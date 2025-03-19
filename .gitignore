@@ -1,0 +1,7 @@
+__pycache__
+*.pyc
+*.pyo
+logs/*
+.DS_Store
+experiment/assets/*
+experiment/logs/*

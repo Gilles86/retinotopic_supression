@@ -1,0 +1,41 @@
+window:
+  size: [1200, 1200]
+  pos: [0, 0]
+  color: [0, 0, 0]
+  fullscr: False
+  winType: pyglet
+  screen: 0
+  viewPos: [0, 0]
+  allowStencil: True
+
+monitor:
+  name: default
+  width: 30
+  distance: 50  # in cm
+  gamma: 1
+
+mri:
+  TR: 2.0  # seconds between volume acquisitions
+  TA: 2.0  # seconds to acquire one volume
+  sync: t  # character used as flag for sync timing, default=‘5’
+  n_dummy_scans: 4
+
+experiment:
+  size_stimuli: 2.5  # size of the stimuli in visual degrees
+  size_fixation: 0.5  # size of the fixation in visual degrees
+  eccentricity_stimulus: 7.0  # eccentricity of the stimuli in visual degrees
+  keys: ['f', 'j']  # keys to be used for the experiment
+  
+durations:
+   trial_start: 1
+   cue: 1.5
+   target: 1.5
+   feedback: 1
+
+various:
+  text_width: 15
+  text_height: .5
+  text_color: [1, 1, 1]
+
+bar_stimulus:
+  bar_width: 1.5

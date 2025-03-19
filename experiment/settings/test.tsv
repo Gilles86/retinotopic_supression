@@ -1,0 +1,6 @@
+trial	target_orientation	singleton_color	target_location	singleton_location
+0	0.0	red	7	3
+1	1.5707963267948966	red	0	4
+2	1.5707963267948966	green	1	0
+3	1.5707963267948966	red	1	6
+4	0.0	green	2	5
