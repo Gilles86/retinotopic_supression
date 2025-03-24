@@ -62,6 +62,7 @@ class SingletonTrial(Trial):
                 distractor_color=None,
                 target_orientation=None,
                 dot_presence=None,
+                most_likely_distractor_location=1,
                   **kwargs):
 
 
@@ -72,17 +73,30 @@ class SingletonTrial(Trial):
 
 
         phase_durations = [trial_start_duration, cue_duration, target_duration, feedback_duration, iti]
-        phase_names = ['trial_start', 'cue', 'target', 'feedback', 'iti']
+        phase_names = ['trial_start', 'pre-target', 'target', 'feedback', 'iti']
 
         super().__init__(session, trial_nr, phase_durations=phase_durations, phase_names=phase_names, **kwargs) 
 
         self.parameters['distractor_color'] = np.random.choice(['red', 'green']) if distractor_color is None else distractor_color
         self.parameters['target_orientation'] = np.random.choice([0.0, 90]) if target_orientation is None else target_orientation
-        self.parameters['distractor_location'] = np.random.choice(range(8)) if distractor_location is None else distractor_location
-        self.parameters['dot_presence'] = np.random.choice([True, False], 8) if dot_presence is None else dot_presence
+
+        if distractor_location is None:
+            locations = range(1, 8, 2)
+            most_likely_distractor_p = self.session.settings['design'].get('most_likely_distractor_p', 0.66)
+            probabilities = [(1 - most_likely_distractor_p)/3] * 4
+            probabilities[locations.index(most_likely_distractor_location)] = most_likely_distractor_p
+            self.parameters['distractor_location'] = np.random.choice(locations, p=probabilities)
+        else:
+            self.parameters['distractor_location'] = distractor_location
+
+        if dot_presence is None:
+            self.parameters['dot_presence'] = ([True] * 4) + ([False] * 4)
+            np.random.shuffle(self.parameters['dot_presence'])
+        else:
+            self.parameters['dot_presence'] = dot_presence
 
         if target_location is None:
-            self.parameters['target_location'] = np.random.choice([i for i in range(8) if i != self.parameters['distractor_location']])
+            self.parameters['target_location'] = np.random.choice([i for i in range(1, 8, 2) if i != self.parameters['distractor_location']])
         else:
             self.parameters['target_location'] = target_location
 
@@ -94,9 +108,12 @@ class SingletonTrial(Trial):
     
     def draw(self):
 
-        if self.phase == 1:
-            self.session.cue_stimuli.draw()
-        elif self.phase == 2:
+        if self.phase == 0:
+            self.session.fixation_dot.color = 'blue'
+        elif self.phase == 1:
+            self.session.fixation_dot.color = 'white'
+
+        if self.phase == 2:
             if self.stimulus_onset is None:
                 self.stimulus_onset = core.getTime()
 
@@ -108,7 +125,10 @@ class SingletonTrial(Trial):
             if (not self.responded) or (not self.parameters['correct']):
                 self.session.error_stimulus.draw()
             else:
-                self.session.correct_stimulus.draw()
+                if self.session.settings['experiment'].get('show_correct_feedback', False):
+                    self.session.correct_stimulus.draw()
+                else:
+                    self.session.fixation_dot.draw()
         else:
             self.session.fixation_dot.draw()
 

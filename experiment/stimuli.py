@@ -139,7 +139,7 @@ class TargetStimulusArray(object):
         """Returns evenly spaced positions in a circular layout."""
         positions = []
         for i in range(self.n_objects):
-            angle = i * 360 / self.n_objects + (360 / (2 * self.n_objects))
+            angle = i * 360 / self.n_objects
             x = eccentricity * np.cos(np.radians(angle))
             y = eccentricity * np.sin(np.radians(angle))
             positions.append((x, y))
@@ -167,25 +167,26 @@ class FixationStimulus:
         self.win = win
         self.position = position
         self.size = size
-        self.color = color
+        self._color = color
 
         # Central fixation dot
         self.dot = visual.Circle(
-            win=win, pos=self.position, radius=self.size / 2, fillColor=self.color, lineColor=None
+            win=win, pos=self.position, radius=self.size / 2, fillColor=self.color, lineColor=None,
+            edges=128
         )
 
         # Cross lines for better visibility
-        cross_length = self.size * 2  # Length of the cross arms
-        self.h_line = visual.Line(
-            win=win, start=(position[0] - cross_length / 2, position[1]), 
-            end=(position[0] + cross_length / 2, position[1]),
-            lineColor=cross_color, lineWidth=cross_thickness
-        )
-        self.v_line = visual.Line(
-            win=win, start=(position[0], position[1] - cross_length / 2), 
-            end=(position[0], position[1] + cross_length / 2),
-            lineColor=cross_color, lineWidth=cross_thickness
-        )
+        # cross_length = self.size * 2  # Length of the cross arms
+        # self.h_line = visual.Line(
+        #     win=win, start=(position[0] - cross_length / 2, position[1]), 
+        #     end=(position[0] + cross_length / 2, position[1]),
+        #     lineColor=cross_color, lineWidth=cross_thickness
+        # )
+        # self.v_line = visual.Line(
+        #     win=win, start=(position[0], position[1] - cross_length / 2), 
+        #     end=(position[0], position[1] + cross_length / 2),
+        #     lineColor=cross_color, lineWidth=cross_thickness
+        # )
 
     def draw(self, cross=True):
         """
@@ -193,11 +194,19 @@ class FixationStimulus:
 
         :param cross: Whether to draw the cross lines (default: True)
         """
-        if cross:
-            self.h_line.draw()
-            self.v_line.draw()
+        # if cross:
+        #     self.h_line.draw()
+        #     self.v_line.draw()
         self.dot.draw()
 
+    @property
+    def color(self):
+        return self._color
+
+    @color.setter
+    def color(self, value):
+        self._color = value
+        self.dot.color = value  # Update visual property
 
 from psychopy import visual, core, event
 import numpy as np
@@ -208,7 +217,7 @@ plugins.loadPlugin('psychopy_visionscience')
 from psychopy import visual, core, event
 
 class SweepingBarStimulus:
-    def __init__(self, win, fov_size=20, bar_width=2, speed=2, rest_duration=2):
+    def __init__(self, win, session, fov_size=20, bar_width=2, speed=2, rest_duration=2):
         """
         Creates a sweeping checkerboard bar stimulus that properly rotates for vertical motion.
 
@@ -219,6 +228,8 @@ class SweepingBarStimulus:
         :param rest_duration: Duration (sec) of rest between sweeps
         """
         self.win = win
+        self.session = session
+
         self.fov_size = fov_size
         self.bar_width = bar_width
         self.speed = speed
@@ -228,12 +239,12 @@ class SweepingBarStimulus:
         self.contrast = 1.0
 
         # ✅ Define paradigm: movement directions + rest periods
-        self.directions = ["right", "rest", "left", "rest", "down", "rest", "up", "rest"]
+        self.directions = ["rest", "right", "rest", "left", "rest", "down", "rest", "up", "rest"]
         self.current_direction_index = 0  # Start with the first direction
         self.sweep_clock = core.Clock()  # Keeps track of how long we've been in the current sweep
 
         # ✅ Compute how long a full sweep takes
-        self.sweep_duration = fov_size / speed  # Ensure full traversal of FOV
+        self.sweep_duration = (fov_size + self.bar_width*2) / speed  # Ensure full traversal of FOV
 
         # ✅ Create the **rectangular bar** with a checkerboard pattern
         self.bar = visual.GratingStim(
@@ -253,8 +264,17 @@ class SweepingBarStimulus:
 
     def switch_direction(self):
         """ Switches to the next movement direction in the paradigm. """
+
         self.current_direction_index = (self.current_direction_index + 1) % len(self.directions)
         self.sweep_clock.reset()  # Reset the clock for the new sweep
+
+        onset = self.session.clock.getTime()
+        idx = self.session.global_log.shape[0]
+        self.session.global_log.loc[idx, 'onset'] = onset
+        self.session.global_log.loc[idx, 'event_type'] = f'bar_{self.directions[self.current_direction_index]}'
+        self.session.global_log.loc[idx, 'nr_frames'] = 0
+        print(self.session.global_log)
+
 
     def update_position(self):
         """ Moves the bar across the screen OR enters a rest period. """
@@ -268,10 +288,10 @@ class SweepingBarStimulus:
             t = self.sweep_clock.getTime() * self.speed
 
             if direction == "right":
-                self.bar.pos = (-self.fov_size / 2 + self.bar_width / 2 + t, 0)
+                self.bar.pos = (-self.fov_size / 2 - self.bar_width / 2 + t, 0)
                 self.bar.ori = 0  # ✅ Keep bar horizontal
             elif direction == "left":
-                self.bar.pos = (self.fov_size / 2 - self.bar_width / 2 - t, 0)
+                self.bar.pos = (self.fov_size / 2 + self.bar_width / 2 - t, 0)
                 self.bar.ori = 0  # ✅ Keep bar horizontal
             elif direction == "down":
                 self.bar.pos = (0, self.fov_size / 2 - self.bar_width / 2 - t)

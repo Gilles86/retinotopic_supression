@@ -22,7 +22,7 @@ class SingletonSession(PylinkEyetrackerSession):
         self.settings['subject'] = subject
         self.settings['session'] = session
         self.settings['run'] = run
-        self.settings['n_trials'] = n_trials
+        # self.settings['n_trials'] = n_trials
 
         self.eccentricity_stimuli = self.settings['experiment'].get('eccentricity_stimulus', 5)
         self.size_stimuli = self.settings['experiment'].get('size_stimuli', 1)
@@ -30,14 +30,15 @@ class SingletonSession(PylinkEyetrackerSession):
 
 
         self.fixation_dot = FixationStimulus(self.win, size=self.settings['experiment']['size_fixation'])
-        self.sweeping_bars = SweepingBarStimulus(self.win, speed=0.1, fov_size=self.radius_bar_aperture * 2,
+        self.sweeping_bars = SweepingBarStimulus(self.win, session=self,
+                                                 speed=self.settings['bar_stimulus']['speed'], fov_size=self.radius_bar_aperture * 2,
                                                  bar_width=self.settings['bar_stimulus']['bar_width'],)
 
         self.target_stimuli = TargetStimulusArray(self.win, eccentricity=self.eccentricity_stimuli, stimulus_size=self.size_stimuli)
         self.cue_stimuli = CueStimulusArray(self.win, self.eccentricity_stimuli, self.size_stimuli)
 
         self.correct_stimulus = visual.TextStim(self.win, text='v', color='green', height=self.settings['experiment']['size_fixation'])
-        self.error_stimulus = visual.TextStim(self.win, text='x', color='red', height=self.settings['experiment']['size_fixation'])
+        self.error_stimulus = visual.TextStim(self.win, text='x', color='red', height=self.settings['experiment']['size_fixation']*2.)
 
         self.rt_clock = core.Clock()
 
@@ -56,7 +57,7 @@ class SingletonSession(PylinkEyetrackerSession):
         self.close()
 
 
-    def create_trials(self, include_instructions=False):
+    def create_trials(self, most_likely_distractor_location, include_instructions=False):
         """Create trials."""
 
 
@@ -68,21 +69,15 @@ class SingletonSession(PylinkEyetrackerSession):
         if not include_instructions:
             self.trials = []
 
+        possible_itis = self.settings['durations']['iti']
+        n_trials = self.settings['design']['n_trials']
 
-        for ix in range(self.settings['n_trials']):
-            self.trials.append(SingletonTrial(self, ix+1, iti=1))
+        # Assert n_trials is multiple of possible_itis
+        assert n_trials % len(possible_itis) == 0, 'n_trials should be multiple of possible itis'
+        itis = np.tile(possible_itis, n_trials // len(possible_itis))
+        np.random.shuffle(itis)
 
-        # n_trials = self.settings['task'].get('n_trials')
-        # range = self.settings['range']
-        # ns = np.random.randint(range[0], range[1] + 1, n_trials)
 
-        # possible_isis = self.settings['durations'].get('isi')
-        # isis = possible_isis * int(np.ceil(n_trials / len(possible_isis)))
-        # isis = isis[:n_trials]
-        # np.random.shuffle(isis)
 
-        # self.trials += [TaskTrial(self, i+1, jitter=jitter, n=n, stimulus_series=self.settings['cloud']['stimulus_series']) for i, (n, jitter) in enumerate(zip(ns, isis))]
-
-        # self.trials.append(OutroTrial(session=self))
-
-        # self.trials.append(ScoreTrial(self, 0))
+        for ix, iti in enumerate(itis):
+            self.trials.append(SingletonTrial(self, ix+1, iti=iti, most_likely_distractor_location=most_likely_distractor_location))

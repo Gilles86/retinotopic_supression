@@ -14,6 +14,10 @@ monitor:
   distance: 50  # in cm
   gamma: 1
 
+design:
+  n_trials: 3
+  likely_distractor_probability: 0.67
+
 mri:
   TR: 2.0  # seconds between volume acquisitions
   TA: 2.0  # seconds to acquire one volume
@@ -21,16 +25,18 @@ mri:
   n_dummy_scans: 4
 
 experiment:
-  size_stimuli: 2.5  # size of the stimuli in visual degrees
-  size_fixation: 0.5  # size of the fixation in visual degrees
-  eccentricity_stimulus: 7.0  # eccentricity of the stimuli in visual degrees
+  size_stimuli: 2.  # size of the stimuli in visual degrees
+  size_fixation: 0.25  # size of the fixation in visual degrees
+  eccentricity_stimulus: 5.0  # eccentricity of the stimuli in visual degrees
   keys: ['f', 'j']  # keys to be used for the experiment
+  show_correct_feedback: False
   
 durations:
-   trial_start: 1
-   cue: 1.5
+   trial_start: .5
+   trial_wait: .5
    target: 1.5
    feedback: 1
+   iti: [1, 3, 5]
 
 various:
   text_width: 15
@@ -39,3 +45,4 @@ various:
 
 bar_stimulus:
   bar_width: 1.5
+  speed: 1.
