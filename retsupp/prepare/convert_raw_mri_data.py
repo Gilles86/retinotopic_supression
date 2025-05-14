@@ -5,6 +5,8 @@ from nilearn import image
 import re
 import json
 from tqdm import tqdm
+from utils import create_preprocessed_t1w
+import shutil
 
 default_json = {
   "Manufacturer": "Philips",
@@ -25,7 +27,8 @@ default_json = {
   "PartialFourier": 0.796610177,
   "PhaseEncodingDirection":"j",
   "TotalScanDuration": "07:05.6",
-  "TotalReadoutTime": 0.027578312
+  "TotalReadoutTime": 0.027578312,
+  'RepetitionTime':1.6
 }
 
 def main(subject, session, bids_dir):
@@ -48,32 +51,59 @@ def main(subject, session, bids_dir):
     target_dir = bids_dir / f'sub-{subject:02d}' / f'ses-{session}'
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    # Anatomical data
+    # # Anatomical data
     print('Converting anatomical data...')
     (target_dir / 'anat').mkdir(parents=True, exist_ok=True)
 
-    #T1w
-    t1w_candidates = list(source_dir.glob('*MP2_085mm*_1.PAR'))
+    mp2rage_candidates = list(source_dir.glob('*MP2_085mm*_1.PAR'))
+    print(f'Found {len(mp2rage_candidates)} T1w candidates')
+
+    if len(mp2rage_candidates) == 1:
+        mp2rage = list(mp2rage_candidates)[0]
+        print('Storing raw MP2RAGE data...')
+
+        # # Convert to NIfTI
+        mp2rage = nib.load(mp2rage)
+        mp2rage_nii = nib.Nifti1Image(mp2rage.dataobj, mp2rage.affine)
+        mp2rage_uni1 = image.index_img(mp2rage_nii, 0)
+        mp2rage_uni2 = image.index_img(mp2rage_nii, 1)
+
+        mp2rage_uni1.to_filename(target_dir / 'anat' / f'sub-{subject:02d}_ses-{session}_inv-1_MP2RAGE.nii.gz')
+        mp2rage_uni2.to_filename(target_dir / 'anat' / f'sub-{subject:02d}_ses-{session}_inv-2_MP2RAGE.nii.gz')
+
+    # #T1w
+    t1w_candidates = list(source_dir.glob('*MP2_085mm*_3.PAR'))
     print(source_dir)
     print(f'Found {len(t1w_candidates)} T1w candidates')
 
-    assert(len(list(t1w_candidates)) == 1), f'Expected 1 T1w candidate, found {len(list(t1w_candidates))}'
-    t1w = list(t1w_candidates)[0]
+    assert(len(list(t1w_candidates)) in [0, 1]), f'Expected 1 T1w candidate, found {len(list(t1w_candidates))}'
+    if len(t1w_candidates) == 1:
+        t1w = list(t1w_candidates)[0]
 
-    # Convert to NIfTI
-    img = nib.load(t1w)
-    t1w_nii = nib.Nifti1Image(img.dataobj, img.affine)
-    t1w_nii = image.index_img(t1w_nii, 0)
-    t1w_nii = image.math_img('np.where(img == img.max(), 0, img)', img=t1w_nii)
-    t1w_nii.to_filename(target_dir / 'anat' / f'sub-{subject:02d}_ses-{session}_T1w.nii.gz')
+        # # Convert to NIfTI
+        img = nib.load(t1w)
+        t1w_nii = nib.Nifti1Image(img.dataobj, img.affine)
+        t1w_nii = image.index_img(t1w_nii, 0)
+        t1w_nii = image.math_img('np.where(img == img.max(), 0, img)', img=t1w_nii)
+        print(t1w_nii.get_fdata().min())
 
-    # T2w
+        # Rescale the image to 0-4092
+        t1w_nii = image.math_img('img - img.min()', img=t1w_nii)
+
+        print(t1w_nii.get_fdata().min())
+        t1w_nii.to_filename(target_dir / 'anat' / f'sub-{subject:02d}_ses-{session}_T1w.nii.gz')
+
+        # Create preprocessing workflow
+        wf = create_preprocessed_t1w(subject, session, bids_folder=bids_dir)
+        wf.run()
+
+    # # T2w
     t2w_candidates = list(source_dir.glob('*T2w*.PAR'))
     print(f'Found {len(t2w_candidates)} T2w candidates')
     assert(len(t2w_candidates) == 1), f'Expected 1 T2w candidate, found {len(list(t2w_candidates))}'
     t2w = list(t2w_candidates)[0]
 
-    # Convert to NIfTI
+    # # Convert to NIfTI
     t2w_nii = image.load_img(t2w)
     t2w_nii = nib.Nifti1Image(t2w_nii.dataobj, t2w_nii.affine)
     t2w_nii = image.math_img('np.where(img == img.max(), 0, img)', img=t2w_nii)
@@ -101,22 +131,24 @@ def main(subject, session, bids_dir):
         reg = re.compile(r'run-(?P<run>[0-9]+)')
         run = int(reg.search(func_candidate.name).group('run'))
 
-        # Save magnitude and phase images
+        # # Save magnitude and phase images
         func_nii_magnitude.to_filename(target_dir / 'func' / f'sub-{subject:02d}_ses-{session}_task-search_run-{run}_part-mag_bold.nii.gz')
         func_nii_phase.to_filename(target_dir / 'func' / f'sub-{subject:02d}_ses-{session}_task-search_run-{run}_part-phase_bold.nii.gz')
 
         with open(target_dir / 'func' / f'sub-{subject:02d}_ses-{session}_task-search_run-{run}_part-mag_bold.json', 'w') as f:
             json.dump(default_json, f, indent=2)
 
-        with open(target_dir / 'func' / f'sub-{subject:02d}_ses-{session}_task-search_rec-NORDIC_run-{run}_bold.json', 'w') as f:
+        with open(target_dir / 'func' / f'sub-{subject:02d}_ses-{session}_task-search_run-{run}_rec-NORDIC_bold.json', 'w') as f:
             json.dump(default_json, f, indent=2)
 
     # B0 maps
     print('Converting B0 maps...')
-    (target_dir / 'func').mkdir(parents=True, exist_ok=True)
+    (target_dir / 'fmap').mkdir(parents=True, exist_ok=True)
 
     # Find all B- maps
     bmap_candidates = list(source_dir.glob('*fmap-B0*.PAR'))
+
+    print(bmap_candidates)
 
     n_bmap_candidates = len(bmap_candidates)
 
@@ -129,15 +161,16 @@ def main(subject, session, bids_dir):
         bmap_magnitude = image.index_img(bmap_nii, 0)
         bmap_phase = image.index_img(bmap_nii, 1)
 
-        json_bmap = {'EchoTime1': 0.0,
-                    'EchoTime2': 0.0045,}
+        json_bmap = {'EchoTimeDifference': 0.001,
+                     'EchoTime1':0.0045,
+                     'EchoTime2':0.0055}
 
         if n_bmap_candidates == 2:
-            json_bmap['IntendedFor'] = [f'ses-{session}/func/sub-{subject:02d}_ses-{session}_task-search_rec-NORDIC_run-{run}_bold.nii.gz' for run in range(1 + ix*3, 4 + ix*3)]
+            json_bmap['IntendedFor'] = [f'ses-{session}/func/sub-{subject:02d}_ses-{session}_task-search_run-{run}_rec-NORDIC_bold.nii.gz' for run in range(1 + ix*3, 4 + ix*3)]
         elif n_bmap_candidates == 1:
-            json_bmap['IntendedFor'] = [f'ses-{session}/func/sub-{subject:02d}_ses-{session}_task-search_rec-NORDIC_run-{run}_bold.nii.gz' for run in range(1, 6)]
+            json_bmap['Intended;or'] = [f'ses-{session}/func/sub-{subject:02d}_ses-{session}_task-search_run-{run}_rec-NORDIC_bold.nii.gz' for run in range(1, 6)]
         elif n_bmap_candidates == 3:
-            json_bmap['IntendedFor'] = [f'ses-{session}/func/sub-{subject:02d}_ses-{session}_task-search_rec-NORDIC_run-{run}_bold.nii.gz' for run in range(1 + ix*2, 3 + ix*2)]
+            json_bmap['IntendedFor'] = [f'ses-{session}/func/sub-{subject:02d}_ses-{session}_task-search_run-{run}_rec-NORDIC_bold.nii.gz' for run in range(1 + ix*2, 3 + ix*2)]
 
         bmap_magnitude.to_filename(target_dir / 'fmap' / f'sub-{subject:02d}_ses-{session}_run-{ix+1}_magnitude1.nii.gz')
         bmap_phase.to_filename(target_dir / 'fmap' / f'sub-{subject:02d}_ses-{session}_run-{ix+1}_phasediff.nii.gz')
