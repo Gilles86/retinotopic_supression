@@ -81,9 +81,10 @@ if __name__ == "__main__":
     argument_parser = argparse.ArgumentParser(description="Fit PRF model")
     argument_parser.add_argument('subject', type=int, help='Subject ID')
     argument_parser.add_argument('--model', type=int, default=1)
+    argument_parser.add_argument('--bids_folder', default='/data/ds-retsupp', help='BIDS folder path')
 
 
     args = argument_parser.parse_args()
 
-    main(args.subject, args.model)
+    main(args.subject, args.model, bids_folder=args.bids_folder)
 
