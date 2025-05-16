@@ -8,7 +8,7 @@ from braincoder.optimize import ParameterFitter
 from braincoder.hrf import SPMHRFModel
 import numpy as np
 
-def main(subject, model_label, bids_folder='/data/ds-retsupp', grid_r2_thr=0.05, max_n_iterations=100):
+def main(subject, model_label, bids_folder='/data/ds-retsupp', grid_r2_thr=0.2, max_n_iterations=1000):
 
     print(f"Fitting model: {model_label}")
 
@@ -97,7 +97,7 @@ def main(subject, model_label, bids_folder='/data/ds-retsupp', grid_r2_thr=0.05,
         par_fitter_dog = ParameterFitter(model=model_dog, data=data, paradigm=paradigm)
 
         # Note how, for now, we are not optimizing the HRF parameters.
-        pars_dog = par_fitter_dog.fit(init_pars=pars_dog_init, max_n_iterations=1000)
+        pars_dog = par_fitter_dog.fit(init_pars=pars_dog_init, max_n_iterations=max_n_iterations)
 
         pars_dog['theta'] = np.arctan2(pars_dog['y'], pars_dog['x'])
         pars_dog['ecc'] = np.sqrt(pars_dog['x']**2 + pars_dog['y']**2)
