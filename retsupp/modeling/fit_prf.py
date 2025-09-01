@@ -8,7 +8,7 @@ from braincoder.optimize import ParameterFitter
 from braincoder.hrf import SPMHRFModel
 import numpy as np
 
-def main(subject, model_label, bids_folder='/data/ds-retsupp', grid_r2_thr=0.2, max_n_iterations=1000):
+def main(subject, model_label, bids_folder='/data/ds-retsupp', grid_r2_thr=0.04, max_n_iterations=5000):
 
     print(f"Fitting model: {model_label}")
 
@@ -25,8 +25,8 @@ def main(subject, model_label, bids_folder='/data/ds-retsupp', grid_r2_thr=0.2, 
 
     data = brain_masker.fit_transform(mean_ts)
 
-    paradigm = sub.get_stimulus(resolution=25).astype(np.float32)
-    grid_coordinates = sub.get_grid_coordinates(resolution=25)
+    paradigm = sub.get_stimulus(resolution=50).astype(np.float32)
+    grid_coordinates = sub.get_grid_coordinates(resolution=50)
     grid_coordinates = np.stack((grid_coordinates[0].ravel(), grid_coordinates[1].ravel()), axis=1).astype(np.float32)
     paradigm = paradigm.reshape((paradigm.shape[0], -1))
 
@@ -61,7 +61,7 @@ def main(subject, model_label, bids_folder='/data/ds-retsupp', grid_r2_thr=0.2, 
     data = r2_masker.fit_transform(mean_ts)
     grid_pars_thr = grid_pars[r2_grid > grid_r2_thr]
     fitter = ParameterFitter(prf_model, data, paradigm)
-    gd_pars = fitter.fit(init_pars=grid_pars_thr, max_n_iterations=max_n_iterations)
+    gd_pars = fitter.fit(init_pars=grid_pars_thr, max_n_iterations=max_n_iterations, learning_rate=0.001,)
 
     if model_label == 1:
         gd_pars['theta'] = np.arctan2(gd_pars['y'], gd_pars['x'])
@@ -87,7 +87,7 @@ def main(subject, model_label, bids_folder='/data/ds-retsupp', grid_r2_thr=0.2, 
         pars_dog_init = gd_pars.copy()
         # This is the relative amplitude of the inhibitory receptive field
         # compared to the excitatory one.
-        pars_dog_init['srf_amplitude'] = grid_pars['srf_amplitude'] = 0.1
+        pars_dog_init['srf_amplitude'] = grid_pars['srf_amplitude'] = 1e-3
 
         # This is the relative size of the inhibitory receptive field
         # compared to the excitatory one.
@@ -97,7 +97,7 @@ def main(subject, model_label, bids_folder='/data/ds-retsupp', grid_r2_thr=0.2, 
         par_fitter_dog = ParameterFitter(model=model_dog, data=data, paradigm=paradigm)
 
         # Note how, for now, we are not optimizing the HRF parameters.
-        pars_dog = par_fitter_dog.fit(init_pars=pars_dog_init, max_n_iterations=max_n_iterations)
+        pars_dog = par_fitter_dog.fit(init_pars=pars_dog_init, max_n_iterations=max_n_iterations, learning_rate=0.001,)
 
         pars_dog['theta'] = np.arctan2(pars_dog['y'], pars_dog['x'])
         pars_dog['ecc'] = np.sqrt(pars_dog['x']**2 + pars_dog['y']**2)
@@ -120,10 +120,10 @@ if __name__ == "__main__":
     argument_parser = argparse.ArgumentParser(description="Fit PRF model")
     argument_parser.add_argument('subject', type=int, help='Subject ID')
     argument_parser.add_argument('--model', type=int, default=1)
+    argument_parser.add_argument('--r2_thr', default=0.04, type=float, help='R2 threshold for grid fit')
     argument_parser.add_argument('--bids_folder', default='/data/ds-retsupp', help='BIDS folder path')
 
 
     args = argument_parser.parse_args()
 
-    main(args.subject, model_label=args.model, bids_folder=args.bids_folder)
-
+    main(args.subject, model_label=args.model, bids_folder=args.bids_folder, grid_r2_thr=args.r2_thr)
