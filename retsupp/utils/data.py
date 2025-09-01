@@ -11,7 +11,12 @@ class Subject(object):
         self.bids_folder = Path(bids_folder)
 
     def get_experimental_settings(self, session=1, run=1):
-        yml_file = self.bids_folder / 'sourcedata' / 'behavior' / 'logs' / f'sub-{self.subject_id}' / f'ses-{session+1}' / f'sub-{self.subject_id}_ses-{session+1}_task-ret_sup_run-{run}_expsettings.yml'
+        
+        print(self.subject_id, session, run)
+        if self.subject_id < 3:
+            yml_file = self.bids_folder / 'sourcedata' / 'behavior' / 'logs' / f'sub-{self.subject_id}' / f'ses-{session+1}' / f'sub-{self.subject_id}_ses-{session+1}_task-ret_sup_run-{run}_expsettings.yml'
+        else:
+            yml_file = self.bids_folder / 'sourcedata' / 'behavior' / 'logs' / f'sub-{self.subject_id:02d}' / f'ses-{session+1}' / f'run-{run}' / f'sub-{self.subject_id:02d}_ses-{session+1}_task-ret_sup_run-{run}_expsettings.yml'
 
         # Load yml file
         with open(yml_file, 'r') as file:
@@ -44,7 +49,11 @@ class Subject(object):
         return [1,2,3,4,5,6]
 
     def get_onsets(self, session=1, run=1):
-        onsets = pd.read_csv(self.bids_folder / 'sourcedata' / 'behavior' / 'logs' / f'sub-{self.subject_id}' / f'ses-{session+1}' / f'sub-{self.subject_id}_ses-{session+1}_task-ret_sup_run-{run}_events.tsv', sep='\t')
+        if self.subject_id < 3:
+            onsets = pd.read_csv(self.bids_folder / 'sourcedata' / 'behavior' / 'logs' / f'sub-{self.subject_id}' / f'ses-{session+1}' / f'sub-{self.subject_id}_ses-{session+1}_task-ret_sup_run-{run}_events.tsv', sep='\t')
+        else:
+            onsets = pd.read_csv(self.bids_folder / 'sourcedata' / 'behavior' / 'logs' / f'sub-{self.subject_id:02d}' / f'ses-{session+1}' / f'run-{run}' /  f'sub-{self.subject_id:02d}_ses-{session+1}_task-ret_sup_run-{run}_events.tsv', sep='\t')
+
         pulses = onsets[onsets['event_type'] == 'pulse']
         onsets['onset'] = onsets['onset'] - pulses['onset'].min()
         return onsets
