@@ -47,7 +47,21 @@ def main(subject, session, bids_dir):
     bids_dir = Path(bids_dir)
     sourcedata = bids_dir / 'sourcedata'
 
-    source_dir = sourcedata / 'mri' / f'sub-{subject:02d}' / f'ses-{session}'
+    # source_dir = sourcedata / 'mri' / f'sub-{subject:02d}' / f'ses-{session}'
+    
+    sourde_dir_candidates = [sourcedata / 'mri' / f'sub-{subject:02d}_ses{session}',
+                             sourcedata / 'mri' / f'sub-{subject:02d}_ses-{session}']
+    
+    source_dir = None
+
+    for candidate in sourde_dir_candidates:
+        if candidate.exists():
+            source_dir = candidate
+            break
+
+    if source_dir is None:
+        raise FileNotFoundError(f'No source directory found for subject {subject}, session {session} in {sourcedata}')
+
     target_dir = bids_dir / f'sub-{subject:02d}' / f'ses-{session}'
     target_dir.mkdir(parents=True, exist_ok=True)
 
@@ -100,17 +114,23 @@ def main(subject, session, bids_dir):
     # # T2w
     t2w_candidates = list(source_dir.glob('*T2w*.PAR'))
     print(f'Found {len(t2w_candidates)} T2w candidates')
-    assert(len(t2w_candidates) == 1), f'Expected 1 T2w candidate, found {len(list(t2w_candidates))}'
-    t2w = list(t2w_candidates)[0]
+    
+    if len(t2w_candidates) == 0:
+        print('No T2w data found, skipping T2w conversion.')
+        
+    elif len(t2w_candidates) == 1:
 
-    # # Convert to NIfTI
-    t2w_nii = image.load_img(t2w)
-    t2w_nii = nib.Nifti1Image(t2w_nii.dataobj, t2w_nii.affine)
-    t2w_nii = image.math_img('np.where(img == img.max(), 0, img)', img=t2w_nii)
-    t2w_nii.to_filename(target_dir / 'anat' / f'sub-{subject:02d}_ses-{session}_T2w.nii.gz')
+        t2w = list(t2w_candidates)[0]
+        print('Storing raw T2w data...')
+        # # Convert to NIfTI
+        t2w_nii = image.load_img(t2w)
+        t2w_nii = nib.Nifti1Image(t2w_nii.dataobj, t2w_nii.affine)
+        t2w_nii = image.math_img('np.where(img == img.max(), 0, img)', img=t2w_nii)
+        t2w_nii.to_filename(target_dir / 'anat' / f'sub-{subject:02d}_ses-{session}_T2w.nii.gz')
+    else:
+        raise ValueError(f'Expected 0/1 T2w candidate, found {len(t2w_candidates)}')
 
     print('Anatomical data converted and saved.')
-
 
     # Functional data
     print('Converting functional data...')

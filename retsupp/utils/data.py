@@ -199,11 +199,15 @@ class Subject(object):
 
 
 
-            info[hemi]['inner'] = self.bids_folder / 'derivatives' / 'fmriprep' / f'sub-{self.subject_id:02d}' / 'anat' / f'sub-{self.subject_id:02d}_hemi-{hemi}_white.surf.gii'
-            info[hemi]['outer'] = self.bids_folder / 'derivatives' / 'fmriprep' / f'sub-{self.subject_id:02d}' / 'anat' / f'sub-{self.subject_id:02d}_hemi-{hemi}_pial.surf.gii'
-            info[hemi]['thickness'] = self.bids_folder / 'derivatives' / 'fmriprep' / f'sub-{self.subject_id:02d}' / 'anat' / f'sub-{self.subject_id:02d}_hemi-{hemi}_thickness.shape.gii'
-            # info[hemi]['inflated'] = self.bids_folder / 'derivatives' / 'fmriprep' / f'sub-{self.subject_id:02d}' / 'anat' / f'sub-{self.subject_id:02d}_hemi-{hemi}_inflated.surf.gii'
-            # info[hemi]['curvature'] = self.bids_folder / 'derivatives' / 'fmriprep' / f'sub-{self.subject_id:02d}' / 'anat' / f'sub-{self.subject_id:02d}_hemi-{hemi}_curvature.shape.gii'
+            if self.subject_id < 3:
+                info[hemi]['inner'] = self.bids_folder / 'derivatives' / 'fmriprep' / f'sub-{self.subject_id:02d}' / 'anat' / f'sub-{self.subject_id:02d}_hemi-{hemi}_white.surf.gii'
+                info[hemi]['outer'] = self.bids_folder / 'derivatives' / 'fmriprep' / f'sub-{self.subject_id:02d}' / 'anat' / f'sub-{self.subject_id:02d}_hemi-{hemi}_pial.surf.gii'
+                info[hemi]['thickness'] = self.bids_folder / 'derivatives' / 'fmriprep' / f'sub-{self.subject_id:02d}' / 'anat' / f'sub-{self.subject_id:02d}_hemi-{hemi}_thickness.shape.gii'
+            else:
+                info[hemi]['inner'] = self.bids_folder / 'derivatives' / 'fmriprep' / f'sub-{self.subject_id:02d}' / 'ses-1' / 'anat' / f'sub-{self.subject_id:02d}_ses-1_hemi-{hemi}_white.surf.gii'
+                info[hemi]['outer'] = self.bids_folder / 'derivatives' / 'fmriprep' / f'sub-{self.subject_id:02d}' / 'ses-1' / 'anat' / f'sub-{self.subject_id:02d}_ses-1_hemi-{hemi}_pial.surf.gii'
+                info[hemi]['thickness'] = self.bids_folder / 'derivatives' / 'fmriprep' / f'sub-{self.subject_id:02d}' / 'ses-1' / 'anat' / f'sub-{self.subject_id:02d}_ses-1_hemi-{hemi}_thickness.shape.gii'
+
 
             for key in info[hemi]:
                 assert(info[hemi][key]).exists(), f'{info[hemi][key]} does not exist'
