@@ -10,23 +10,24 @@ subject = sprintf('sub-%s', subject_id);
 % Check if session is provided and format path and filenames accordingly
 if nargin < 4 || isempty(session)
     session_str = '';
-    session_path = '';  % No session subdirectory
+    session_path = ''; % No session subdirectory
 else
-    session_str = sprintf('ses-%d_', session);  % Include session in filename
+    session_str = sprintf('ses-%d_', session); % Include session in filename
     session_path = sprintf('ses-%d/', session); % Include session in path
 end
 
 % Updated input filenames with optional session
-fn_magn_in = sprintf('%s/%s/%sfunc/%s_%stask-search_run-%d_part-mag_bold.nii.gz', base_path, subject, session_path, subject, session_str, run);
-fn_phase_in = sprintf('%s/%s/%sfunc/%s_%stask-search_run-%d_part-phase_bold.nii.gz', base_path, subject, session_path, subject, session_str, run);
+fn_magn_in = fullfile(base_path, subject, session_path, 'func', sprintf('%s_%stask-search_run-%d_part-mag_bold.nii.gz', subject, session_str, run));
+fn_phase_in = fullfile(base_path, subject, session_path, 'func', sprintf('%s_%stask-search_run-%d_part-phase_bold.nii.gz', subject, session_str, run));
 
 % Updated output directory and filenames with optional session
-output_dir = sprintf('%s/derivatives/nordic/%s/%s', base_path, subject, session_path);  % Ensure trailing slash
+output_dir = fullfile(base_path, 'derivatives', 'nordic', subject, session_path);
 if ~exist(output_dir, 'dir')
-    mkdir(output_dir);  % This will create intermediate directories as needed
+    mkdir(output_dir); % Create intermediate directories as needed
 end
-fn_out = sprintf('sub-%s_%stask-search_run-%d_rec-NORDIC_bold', subject_id, session_str, run);  % New naming convention without .nii
-fn_out_full = fullfile(output_dir, [fn_out, '.nii.gz']);
+
+fn_out = sprintf('sub-%s_%stask-search_run-%d_rec-NORDIC_bold', subject_id, session_str, run);
+fn_out_full = fullfile(output_dir, [fn_out, '.nii']);
 
 % Debugging: Display the paths being used
 disp(['fn_magn_in: ', fn_magn_in]);
@@ -36,7 +37,7 @@ disp(['fn_out_full: ', fn_out_full]);
 % Set up the ARG structure
 ARG.temporal_phase = 1;
 ARG.phase_filter_width = 10;
-ARG.DIROUT = output_dir;  % Output directory with trailing slash
+ARG.DIROUT = output_dir;
 
 % Check if the output file already exists and delete it if it does
 if exist(fn_out_full, 'file')
@@ -55,9 +56,15 @@ else
     error(['NIFTI_NORDIC did not create the output file: ', fn_out_full]);
 end
 
-% Copy the denoised file back to the source folder
-final_output = sprintf('%s/%s/%sfunc/%s_%stask-search_task_run-%d_rec-NORDIC_bold.nii.gz', base_path, subject, session_path, subject, session_str, run);
-disp(['Copying denoised file to source folder: ', final_output]);
-copyfile(fn_out_full, final_output);
+% Define the final output path for the gzipped file
+final_output = fullfile(base_path, subject, session_path, 'func', sprintf('%s_%stask-search_run-%d_rec-NORDIC_bold.nii.gz', subject, session_str, run));
 
+% Compress the .nii file to .nii.gz
+gzip(fn_out_full);
+movefile([fn_out_full, '.gz'], final_output);
+
+% Optionally, delete the temporary .nii file after compression
+delete(fn_out_full);
+
+disp(['Compressed file created: ', final_output]);
 end
