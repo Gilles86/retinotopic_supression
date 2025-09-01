@@ -121,16 +121,16 @@ class Subject(object):
                 pos = 100
             elif current_state in ['bar_right']:
                 ori = 0
-                pos = -radius_bar_aperture / 2 - bar_width / 2 + dt * speed
+                pos = -radius_bar_aperture - bar_width / 2 + dt * speed
             elif current_state in ['bar_left']:
                 ori = 0
-                pos = radius_bar_aperture / 2 + bar_width / 2 - dt * speed
+                pos = radius_bar_aperture + bar_width / 2 - dt * speed
             elif current_state in ['bar_up']:
                 ori = 90
-                pos = -radius_bar_aperture / 2 + bar_width / 2 + dt * speed
+                pos = -radius_bar_aperture + bar_width / 2 + dt * speed
             elif current_state in ['bar_down']:
                 ori = 90
-                pos = radius_bar_aperture / 2 - bar_width / 2 - dt * speed
+                pos = radius_bar_aperture - bar_width / 2 - dt * speed
 
             stimulus[i, ...] = draw_bar(grid_coordinates, pos, ori, bar_width) * mask
 
