@@ -34,6 +34,8 @@ def main(subject, session, run, model_label=1, bids_folder='/data/ds-retsupp', m
     if not isinstance(prf_pars, pd.DataFrame):
         prf_pars = pd.DataFrame(prf_pars)
 
+    print(prf_pars.head())
+
     # Mask: only voxels with r2 > r2_thr
     mask_r2 = prf_pars['r2'] > r2_thr
     print(f"Voxels above r2 threshold ({r2_thr}): {mask_r2.sum()} / {len(mask_r2)}")
@@ -48,34 +50,20 @@ def main(subject, session, run, model_label=1, bids_folder='/data/ds-retsupp', m
 
     if model_label == 1:
         prf_model = GaussianPRF2DWithHRF(grid_coordinates, paradigm, hrf_model=hrf_model)
-        fitter = ParameterFitter(prf_model, data, paradigm)
-        refined_pars = fitter.refine_baseline_and_amplitude(init_pars, l2_alpha=0.001)
-        fit_pars = fitter.fit(init_pars=refined_pars, max_n_iterations=max_n_iterations, learning_rate=0.005)
-        pred = fitter.predictions
-        r2 = fitter.get_rsq(fit_pars)
     elif model_label == 2:
         prf_model = DifferenceOfGaussiansPRF2DWithHRF(grid_coordinates, paradigm, hrf_model=hrf_model)
-        fitter = ParameterFitter(prf_model, data, paradigm)
-        refined_pars = fitter.refine_baseline_and_amplitude(init_pars, l2_alpha=0.001)
-        fit_pars = fitter.fit(init_pars=refined_pars, max_n_iterations=max_n_iterations, learning_rate=0.005)
-        pred = fitter.predictions
-        r2 = fitter.get_rsq(fit_pars)
     elif model_label == 3:
         prf_model = GaussianPRF2DWithHRF(grid_coordinates, paradigm, hrf_model=hrf_model, flexible_hrf_parameters=True)
-        fitter = ParameterFitter(prf_model, data, paradigm)
-        refined_pars = fitter.refine_baseline_and_amplitude(init_pars, l2_alpha=0.001)
-        fit_pars = fitter.fit(init_pars=refined_pars, max_n_iterations=max_n_iterations, learning_rate=0.005)
-        pred = fitter.predictions
-        r2 = fitter.get_rsq(fit_pars)
     elif model_label == 4:
         prf_model = DifferenceOfGaussiansPRF2DWithHRF(grid_coordinates, paradigm, hrf_model=hrf_model, flexible_hrf_parameters=True)
-        fitter = ParameterFitter(prf_model, data, paradigm)
-        refined_pars = fitter.refine_baseline_and_amplitude(init_pars, l2_alpha=0.001)
-        fit_pars = fitter.fit(init_pars=refined_pars, max_n_iterations=max_n_iterations, learning_rate=0.005)
-        pred = fitter.predictions
-        r2 = fitter.get_rsq(fit_pars)
     else:
         raise ValueError(f'Unknown model label: {model_label}')
+
+    fitter = ParameterFitter(prf_model, data, paradigm)
+    refined_pars = fitter.refine_baseline_and_amplitude(init_pars, l2_alpha=0.001)
+    fit_pars = fitter.fit(init_pars=refined_pars, max_n_iterations=max_n_iterations, learning_rate=0.005)
+    pred = fitter.predictions
+    r2 = fitter.get_rsq(fit_pars)
 
     fit_pars['theta'] = np.arctan2(fit_pars['y'], fit_pars['x'])
     fit_pars['ecc'] = np.sqrt(fit_pars['x']**2 + fit_pars['y']**2)

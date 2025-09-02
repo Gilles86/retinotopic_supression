@@ -216,6 +216,18 @@ class Subject(object):
 
     def get_prf_parameter_labels(self, model=1):
         labels = ['x', 'y', 'sd', 'amplitude', 'baseline', 'r2', 'theta', 'ecc']
+
+        if model == 2:
+            labels += ['srf_size', 'srf_amplitude']
+        elif model == 3:
+            labels += ['hrf_delay', 'hrf_dispersion']
+        elif model == 4:
+            labels += ['srf_size', 'srf_amplitude', 'hrf_delay', 'hrf_dispersion']
+        elif model == 1:
+            pass
+        else:
+            raise ValueError(f'Unknown model parameters for model: {model}')
+
         return labels
 
     def get_prf_parameters_volume(self, model=1, return_image=False):
