@@ -19,5 +19,5 @@ model=$4
 mkdir -p $HOME/logs
 
 echo "Running fit_run.py for subject $subject, session $session, run $run, model $model"
-python $HOME/git/retsupp/retsupp/modeling/fit_run.py $subject $session $run --model "$model" --r2_thr 0.04 \
+python $HOME/git/retsupp/retsupp/modeling/fit_run.py $subject $session $run --model "$model" --bids_folder /shares/zne.uzh/gdehol/ds-retsupp --max_n_iterations 4000 --r2_thr 0.04 \
 	> $HOME/logs/fit_run_sub-${subject}_ses-${session}_run-${run}_model-${model}.out 2>&1
