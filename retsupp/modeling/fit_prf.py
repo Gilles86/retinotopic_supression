@@ -52,6 +52,7 @@ def main(subject, model_label, bids_folder='/data/ds-retsupp', grid_r2_thr=0.05,
     grid_x = np.linspace(-3, 3, 12)
     grid_y = np.linspace(-3, 3, 12)
     grid_sd = np.linspace(1., 4., 8)
+
     # grid_x = np.linspace(-4, 4, 3)
     # grid_y = np.linspace(-4, 4, 3)
     # grid_sd = np.linspace(.33, 6, 3)
@@ -95,7 +96,7 @@ def main(subject, model_label, bids_folder='/data/ds-retsupp', grid_r2_thr=0.05,
         pars_dog_init = gd_pars.copy()
         # This is the relative amplitude of the inhibitory receptive field
         # compared to the excitatory one.
-        pars_dog_init['srf_amplitude'] = grid_pars['srf_amplitude'] = 1e-3
+        pars_dog_init['srf_amplitude'] = grid_pars['srf_amplitude'] = 5e-2
 
         # This is the relative size of the inhibitory receptive field
         # compared to the excitatory one.
@@ -177,7 +178,6 @@ def main(subject, model_label, bids_folder='/data/ds-retsupp', grid_r2_thr=0.05,
                                 r2=r2_grid_img, final_pars=final_par_img, grid_pars=grid_par_img)
 
         par_img.to_filename(target_dir / f'sub-{subject:02d}_desc-{par}.nii.gz')
-
 
     pred_img = r2_masker.inverse_transform(pred)
     pred_img.to_filename(target_dir / f'sub-{subject:02d}_desc-pred.nii.gz')
