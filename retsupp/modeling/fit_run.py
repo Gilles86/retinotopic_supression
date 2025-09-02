@@ -21,7 +21,12 @@ def main(subject, session, run, model_label=1, bids_folder='/data/ds-retsupp', m
     bold_fn = bids_folder / 'derivatives' / 'cleaned' / f'sub-{subject:02d}' / f'ses-{session}' / 'func' / f'sub-{subject:02d}_ses-{session}_task-search_desc-cleaned_run-{run}_bold.nii.gz'
     bold_mask = sub.get_bold_mask()
     brain_masker = input_data.NiftiMasker(mask_img=bold_mask)
+
     data = brain_masker.fit_transform(bold_fn)
+    # Check and crop data if needed
+    if data.shape[0] != 258:
+        print(f"WARNING: Data has {data.shape[0]} timepoints, expected 258. Cropping to first 258.")
+        data = data[:258]
 
     # Get stimulus and grid coordinates for this run
     paradigm = sub.get_stimulus(session=session, run=run, resolution=resolution).astype(np.float32)
