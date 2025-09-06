@@ -3,8 +3,106 @@ import yaml
 import numpy as np
 import pandas as pd
 from nilearn import image, input_data, surface
+import nibabel as nib
 
 class Subject(object):
+    def get_hemisphere_mask(self, hemi, bold_space=False):
+        """
+        Returns a boolean mask for the specified hemisphere ('L' or 'R') 
+        based on aparc+aseg.mgz codes: 1021 (left), 2029 (right).
+        """
+        aseg_file = (
+            self.bids_folder
+            / "derivatives"
+            / "fmriprep"
+            / "sourcedata"
+            / "freesurfer"
+            / f"sub-{self.subject_id:02d}"
+            / "mri"
+            / "aparc+aseg.mgz"
+        )
+        aseg_img = image.load_img(str(aseg_file))
+    
+        if hemi.upper() == "L":
+            mask = image.math_img('(aseg >= 1000) & (aseg < 2000)', aseg=aseg_img)
+        elif hemi.upper() == "R":
+            mask = image.math_img('(aseg >= 2000) & (aseg < 3000)', aseg=aseg_img)
+        else:
+            raise ValueError("hemi must be 'L' or 'R'")
+
+        mask = nib.Nifti1Image(mask.get_fdata(), affine=mask.affine)
+
+        if bold_space:
+            mask = image.resample_to_img(mask, target_img=self.get_bold_mask(), interpolation='nearest')
+
+        return mask
+
+    def get_retinotopic_labels(self):
+        return {
+            1: 'V1', 2: 'V2', 3: 'V3', 4: 'hV4', 5: 'VO1', 6: 'VO2', 7: 'LO1', 8: 'LO2',
+            9: 'TO1', 10: 'TO2', 11: 'V3A', 12: 'V3B',}
+        #13: 'IPS0', 14: 'IPS1', 15: 'IPS2',
+         #   16: 'IPS3', 17: 'IPS4', 18: 'IPS5', 19: 'SPL1', 20: 'FEF'
+        # 
+
+    def get_retinotopic_atlas(self, bold_space=False):
+        varea_file = (
+            self.bids_folder
+            / "derivatives"
+            / "fmriprep"
+            / "sourcedata"
+            / "freesurfer"
+            / f"sub-{self.subject_id:02d}"
+            / "mri"
+            / "inferred_varea.mgz"
+        )
+        varea_img = image.load_img(str(varea_file))
+
+        # Make Nifti1Image out of MGZImage
+        varea_img = nib.Nifti1Image(varea_img.get_fdata(), affine=varea_img.affine)
+
+        if bold_space:
+            func_mask = self.get_bold_mask()
+            varea_img = image.resample_to_img(varea_img, target_img=func_mask, interpolation='nearest')
+
+        return varea_img
+
+    def get_retinotopic_roi(self, roi=None, bold_space=False):
+        """
+        Returns a mask image for the specified retinotopic ROI (e.g., 'V1', 'V2', etc.).
+        If hemi is 'L' or 'R', restricts to that hemisphere.
+        Uses nilearn.image.load_img and image.math_img for masking.
+        """
+        # Invert the label dictionary for fast lookup
+
+        atlas = self.get_retinotopic_atlas(bold_space=bold_space)
+        labels = self.get_retinotopic_labels()
+
+        if roi is None:
+            return atlas, [label for _, label in sorted(labels.items())]
+
+        if roi.endswith('_L'):
+            hemi = 'L'
+            roi = roi[:-2]
+        elif roi.endswith('_R'):
+            hemi = 'R'
+            roi = roi[:-2]
+        else:
+            hemi = None
+
+        name_to_idx = {v.lower(): k for k, v in labels.items()}
+        idx = name_to_idx.get(roi.lower())
+        if idx is None:
+            raise ValueError(f"ROI '{roi}' not found in label names.")
+
+        roi_mask = image.math_img(f"img == {idx}", img=atlas)
+
+        if hemi is not None:
+            hemi_mask = self.get_hemisphere_mask(hemi, bold_space=bold_space)
+            # Convert boolean array to image with same affine/shape as roi_mask
+            roi_mask = image.math_img("roi * hemi", roi=roi_mask, hemi=hemi_mask)
+
+        return roi_mask
 
     def __init__(self, subject_id, bids_folder='/data/ds-retsupp'):
         self.subject_id = int(subject_id)
@@ -22,8 +120,8 @@ class Subject(object):
         with open(yml_file, 'r') as file:
             settings = yaml.safe_load(file)
 
-        eccentricity_stimuli = settings['experiment'].get('eccentricity_stimulus', 5)
-        size_stimuli = settings['experiment'].get('size_stimuli', 1)
+        eccentricity_stimuli = settings['experiment'].get('eccentricity_stimulus')
+        size_stimuli = settings['experiment'].get('size_stimuli')
         radius_bar_aperture = eccentricity_stimuli - size_stimuli / 1.8
         radius_bar_aperture
         speed = settings["bar_stimulus"]["speed"]
@@ -65,49 +163,51 @@ class Subject(object):
         grid_coordinates = np.meshgrid(grid_coordinates_1d, grid_coordinates_1d)
         return grid_coordinates
 
-    def get_stimulus(self, session=1, run=1, resolution=100):
+    def get_stimulus(self, session=1, run=1, resolution=100, debug=False):
 
         settings = self.get_experimental_settings(session, run)
 
+        if debug:
+            print("[DEBUG] Sweep parameters:")
+            print(f"radius_bar_aperture: {settings['radius_bar_aperture']}")
+            print(f"fov_size: {settings['fov_size']}")
+            print(f"bar_width: {settings['bar_width']}")
+            print(f"speed: {settings['speed']}")
+
         def draw_bar(grid_coordinates, pos, ori, bar_width):
-
             # Grid coordinates are 2D arrays
-
             assert ori in [0, 90], "Orientation must be 0 or 90 degrees"
             bar = np.zeros_like(grid_coordinates[0])
-
             x, y = grid_coordinates
-
             if ori == 0:
                 bar[np.abs(x - pos) < bar_width / 2] = 1
             elif ori == 90:
                 bar[np.abs(y - pos) < bar_width / 2] = 1
             return bar
-    
+
         tr = self.get_tr(session, run)
         n_volumes = self.get_n_volumes(session, run)
-
         frametimes = np.arange(tr/2., tr*n_volumes + tr/2., tr)
 
         onsets = self.get_onsets(session, run)
         bar = onsets[onsets['event_type'].apply(lambda x: x.startswith('bar'))]
 
+        if debug:
+            print("[DEBUG] Bar event log:")
+            print(bar[['onset', 'event_type']])
+
         radius_bar_aperture, fov_size, bar_width = settings['radius_bar_aperture'], settings['fov_size'], settings['bar_width']
         speed = settings['speed']
 
         grid_coordinates = self.get_grid_coordinates(resolution, session, run)
-
         grid_x, grid_y = grid_coordinates
-
         mask = np.sqrt(grid_x**2 + grid_y**2) <= radius_bar_aperture
-
         stimulus = np.zeros((len(frametimes), resolution, resolution))
 
         ori = 0
         pos = -fov_size - bar_width
 
         for i, t in enumerate(frametimes):
-
             if t < bar['onset'].min():
                 stimulus[i, :, :] = 0
                 continue
@@ -127,10 +227,13 @@ class Subject(object):
                 pos = radius_bar_aperture + bar_width / 2 - dt * speed
             elif current_state in ['bar_up']:
                 ori = 90
-                pos = -radius_bar_aperture + bar_width / 2 + dt * speed
+                pos = -radius_bar_aperture - bar_width / 2 + dt * speed
             elif current_state in ['bar_down']:
                 ori = 90
-                pos = radius_bar_aperture - bar_width / 2 - dt * speed
+                pos = radius_bar_aperture + bar_width / 2 - dt * speed
+
+            if debug:
+                print(f"[DEBUG] Frame {i}: t={t:.2f}, state={current_state}, dt={dt:.2f}, ori={ori}, pos={pos:.2f}")
 
             stimulus[i, ...] = draw_bar(grid_coordinates, pos, ori, bar_width) * mask
 
@@ -230,16 +333,28 @@ class Subject(object):
 
         return labels
 
-    def get_prf_parameters_volume(self, model=1, return_image=False):
+    def get_prf_parameters_volume(self, model=1, return_image=False, roi=None, session=None, run=None):
 
         parameters = self.get_prf_parameter_labels(model=model)
 
-        masker = self.get_bold_mask(return_masker=True)
+        if ((session is None) and (run is not None)) or ((session is not None) and (run is None)):
+            raise ValueError('Both session and run must be specified or both be None.')
+        # elif (session is not None) and (run is not None):
+        #     raise NotImplementedError('PRF parameters per run not implemented yet.')
+
+        if roi is None:
+            masker = self.get_bold_mask(return_masker=True)
+        else:
+            roi = self.get_retinotopic_roi(roi=roi, bold_space=True)
+            masker = input_data.NiftiMasker(mask_img=roi)
 
         output = []
 
         for par in parameters:
-            fn = self.bids_folder / 'derivatives' / 'prf' / f'model{model}' / f'sub-{self.subject_id:02d}' / f'sub-{self.subject_id:02d}_desc-{par}.nii.gz'
+            if (session is None) and (run is None):
+                fn = self.bids_folder / 'derivatives' / 'prf' / f'model{model}' / f'sub-{self.subject_id:02d}' / f'sub-{self.subject_id:02d}_desc-{par}.nii.gz'
+            else:
+                fn = self.bids_folder / 'derivatives' / 'prf_runfit' / f'model{model}' / f'sub-{self.subject_id:02d}' / f'ses-{session}' / f'sub-{self.subject_id:02d}_ses-{session}_run-{run}_desc-{par}.nii.gz'
             output.append(pd.Series(masker.fit_transform(fn).squeeze(), name=par))
 
         output = pd.concat(output, axis=1)
@@ -266,3 +381,114 @@ class Subject(object):
         output = pd.concat(output, axis=1)
 
         return output
+    
+    def get_hemisphere_mask(self, hemi, bold_space=False):
+        """
+        Returns a boolean mask for the specified hemisphere ('L' or 'R') 
+        based on aparc+aseg.mgz codes: 1021 (left), 2029 (right).
+        """
+        aseg_file = (
+            self.bids_folder
+            / "derivatives"
+            / "fmriprep"
+            / "sourcedata"
+            / "freesurfer"
+            / f"sub-{self.subject_id:02d}"
+            / "mri"
+            / "aparc+aseg.mgz"
+        )
+        aseg_img = image.load_img(str(aseg_file))
+    
+        if hemi.upper() == "L":
+            mask = image.math_img('(aseg >= 1000) & (aseg < 2000)', aseg=aseg_img)
+        elif hemi.upper() == "R":
+            mask = image.math_img('(aseg >= 2000) & (aseg < 3000)', aseg=aseg_img)
+        else:
+            raise ValueError("hemi must be 'L' or 'R'")
+
+        mask = nib.Nifti1Image(mask.get_fdata(), affine=mask.affine)
+
+        if bold_space:
+            mask = image.resample_to_img(mask, target_img=self.get_bold_mask(), interpolation='nearest')
+
+        return mask
+
+    def get_t1w(self):
+        t1w = self.bids_folder / 'derivatives' / 'fmriprep' / f'sub-{self.subject_id:02d}' / 'anat' / f'sub-{self.subject_id:02d}_desc-preproc_T1w.nii.gz'
+
+        if t1w.exists():
+            return image.load_img(str(t1w))
+        else:
+            for session in [1,2]:
+                t1w = self.bids_folder / 'derivatives' / 'fmriprep' / f'sub-{self.subject_id:02d}' / f'ses-{session}' / 'anat' / f'sub-{self.subject_id:02d}_ses-{session}_desc-preproc_T1w.nii.gz'
+                if t1w.exists():
+                    return image.load_img(str(t1w))
+        raise FileNotFoundError(f"T1w image not found: {t1w}")   
+
+    def get_retinotopic_labels(self):
+        return {
+            1: 'V1', 2: 'V2', 3: 'V3', 4: 'hV4', 5: 'VO1', 6: 'VO2', 7: 'LO1', 8: 'LO2',
+            9: 'TO1', 10: 'TO2', 11: 'V3A', 12: 'V3B',}
+        #13: 'IPS0', 14: 'IPS1', 15: 'IPS2',
+         #   16: 'IPS3', 17: 'IPS4', 18: 'IPS5', 19: 'SPL1', 20: 'FEF'
+        # 
+
+
+    def get_retinotopic_atlas(self, bold_space=False):
+        varea_file = (
+            self.bids_folder
+            / "derivatives"
+            / "fmriprep"
+            / "sourcedata"
+            / "freesurfer"
+            / f"sub-{self.subject_id:02d}"
+            / "mri"
+            / "inferred_varea.mgz"
+        )
+        varea_img = image.load_img(str(varea_file))
+
+        # Make Nifti1Image out of MGZImage
+        varea_img = nib.Nifti1Image(varea_img.get_fdata(), affine=varea_img.affine)
+
+        if bold_space:
+            func_mask = self.get_bold_mask()
+            varea_img = image.resample_to_img(varea_img, target_img=func_mask, interpolation='nearest')
+
+        return varea_img
+
+    def get_retinotopic_roi(self, roi=None, bold_space=False):
+        """
+        Returns a mask image for the specified retinotopic ROI (e.g., 'V1', 'V2', etc.).
+        If hemi is 'L' or 'R', restricts to that hemisphere.
+        Uses nilearn.image.load_img and image.math_img for masking.
+        """
+        # Invert the label dictionary for fast lookup
+
+        atlas = self.get_retinotopic_atlas(bold_space=bold_space)
+        labels = self.get_retinotopic_labels()
+
+        if roi is None:
+            return atlas, [label for _, label in sorted(labels.items())]
+
+        if roi.endswith('_L'):
+            hemi = 'L'
+            roi = roi[:-2]
+        elif roi.endswith('_R'):
+            hemi = 'R'
+            roi = roi[:-2]
+        else:
+            hemi = None
+
+        name_to_idx = {v.lower(): k for k, v in labels.items()}
+        idx = name_to_idx.get(roi.lower())
+        if idx is None:
+            raise ValueError(f"ROI '{roi}' not found in label names.")
+
+        roi_mask = image.math_img(f"img == {idx}", img=atlas)
+
+        if hemi is not None:
+            hemi_mask = self.get_hemisphere_mask(hemi, bold_space=bold_space)
+            # Convert boolean array to image with same affine/shape as roi_mask
+            roi_mask = image.math_img("roi * hemi", roi=roi_mask, hemi=hemi_mask)
+
+        return roi_mask
