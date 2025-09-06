@@ -244,12 +244,14 @@ class Subject(object):
         def filter_confounds(confounds, n_acompcorr=10):
             confound_cols = ['dvars', 'framewise_displacement']
 
-            a_compcorr_cols = [f"a_comp_cor_{i:02d}" for i in range(n_acompcorr)]
+            # Only include available a_comp_cor columns, up to n_acompcorr
+            a_compcorr_cols = [f'a_comp_cor_{i:02d}' for i in range(n_acompcorr)]
+            a_compcorr_cols = [c for c in a_compcorr_cols if c in confounds.columns]
             confound_cols += a_compcorr_cols
 
             motion_cols = ['trans_x', 'trans_y', 'trans_z', 'rot_x', 'rot_y', 'rot_z']
             motion_cols += [f'{e}_derivative1' for e in motion_cols]
-            confound_cols += motion_cols
+            confound_cols += [c for c in motion_cols if c in confounds.columns]
 
             steady_state_cols = [c for c in confounds.columns if 'non_steady_state' in c]
             confound_cols += steady_state_cols
@@ -260,7 +262,8 @@ class Subject(object):
             cosine_cols = [c for c in confounds.columns if 'cosine' in c]
             confound_cols += cosine_cols
 
-            
+            # Only keep columns that exist in confounds
+            confound_cols = [c for c in confound_cols if c in confounds.columns]
             return confounds[confound_cols].fillna(0)
 
         confounds = pd.read_csv(self.bids_folder / 'derivatives' / 'fmriprep' / f'sub-{self.subject_id:02d}' / f'ses-{session}' / 'func' / f'sub-{self.subject_id:02d}_ses-{session}_task-search_rec-NORDIC_run-{run}_desc-confounds_timeseries.tsv', sep='\t')
