@@ -1,17 +1,143 @@
 intro: |
   - INSTRUCTIONS -
 
-  This task is a version of a task
-  called the additional singleton paradigm
+  In this experiment, you will encounter arrays of colored bars.
+  Your job on every trial will be to find the bar
+  that has a different orientation than all the others.
+  |||||-||
 
-  On each trial you will see a display with 8 shapes.
+  Once you have found this bar, you will need to report whether
+  this uniquely oriented bar has a grey dot inside it.
 
-  Each display contains a single unique shape.
+  If it has a dot, then you need to press the 'left' button.
+  if it doesnt have a dot, then you will need to press the
+  'up' direction button
 
-  This can be a shape of two vertical lines
-  among shapes with horizontal lines, or vice versa.
+  While you do this task, it is very important that you 
+  do not move your eyes!
 
-  Your task is to detect the orientation
-  of the wedge inside the unique shape.
+  -- the next screen will have an example of the test array --
 
-  --- press space bar to see an example of this task ---
+
+example1:
+  text: |
+    - EXAMPLE TRIAL 1 -
+
+    Here's what a trial display looks like.
+
+    Do you notice that one of the lines is vertical and the others
+    are horizontal? This is your search target.
+
+    Notice that there is a grey dot inside this line? On this trial,
+    a correct answer would be to press the 'left' button.
+  image: images/noDist.png
+
+example2:
+  text: |
+    - EXAMPLE TRIAL 2 -
+
+    Here's is another example trial. This one includes a 
+    color distractor. That is the green bar. 
+    This color distractor is there to mess you up!
+    Try to ignore it and focus on the oriented bar 
+    that is your target. 
+
+    You probably also noticed that the colors switched, 
+    so now your search target is orange. 
+    This happens randomly on every trial. Color is never 
+    important in this experiment, only orientations!
+
+    On this trial, your target doesnt have a grey dot inside it.
+    The correct answer on this trial is therefore to press the 'up' button
+  image: images/withDist.png
+
+example3:
+  text: |
+    - EXAMPLE TRIAL 3 -
+
+    While you are doing this search task,
+    a checkardboard bar will slowly move across
+    the screen. This has nothing to do with your task,
+    so you can safely ignore it.
+
+    We use this checkardboard to measure your visual system
+    while you are doing the task. You can ask the experimenter
+    for more information about this if you are interested.
+  image: images/withBar.png
+  
+
+fix: |
+  - SUMMARY -
+
+  Sometimes there will be a long break between
+  search trials (a couple seconds). So just wait!
+
+  Notably, the block will start with 15 seconds of just fixation,
+  so just at the begining, expect to just
+  stare at the fixation dot for a while and wait for the trials to start :)
+
+
+summary: |
+  - SUMMARY -
+
+  So thats it! Your job is to identify the
+  bar with a unique orientation and report
+  whether it contains a dot. While you do
+  this, you will sometimes need to ignore
+  a color distractor.
+
+  You will also sometimes see a slowly
+  moving checkardbaord at the middle of
+  the screen. This is unrelated to your
+  task and can be ignored.
+
+reminder: |
+
+  - REMINDER -
+
+  While doing this task it is extremely important 
+  that you.
+  DONT MOVE YOUR EYES!
+
+  If you move your eyes then we will need
+  to throw out that trial! It is always
+  better to get a trial wrong than to move
+  your eyes.
+
+  Now if you are ready, lets start the trials!
+
+  -- WARNING if you press a button now you will start the real experiment trials --
+
+break: |
+  - TIME FOR A BREAK! -
+
+  You have just completed a block of trials. Great job!
+
+  Take a moment to rest your eyes.
+
+fin: |
+  - YOURE FINISHED -
+
+  You have just completed the whole experimental session! Great job!
+
+  If this was training, then the experimenter will now let you know
+  if your eye control was good enough to proceed with the scanning sessions.
+
+  If this was a scanning session then you will now be ejected from the 
+  expensive magnetic tube
+
+return: 
+  text: |
+    - WELCOME BACK! -
+
+    Weclome to the MRI sessions of this experiment!
+    The fact that you are here means that you were very 
+    good at keeping your eyes still. So you should
+    be proud of that!!
+
+    We will now do six blocks of the exact same
+    task you did in the eyetracker labs, but now you
+    are laying in a big magnet.
+
+    Press any button to jump back into the task!
+  image: images/withBar.png
