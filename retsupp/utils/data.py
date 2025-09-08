@@ -10,6 +10,46 @@ class Subject(object):
     def __init__(self, subject_id, bids_folder='/data/ds-retsupp'):
         self.subject_id = int(subject_id)
         self.bids_folder = Path(bids_folder)
+        # Mapping from distractor code to location
+        self.location_mapping = {
+            1.0: 'upper_right',
+            3.0: 'upper_left',
+            5.0: 'lower_left',
+            7.0: 'lower_right',
+            np.nan: 'no distractor',
+        }
+    def get_distractor_mapping(self):
+        subject = int(self.subject_id)
+
+        # Counterbalancing lists (fixed indexing: (subject-1) % 8)
+        hp_sequences = [
+            [1, 5, 3, 7],
+            [1, 5, 7, 3],
+            [3, 7, 5, 1],
+            [5, 1, 7, 3],
+            [3, 7, 1, 5],
+            [7, 3, 1, 5],
+            [5, 1, 3, 7],
+            [7, 3, 5, 1],
+        ]
+        hp_list = hp_sequences[(subject - 1) % 8]
+
+        # Build the 12-run block pattern (2 sessions × 6 runs)
+        if subject in (1, 2):
+            # Bugged order: AA BBB CCC DDD A  →  runs: 1..12 = A,A,B,B,B,C,C,C,D,D,D,A
+            block_order = [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 0]
+        else:
+            # Intended order: AAA BBB CCC DDD  →  runs: 1..12 = A,A,A,B,B,B,C,C,C,D,D,D
+            block_order = [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3]
+
+        distractor_locations = {}
+        for session in (1, 2):
+            for run in range(1, 7):
+                global_run = (session - 1) * 6 + run  # 1..12
+                block_idx = block_order[global_run - 1]  # 0..3
+                distractor_locations[(session, run)] = self.location_mapping[hp_list[block_idx]]
+
+        return distractor_locations
 
     def get_experimental_settings(self, session=1, run=1):
         
@@ -39,6 +79,7 @@ class Subject(object):
             'bar_width': bar_width,
             'fov_size': fov_size
         }
+
 
     def get_tr(self, session=1, run=1):
         return 1.6
@@ -239,36 +280,60 @@ class Subject(object):
 
         return labels
 
-    def get_prf_parameters_volume(self, model=1, return_image=False, roi=None, session=None, run=None):
+    def get_prf_parameters_volume(self, model=1, type='mean', return_images=True):
+        """
+        Extract PRF parameter images for this subject.
+        Args:
+            model (int): Model number
+            runwise (bool): If True, return images for each session/run. If False, return one image per parameter.
+        Returns:
+            If runwise is False: pd.Series with parameter labels as index and NiftiImages as values.
+            If runwise is True: pd.DataFrame with columns as parameter labels, index as session/run pairs, and values as NiftiImages.
+        """
 
-        parameters = self.get_prf_parameter_labels(model=model)
+        param_labels = self.get_prf_parameter_labels(model=model)
 
-        if ((session is None) and (run is not None)) or ((session is not None) and (run is None)):
-            raise ValueError('Both session and run must be specified or both be None.')
-        # elif (session is not None) and (run is not None):
-        #     raise NotImplementedError('PRF parameters per run not implemented yet.')
+        if type == 'mean':
+            base_dir = self.bids_folder / 'derivatives' / 'prf' / f'model{model}' / f'sub-{self.subject_id:02d}'
+            images = {}
+            for par in param_labels:
+                img_path = base_dir / f'sub-{self.subject_id:02d}_desc-{par}.nii.gz'
+                images[par] = nib.load(str(img_path))
+            
+            if return_images:
+                return pd.Series(images)
+            else:
+                masker = self.get_bold_mask(return_masker=True)
+                data = {par: self._extract_param_arr(images[par], roi=None) for par in param_labels}
+                return pd.DataFrame(data)
 
+        elif type=='runwise':
+
+            base_dir = self.bids_folder / 'derivatives' / 'prf_runfit' / f'model{model}' / f'sub-{self.subject_id:02d}'
+            data = []
+            index = []
+            for ses in [1, 2]:
+                ses_dir = base_dir / f'ses-{ses}'
+                for run in [1, 2, 3, 4, 5, 6]:
+                    row = {}
+                    for par in param_labels:
+                        img_path = ses_dir / f'sub-{self.subject_id:02d}_ses-{ses}_run-{run}_desc-{par}.nii.gz'
+                        row[par] = nib.load(str(img_path))
+                    data.append(row)
+                    index.append((ses, run))
+            df = pd.DataFrame(data, index=pd.MultiIndex.from_tuples(index, names=['session', 'run']))
+            df.columns.name = 'parameter'
+            return df
+        else:
+            raise ValueError("type must be 'mean' or 'runwise'")
+
+    def _extract_param_arr(self, fn, roi):
         if roi is None:
             masker = self.get_bold_mask(return_masker=True)
         else:
-            roi = self.get_retinotopic_roi(roi=roi, bold_space=True)
-            masker = input_data.NiftiMasker(mask_img=roi)
-
-        output = []
-
-        for par in parameters:
-            if (session is None) and (run is None):
-                fn = self.bids_folder / 'derivatives' / 'prf' / f'model{model}' / f'sub-{self.subject_id:02d}' / f'sub-{self.subject_id:02d}_desc-{par}.nii.gz'
-            else:
-                fn = self.bids_folder / 'derivatives' / 'prf_runfit' / f'model{model}' / f'sub-{self.subject_id:02d}' / f'ses-{session}' / f'sub-{self.subject_id:02d}_ses-{session}_run-{run}_desc-{par}.nii.gz'
-            output.append(pd.Series(masker.fit_transform(fn).squeeze(), name=par))
-
-        output = pd.concat(output, axis=1)
-
-        if return_image:
-            return masker.inverse_transform(output.T), parameters
-        else:
-            return output
+            roi_mask = self.get_retinotopic_roi(roi=roi, bold_space=True)
+            masker = input_data.NiftiMasker(mask_img=roi_mask)
+        return masker.fit_transform(fn).squeeze()
 
     def get_prf_parameters_surface(self, model=1):
 
@@ -315,7 +380,7 @@ class Subject(object):
         mask = nib.Nifti1Image(mask.get_fdata(), affine=mask.affine)
 
         if bold_space:
-            mask = image.resample_to_img(mask, target_img=self.get_bold_mask(), interpolation='nearest')
+            mask = image.resample_to_img(mask, target_img=self.get_bold_mask(), interpolation='nearest', force_resample=True)
 
         return mask
 
@@ -358,7 +423,7 @@ class Subject(object):
 
         if bold_space:
             func_mask = self.get_bold_mask()
-            varea_img = image.resample_to_img(varea_img, target_img=func_mask, interpolation='nearest')
+            varea_img = image.resample_to_img(varea_img, target_img=func_mask, interpolation='nearest', force_resample=True)
 
         return varea_img
 
