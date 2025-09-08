@@ -112,7 +112,7 @@ def main(subject, model_label=1, bids_folder='/data/ds-retsupp', max_n_iteration
         pred_full = np.zeros((pred.shape[0], n_voxels))
         pred_full[:, mask_r2.values] = pred
         pred_img = brain_masker.inverse_transform(pred_full)
-        pred_img.to_filename(target_dir / f'sub-{subject:02d}_ses-{session}_cond-{cond}_desc-pred.nii.gz')
+        pred_img.to_filename(target_dir / f'sub-{subject:02d}_cond-{cond}_desc-pred.nii.gz')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fit PRF model to mean time series for each condition across all sessions.")
