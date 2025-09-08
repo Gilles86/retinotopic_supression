@@ -24,7 +24,7 @@ def main(subject, model_label=1, bids_folder='/data/ds-retsupp', max_n_iteration
 
     print("Loading and masking BOLD data...")
 
-    for session, run in product([1, ], range(1, 2)):
+    for session, run in product([1, 2], range(1, 7)):
         bold_fn = bids_folder / 'derivatives' / 'cleaned' / f'sub-{subject:02d}' / f'ses-{session}' / 'func' / f'sub-{subject:02d}_ses-{session}_task-search_desc-cleaned_run-{run}_bold.nii.gz'
         data = brain_masker.fit_transform(bold_fn)
         if data.shape[0] != 258:
