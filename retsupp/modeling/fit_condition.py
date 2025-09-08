@@ -67,7 +67,7 @@ def main(subject, model_label=1, bids_folder='/data/ds-retsupp', max_n_iteration
         raise Exception("No voxels above r2 threshold.")
 
     # Group by condition and fit PRF model to mean time series
-    for cond, cond_df in data_df.groupby(['condition']):
+    for cond, cond_df in data_df.groupby('condition'):
         print(f'Fitting condition {cond}...')
 
         mean_ts = cond_df.drop(columns=['condition']).groupby('timepoint').mean()  # mean time series for voxels
