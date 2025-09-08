@@ -119,7 +119,7 @@ if __name__ == "__main__":
     parser.add_argument('subject', type=int, help='Subject ID')
     parser.add_argument('--model', type=int, default=1, help='Model label (1=Gaussian, 2=DoG, 3=Gaussian+HRF, 4=DoG+HRF)')
     parser.add_argument('--bids_folder', default='/data/ds-retsupp', help='BIDS folder path')
-    parser.add_argument('--max_n_iterations', default=2000, type=int, help='Max number of iterations')
+    parser.add_argument('--max_n_iterations', default=4000, type=int, help='Max number of iterations')
     parser.add_argument('--resolution', default=50, type=int, help='Stimulus resolution')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
     parser.add_argument('--r2_thr', default=0.04, type=float, help='R2 threshold for output masking')
