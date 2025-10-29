@@ -5,6 +5,15 @@ import pandas as pd
 from nilearn import image, input_data, surface
 import nibabel as nib
 
+# Utility function to load subject IDs from the installed YAML file
+def get_subject_ids():
+    """Load subject IDs from the installed subjects.yml and return as zero-padded strings."""
+    import yaml
+    with importlib.resources.files('retsupp.data').joinpath('subjects.yml').open('r') as f:
+        subjects = yaml.safe_load(f)
+    # Assume subjects is a list of ints or strings convertible to int
+    return [f"{int(s):02d}" for s in subjects]
+
 class Subject(object):
 
     def __init__(self, subject_id, bids_folder='/data/ds-retsupp'):
