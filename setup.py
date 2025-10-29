@@ -1,3 +1,4 @@
+
 from setuptools import setup, find_packages
 
 setup(
@@ -17,4 +18,8 @@ setup(
     install_requires=[
         # Add your project dependencies here
     ],
+    package_data={
+        "retsupp": ["data/subjects.yml"],
+    },
+    include_package_data=True,
 )
