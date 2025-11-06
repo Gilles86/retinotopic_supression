@@ -2,7 +2,7 @@
 #SBATCH --job-name=preprocess
 #SBATCH --output=/home/gdehol/logs/retsupp_preprocess_%A_%a.out
 #SBATCH --error=/home/gdehol/logs/retsupp_preprocess_%A_%a.out
-#SBATCH --time=20:00
+#SBATCH --time=1:00:00
 #SBATCH --mem=96G
 #SBATCH --cpus-per-task=16
 
