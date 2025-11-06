@@ -1,9 +1,11 @@
+import importlib.resources
 from pathlib import Path
 import yaml
 import numpy as np
 import pandas as pd
 from nilearn import image, input_data, surface
 import nibabel as nib
+from itertools import product
 
 # Utility function to load subject IDs from the installed YAML file
 def get_subject_ids():
@@ -97,6 +99,9 @@ class Subject(object):
         return 258
     
     def get_runs(self, session=1):
+        if (self.subject_id == 24) & (session == 1):
+            return [1,2,3,4,5]
+
         return [1,2,3,4,5,6]
 
     def get_onsets(self, session=1, run=1):
@@ -192,9 +197,9 @@ class Subject(object):
 
         return stimulus
 
-    def get_confounds(self, session=1, run=1, confounds=None):
+    def get_confounds(self, session=1, run=1, filter_confounds=True):
 
-        def filter_confounds(confounds, n_acompcorr=10):
+        def filter_confounds_(confounds, n_acompcorr=10):
             confound_cols = ['dvars', 'framewise_displacement']
 
             # Only include available a_comp_cor columns, up to n_acompcorr
@@ -221,7 +226,8 @@ class Subject(object):
 
         confounds = pd.read_csv(self.bids_folder / 'derivatives' / 'fmriprep' / f'sub-{self.subject_id:02d}' / f'ses-{session}' / 'func' / f'sub-{self.subject_id:02d}_ses-{session}_task-search_rec-NORDIC_run-{run}_desc-confounds_timeseries.tsv', sep='\t')
 
-        confounds = filter_confounds(confounds)
+        if filter_confounds:
+            confounds = filter_confounds_(confounds)
 
         return confounds
 
@@ -233,8 +239,11 @@ class Subject(object):
             fn = self.bids_folder / 'sub-{self.subject_id:02d}' / f'ses-{session}' / 'func' / f'sub-{self.subject_id:02d}_ses-{session}_task-search_run-{run}_bold.nii.gz'
         elif type == 'cleaned':
             fn = self.bids_folder / 'derivatives' / 'cleaned' / f'sub-{self.subject_id:02d}' / f'ses-{session}' / 'func' / f'sub-{self.subject_id:02d}_ses-{session}_task-search_desc-cleaned_run-{run}_bold.nii.gz'
+        elif type == 'prf_regressed_out':
+            # sub-02_ses-1_run-1_task-prf_cleaned_regressed.nii.gz
+            fn = self.bids_folder / 'derivatives' / 'prf_regressed_out' / f'sub-{self.subject_id:02d}' / f'ses-{session}' / 'func' / f'sub-{self.subject_id:02d}_ses-{session}_run-{run}_task-prf_cleaned_regressed.nii.gz'
         else:
-            raise ValueError("Type must be 'fmriprep', 'raw', 'cleaned', or 'nordic'")
+            raise ValueError("Type must be 'fmriprep', 'raw', 'cleaned', or 'nordic', 'prf_regressed_out")
 
         if return_image:
             return image.load_img(fn)
@@ -333,8 +342,24 @@ class Subject(object):
             df = pd.DataFrame(data, index=pd.MultiIndex.from_tuples(index, names=['session', 'run']))
             df.columns.name = 'parameter'
             return df
+        elif type == 'conditionwise':
+            # Four conditions: upper_left, upper_right, lower_left, lower_right
+            conditions = ['upper_left', 'upper_right', 'lower_left', 'lower_right']
+            base_dir = self.bids_folder / 'derivatives' / 'prf_conditionfit' / f'model{model}' / f'sub-{self.subject_id:02d}'
+            data = []
+            index = []
+            for cond in conditions:
+                row = {}
+                for par in param_labels:
+                    img_path = base_dir / f'sub-{self.subject_id:02d}_cond-{cond}_desc-{par}.nii.gz'
+                    row[par] = nib.load(str(img_path))
+                data.append(row)
+                index.append(cond)
+            df = pd.DataFrame(data, index=pd.Index(index, name='condition'))
+            df.columns.name = 'parameter'
+            return df
         else:
-            raise ValueError("type must be 'mean' or 'runwise'")
+            raise ValueError("type must be 'mean', 'runwise', or 'conditionwise'")
 
     def _extract_param_arr(self, fn, roi):
         if roi is None:
@@ -344,7 +369,7 @@ class Subject(object):
             masker = input_data.NiftiMasker(mask_img=roi_mask)
         return masker.fit_transform(fn).squeeze()
 
-    def get_prf_parameters_surface(self, model=1):
+    def get_prf_parameters_surface(self, model=1, space='fsnative'):
 
         parameters = self.get_prf_parameter_labels(model=model)
 
@@ -353,8 +378,9 @@ class Subject(object):
         for par in parameters:
             tmp = []
             for hemi in ['L', 'R']:
-                fn = self.bids_folder / 'derivatives' / 'prf' / f'model{model}' / f'sub-{self.subject_id:02d}' / f'sub-{self.subject_id:02d}_desc-{par}.optim.nilearn_space-fsnative_hemi-{hemi}.func.gii'
-                tmp.append(pd.Series(surface.load_surf_data(fn).squeeze(), name=(par)))
+                fn = self.bids_folder / 'derivatives' / 'prf' / f'model{model}' / f'sub-{self.subject_id:02d}' / f'sub-{self.subject_id:02d}_desc-{par}.optim.nilearn_space-{space}_hemi-{hemi}.func.gii'
+                surf_data = surface.load_surf_data(fn).squeeze()
+                tmp.append(pd.Series(surf_data, name=(par), index=pd.Index(range(surf_data.shape[0]), name='vertex')))
                 # output.append(pd.Series(surface.load_surf_data(fn), name=(par, hemi)))
             output.append(pd.concat(tmp, axis=0, keys=['L', 'R'], names=['hemi']))
 
@@ -472,3 +498,76 @@ class Subject(object):
             roi_mask = image.math_img("roi * hemi", roi=roi_mask, hemi=hemi_mask)
 
         return roi_mask
+
+    def get_prf_predictions(self, model=1, type='mean', return_image=True):
+
+        if type not in ['mean']:
+            raise NotImplementedError("Only 'mean' type is implemented for PRF predictions.")
+
+        fn = self.bids_folder / 'derivatives' / 'prf' / f'model{model}' / f'sub-{self.subject_id:02d}' / f'sub-{self.subject_id:02d}_desc-pred.nii.gz'
+
+        if return_image:
+            return image.load_img(str(fn))
+        else:
+            masker = self.get_bold_mask(return_masker=True)
+            data = masker.fit_transform(image.load_img(str(fn)))
+            return pd.DataFrame(data, index=pd.Index(range(data.shape[0]), name='time'), columns=pd.Index(range(data.shape[1], name='voxel')))
+
+
+    def get_inferred_pars_volume(self, return_images=True):
+        from nibabel.freesurfer.io import read_morph_data
+        import numpy as np
+        import pandas as pd
+        from itertools import product
+
+        freesurfer_dir = self.bids_folder / 'derivatives' / 'fmriprep' / 'sourcedata' / 'freesurfer' / f'sub-{self.subject_id:02d}' / 'mri'
+        par_labels = ['angle', 'eccen', 'sigma', 'varea']
+
+        results = {}
+
+        for par in par_labels:
+            img = nib.load(freesurfer_dir / f'inferred_{par}.mgz')
+            results[par] = img
+
+        if return_images:
+            return pd.Series(results)
+        else:
+            masker = self.get_bold_mask(return_masker=True)
+            data = {par: self._extract_param_arr(results[par], roi=None) for par in par_labels}
+            return pd.DataFrame(data)
+
+    def get_inferred_prf_pars_surf(self):
+        from nibabel.freesurfer.io import read_morph_data
+        import numpy as np
+        import pandas as pd
+        from itertools import product
+
+        freesurfer_dir = self.bids_folder / 'derivatives' / 'fmriprep' / 'sourcedata' / 'freesurfer' / f'sub-{self.subject_id:02d}'
+        par_labels = ['angle', 'eccen', 'sigma', 'varea']
+        hemis = ['L', 'R']
+        fs_hemi = {'L': 'lh', 'R': 'rh'}
+
+        # Load data for each hemisphere
+        dfs = []
+        for hemi in hemis:
+            df = pd.DataFrame({
+                par: read_morph_data(freesurfer_dir / 'surf' / f'{fs_hemi[hemi]}.inferred_{par}').squeeze().astype(np.float32)
+                for par in par_labels
+            })
+            n_vertices = len(df)
+            # Create a MultiIndex for this hemisphere
+            df.index = pd.MultiIndex.from_product(
+                [[hemi], range(n_vertices)],
+                names=['hemi', 'vertex']
+            )
+            dfs.append(df)
+
+        # Concatenate along rows
+        results = pd.concat(dfs, axis=0)
+
+        results['roi'] = results['varea'].map(self.get_retinotopic_labels()).fillna('None')
+
+        # Set all 0's to nan
+        results['varea'] = results['varea'].replace(0, np.nan)
+
+        return results
