@@ -7,7 +7,7 @@ from retsupp.utils.data import Subject
 from braincoder.models import GaussianPRF2DWithHRF, DifferenceOfGaussiansPRF2DWithHRF
 from braincoder.optimize import ParameterFitter
 from braincoder.hrf import SPMHRFModel
-from tqdm.contrib.itertools import product
+from tqdm import tqdm
 
 def main(subject, model_label=1, bids_folder='/data/ds-retsupp', max_n_iterations=2000, debug=False, resolution=50, r2_thr=0.04):
     print(f"Fitting PRF model for subject {subject} across all sessions by condition.")
@@ -24,7 +24,9 @@ def main(subject, model_label=1, bids_folder='/data/ds-retsupp', max_n_iteration
 
     print("Loading and masking BOLD data...")
 
-    for session, run in product([1, 2], range(1, 7)):
+    session_runs = [(session, run) for session in [1, 2] for run in sub.get_runs(session)]
+
+    for session, run in tqdm(session_runs, desc="Sessions and runs"):
         bold_fn = bids_folder / 'derivatives' / 'cleaned' / f'sub-{subject:02d}' / f'ses-{session}' / 'func' / f'sub-{subject:02d}_ses-{session}_task-search_desc-cleaned_run-{run}_bold.nii.gz'
         data = brain_masker.fit_transform(bold_fn)
         if data.shape[0] != 258:
