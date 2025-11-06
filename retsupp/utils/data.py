@@ -99,7 +99,7 @@ class Subject(object):
         return 258
     
     def get_runs(self, session=1):
-        if (self.subject_id == 24) & (session == 1):
+        if (self.subject_id == 20) & (session == 1):
             return [1,2,3,4,5]
 
         return [1,2,3,4,5,6]
