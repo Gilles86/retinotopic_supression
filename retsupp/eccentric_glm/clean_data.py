@@ -6,7 +6,7 @@ from retsupp.utils.data import Subject
 from tqdm.contrib.itertools import product
 from pathlib import Path
 
-def main(subject, mean_prf=False, bids_folder='/data/ds-retsupp'):
+def main(subject, mean_prf=True, bids_folder='/data/ds-retsupp'):
 
     sub = Subject(subject, bids_folder=bids_folder)
     sessions = [1, 2]
