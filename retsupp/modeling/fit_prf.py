@@ -1,9 +1,9 @@
 import argparse
-from nilearn import input_data, image
+from nilearn import maskers, image
 from retsupp.utils.data import Subject
 from pathlib import Path
 
-from braincoder.models import GaussianPRF2DWithHRF, DifferenceOfGaussiansPRF2DWithHRF
+from braincoder.models import GaussianPRF2DWithHRF, DifferenceOfGaussiansPRF2DWithHRF, DivisiveNormalizationGaussianPRF2DWithHRF
 from braincoder.optimize import ParameterFitter
 from braincoder.hrf import SPMHRFModel
 import numpy as np
@@ -31,7 +31,7 @@ def main(subject, model_label, bids_folder='/data/ds-retsupp', grid_r2_thr=0.05,
 
     mean_ts = bids_folder / 'derivatives' / 'mean_signal' / f'sub-{subject:02d}'/ f'sub-{subject:02d}_desc-mean_bold.nii.gz'
 
-    brain_masker = input_data.NiftiMasker(mask_img=bold_mask)
+    brain_masker = maskers.NiftiMasker(mask_img=bold_mask)
 
     data = brain_masker.fit_transform(mean_ts)
 
@@ -76,7 +76,7 @@ def main(subject, model_label, bids_folder='/data/ds-retsupp', grid_r2_thr=0.05,
     r2_mask = image.math_img(f'r2 > {grid_r2_thr}', r2=brain_masker.inverse_transform(grid_pars['r2']))
 
     # GD fit
-    r2_masker = input_data.NiftiMasker(mask_img=r2_mask)
+    r2_masker = maskers.NiftiMasker(mask_img=r2_mask)
     data = r2_masker.fit_transform(mean_ts)
     grid_pars_thr = grid_pars[r2_grid > grid_r2_thr]
     fitter = ParameterFitter(prf_model, data, paradigm)
@@ -155,6 +155,32 @@ def main(subject, model_label, bids_folder='/data/ds-retsupp', grid_r2_thr=0.05,
         pred = dog_hrf_fitter.predictions
 
         final_pars = dog_hrf_pars.copy()
+
+    elif model_label == 6:
+        dn_model = DivisiveNormalizationGaussianPRF2DWithHRF(data=data, paradigm=paradigm, hrf_model=hrf_model,
+                                                grid_coordinates=grid_coordinates, flexible_hrf_parameters=True)
+
+        dn_init_pars = gd_pars.copy()
+
+        dn_init_pars['rf_amplitude'] = gd_pars['amplitude']
+        dn_init_pars['srf_amplitude'] = 1e-2
+        dn_init_pars['srf_size'] = 2.
+        dn_init_pars['neural_baseline'] = 1.0
+        dn_init_pars['surround_baseline'] = 1.0
+        dn_init_pars['bold_baseline'] = 0.0
+
+        dn_init_pars['hrf_delay'] = 4.5
+        dn_init_pars['hrf_dispersion'] = .75
+
+        dn_fitter = ParameterFitter(model=dn_model, data=data, paradigm=paradigm)
+
+        dn_pars = dn_fitter.fit(init_pars=dn_init_pars, max_n_iterations=max_n_iterations, learning_rate=0.005)
+
+        r2 = dn_fitter.get_rsq(dn_pars)
+
+        pred = dn_fitter.predictions
+
+        final_pars = dn_pars.copy()
 
     else:
         raise ValueError(f'Unknown model label: {model_label}')
