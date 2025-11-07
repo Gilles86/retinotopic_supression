@@ -499,12 +499,19 @@ class Subject(object):
 
         return roi_mask
 
-    def get_prf_predictions(self, model=1, type='mean', return_image=True):
+    def get_prf_predictions(self, model=1, type='mean', session=None, run=None, return_image=True):
 
-        if type not in ['mean']:
+        if type not in ['mean', 'run']:
             raise NotImplementedError("Only 'mean' type is implemented for PRF predictions.")
 
-        fn = self.bids_folder / 'derivatives' / 'prf' / f'model{model}' / f'sub-{self.subject_id:02d}' / f'sub-{self.subject_id:02d}_desc-pred.nii.gz'
+        
+        if type == 'mean':
+            fn = self.bids_folder / 'derivatives' / 'prf' / f'model{model}' / f'sub-{self.subject_id:02d}' / f'sub-{self.subject_id:02d}_desc-pred.nii.gz'
+        
+        if type == 'run':
+            if (session is None) or (run is None):
+                raise ValueError("For 'run' type, both session and run must be specified.")
+            fn = self.bids_folder / 'derivatives' / 'prf_runfit' / f'model{model}' / f'sub-{self.subject_id:02d}' / f'ses-{session}' / f'sub-{self.subject_id:02d}_ses-{session}_run-{run}_desc-pred.nii.gz'
 
         if return_image:
             return image.load_img(str(fn))

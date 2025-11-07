@@ -6,7 +6,7 @@ from retsupp.utils.data import Subject
 from tqdm.contrib.itertools import product
 from pathlib import Path
 
-def main(subject, mean_prf=True, bids_folder='/data/ds-retsupp'):
+def main(subject, mean_prf=False, bids_folder='/data/ds-retsupp'):
 
     sub = Subject(subject, bids_folder=bids_folder)
     sessions = [1, 2]
@@ -28,7 +28,11 @@ def main(subject, mean_prf=True, bids_folder='/data/ds-retsupp'):
         bold_ts = masker.fit_transform(bold)
 
         # Get PRF predictions as a 4D nifti and extract using same masker
-        prf_img = sub.get_prf_predictions(model=4, type='mean', return_image=True)
+        if mean_prf:
+            prf_img = sub.get_prf_predictions(model=4, type='mean', return_image=True)
+        else:
+            prf_img = sub.get_prf_predictions(model=4, type='run', session=session, run=run, return_image=True)
+
         prf_ts = masker.transform(prf_img)  # shape (T, V) or (T, K)
 
         # Normalize shapes
