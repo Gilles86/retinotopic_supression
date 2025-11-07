@@ -458,11 +458,11 @@ class Subject(object):
 
         if bold_space:
             func_mask = self.get_bold_mask()
-            varea_img = image.resample_to_img(varea_img, target_img=func_mask, interpolation='nearest', force_resample=True)
+            varea_img = image.resample_to_img(varea_img, target_img=func_mask, interpolation='nearest', force_resample=True, copy_header=True)
 
         return varea_img
 
-    def get_retinotopic_roi(self, roi=None, bold_space=False):
+    def get_retinotopic_roi(self, roi=None, bold_space=False,):
         """
         Returns a mask image for the specified retinotopic ROI (e.g., 'V1', 'V2', etc.).
         If hemi is 'L' or 'R', restricts to that hemisphere.
@@ -578,3 +578,31 @@ class Subject(object):
         results['varea'] = results['varea'].replace(0, np.nan)
 
         return results
+
+    def get_eccentric_roi(self, roi, quadrant, bold_space=True, return_masker=True):
+        """
+        Returns a mask image for the specified eccentricity ROI and quadrant.
+        """
+
+        if not bold_space:
+            raise NotImplementedError("Only bold_space=True is implemented for eccentricity ROIs.")
+
+        if roi.endswith('_L'):
+            assert quadrant in ['lower_right', 'upper_right'], "Left hemisphere can only have right visual field quadrants."
+        elif roi.endswith('_R'):
+            assert quadrant in ['lower_left', 'upper_left'], "Right hemisphere can only have left visual field quadrants."
+        else:
+            raise ValueError("ROI must end with '_L' or '_R' to specify hemisphere.")
+
+        fn = self.bids_folder / 'derivatives' / 'stimulus_rois' / f'sub-{self.subject_id:02d}' / f'sub-{self.subject_id:02d}_desc-{roi}_{quadrant}_roi.nii.gz'
+
+        img = image.load_img(fn)
+
+        if bold_space:
+            func_mask = self.get_bold_mask()
+            img = image.resample_to_img(img, target_img=func_mask, interpolation='nearest', force_resample=True, copy_header=True)
+        
+        if return_masker:
+            return input_data.NiftiMasker(mask_img=img)
+        else:
+            return img
