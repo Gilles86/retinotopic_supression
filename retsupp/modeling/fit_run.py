@@ -35,7 +35,7 @@ def main(subject, session, run, model_label=1, bids_folder='/data/ds-retsupp', m
     paradigm = paradigm.reshape((paradigm.shape[0], -1))
 
     # Get subject's PRF parameters as initial values
-    prf_pars = sub.get_prf_parameters_volume(model=model_label)
+    prf_pars = sub.get_prf_parameters_volume(model=model_label, return_images=False)
     if not isinstance(prf_pars, pd.DataFrame):
         prf_pars = pd.DataFrame(prf_pars)
 

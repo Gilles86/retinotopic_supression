@@ -4,7 +4,7 @@ from nilearn import input_data, image
 import numpy as np
 import pandas as pd
 from retsupp.utils.data import Subject
-from braincoder.models import GaussianPRF2DWithHRF, DifferenceOfGaussiansPRF2DWithHRF
+from braincoder.models import GaussianPRF2DWithHRF, DifferenceOfGaussiansPRF2DWithHRF, DivisiveNormalizationGaussianPRF2DWithHRF
 from braincoder.optimize import ParameterFitter
 from braincoder.hrf import SPMHRFModel
 from tqdm import tqdm
@@ -89,6 +89,8 @@ def main(subject, model_label=1, bids_folder='/data/ds-retsupp', max_n_iteration
             prf_model = GaussianPRF2DWithHRF(grid_coordinates, paradigm, hrf_model=hrf_model, flexible_hrf_parameters=True)
         elif model_label == 4:
             prf_model = DifferenceOfGaussiansPRF2DWithHRF(grid_coordinates, paradigm, hrf_model=hrf_model, flexible_hrf_parameters=True)
+        elif model_label == 6:
+            prf_model = DivisiveNormalizationGaussianPRF2DWithHRF(grid_coordinates, paradigm, hrf_model=hrf_model, flexible_hrf_parameters=True)
         else:
             raise ValueError(f'Unknown model label: {model_label}')
 
