@@ -16,6 +16,11 @@ def get_subject_ids():
     # Assume subjects is a list of ints or strings convertible to int
     return [f"{int(s):02d}" for s in subjects]
 
+def get_retinotopic_labels():
+    return {
+        1: 'V1', 2: 'V2', 3: 'V3', 4: 'hV4', 5: 'VO1', 6: 'VO2', 7: 'LO1', 8: 'LO2',
+        9: 'TO1', 10: 'TO2', 11: 'V3A', 12: 'V3B',}
+
 class Subject(object):
 
     def __init__(self, subject_id, bids_folder='/data/ds-retsupp'):
@@ -101,6 +106,9 @@ class Subject(object):
     def get_runs(self, session=1):
         if (self.subject_id == 20) & (session == 1):
             return [1,2,3,4,5]
+
+        if (self.subject_id == 24) & (session == 2):
+            return [1,2,3,4, 5]
 
         return [1,2,3,4,5,6]
 
@@ -291,6 +299,16 @@ class Subject(object):
             labels += ['hrf_delay', 'hrf_dispersion']
         elif model == 4:
             labels += ['srf_size', 'srf_amplitude', 'hrf_delay', 'hrf_dispersion']
+        elif model == 6:
+            # Get rid of amplitude parmameter
+            labels.pop(labels.index('amplitude'))
+            labels.pop(labels.index('baseline'))
+            
+            labels += ['rf_amplitude', 'srf_amplitude', 'srf_size',
+                       'neural_baseline', 'surround_baseline',
+                       'bold_baseline']
+
+            labels += ['hrf_delay', 'hrf_dispersion']
         elif model == 1:
             pass
         else:
