@@ -10,7 +10,7 @@ from nilearn import image
 
 
 def main(subject_id, bids_folder):
-    sub = Subject(f'{subject_id:02d}')
+    sub = Subject(f'{subject_id:02d}', bids_folder=bids_folder)
 
     design_matrices = []
     data = []
@@ -43,7 +43,7 @@ def main(subject_id, bids_folder):
 
         dm = make_first_level_design_matrix(frame_times, [onsets], drift_model=None)
 
-        bold = sub.get_bold(session=session, run=run, type='cleaned')
+        bold = sub.get_bold(session=session, run=run, type='prf_regressed_out')
 
         bold = image.index_img(bold, slice(258))
         r = fmri_glm.fit(bold, design_matrices=dm)
@@ -62,17 +62,17 @@ def main(subject_id, bids_folder):
 
     results_all = fmri_glm.fit(data, design_matrices=design_matrices)
 
+    output_dir = bids_folder / 'derivatives' / 'eccentric_glm' / f'sub-{subject_id:02d}'  / 'func'
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     for distractor in [1.0, 3.0, 5.0, 7.0]:
         contrast_name = f'distractor_{distractor}'
         beta = results_all.compute_contrast(contrast_name, output_type='effect_size')
         zmap = results_all.compute_contrast(contrast_name, output_type='z_score')
 
-        beta.to_filename(bids_folder / 'derivatives' / 'eccentric_glm' / f'sub-{subject_id:02d}' / 'func' / f'sub-{subject_id:02d}_desc-{contrast_name}_beta.nii.gz')
-        zmap.to_filename(bids_folder / 'derivatives' / 'eccentric_glm' / f'sub-{subject_id:02d}' / 'func' / f'sub-{subject_id:02d}_desc-{contrast_name}_zmap.nii.gz')
+        beta.to_filename(output_dir / f'sub-{subject_id:02d}_desc-{contrast_name}_beta.nii.gz')
+        zmap.to_filename(output_dir / f'sub-{subject_id:02d}_desc-{contrast_name}_zmap.nii.gz')
 
-
-    output_dir = bids_folder / 'derivatives' / 'eccentric_glm' / f'sub-{subject_id:02d}'  / 'func'
-    output_dir.mkdir(parents=True, exist_ok=True)
 
     zmap_all = results_all.compute_contrast([[1, 1, 1, 1]] * 12, output_type='z_score')
     zmap_all.to_filename(output_dir / f'sub-{subject_id:02d}_desc-all_distractors_zmap.nii.gz')

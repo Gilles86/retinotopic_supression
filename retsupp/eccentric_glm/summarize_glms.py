@@ -4,6 +4,7 @@ import argparse
 from retsupp.utils.data import Subject
 from pathlib import Path
 from nilearn import image
+import numpy as np
 
 def main(subject_id, bids_folder='/data/ds-retsupp'):
 
@@ -17,7 +18,7 @@ def main(subject_id, bids_folder='/data/ds-retsupp'):
     distractors = [1.0, 3.0, 5.0, 7.0]
 
     # Initialize
-    sub = Subject(subject_id, bids_folder='/data/ds-retsupp')
+    sub = Subject(subject_id, bids_folder=bids_folder)
 
     # Build atlas
     atlas = {}
@@ -43,7 +44,10 @@ def main(subject_id, bids_folder='/data/ds-retsupp'):
         beta = image.load_img(beta_path)
 
         for roi_key in atlas.keys():
-            mean_beta = atlas[roi_key].fit_transform(beta).mean()
+            try:
+                mean_beta = atlas[roi_key].fit_transform(beta).mean()
+            except ValueError:
+                mean_beta = np.nan
             df.append({
                 'subject_id': subject_id,
                 'session': session,
@@ -65,5 +69,4 @@ if __name__ == '__main__':
     parser.add_argument('--bids_folder', type=str, default='/data/ds-retsupp', help='Path to BIDS folder')
     args = parser.parse_args()
 
-    main(subject=args.subject, bids_folder=args.bids_folder)
-
+    main(subject_id=args.subject, bids_folder=args.bids_folder)
