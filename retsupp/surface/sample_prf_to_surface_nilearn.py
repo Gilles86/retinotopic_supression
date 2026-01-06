@@ -27,9 +27,11 @@ def main(subject, model, bids_folder):
     sub = Subject(subject, bids_folder=bids_folder)
     surfinfo = sub.get_surf_info()
 
-    prf_pars_volume, par_keys = sub.get_prf_parameters_volume(model=model, return_image=True)
+    prf_pars_volume = sub.get_prf_parameters_volume(model=model, type='mean')
 
-    # prf_pars_volume = image.math_img('np.where(img == 0, np.nan, img)', img=prf_pars_volume)
+
+    par_keys = prf_pars_volume.index
+    prf_pars_volume = image.concat_imgs([prf_pars_volume[k] for k in par_keys])
 
     bids_folder = Path(bids_folder)
 
