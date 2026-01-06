@@ -28,5 +28,5 @@ dependencies:
       - pybids
       - pymc
       - git+https://github.com/cvnlab/GLMsingle.git
-      - -e ./libs/braincoder
-      - -e .
+      - -e ../libs/braincoder
+      - -e ..

@@ -6,20 +6,22 @@
 #SBATCH --gpus=1
 #SBATCH --mem=32G
 #SBATCH --time=02:00:00
-#SBATCH --output=logs/create_gpu_env_%j.log 2>&1
+#SBATCH --output=logs/create_gpu_env_%j.log
 
 set -e
 
+
+
+# Load CUDA 12.1 module
+module load cuda/12.6.3
 echo "=== Creating CUDA-enabled conda environment ==="
+
 echo "Starting at $(date)"
 echo "Job ID: $SLURM_JOB_ID"
 echo "GPU info:"
 nvidia-smi
 
-# Load CUDA 12.1 module
-module load cuda/12.6.3
-
-# Activate conda (adjust path if needed)
+# Activate conda
 source "$(conda info --base)/etc/profile.d/conda.sh"
 
 # Create environment
