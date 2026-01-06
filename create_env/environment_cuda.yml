@@ -1,0 +1,32 @@
+name: retsupp_cuda
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  # Scientific stack
+  - numpy<2.0
+  - scipy
+  - pandas
+  - matplotlib
+  - seaborn
+  - scikit-learn
+  - jupyterlab
+  - ipykernel
+  - ipywidgets
+  - pingouin
+  # Neuroimaging
+  - nibabel
+  - nilearn
+  - nipype
+  # CUDA toolkit (optional, as system CUDA will be used)
+  - pip:
+      - tensorflow[and-cuda]==2.14.0
+      - tensorflow-probability==0.22.0
+      - protobuf==3.20.3
+      - tqdm
+      - pybids
+      - pymc
+      - git+https://github.com/cvnlab/GLMsingle.git
+      - -e ./libs/braincoder
+      - -e .
