@@ -14,13 +14,12 @@ if [ ! -z "$2" ]; then
     SESSION=$2
 fi
 
-# Submit jobs for 8 runs
-for RUN in {1..6}
-do
-    if [ -z "$SESSION" ]
-    then
+# Submit jobs for 6 runs with 10-second delay
+for RUN in {1..6}; do
+    if [ -z "$SESSION" ]; then
         sbatch submit_nordic_job.sh -s $SUBJECT -r $RUN
     else
         sbatch submit_nordic_job.sh -s $SUBJECT -r $RUN -e $SESSION
     fi
+    # sleep 10
 done

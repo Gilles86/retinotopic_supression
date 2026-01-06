@@ -4,6 +4,7 @@
 #SBATCH --ntasks=32                      # Number of cores
 #SBATCH --time=02:00:00                  # Time limit hrs:min:sec
 #SBATCH --mem=64gb                       # Memory limit
+#SBATCH --constraint=INTEL
 
 source /etc/profile.d/lmod.sh
 
