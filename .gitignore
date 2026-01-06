@@ -7,3 +7,5 @@ experiment/assets/*
 experiment/logs/*
 
 retsupp.egg-info
+
+create_env/logs/*
