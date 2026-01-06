@@ -143,23 +143,26 @@ def main(subject, session, bids_dir):
 
     for func_candidate in tqdm(func_candidates):
         # Convert to NIfTI
-        func_nii = image.load_img(func_candidate)
-        func_nii = nib.Nifti1Image(func_nii.dataobj, func_nii.affine)
-        func_nii_magnitude = image.index_img(func_nii, slice(0, int(func_nii.shape[-1]/2)))
-        func_nii_phase = image.index_img(func_nii, slice(int(func_nii.shape[-1]/2), func_nii.shape[-1]))
+        try:
+            func_nii = image.load_img(func_candidate)
+            func_nii = nib.Nifti1Image(func_nii.dataobj, func_nii.affine)
+            func_nii_magnitude = image.index_img(func_nii, slice(0, int(func_nii.shape[-1]/2)))
+            func_nii_phase = image.index_img(func_nii, slice(int(func_nii.shape[-1]/2), func_nii.shape[-1]))
 
-        reg = re.compile(r'run-(?P<run>[0-9]+)')
-        run = int(reg.search(func_candidate.name).group('run'))
+            reg = re.compile(r'run-(?P<run>[0-9]+)')
+            run = int(reg.search(func_candidate.name).group('run'))
 
-        # # Save magnitude and phase images
-        func_nii_magnitude.to_filename(target_dir / 'func' / f'sub-{subject:02d}_ses-{session}_task-search_run-{run}_part-mag_bold.nii.gz')
-        func_nii_phase.to_filename(target_dir / 'func' / f'sub-{subject:02d}_ses-{session}_task-search_run-{run}_part-phase_bold.nii.gz')
+            # # Save magnitude and phase images
+            func_nii_magnitude.to_filename(target_dir / 'func' / f'sub-{subject:02d}_ses-{session}_task-search_run-{run}_part-mag_bold.nii.gz')
+            func_nii_phase.to_filename(target_dir / 'func' / f'sub-{subject:02d}_ses-{session}_task-search_run-{run}_part-phase_bold.nii.gz')
 
-        with open(target_dir / 'func' / f'sub-{subject:02d}_ses-{session}_task-search_run-{run}_part-mag_bold.json', 'w') as f:
-            json.dump(default_json, f, indent=2)
+            with open(target_dir / 'func' / f'sub-{subject:02d}_ses-{session}_task-search_run-{run}_part-mag_bold.json', 'w') as f:
+                json.dump(default_json, f, indent=2)
 
-        with open(target_dir / 'func' / f'sub-{subject:02d}_ses-{session}_task-search_run-{run}_rec-NORDIC_bold.json', 'w') as f:
-            json.dump(default_json, f, indent=2)
+            with open(target_dir / 'func' / f'sub-{subject:02d}_ses-{session}_task-search_run-{run}_rec-NORDIC_bold.json', 'w') as f:
+                json.dump(default_json, f, indent=2)
+        except Exception as e:
+            print(f'Error processing {func_candidate}: {e}')
 
     # B0 maps
     print('Converting B0 maps...')
