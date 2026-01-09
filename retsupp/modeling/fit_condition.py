@@ -95,7 +95,12 @@ def main(subject, model_label=1, bids_folder='/data/ds-retsupp', max_n_iteration
             raise ValueError(f'Unknown model label: {model_label}')
 
         fitter = ParameterFitter(prf_model, mean_ts, paradigm)
-        refined_pars = fitter.refine_baseline_and_amplitude(init_pars, l2_alpha=0.001)
+        
+        if model_label < 5:
+            refined_pars = fitter.refine_baseline_and_amplitude(init_pars, l2_alpha=0.001)
+        else:
+            refined_pars = init_pars
+
         fit_pars = fitter.fit(init_pars=refined_pars, max_n_iterations=max_n_iterations, learning_rate=0.005)
         r2 = fitter.get_rsq(fit_pars)
         pred = fitter.predictions

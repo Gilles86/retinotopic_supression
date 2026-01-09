@@ -8,7 +8,6 @@
 
 # Load environment
 . $HOME/init_conda.sh
-module load gpu
 source activate neural_priors2
 
 subject=$1
