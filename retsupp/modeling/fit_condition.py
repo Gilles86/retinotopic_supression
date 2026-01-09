@@ -41,7 +41,7 @@ def main(subject, model_label=1, bids_folder='/data/ds-retsupp', max_n_iteration
     data_df = pd.concat(all_dfs, ignore_index=True)
 
     # Get distractor mapping for this subject
-    distractor_map = sub.get_distractor_mapping()
+    distractor_map = sub.get_hpd_locations()
 
     # Map condition for each (session, run)
     data_df['condition'] = data_df.apply(lambda row: distractor_map[(row['session'], row['run'])], axis=1)

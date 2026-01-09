@@ -32,9 +32,26 @@ class Subject(object):
             3.0: 'upper_left',
             5.0: 'lower_left',
             7.0: 'lower_right',
-            np.nan: 'no distractor',
+            10.0: 'no distractor',
+            np.nan: 'no distractor'
         }
-    def get_distractor_mapping(self):
+
+    def get_hpd_locations(self):
+
+        hpd_locations = {}
+
+        for session in [1,2]:
+            runs = self.get_runs(session)
+            for run in runs:
+                onsets = self.get_onsets(session=session, run=run)
+                loc_counts = onsets[onsets.event_type == 'feedback']['distractor_location'].value_counts()
+                loc_counts.index = loc_counts.index.map(self.location_mapping)
+
+                hpd_locations[(session, run)] = loc_counts.idxmax()
+
+        return hpd_locations
+
+    def get_distractor_mapping_old(self):
         subject = int(self.subject_id)
 
         # Counterbalancing lists (fixed indexing: (subject-1) % 8)
