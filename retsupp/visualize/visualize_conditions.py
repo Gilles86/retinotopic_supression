@@ -14,12 +14,7 @@ from retsupp.utils.data import Subject
 
 def main(subject: int = 24, model: int = 4):
 
-    r2_dict = {1:0.025, 3:0.08, 5:0.05, 4:0.1, 6:0.05, 14:0.08, 27:0.08, 28:0.05, 29:0.05}
-
-    if subject in r2_dict:
-        r2_thr = r2_dict[subject]
-    else:
-        r2_thr = 0.05
+    r2_thr = 0.05
 
     pc_subject = f'retsupp.sub-{subject:02d}'
 
