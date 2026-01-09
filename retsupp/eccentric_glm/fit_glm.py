@@ -33,7 +33,7 @@ def main(subject_id, bids_folder):
 
         if 'HPL_distractor' not in onsets.columns:
 
-            hpl_distractor = sub.get_distractor_mapping()[session, run]
+            hpl_distractor = sub.get_hpd_locations()[session, run]
             hpl_distractor = {v: k for k, v in sub.location_mapping.items()}[hpl_distractor]
             onsets['HPL_distractor'] = hpl_distractor
 
@@ -48,7 +48,7 @@ def main(subject_id, bids_folder):
         bold = image.index_img(bold, slice(258))
         r = fmri_glm.fit(bold, design_matrices=dm)
 
-        for distractor in [1.0, 3.0, 5.0, 7.0]:
+        for distractor in [1.0, 3.0, 5.0, 7.0, 10.0]:
             contrast_name = f'distractor_{distractor}'
             beta = r.compute_contrast(contrast_name, output_type='effect_size')
             zmap = r.compute_contrast(contrast_name, output_type='z_score')
@@ -65,7 +65,7 @@ def main(subject_id, bids_folder):
     output_dir = bids_folder / 'derivatives' / 'eccentric_glm' / f'sub-{subject_id:02d}'  / 'func'
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    for distractor in [1.0, 3.0, 5.0, 7.0]:
+    for distractor in [1.0, 3.0, 5.0, 7.0, 10.0]:
         contrast_name = f'distractor_{distractor}'
         beta = results_all.compute_contrast(contrast_name, output_type='effect_size')
         zmap = results_all.compute_contrast(contrast_name, output_type='z_score')
