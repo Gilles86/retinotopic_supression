@@ -41,11 +41,15 @@ def main(subject_id, bids_folder='/data/ds-retsupp'):
             f'sub-{subject_id:02d}_ses-{session:02d}_run-{run:02d}_desc-distractor_{distractor:.1f}_beta.nii.gz'
         )
 
+        zmap_path = beta_path.with_name(beta_path.name.replace('beta', 'zmap'))
+
         beta = image.load_img(beta_path)
+        zmap = image.load_img(zmap_path)
 
         for roi_key in atlas.keys():
             try:
                 mean_beta = atlas[roi_key].fit_transform(beta).mean()
+                mean_z = atlas[roi_key].fit_transform(zmap).mean()
             except ValueError:
                 mean_beta = np.nan
             df.append({
@@ -54,7 +58,8 @@ def main(subject_id, bids_folder='/data/ds-retsupp'):
                 'run': run,
                 'distractor': distractor,
                 'roi': roi_key,
-                'mean_beta': mean_beta
+                'mean_beta': mean_beta,
+                'mean_z': mean_z
             })
 
     # Convert to DataFrame
