@@ -2,11 +2,18 @@
 #SBATCH --job-name=dyn_af_prf_braincoder
 #SBATCH --account=zne.uzh
 #SBATCH --output=/dev/null
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=12G
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --gres=gpu:1
 #SBATCH --time=00:45:00
 
-# Joint Dynamic AF + PRF braincoder fit on the cluster (CPU only).
+# Joint Dynamic AF + PRF braincoder fit on the cluster (single GPU).
+#
+# The dynamic term adds a per-TR phasic modulation, which makes the
+# einsum graph noticeably heavier than the per-condition static AF;
+# fitting on a GPU (any model — L4, A100, RTX, whatever the cluster
+# scheduler hands us) is much faster.  No `--constraint` set so we
+# can backfill on whichever GPU is free.
 #
 # Submits one fit per (subject, ROI) pair via a SLURM array.
 # 30 subjects * 8 ROIs = 240 array tasks.
@@ -54,16 +61,18 @@ roi="${ROIS[$roi_idx]}"
 echo "Subject:     ${subject}"
 echo "ROI:         ${roi}"
 
-# --- Conda env (CPU). ---
+# --- Conda env (CUDA). ---
 source "$HOME/data/miniforge3/etc/profile.d/conda.sh"
 conda activate retsupp_cuda
 
-# CPU-only run: hide any GPUs so TF doesn't try to register CUDA.
-export CUDA_VISIBLE_DEVICES=-1
+# Sanity-check GPU is visible (don't fail the job if it isn't — TF will
+# just fall back to CPU, slow but functional).
+nvidia-smi 2>/dev/null | head -15 || echo "WARN: nvidia-smi unavailable"
+
 export PYTHONUNBUFFERED=1
 # Cap intra-op threads to fit cpus-per-task.
-export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
-export TF_NUM_INTRAOP_THREADS="${SLURM_CPUS_PER_TASK:-8}"
+export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-4}"
+export TF_NUM_INTRAOP_THREADS="${SLURM_CPUS_PER_TASK:-4}"
 export TF_NUM_INTEROP_THREADS=2
 
 bids_folder="/shares/zne.uzh/gdehol/ds-retsupp"

@@ -133,29 +133,56 @@ def cover_page(pdf, df, args):
 
 
 def page_distributions(pdf, df):
-    """Per-ROI strip+box for each of σ_AF, g_HP, g_LP, g_diff, R²."""
+    """Per-ROI strip+box for each of σ_AF, g_HP, g_LP, g_diff, R².
+
+    Y-axis clipped per metric to focus on the bulk of the distribution
+    (a handful of fits with σ_AF≈9° / |g|≈5 would otherwise compress
+    everyone else into a thin band). Out-of-range counts shown as red
+    ↑/↓ at the panel edges.
+    """
     metrics = [
-        ('sigma_AF', 'σ_AF (deg)'),
-        ('g_HP',    'g_HP'),
-        ('g_LP',    'g_LP'),
-        ('g_diff',  'g_HP − g_LP  (HP differential)'),
-        ('g_avg',   '½(g_HP + g_LP)  (overall AF strength)'),
-        ('r2_mean', 'mean voxel R²'),
+        ('sigma_AF', 'σ_AF (deg)',                       0,    5.0,   False),
+        ('g_HP',    'g_HP',                              -2.0, +2.0,  True),
+        ('g_LP',    'g_LP',                              -2.0, +2.0,  True),
+        ('g_diff',  'g_HP − g_LP  (HP differential)',    -1.5, +1.5,  True),
+        ('g_avg',   '½(g_HP + g_LP)  (overall AF strength)', -2.0, +2.0, True),
+        ('r2_mean', 'mean voxel R²',                      0,    0.30, False),
     ]
+    rois_with_data = [r for r in df['roi'].cat.categories
+                      if (df['roi'] == r).any()]
     fig, axes = plt.subplots(2, 3, figsize=(15, 9))
-    for ax, (col, label) in zip(axes.ravel(), metrics):
-        sns.stripplot(data=df, x='roi', y=col, ax=ax,
+    for ax, (col, label, ylo, yhi, symmetric) in zip(axes.ravel(), metrics):
+        d = df.copy()
+        d[col + '_clip'] = d[col].clip(ylo, yhi)
+        sns.stripplot(data=d, x='roi', y=col + '_clip', ax=ax,
                       hue='roi', palette='Set2', legend=False,
                       jitter=0.2, alpha=0.8, size=5)
-        sns.boxplot(data=df, x='roi', y=col, ax=ax,
+        sns.boxplot(data=d, x='roi', y=col + '_clip', ax=ax,
                     width=0.4, fill=False, color='k', linewidth=1,
                     showfliers=False)
-        ax.axhline(0, color='gray', lw=0.5, ls='--')
+        # Out-of-range outlier annotations.
+        for i, roi in enumerate(rois_with_data):
+            x = df.loc[df['roi'] == roi, col].dropna().values
+            n_lo = int((x < ylo).sum())
+            n_hi = int((x > yhi).sum())
+            if n_lo:
+                ax.annotate(f'↓ {n_lo}', xy=(i, ylo + 0.02 * (yhi - ylo)),
+                            ha='center', va='bottom', fontsize=8,
+                            color='C3', weight='bold')
+            if n_hi:
+                ax.annotate(f'↑ {n_hi}', xy=(i, yhi - 0.02 * (yhi - ylo)),
+                            ha='center', va='top', fontsize=8,
+                            color='C3', weight='bold')
+        if symmetric:
+            ax.axhline(0, color='gray', lw=0.5, ls='--')
+        ax.set_ylim(ylo, yhi)
         ax.set_xlabel('')
         ax.set_ylabel(label)
         ax.set_title(label, fontsize=10)
-    fig.suptitle('Per-ROI parameter distributions across (subject) fits',
-                 fontsize=12)
+    fig.suptitle('Per-ROI parameter distributions across (subject) fits  '
+                 '(y-axis clipped; red ↑/↓ = #fits past the limit)',
+                 fontsize=11)
+    fig.tight_layout()
     pdf.savefig(fig); plt.close(fig)
 
 
@@ -509,6 +536,53 @@ def page_predicted_vs_observed(pdf, shifts: pd.DataFrame):
     """
     if shifts.empty:
         return
+
+    # ---- Front matter page: precisely what is being predicted vs observed.
+    fig, ax = plt.subplots(figsize=(11, 8.5))
+    ax.axis('off')
+    ax.text(0.5, 0.96, 'Predicted vs observed shifts — what each side is',
+            ha='center', va='top', fontsize=15, weight='bold',
+            transform=ax.transAxes)
+    body = (
+        'PER VOXEL × HP-CONDITION row, we have:\n'
+        '\n'
+        '  base PRF center  (x_v, y_v)\n'
+        '    = the voxel\'s position parameters from the JOINT AF + Gaussian-PRF\n'
+        '      fit to the BOLD time-series (the same fit that produced σ_AF,\n'
+        '      g_HP, g_LP). NOT the standard mean-PRF fit.\n'
+        '\n'
+        '  predicted AD-pRF center  (μ̃_v_C)\n'
+        '    = closed-form center-of-mass of  ρ_v_C(g) = M_C(g) · S_v(g)\n'
+        '      computed on a discretized 2D grid, where M_C(g) is built from\n'
+        '      the SHARED-AF parameters (σ_AF, g_HP, g_LP, mode) for the\n'
+        '      condition C, and S_v(g) is the voxel\'s Gaussian PRF.\n'
+        '      Negative modulation is clamped to 0 before the COM (matching the\n'
+        '      braincoder forward model).\n'
+        '\n'
+        '  observed conditionwise PRF center  (x^obs_v_C, y^obs_v_C)\n'
+        '    = the (x, y) parameters from prf_conditionfit/model4 — INDEPENDENT\n'
+        '      per-condition Gaussian-PRF fits, one per HP block, run on\n'
+        '      subsets of runs. These are NOT used by the joint AF + PRF fit.\n'
+        '\n'
+        'The two correlation axes:\n'
+        '\n'
+        '  proj  (1D)  : project (predicted − base) and (observed − base) shifts\n'
+        '                onto the unit vector pointing AWAY from the HP location\n'
+        '                of that condition C. Negative = toward HP, positive =\n'
+        '                away from HP.\n'
+        '\n'
+        '  (Δx, Δy) (2D): full per-component shift vectors\n'
+        '                Δx = x_pred − base_x;   Δy = y_pred − base_y\n'
+        '                (and similarly for observed).\n'
+        '\n'
+        'High Pearson r between predicted and observed at the voxel level means\n'
+        'the joint BOLD-level AF model genuinely recovers the voxel-wise shift\n'
+        'pattern that the conditionwise PRF fits independently report.\n'
+    )
+    ax.text(0.04, 0.90, body, ha='left', va='top',
+            family='monospace', fontsize=9, transform=ax.transAxes)
+    pdf.savefig(fig); plt.close(fig)
+
     # Compute per-(sub, roi) Pearson r.
     rec = []
     for (s, roi), g in shifts.groupby(['subject', 'roi']):
@@ -745,20 +819,22 @@ def page_predicted_vs_observed_2d(pdf, shifts: pd.DataFrame):
             family='monospace', fontsize=10, transform=ax.transAxes)
     pdf.savefig(fig); plt.close(fig)
 
-    # ---- (d) pooled per-voxel scatter of (dx_pred, dx_obs) and (dy_pred, dy_obs).
+    # ---- (d) pooled per-voxel 2D hexbin of (dx_pred, dx_obs) and
+    # (dy_pred, dy_obs). Hexbin instead of a 200K-point scatter so the
+    # PDF stays light AND the eye sees density structure rather than a
+    # cloud of dots.
     fig, axes = plt.subplots(1, 2, figsize=(13, 6))
-    rois = list(summary['roi'].cat.categories)
-    palette = dict(zip(rois, sns.color_palette('Set2', len(rois))))
     for ax, (xc, yc, title) in zip(axes, [
             ('dx_pred', 'dx_obs', 'Δx component  (deg)'),
             ('dy_pred', 'dy_obs', 'Δy component  (deg)')]):
-        for roi, sub in s.groupby('roi'):
-            ax.scatter(sub[xc], sub[yc], s=2, alpha=0.10,
-                       color=palette.get(roi, '0.5'))
         lim = float(np.nanpercentile(
             np.abs(np.r_[s[xc].values, s[yc].values]), 99.5))
         lim = max(lim, 0.3)
-        ax.plot([-lim, lim], [-lim, lim], 'k:', lw=0.8)
+        hb = ax.hexbin(s[xc], s[yc],
+                        gridsize=60, mincnt=2,
+                        cmap='Greys', bins='log',
+                        extent=(-lim, lim, -lim, lim))
+        ax.plot([-lim, lim], [-lim, lim], 'C3:', lw=1.0)
         ax.axhline(0, color='gray', lw=0.4)
         ax.axvline(0, color='gray', lw=0.4)
         ax.set_xlim(-lim, lim); ax.set_ylim(-lim, lim)
@@ -766,7 +842,11 @@ def page_predicted_vs_observed_2d(pdf, shifts: pd.DataFrame):
         ax.set_ylabel(f'observed {title}')
         ax.set_aspect('equal')
         ax.set_title(title)
-    fig.suptitle('Pooled per-voxel 2D shift components', fontsize=11)
+        cb = plt.colorbar(hb, ax=ax, label='log10(n voxels)')
+        cb.ax.tick_params(labelsize=8)
+    fig.suptitle(f'Pooled per-voxel 2D shift density  '
+                 f'(N = {len(s):,} voxel-condition rows; hexbin, log scale)',
+                 fontsize=11)
     fig.tight_layout()
     pdf.savefig(fig); plt.close(fig)
 
