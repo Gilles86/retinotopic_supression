@@ -640,11 +640,83 @@ def fit_four_af_competing(
     }
 
 
+def _refine_base_per_voxel(
+    obs, sigma_base, ring_pos, sigma_AF, g_HP, g_LP, sign, hp_idx, base_init,
+):
+    """Given fixed shared params (σ_AF, g_HP, g_LP), do a per-voxel
+    L-BFGS-B fit of (x0_v, y0_v) initialised at `base_init`. Returns
+    (N, 2) refined bases.
+    """
+    from scipy.optimize import minimize
+    n_C = obs.shape[1]
+    is_hp = np.zeros((n_C, 4))
+    is_hp[np.arange(n_C), hp_idx] = 1.0
+    g_C_ℓ = is_hp * g_HP + (1 - is_hp) * g_LP   # (n_C, 4)
+
+    def voxel_predict(base_v, sb):
+        sigma_base_sq = sb ** 2
+        sigma_sum_sq = sigma_AF ** 2 + sigma_base_sq
+        Z = 2 * np.pi * sigma_AF ** 2 * sigma_base_sq / sigma_sum_sq
+        diff = base_v[None, :] - ring_pos                       # (4, 2)
+        delta_sq = (diff ** 2).sum(axis=1)                       # (4,)
+        log_arg = np.clip(-delta_sq / (2 * sigma_sum_sq), -50, 50)
+        I_AS = Z * np.exp(log_arg)                               # (4,)
+        I_S = 2 * np.pi * sigma_base_sq
+        mu_AD_ring = (
+            ring_pos * sigma_base_sq + base_v[None, :] * sigma_AF ** 2
+        ) / sigma_sum_sq                                          # (4, 2)
+        weighted_I_AS = g_C_ℓ * I_AS[None, :]                     # (n_C, 4)
+        weighted_term = (
+            weighted_I_AS[:, :, None] * mu_AD_ring[None, :, :]
+        ).sum(axis=1)                                             # (n_C, 2)
+        numer = I_S * base_v[None, :] + sign * weighted_term      # (n_C, 2)
+        denom = I_S + sign * weighted_I_AS.sum(axis=1)            # (n_C,)
+        denom = np.where(np.abs(denom) < 1e-9, 1e-9, denom)
+        return numer / denom[:, None]
+
+    base = base_init.copy()
+    for v in range(len(obs)):
+        def loss(xy):
+            pred = voxel_predict(xy, sigma_base[v])
+            return float(((obs[v] - pred) ** 2).sum())
+        try:
+            res = minimize(
+                loss, base[v], method="L-BFGS-B",
+                bounds=[(-6, 6), (-6, 6)],
+                options={"maxiter": 100},
+            )
+            base[v] = res.x
+        except Exception:
+            pass
+    return base
+
+
 def fit_four_af_per_subject(
     pars, rois, modes=("suppression", "attraction"),
     conditions=("upper_right", "upper_left", "lower_left", "lower_right"),
+    min_r2_mean_model: float = 0.0,
+    refit_base: bool = True,
+    n_iter: int = 3,
+    joint_base_fit: bool = False,
 ):
     """Fit the 4-AF competing model per subject per ROI, both modes.
+
+    `min_r2_mean_model`: only include voxels whose mean-model PRF R² >
+    this threshold (default 0 = no extra filter beyond what
+    load_all_conditionwise already applied).
+
+    `refit_base`: if True, iteratively refit per-voxel base position to
+    correct for the bias in `mean(observed)` that arises when g_HP ≠
+    g_LP. Each iteration: (a) refit (σ_AF, g_HP, g_LP) with current base,
+    (b) compute residual = observed − predicted, (c) update base ← base +
+    mean_C(residual). For symmetric 4-condition designs with shared
+    σ_AF, the AF effect on the across-condition mean residual is
+    structured and can be partially absorbed by base correction.
+
+    `joint_base_fit`: if True, after the iterative shared-parameter fit
+    is done, run a final scipy L-BFGS-B per-voxel optimization of
+    (x0_v, y0_v) given the fixed shared params, then re-fit shared params
+    one more time. This is the "true" joint fit, but slow (~0.05s/voxel).
 
     Returns DataFrame with one row per (subject, roi, mode).
     """
@@ -656,6 +728,8 @@ def fit_four_af_per_subject(
     for sub in sorted(work["subject"].unique()):
         for roi in rois:
             sub_df = work[(work["subject"] == sub) & (work["roi_base"] == roi)]
+            if min_r2_mean_model > 0 and "r2_mean_model" in sub_df.columns:
+                sub_df = sub_df[sub_df["r2_mean_model"] > min_r2_mean_model]
             if len(sub_df) < 40:
                 continue
 
@@ -683,8 +757,77 @@ def fit_four_af_per_subject(
 
             for mode in modes:
                 try:
-                    fit = fit_four_af_competing(obs, sigma_base, mode=mode)
-                    rows.append({"subject": sub, "roi": roi, **fit})
+                    if not refit_base:
+                        fit = fit_four_af_competing(obs, sigma_base, mode=mode)
+                    else:
+                        # Iterative base refitting.
+                        # Step 1: fit with base = mean(observed) (default closed form).
+                        # Step 2: residual = observed − predicted; update base ← base + mean_C(residual).
+                        # Step 3: refit shared params with corrected base, repeat.
+                        from retsupp.utils.data import distractor_locations
+                        ring_keys = ["upper right", "upper left", "lower left", "lower right"]
+                        ring_pos = np.array([list(distractor_locations[k]) for k in ring_keys])
+                        hp_idx = np.array([0, 1, 2, 3])
+                        base = obs.mean(axis=1)  # initial: across-condition mean
+                        for it in range(n_iter):
+                            # Inject the current base as a fake "observed" so the
+                            # closed-form solver uses it. Subtle: fit_four_af_competing
+                            # uses mean(observed) as base internally. To override base,
+                            # we shift each (voxel, condition) row by (target_base − current_mean)
+                            # so the new mean equals target_base.
+                            shift = (base - obs.mean(axis=1))[:, None, :]
+                            obs_shifted = obs + shift
+                            fit = fit_four_af_competing(obs_shifted, sigma_base, mode=mode)
+                            # Recompute predictions; residual mean across conditions tells us
+                            # how much to update base.
+                            sigma_AF = fit["sigma_AF"]
+                            g_HP, g_LP = fit["g_HP"], fit["g_LP"]
+                            sign = -1.0 if mode == "suppression" else +1.0
+                            sigma_base_sq = sigma_base ** 2
+                            sigma_sum_sq = sigma_AF ** 2 + sigma_base_sq
+                            Z = 2 * np.pi * sigma_AF ** 2 * sigma_base_sq / sigma_sum_sq
+                            diff = base[:, None, :] - ring_pos[None, :, :]
+                            delta_sq = (diff ** 2).sum(axis=-1)
+                            log_arg = np.clip(-delta_sq / (2 * sigma_sum_sq[:, None]), -50, 50)
+                            I_AS = Z[:, None] * np.exp(log_arg)
+                            I_S = 2 * np.pi * sigma_base_sq
+                            mu_AD_ring = (
+                                ring_pos[None, :, :] * sigma_base_sq[:, None, None]
+                                + base[:, None, :] * sigma_AF ** 2
+                            ) / sigma_sum_sq[:, None, None]
+                            is_hp = np.zeros((4, 4))
+                            is_hp[np.arange(4), hp_idx] = 1.0
+                            g_C_ℓ = is_hp * g_HP + (1 - is_hp) * g_LP
+                            weighted_I_AS = g_C_ℓ[None, :, :] * I_AS[:, None, :]
+                            weighted_term = (
+                                weighted_I_AS[:, :, :, None] * mu_AD_ring[:, None, :, :]
+                            ).sum(axis=2)
+                            numer = I_S[:, None, None] * base[:, None, :] + sign * weighted_term
+                            denom = I_S[:, None] + sign * weighted_I_AS.sum(axis=2)
+                            denom = np.where(np.abs(denom) < 1e-9, 1e-9, denom)
+                            pred = numer / denom[:, :, None]
+                            # Update base by the residual's across-condition mean.
+                            residual = obs - pred
+                            base = base + 0.5 * residual.mean(axis=1)  # damping
+
+                        # Optional: final per-voxel scipy minimization of (x0, y0)
+                        # given fixed shared params. Slow (~0.05s/voxel) but
+                        # eliminates the bias from the analytical-residual update.
+                        if joint_base_fit:
+                            base = _refine_base_per_voxel(
+                                obs, sigma_base, ring_pos,
+                                fit["sigma_AF"], fit["g_HP"], fit["g_LP"],
+                                sign, hp_idx, base,
+                            )
+                            # Re-fit shared params one last time with refined base.
+                            shift = (base - obs.mean(axis=1))[:, None, :]
+                            obs_shifted = obs + shift
+                            fit = fit_four_af_competing(obs_shifted, sigma_base, mode=mode)
+                    rows.append({
+                        "subject": sub, "roi": roi,
+                        "n_voxels": int(len(pivot)),
+                        **fit,
+                    })
                 except Exception as e:
                     print(f"  fit failed for sub-{sub} {roi} mode={mode}: {e}")
                     continue

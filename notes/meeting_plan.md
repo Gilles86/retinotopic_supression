@@ -292,6 +292,45 @@ total.
   joint braincoder model is the right answer if the post-hoc fits keep
   hitting bounds, but it's a big dev investment.
 
+## State of the post-hoc 4-AF fits (May 2026)
+
+Implemented per-subject per-ROI fits of:
+```
+R(x) = (1 ± g_HP · A_{HP_C}(x) ± g_LP · Σ_{ℓ ≠ HP_C} A_ℓ(x)) · S_v(x)
+```
+with shared σ_AF + g_HP + g_LP per ROI per subject, both `mode='suppression'`
+and `mode='attraction'`. Per-voxel base position fitted via:
+1. Iterative residual-based base correction (cheap).
+2. Optional final scipy L-BFGS-B per-voxel fit (~5 min total).
+
+Findings: even with `r2_mean_model > 0.3` filter and per-voxel base
+refit, many subjects' σ_AF saturates at the lower or upper bound and
+log(g_HP/g_LP) is bimodal. The post-hoc inversion at this SNR is
+ill-conditioned. The model-free per-anchor and projection-vs-distance
+tests give clean significant results in V3AB and hV4; the AF parameters
+themselves are not yet quantitative-comparison-ready. Cluster plan #4
+(braincoder joint AF+PRF at the BOLD level) is the right fix.
+
+## SLURM scripts ready to submit
+
+After `git pull` on cluster (`cd ~/git/retsupp`):
+
+```bash
+# GLMsingle single-trial betas, all 30 subjects in parallel.
+# 96 GB RAM per job, 6 hours, 16 cores.
+sbatch --array=1-30 retsupp/glm/slurm_jobs/fit_glmsingle.sh
+```
+
+Outputs:
+- `derivatives/glmsingle/sub-XX/func/sub-XX_task-search_space-T1w_desc-distractor_pe.nii.gz` (4D, x×y×z×n_trials beta map)
+- `derivatives/glmsingle/sub-XX/func/sub-XX_task-search_space-T1w_desc-R2_pe.nii.gz`
+- `derivatives/glmsingle/sub-XX/func/sub-XX_task-search_space-T1w_desc-trials.tsv` (per-trial labels: distractor location, HP location, is_hp, etc.)
+
+Downstream (still to be written):
+- `retsupp/glm/aggregate_richter_style.py` — apply quadrant ROI masks to
+  the 4D beta map, get per-trial × ROI × stimulus-type × HP-status
+  values, replicate Richter Fig 4.
+
 **My recommendation:** start with #1 and #3 in parallel (cheap, fast to
 set up, addresses real questions). Then #2 once #1 results are in. #4
 only if #2 leaves the model-fit story unsatisfying.

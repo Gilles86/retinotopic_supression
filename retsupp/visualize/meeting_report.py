@@ -387,7 +387,7 @@ def figure_2_hexbin_vs_null(
             last_hb = ax.hexbin(
                 roi_df["x_mean_rotated"], roi_df["y_mean_rotated"],
                 C=roi_df[c_col],
-                gridsize=12, cmap="coolwarm", norm=norm,
+                gridsize=8, cmap="coolwarm", norm=norm,
                 extent=(-4, 4, -4, 4), mincnt=20,
             )
             ax.scatter(0, 4, s=300, marker="*", color="k", zorder=3)
@@ -462,14 +462,32 @@ def figure_3_projection_vs_distance(
             roi_df.groupby(["subject", "d_bin"], observed=True)
             ["proj_away_from_HP"].mean().reset_index()
         )
-        sns.lineplot(data=per_sub, x="d_bin", y="proj_away_from_HP",
-                     errorbar=("ci", 95), color="#444", alpha=0.4, ax=ax)
-        sub = per_sub.dropna(subset=["d_bin", "proj_away_from_HP"])
-        if len(sub) >= 5:
-            sm = lowess(sub["proj_away_from_HP"].values,
-                        sub["d_bin"].astype(float).values,
-                        frac=0.5, return_sorted=True)
-            ax.plot(sm[:, 0], sm[:, 1], color="#444", lw=2.5)
+
+        # Per-subject smoothed curves (light gray, in background).
+        from scipy.ndimage import gaussian_filter1d
+        d_centers = sorted(per_sub["d_bin"].unique())
+        subjects = per_sub["subject"].unique()
+        subj_smoothed = []
+        for sub_id in subjects:
+            sub_data = per_sub[per_sub["subject"] == sub_id].set_index("d_bin").reindex(d_centers)
+            row = sub_data["proj_away_from_HP"].values.astype(float)
+            mask = ~np.isnan(row)
+            if mask.sum() < 3:
+                continue
+            row_filled = row.copy()
+            row_filled[~mask] = np.nanmean(row)
+            sm_curve = gaussian_filter1d(row_filled, sigma=1.0)
+            ax.plot(d_centers, sm_curve, color="0.7", lw=0.5, alpha=0.5)
+            subj_smoothed.append(sm_curve)
+
+        # Group-level mean ± SEM across subject-smoothed curves (bold).
+        if subj_smoothed:
+            arr = np.stack(subj_smoothed)
+            mean = np.nanmean(arr, axis=0)
+            sem = np.nanstd(arr, axis=0, ddof=1) / np.sqrt(arr.shape[0])
+            ax.fill_between(d_centers, mean - sem, mean + sem,
+                            color="#222", alpha=0.25)
+            ax.plot(d_centers, mean, color="#222", lw=2.5)
 
         # Near / far tests.
         near = roi_df[roi_df["distance_from_distractor_mean"] <= 1.5]
@@ -503,6 +521,185 @@ def figure_3_projection_vs_distance(
     )
     fig.tight_layout()
     return fig
+
+
+def figure_3b_cluster_stats(
+    pars: pd.DataFrame,
+    rois: list[str],
+    bin_edges: np.ndarray | None = None,
+    cluster_threshold_t: float = 2.0,
+    n_perm: int = 500,
+    seed: int = 42,
+    smooth_sigma_bins: float = 1.0,
+    clip_projection: float = 1.5,
+    fig=None,
+):
+    """Per-ROI smoothed curves + 1D cluster-based permutation test.
+
+    Per (subject, ROI, distance bin): mean projection_away_from_HP.
+    Per subject: Gaussian-smooth across bins (σ = smooth_sigma_bins).
+    Per ROI: at each bin, one-sample t against 0.
+    Find clusters of |t| > cluster_threshold_t; cluster stat = Σ t.
+    Sign-flip permutation: flip each subject's smoothed curve sign with
+    p=0.5 across all bins jointly, recompute t, find max cluster stat.
+    Repeat n_perm times → null distribution. Real cluster significant if
+    stat > 95th percentile of null.
+    """
+    from scipy import stats
+    from scipy.ndimage import gaussian_filter1d
+
+    rng = np.random.default_rng(seed)
+    if bin_edges is None:
+        bin_edges = np.arange(0.0, 7.5, 0.5)
+    centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+
+    work = pars.reset_index().copy()
+    work = work[work["roi_base"].isin(rois)]
+    work["proj_away_from_HP"] = -work["dy_rotated"]
+    work = work[work["proj_away_from_HP"].abs() <= clip_projection]
+    work["d_bin"] = pd.cut(
+        work["distance_from_distractor_mean"], bin_edges,
+        labels=centers, include_lowest=True,
+    )
+    work = work.dropna(subset=["d_bin"])
+    work["d_bin"] = work["d_bin"].astype(float)
+
+    # Per (subject, ROI, bin) mean.
+    per_sub_bin = (
+        work.groupby(["subject", "roi_base", "d_bin"], observed=True)
+        ["proj_away_from_HP"].mean().reset_index()
+    )
+
+    n = len(rois)
+    ncols = min(4, n); nrows = int(np.ceil(n / ncols))
+    if fig is None:
+        fig, axes = plt.subplots(nrows, ncols,
+                                 figsize=(3.6 * ncols, 2.8 * nrows + 0.5),
+                                 sharex=True, sharey=True)
+    axes = np.atleast_1d(axes).ravel()
+
+    cluster_results = {}
+    for ax, roi in zip(axes, rois):
+        roi_df = per_sub_bin[per_sub_bin["roi_base"] == roi]
+        # Pivot to (n_subjects, n_bins).
+        pivot = roi_df.pivot_table(
+            index="subject", columns="d_bin", values="proj_away_from_HP",
+        )
+        pivot = pivot.reindex(columns=centers)  # align bins
+        # Per subject: Gaussian-smooth across bins (skip NaN-only rows).
+        valid_rows = pivot.notna().any(axis=1)
+        smoothed = pivot.copy()
+        for sub in pivot.index[valid_rows]:
+            row = pivot.loc[sub].values.astype(float)
+            mask = ~np.isnan(row)
+            if mask.sum() < 3:
+                continue
+            # Replace NaNs with bin-wise mean for smoothing input.
+            row_filled = row.copy()
+            row_filled[~mask] = np.nanmean(row)
+            smoothed.loc[sub] = gaussian_filter1d(row_filled, smooth_sigma_bins)
+
+        smoothed_arr = smoothed.dropna(how="all").values  # (n_subj, n_bins)
+
+        # Per-bin t-test against 0.
+        t_obs = np.full(len(centers), np.nan)
+        for j in range(len(centers)):
+            col = smoothed_arr[:, j]
+            col = col[~np.isnan(col)]
+            if len(col) >= 3:
+                t_obs[j], _ = stats.ttest_1samp(col, 0.0)
+
+        # Threshold + find connected clusters where |t| > thr.
+        def find_clusters(t_array, thr):
+            """Return list of (start_idx, end_idx, cluster_stat) for |t|>thr clusters."""
+            sig = np.abs(t_array) > thr
+            sig = np.nan_to_num(sig, nan=False)
+            clusters = []
+            i = 0
+            while i < len(sig):
+                if sig[i]:
+                    j = i
+                    while j < len(sig) and sig[j]:
+                        j += 1
+                    cs = float(np.nansum(t_array[i:j]))
+                    clusters.append((i, j - 1, cs))
+                    i = j
+                else:
+                    i += 1
+            return clusters
+
+        obs_clusters = find_clusters(t_obs, cluster_threshold_t)
+        obs_max_abs = max((abs(c[2]) for c in obs_clusters), default=0.0)
+
+        # Permutation null: sign-flip each subject's curve.
+        null_max_stats = np.zeros(n_perm)
+        for k in range(n_perm):
+            signs = rng.choice([-1, 1], size=smoothed_arr.shape[0])
+            perm = smoothed_arr * signs[:, None]
+            t_perm = np.full(len(centers), np.nan)
+            for j in range(len(centers)):
+                col = perm[:, j]
+                col = col[~np.isnan(col)]
+                if len(col) >= 3:
+                    t_perm[j], _ = stats.ttest_1samp(col, 0.0)
+            perm_clusters = find_clusters(t_perm, cluster_threshold_t)
+            null_max_stats[k] = max((abs(c[2]) for c in perm_clusters), default=0.0)
+
+        # Cluster-level p-values per observed cluster.
+        cluster_ps = []
+        for i_start, i_end, cs in obs_clusters:
+            p = (1 + np.sum(null_max_stats >= abs(cs))) / (1 + n_perm)
+            cluster_ps.append(p)
+
+        cluster_results[roi] = {
+            "centers": centers,
+            "t_obs": t_obs,
+            "smoothed": smoothed_arr,
+            "clusters": obs_clusters,
+            "cluster_ps": cluster_ps,
+            "null_max_stats": null_max_stats,
+        }
+
+        # Plot.
+        mean = np.nanmean(smoothed_arr, axis=0)
+        sem = np.nanstd(smoothed_arr, axis=0, ddof=1) / np.sqrt(
+            (~np.isnan(smoothed_arr)).sum(axis=0).clip(min=1)
+        )
+        ax.plot(centers, mean, color="#444", lw=2.0)
+        ax.fill_between(centers, mean - sem, mean + sem,
+                        color="#444", alpha=0.25)
+        ax.axhline(0, color="k", lw=0.5, ls="--")
+        ax.set_xlabel("distance of mean PRF from HP (deg)")
+        ax.set_ylabel("smoothed proj. away from HP (deg)")
+        ax.set_ylim(-0.25, 0.25)
+
+        # Highlight significant clusters in red, non-significant in light red.
+        for (i_start, i_end, cs), p in zip(obs_clusters, cluster_ps):
+            color = "#d62728" if p < 0.05 else "#f0a0a0"
+            ax.axvspan(bin_edges[i_start], bin_edges[i_end + 1],
+                       color=color, alpha=0.25, zorder=0)
+            x_mid = 0.5 * (bin_edges[i_start] + bin_edges[i_end + 1])
+            ax.text(
+                x_mid, ax.get_ylim()[1] * 0.92,
+                f"p={p:.3f}",
+                ha="center", va="top", fontsize=8,
+                color="black" if p < 0.05 else "0.4",
+                weight="bold" if p < 0.05 else "normal",
+            )
+        ax.set_title(roi)
+
+    for ax in axes[n:]:
+        ax.set_visible(False)
+
+    fig.suptitle(
+        f"Figure 3b — Smoothed per-subject curves + 1D cluster-based permutation test\n"
+        f"σ_smooth = {smooth_sigma_bins} bins.  "
+        f"|t| > {cluster_threshold_t} threshold, cluster stat = Σ t inside.  "
+        f"{n_perm} sign-flip permutations.  Red = p<0.05, pink = n.s.",
+        y=1.02,
+    )
+    fig.tight_layout()
+    return fig, cluster_results
 
 
 # -----------------------------------------------------------------------------
@@ -614,15 +811,35 @@ def figure_5_dn_parameters(
     fig, axes = plt.subplots(2, 3, figsize=(13, 7), sharey=False)
     axes = axes.ravel()
     for ax, (col, label) in zip(axes, pars_to_show):
-        sns.violinplot(
-            data=dn, x="roi_base", y=col, order=rois,
-            inner="quartile", color="0.85", linewidth=0.7, ax=ax,
-        )
-        # Per-subject median dots.
+        # Per-subject median for this parameter.
         med = dn.groupby(["subject", "roi_base"], observed=True)[col].median().reset_index()
-        sns.stripplot(
-            data=med, x="roi_base", y=col, order=rois,
-            color="black", size=2.5, alpha=0.6, ax=ax,
+
+        # Outlier clip: drop values beyond 3 IQR from each ROI's median
+        # to prevent extreme single-subject fits from blowing up the y-axis.
+        keep_mask = pd.Series(True, index=med.index)
+        for roi in rois:
+            sel = med["roi_base"] == roi
+            vals = med.loc[sel, col]
+            if len(vals) >= 4:
+                q25, q75 = np.nanpercentile(vals, [25, 75])
+                iqr = q75 - q25
+                lo, hi = q25 - 3 * iqr, q75 + 3 * iqr
+                keep_mask.loc[sel] = (vals >= lo) & (vals <= hi)
+        med_clean = med[keep_mask]
+
+        sns.swarmplot(
+            data=med_clean, x="roi_base", y=col, order=rois,
+            color="0.55", size=4, alpha=0.7, ax=ax,
+        )
+        # Group mean ± SEM as large dot + errorbar in the middle.
+        from scipy import stats as _stats
+        means = med_clean.groupby("roi_base", observed=True)[col].mean().reindex(rois)
+        sems = med_clean.groupby("roi_base", observed=True)[col].sem().reindex(rois)
+        ax.errorbar(
+            x=np.arange(len(rois)), y=means.values,
+            yerr=sems.values, fmt="o",
+            color="black", markersize=10, capsize=5, lw=1.5,
+            markeredgecolor="white", markeredgewidth=1.2, zorder=5,
         )
         ax.set_title(label, fontsize=10)
         ax.set_xlabel("")
@@ -636,6 +853,81 @@ def figure_5_dn_parameters(
     )
     fig.tight_layout()
     return fig
+
+
+def figure_r2_distributions(
+    pars: pd.DataFrame,
+    rois: list[str],
+    r2_threshold: float = 0.3,
+    fig=None,
+):
+    """Per-ROI distribution of mean-model PRF R², with cutoff line.
+
+    Diagnostic figure: how many voxels survive at r²>thr per ROI per
+    subject, what the typical R² is, how strict the threshold actually is.
+    """
+    work = pars.reset_index().copy()
+    work = work[work["roi_base"].isin(rois)]
+    # Drop duplicates per voxel — r2_mean_model is the same across conditions.
+    per_voxel = work.drop_duplicates(["subject", "roi_base", "voxel"])
+    per_voxel = per_voxel[per_voxel["r2_mean_model"].notna()]
+
+    if fig is None:
+        fig, axes = plt.subplots(2, len(rois), figsize=(2.6 * len(rois), 6),
+                                 sharey="row")
+    axes = np.atleast_2d(axes)
+
+    summary_rows = []
+    for j, roi in enumerate(rois):
+        roi_df = per_voxel[per_voxel["roi_base"] == roi]
+        # Top: histogram of R² across all voxels in ROI (pooled over subjects).
+        ax = axes[0, j]
+        ax.hist(roi_df["r2_mean_model"], bins=40, color="0.7",
+                edgecolor="white", lw=0.3)
+        ax.axvline(r2_threshold, color="red", lw=1.5)
+        ax.set_xlim(0, 1)
+        ax.set_xlabel("r²_mean_model")
+        if j == 0:
+            ax.set_ylabel("voxel count\n(pooled)")
+        ax.set_title(f"{roi}", fontsize=10)
+
+        # Bottom: per-subject % of voxels above threshold.
+        per_subj_pct = (
+            roi_df.groupby("subject", observed=True)["r2_mean_model"]
+            .agg(lambda v: 100 * (v > r2_threshold).mean())
+        )
+        per_subj_n = (
+            roi_df.groupby("subject", observed=True)["r2_mean_model"]
+            .agg(lambda v: int((v > r2_threshold).sum()))
+        )
+        ax = axes[1, j]
+        ax.boxplot(per_subj_pct.values, vert=True, widths=0.5,
+                   patch_artist=True, boxprops=dict(facecolor="0.85"))
+        sns.stripplot(y=per_subj_pct.values, color="black", size=3,
+                      alpha=0.6, ax=ax)
+        ax.set_ylim(0, 100)
+        if j == 0:
+            ax.set_ylabel(f"% voxels with r²>{r2_threshold}\n(per subject)")
+        ax.set_xticks([])
+        ax.set_xlabel(roi)
+
+        summary_rows.append({
+            "roi": roi,
+            "median_R2": float(roi_df["r2_mean_model"].median()),
+            "pct_above_thr_median": float(per_subj_pct.median()),
+            "n_above_thr_per_subj_median": float(per_subj_n.median()),
+            "n_above_thr_per_subj_min": int(per_subj_n.min()),
+            "n_above_thr_per_subj_max": int(per_subj_n.max()),
+        })
+
+    fig.suptitle(
+        f"Figure — Distribution of r²_mean_model per ROI.\n"
+        f"Top: pooled histogram (red line = r² threshold for AF fit = {r2_threshold}).\n"
+        f"Bottom: per-subject percentage of voxels surviving the threshold.",
+        y=1.02,
+    )
+    fig.tight_layout()
+    return fig, pd.DataFrame(summary_rows)
 
 
 # -----------------------------------------------------------------------------
@@ -657,8 +949,11 @@ def figure_6_four_af_fits(pars, rois, fig=None):
     from scipy import stats
 
     print("  fitting 4-AF model (suppression + attraction) per subject per ROI ...")
+    print("  R²>0.3 filter + iterative base refit + final per-voxel scipy base fit ...")
     df = fit_four_af_per_subject(
         pars, rois, modes=("suppression", "attraction"),
+        min_r2_mean_model=0.3, refit_base=True, n_iter=3,
+        joint_base_fit=True,
     )
     if df.empty:
         return None, None
@@ -752,11 +1047,11 @@ def main():
     # outside the aperture. The 50% threshold removes signal because HP
     # sits at the aperture boundary; 90% catches only runaway fits.
     pars = filter_prf_inside_aperture(
-        pars, aperture_radius=3.17, max_fraction_outside=0.75, use_mean_only=False,
+        pars, aperture_radius=3.17, max_fraction_outside=0.5, use_mean_only=False,
     )
     n_after = len(pars)
     print(
-        f"After aperture filter (drop voxels with any PRF >75% outside R=3.17°): "
+        f"After aperture filter (drop voxels with any PRF >50% outside R=3.17°): "
         f"{n_before:,} → {n_after:,} rows  ({100*(n_before-n_after)/n_before:.1f}% dropped)"
     )
 
@@ -850,6 +1145,10 @@ RICHTER 2025 (just read):
         fig = figure_3_projection_vs_distance(pars, rois=args.rois)
         pdf.savefig(fig, bbox_inches="tight"); plt.close(fig)
 
+        print("Figure 3b — cluster-based permutation stats ...")
+        fig, _ = figure_3b_cluster_stats(pars, rois=args.rois, n_perm=300)
+        pdf.savefig(fig, bbox_inches="tight"); plt.close(fig)
+
         print("Figure 4 ...")
         fig = figure_4_parameter_shifts_2d(pars, rois=args.rois)
         pdf.savefig(fig, bbox_inches="tight"); plt.close(fig)
@@ -858,6 +1157,14 @@ RICHTER 2025 (just read):
         fig = figure_5_dn_parameters(rois=args.rois, bids_folder=args.bids_folder)
         if fig is not None:
             pdf.savefig(fig, bbox_inches="tight"); plt.close(fig)
+
+        print("Figure — R² distributions per ROI (diagnostic) ...")
+        fig, r2_summary = figure_r2_distributions(
+            pars, rois=args.rois, r2_threshold=0.3,
+        )
+        pdf.savefig(fig, bbox_inches="tight"); plt.close(fig)
+        print("R² summary:")
+        print(r2_summary.to_string(index=False, float_format=lambda v: f"{v:7.3f}"))
 
         print("Figure 6 — 4-AF competing model ...")
         result = figure_6_four_af_fits(pars, rois=args.rois)
