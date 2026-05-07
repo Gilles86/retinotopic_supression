@@ -471,6 +471,24 @@ def page_hp_vs_lp_test(pdf, df: pd.DataFrame,
     ax.axhline(0, color='gray', lw=0.7, ls='--')
     ax.set_xlabel('')
     ax.set_ylabel(f'{metric_label}   (negative ⇒ HP suppressed more than LP)')
+    # Natural-factor ticks for log-ratio plots (so the eye reads
+    # ".2× / .5× / 1× / 2× / 3×" instead of "log(2)").
+    if metric == 'log_ratio':
+        # Build symmetric set of natural factors that fit inside YLIM.
+        factor_set = [2, 3, 4, 5, 6, 8, 10]
+        ratio_ticks = [1.0]
+        labels = ['1×']
+        for f in factor_set:
+            if np.log(f) <= YLIM:
+                ratio_ticks.append(f)
+                labels.append(f'{f}×')
+                ratio_ticks.append(1.0 / f)
+                labels.append(f'1/{f}×')
+        order = np.argsort(np.log(ratio_ticks))
+        ratio_ticks = [ratio_ticks[i] for i in order]
+        labels = [labels[i] for i in order]
+        ax.set_yticks(np.log(ratio_ticks))
+        ax.set_yticklabels(labels)
     ax.set_title(
         f'HP-vs-LP test ({h0_text}):  per-fit median ± 95 % bootstrap CI  '
         f'(outlier-resistant; {n_outliers}/{n_total_for_outliers} fits '

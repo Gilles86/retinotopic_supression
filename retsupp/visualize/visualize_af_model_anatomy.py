@@ -348,6 +348,137 @@ def page_vector_field(pdf, sigma_AF=1.0, g_HP=-0.5, g_LP=-0.1,
     pdf.savefig(fig); plt.close(fig)
 
 
+def page_projection_field(pdf, sigma_AF=2.0, g_HP=+0.14, g_LP=+0.29,
+                            prf_sd=1.0, spacing=0.4, fov=4.5,
+                            integration_resolution=81,
+                            integration_radius=5.0):
+    """Why the away-from-HP projection is small at large distance from HP.
+
+    For each seed PRF position the model predicts a 2D shift vector
+    (pred − base). We project that onto the unit vector pointing AWAY
+    from HP, exactly as the data analysis does. The resulting scalar
+    field shows why the projection is large near HP, small at large
+    distance, and ~0 at the perpendicular-to-HP locations: shifts there
+    are radial wrt the nearby LP-AF, hence tangential to the HP-axis,
+    so the projection cancels.
+    """
+    s1d = np.arange(-fov, fov + spacing / 2, spacing)
+    SX, SY = np.meshgrid(s1d, s1d)
+    seeds = np.stack([SX.ravel(), SY.ravel()], axis=1).astype(np.float32)
+    pred = predict_shift_field(sigma_AF, g_HP, g_LP, seeds,
+                                 integration_resolution=integration_resolution,
+                                 integration_radius=integration_radius,
+                                 prf_sd=prf_sd)
+    ring = get_ring_positions()
+    hp_idx = 0  # UR
+    hp = ring[hp_idx]
+    u = -hp / (np.linalg.norm(hp) + 1e-12)   # away-from-HP unit vector
+
+    dx = pred[hp_idx, :, 0] - seeds[:, 0]
+    dy = pred[hp_idx, :, 1] - seeds[:, 1]
+    proj = dx * u[0] + dy * u[1]              # away-from-HP projection
+    mag = np.sqrt(dx ** 2 + dy ** 2)
+
+    # Reshape onto the seed grid for imshow.
+    n_side = SX.shape[0]
+    proj_grid = proj.reshape(n_side, n_side)
+    mag_grid = mag.reshape(n_side, n_side)
+
+    fig = plt.figure(figsize=(13, 5.5))
+    fig.suptitle(
+        'Why projection on the away-from-HP axis is small at large distance.\n'
+        f'σ_AF={sigma_AF}, g_HP={g_HP:+.2f}, g_LP={g_LP:+.2f}, '
+        f'prf_sd={prf_sd}.  HP = upper-right (red star).',
+        fontsize=11,
+    )
+
+    extent = (s1d[0], s1d[-1], s1d[0], s1d[-1])
+
+    # (1) shift-magnitude scalar field — full magnitude, regardless of direction.
+    ax = fig.add_subplot(1, 3, 1)
+    vmax_mag = float(np.nanpercentile(mag_grid, 98)) or 0.01
+    im = ax.imshow(mag_grid, extent=extent, origin='lower',
+                    cmap='Greys', vmin=0, vmax=vmax_mag)
+    add_aperture_and_ring(ax, ring, hp_idx=hp_idx)
+    ax.plot(hp[0], hp[1], '*', markersize=18, color='C3', mec='k', zorder=5)
+    ax.set_xlim(-fov, fov); ax.set_ylim(-fov, fov)
+    ax.set_aspect('equal'); ax.set_xticks([]); ax.set_yticks([])
+    ax.set_title('|shift|  (any direction)', fontsize=10)
+    plt.colorbar(im, ax=ax, fraction=0.046, label='deg')
+
+    # (2) projection onto away-from-HP axis (signed scalar field).
+    ax = fig.add_subplot(1, 3, 2)
+    vmax_proj = float(np.nanpercentile(np.abs(proj_grid), 98)) or 0.01
+    im = ax.imshow(proj_grid, extent=extent, origin='lower',
+                    cmap='RdBu_r', vmin=-vmax_proj, vmax=+vmax_proj)
+    add_aperture_and_ring(ax, ring, hp_idx=hp_idx)
+    ax.plot(hp[0], hp[1], '*', markersize=18, color='k', mec='w', zorder=5)
+    # The HP-axis line.
+    ax.plot([-fov * u[0], fov * u[0]],
+            [-fov * u[1], fov * u[1]],
+            '--', color='gray', lw=0.7)
+    ax.set_xlim(-fov, fov); ax.set_ylim(-fov, fov)
+    ax.set_aspect('equal'); ax.set_xticks([]); ax.set_yticks([])
+    ax.set_title('projection onto away-from-HP axis\n'
+                 '(signed: red = away, blue = toward)',
+                 fontsize=10)
+    plt.colorbar(im, ax=ax, fraction=0.046, label='deg')
+
+    # (3) shift VECTORS (so direction is explicit).
+    ax = fig.add_subplot(1, 3, 3)
+    ax.quiver(seeds[:, 0], seeds[:, 1], dx, dy,
+              angles='xy', scale_units='xy',
+              scale=1.0 / 5.0, color='C0',
+              width=0.005, alpha=0.85)
+    add_aperture_and_ring(ax, ring, hp_idx=hp_idx)
+    ax.plot(hp[0], hp[1], '*', markersize=18, color='C3', mec='k', zorder=5)
+    ax.set_xlim(-fov, fov); ax.set_ylim(-fov, fov)
+    ax.set_aspect('equal'); ax.set_xticks([]); ax.set_yticks([])
+    ax.set_title('predicted shift vectors (×5)', fontsize=10)
+
+    fig.tight_layout(rect=[0, 0, 1, 0.92])
+    pdf.savefig(fig); plt.close(fig)
+
+    # Bonus page: 1D azimuthal cut along the HP↔origin↔opposite-LP line.
+    # Walk a probe point from HP outward through origin to the opposite
+    # ring location and show |shift| and projection vs distance from HP.
+    n_pts = 80
+    distances = np.linspace(-1.0, 8.0, n_pts)   # from HP outward
+    base_pts = hp[None, :] + distances[:, None] * u[None, :]
+    pred_pts = predict_shift_field(sigma_AF, g_HP, g_LP,
+                                     base_pts.astype(np.float32),
+                                     integration_resolution=integration_resolution,
+                                     integration_radius=integration_radius,
+                                     prf_sd=prf_sd)
+    dx_pts = pred_pts[hp_idx, :, 0] - base_pts[:, 0]
+    dy_pts = pred_pts[hp_idx, :, 1] - base_pts[:, 1]
+    proj_pts = dx_pts * u[0] + dy_pts * u[1]
+    mag_pts = np.sqrt(dx_pts ** 2 + dy_pts ** 2)
+
+    fig, ax = plt.subplots(figsize=(11, 5))
+    ax.plot(distances, mag_pts, 'k-', lw=2, label='|shift| (any direction)')
+    ax.plot(distances, proj_pts, 'C3-', lw=2,
+            label='projection on away-from-HP axis')
+    ax.fill_between(distances, 0, mag_pts, color='0.85', zorder=0)
+    ax.axhline(0, color='gray', lw=0.5, ls='--')
+    ax.axvline(0, color='C3', lw=0.7, ls=':', label='HP location')
+    # Label LL position approximately (twice the HP magnitude).
+    d_ll = 2.0 * np.linalg.norm(hp)
+    ax.axvline(d_ll, color='gray', lw=0.7, ls=':', label='opposite LP (LL)')
+    ax.set_xlabel('distance along HP→opposite axis  (deg, from HP)')
+    ax.set_ylabel('shift size  (deg)')
+    ax.set_title(
+        'Predicted shift along the HP-axis line (HP at d=0, opposite LP at d≈5.7°).\n'
+        'Total |shift| can be non-zero at far distance, but its projection on\n'
+        'the HP-axis stays small — shifts there are radial wrt the LL-AF, \n'
+        'NOT wrt HP, so they cancel along this projection.',
+        fontsize=10,
+    )
+    ax.legend(loc='upper right', fontsize=9)
+    fig.tight_layout()
+    pdf.savefig(fig); plt.close(fig)
+
+
 def page_per_roi_typical(pdf, params_per_roi):
     """Show each ROI's modulation field at its empirical median params.
 
@@ -487,6 +618,9 @@ def main():
         page_vector_field(pdf,
                             sigma_AF=args.sigma_af,
                             g_HP=args.g_hp, g_LP=args.g_lp)
+        page_projection_field(pdf,
+                                sigma_AF=args.sigma_af,
+                                g_HP=args.g_hp, g_LP=args.g_lp)
         if typical:
             page_per_roi_typical(pdf, typical)
             page_per_roi_vector_field(pdf, typical)

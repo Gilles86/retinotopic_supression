@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=dyn_af_prf_braincoder
+#SBATCH --job-name=af_dyn
 #SBATCH --account=zne.uzh
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=4
