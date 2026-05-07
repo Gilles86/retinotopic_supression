@@ -4,7 +4,7 @@
 #SBATCH --partition=standard
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=8G
+#SBATCH --mem=24G
 #SBATCH --time=02:00:00
 
 # Cross-validated DoG-dyn-v3 AF + PRF fit (factorial-class, leave-one-
@@ -106,6 +106,6 @@ echo "Running fit_af_prf_cv.py (all 4 folds) for sub-${subject}, roi=${roi}, cla
     --dyn-hp-sign "$DYN_HP" \
     --dyn-lp-sign "$DYN_LP" \
     --resolution 50 \
-    --max-voxels 0
+    --max-voxels 500
 
 echo "Finished:    $(date)"
