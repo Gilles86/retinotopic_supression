@@ -333,31 +333,32 @@ def slide_model_panels(pdf):
     # Panels: schematic + 4 parameter regimes.
     panel_specs = [
         ('schematic', None,
-         'Geometry — 4 AFs at the 4 ring positions',
-         '(★ = HP, ● = LP, dashed = bar aperture)'),
+         'Geometry',
+         '★ = HP,  ● = LP,  dashed = bar aperture'),
+        ('heat',      (2.0, +0.5,  0.0),
+         'HP attraction\n(pure gain at HP)',
+         'σ=2°,  g_HP=+0.5,  g_LP=0'),
         ('heat',      (2.0, -0.5,  0.0),
-         'Pure HP suppression',
+         'HP suppression\n(pure gain at HP)',
          'σ=2°,  g_HP=−0.5,  g_LP=0'),
-        ('heat',      (2.0, -0.5, -0.1),
-         'HP-specific suppression\n(plus weaker LP suppression)',
-         'σ=2°,  g_HP=−0.5,  g_LP=−0.1'),
+        ('heat',      (2.0, -0.5, +0.2),
+         'HP suppress + LP attract\n(HP-specific, mixed signs)',
+         'σ=2°,  g_HP=−0.5,  g_LP=+0.2'),
         ('heat',      (2.0, -0.3, -0.3),
          'Uniform 4-AF suppression\n(NO HP-specific effect)',
          'σ=2°,  g_HP=g_LP=−0.3'),
-        ('heat',      (4.0, -0.3, -0.1),
-         'Wider AFs spread the modulation',
-         'σ=4°,  g_HP=−0.3,  g_LP=−0.1'),
     ]
 
-    fig, axes = plt.subplots(1, 5, figsize=(20, 5.0))
-    for ax, (kind, params, title_main, title_params) in zip(axes, panel_specs):
+    fig, axes = plt.subplots(2, 5, figsize=(20, 9))
+
+    # ---- Top row: modulation field heatmaps OR schematic.
+    for col_i, (kind, params, title_main, title_params) in enumerate(panel_specs):
+        ax = axes[0, col_i]
         if kind == 'schematic':
             ax.set_xlim(-5, 5); ax.set_ylim(-5, 5)
             ax.set_aspect('equal'); ax.set_xticks([]); ax.set_yticks([])
-            # Aperture.
             ax.add_patch(Circle((0, 0), APERTURE, fill=False,
                                   ec='0.4', ls='--', lw=1.0))
-            # Schematic σ=1.2.
             sigma_show = 1.2
             for i, mu in enumerate(ring):
                 is_hp = (i == hp_idx)
@@ -375,24 +376,58 @@ def slide_model_panels(pdf):
             sigma_AF, g_HP, g_LP = params
             M = modulation_field(GX, GY, ring, hp_idx=hp_idx,
                                   sigma_AF=sigma_AF, g_HP=g_HP, g_LP=g_LP)
-            # Common color scale across heatmaps for comparability.
             vmax = 0.6
             ax.imshow(M, extent=(-5, 5, -5, 5), origin='lower',
                        cmap='RdBu_r', vmin=1 - vmax, vmax=1 + vmax)
             add_aperture_and_ring(ax, ring, hp_idx=hp_idx)
             ax.set_xlim(-5, 5); ax.set_ylim(-5, 5)
             ax.set_aspect('equal'); ax.set_xticks([]); ax.set_yticks([])
-        ax.set_title(title_main, fontsize=12, weight='bold')
+        ax.set_title(title_main, fontsize=11, weight='bold')
         ax.text(0.5, -0.10, title_params, ha='center', va='top',
-                 fontsize=10, color='0.25', transform=ax.transAxes)
+                 fontsize=9.5, color='0.25', transform=ax.transAxes)
+
+    # Annotate top-row labels.
+    axes[0, 0].set_ylabel('M(g)\nmodulation field', fontsize=11, weight='bold')
+
+    # ---- Bottom row: predicted PRF-center shift VECTOR FIELDS for the
+    # same parameter regimes.
+    s1d = np.arange(-3, 3.1, 0.7, dtype=np.float32)
+    SX, SY = np.meshgrid(s1d, s1d)
+    seeds = np.stack([SX.ravel(), SY.ravel()], axis=1).astype(np.float32)
+    inside = np.linalg.norm(seeds, axis=1) <= APERTURE
+    seeds = seeds[inside]
+    for col_i, (kind, params, _, _) in enumerate(panel_specs):
+        ax = axes[1, col_i]
+        if kind == 'schematic':
+            # Show a "neutral" reference grid: all gains 0 → no shift.
+            ax.scatter(seeds[:, 0], seeds[:, 1], s=14, color='0.5',
+                        alpha=0.7)
+            add_aperture_and_ring(ax, ring, hp_idx=hp_idx)
+            ax.text(0, -4.4, 'PRFs at rest\n(no modulation)',
+                    ha='center', fontsize=10, color='0.4', style='italic')
+        else:
+            sigma_AF, g_HP, g_LP = params
+            pred = predict_shift_field(sigma_AF, g_HP, g_LP, seeds,
+                                          prf_sd=1.0)
+            dx = pred[0, :, 0] - seeds[:, 0]
+            dy = pred[0, :, 1] - seeds[:, 1]
+            add_aperture_and_ring(ax, ring, hp_idx=hp_idx)
+            ax.quiver(seeds[:, 0], seeds[:, 1], dx, dy,
+                       angles='xy', scale_units='xy',
+                       scale=1.0 / 8.0, color='k',
+                       width=0.008, alpha=0.95)
+        ax.set_xlim(-5, 5); ax.set_ylim(-5, 5)
+        ax.set_aspect('equal'); ax.set_xticks([]); ax.set_yticks([])
+    axes[1, 0].set_ylabel('predicted\nPRF-center shifts\n(arrows ×8)',
+                            fontsize=11, weight='bold')
 
     fig.suptitle(
-        '(b)  What the model predicts.    '
-        'Heatmaps: M(g) = modulation factor across the visual field '
-        '(blue = suppression, white = no effect).',
+        '(b)  What the model predicts at different parameter settings.\n'
+        'Top: modulation field M(g)  (red = attraction,  blue = suppression).   '
+        'Bottom: predicted PRF-center shifts under HP=★.',
         fontsize=15, weight='bold',
     )
-    fig.tight_layout(rect=[0, 0.05, 1, 0.93])
+    fig.tight_layout(rect=[0, 0, 1, 0.92])
     pdf.savefig(fig); plt.close(fig)
 
 
@@ -413,7 +448,7 @@ def slide_parameter_distributions(pdf, df: pd.DataFrame):
         sns.stripplot(data=d_plot, x='roi', y='_clip', ax=ax,
                        order=rois, hue='roi', palette='Set2', legend=False,
                        jitter=0.20, alpha=0.55, size=8)
-        # Mean ± SEM error bars.
+        # Mean ± SEM error bars + (for the gain panels) t-test against 0.
         for i, roi in enumerate(rois):
             x = df.loc[df['roi'] == roi, col].dropna().values
             if len(x) < 2:
@@ -423,6 +458,16 @@ def slide_parameter_distributions(pdf, df: pd.DataFrame):
             ax.errorbar([i], [mean], yerr=[sem],
                          fmt='s', color='k', markersize=11,
                          ecolor='k', elinewidth=2.5, capsize=8, zorder=10)
+            if sym:    # only annotate symmetric (gain) panels
+                t, p = stats.ttest_1samp(x, 0.0)
+                sig = ('***' if p < 0.001 else '**' if p < 0.01
+                        else '*' if p < 0.05 else 'n.s.')
+                col_anno = ('C2' if (p < 0.05 and mean > 0)
+                             else 'C3' if (p < 0.05 and mean < 0)
+                             else '0.5')
+                ax.text(i, yhi - 0.05, sig,
+                         ha='center', va='top', fontsize=14,
+                         color=col_anno, weight='bold')
         if sym:
             ax.axhline(0, color='gray', lw=0.7, ls='--')
         ax.set_ylim(ylo, yhi)
@@ -557,23 +602,27 @@ def _draw_af_visual(ax, ring, sigma_AF, g_HP, g_LP, hp_idx=0,
 def _vector_field_panel(ax, sigma_AF, g_HP, g_LP, ring, prf_sd=1.0,
                          spacing=0.6, scale=10.0):
     """Per-condition shift relative to the mean prediction across all 4
-    conditions. Highlights HP-specific asymmetry, removes the
-    rotation-symmetric component."""
+    conditions. Arrows START at the MEAN-across-conditions prediction
+    and POINT toward the per-condition (HP=UR) prediction. So the arrow
+    base is "where the PRF would be if attention had no HP-specificity"
+    and the arrow tip is "where HP=UR pushes it"."""
     s1d = np.arange(-3, 3.1, spacing, dtype=np.float32)
     SX, SY = np.meshgrid(s1d, s1d)
     seeds = np.stack([SX.ravel(), SY.ravel()], axis=1).astype(np.float32)
     inside = np.linalg.norm(seeds, axis=1) <= APERTURE
     seeds = seeds[inside]
     pred = predict_shift_field(sigma_AF, g_HP, g_LP, seeds, prf_sd=prf_sd)
-    # Per-voxel mean across the 4 conditions.
-    mean_pred = pred.mean(axis=0)         # (V, 2)
-    # Show condition-specific deviation from that mean at HP=UR.
+    mean_pred = pred.mean(axis=0)             # (V, 2)
+    # Condition-specific shift at HP=UR.
     dx = pred[0, :, 0] - mean_pred[:, 0]
     dy = pred[0, :, 1] - mean_pred[:, 1]
     # AF circles + aperture.
     _draw_af_visual(ax, ring, sigma_AF, g_HP, g_LP, hp_idx=0)
-    # Quiver of condition-specific shift.
-    ax.quiver(seeds[:, 0], seeds[:, 1], dx, dy,
+    # Mark the MEAN positions (small grey dots) — arrow START points.
+    ax.scatter(mean_pred[:, 0], mean_pred[:, 1],
+                s=4, color='0.45', alpha=0.7, zorder=4)
+    # Quiver of condition-specific shift, anchored at MEAN positions.
+    ax.quiver(mean_pred[:, 0], mean_pred[:, 1], dx, dy,
               angles='xy', scale_units='xy',
               scale=1.0 / scale, color='k',
               width=0.007, alpha=0.95, zorder=10)
@@ -602,9 +651,11 @@ def _per_roi_grid(pdf, df: pd.DataFrame, label: str,
     for i, roi in enumerate(rois):
         ax = axes[i // ncol, i % ncol]
         sub = df[df['roi'] == roi]
-        if len(sub) < 2:
+        if len(sub) < 1:
             ax.axis('off'); continue
         sigma_AF, g_HP, g_LP = _pick_params(df, roi, agg=agg)
+        if not np.isfinite(sigma_AF) or not np.isfinite(g_HP):
+            ax.axis('off'); continue
         _vector_field_panel(ax, sigma_AF, g_HP, g_LP, ring, scale=scale)
         ax.set_title(
             f'{roi}   n = {len(sub)}\n'
