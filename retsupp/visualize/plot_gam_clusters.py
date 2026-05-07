@@ -137,6 +137,7 @@ def fit_gam_per_roi(
     ell_sigma_log: float = 0.5,
     nuts_sampler: str = "pymc",
     init: str = "auto",
+    model_form: str = "population",
 ):
     """Fit GAM `proj ~ hsgp(distance, m=m, c=c) + (1 | subject)` for one ROI.
 
@@ -147,13 +148,37 @@ def fit_gam_per_roi(
 
     Returns (model, idata, fit_seconds, n_divergences).
     """
-    formula = f"proj ~ hsgp(distance, m={m}, c={c}) + (1|subject)"
-    hsgp_term_name = f"hsgp(distance, m={m}, c={c})"
-    priors = {
-        hsgp_term_name: _make_hsgp_priors(
-            ell_mu_log=ell_mu_log, ell_sigma_log=ell_sigma_log,
-        ),
-    }
+    if model_form == "population":
+        # Population smooth + per-subject random intercept only.
+        formula = f"proj ~ hsgp(distance, m={m}, c={c}) + (1|subject)"
+        hsgp_term_name = f"hsgp(distance, m={m}, c={c})"
+        priors = {
+            hsgp_term_name: _make_hsgp_priors(
+                ell_mu_log=ell_mu_log, ell_sigma_log=ell_sigma_log,
+            ),
+        }
+    elif model_form == "subjectwise":
+        # Population smooth + per-subject smooth deviations + per-subj
+        # random intercept.  Both HSGP terms get the same length-scale
+        # prior; the by=subject term uses share_cov so per-subject
+        # smooths share GP hyperparameters (partial pooling on smoothness).
+        formula = (
+            f"proj ~ hsgp(distance, m={m}, c={c}) "
+            f"+ hsgp(distance, m={m}, c={c}, by=subject, share_cov=True) "
+            f"+ (1|subject)"
+        )
+        priors = {
+            f"hsgp(distance, m={m}, c={c})": _make_hsgp_priors(
+                ell_mu_log=ell_mu_log, ell_sigma_log=ell_sigma_log,
+            ),
+            f"hsgp(distance, m={m}, c={c}, by=subject, share_cov=True)":
+                _make_hsgp_priors(
+                    ell_mu_log=ell_mu_log,
+                    ell_sigma_log=ell_sigma_log,
+                ),
+        }
+    else:
+        raise ValueError(f"Unknown model_form={model_form!r}")
     model = bmb.Model(formula, df_roi, family=family, priors=priors)
     t0 = time.perf_counter()
     with warnings.catch_warnings():
@@ -440,6 +465,13 @@ def main():
                         help="PyMC NUTS init strategy (only used when "
                              "--nuts-sampler=pymc). 'jitter+adapt_full' "
                              "tunes a full off-diagonal mass matrix.")
+    parser.add_argument("--model-form",
+                        choices=["population", "subjectwise"],
+                        default="population",
+                        help="Model formula. 'population': proj ~ "
+                             "hsgp(distance) + (1|subject) (default). "
+                             "'subjectwise': add per-subject HSGP smooth "
+                             "deviations from the population smooth.")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--threshold", type=float, default=0.95,
                         help="P(>0)/P(<0) threshold for cluster flagging")
@@ -505,6 +537,7 @@ def main():
                 ell_sigma_log=args.ell_sigma_log,
                 nuts_sampler=args.nuts_sampler,
                 init=args.init,
+                model_form=args.model_form,
             )
             print(f"  fit took {fit_secs:.1f}s, divergences = {n_div}")
 
