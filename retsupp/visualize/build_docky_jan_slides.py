@@ -1140,41 +1140,67 @@ def slide_behavior(pdf, af_tsv: Path, rt_tsv: Path):
     )
     ax.grid(alpha=0.2, axis='y')
 
-    # ---- (right) PCA of g_HP across ROIs vs RT(dist)−RT(no-dist).
+    # ---- (right) two-panel mini-grid: targeted test (null) AND
+    # the test that DOES come out marginal.
     ax = axes[1]
-    wide = (af.pivot_table(index='subject', columns='roi',
-                              values='g_HP', aggfunc='first')
-              [rois]).dropna()
-    Z = wide.rank(axis=0).values
-    Z = (Z - Z.mean(axis=0)) / Z.std(axis=0, ddof=1)
-    pca = PCA(n_components=2).fit(Z)
-    PC1 = pca.transform(Z)[:, 0]
-    pc_df = pd.DataFrame({'subject': wide.index, 'PC1': PC1}).merge(
-        rt, on='subject', how='inner')
-    x = pc_df['RT_dist_minus_no'].values
-    y = pc_df['PC1'].values
-    m = np.isfinite(x) & np.isfinite(y)
-    r_s, p_s = stats.spearmanr(x[m], y[m])
-    ax.scatter(x[m], y[m], s=70, alpha=0.85, color='C0',
-                edgecolor='k', linewidth=0.5)
-    if m.sum() >= 4:
-        slope, intercept = np.polyfit(x[m], y[m], 1)
-        xs = np.linspace(x[m].min(), x[m].max(), 50)
-        ax.plot(xs, slope * xs + intercept, 'k--', lw=1.4)
-    ax.axhline(0, color='gray', lw=0.4, ls=':')
-    ax.axvline(0, color='gray', lw=0.4, ls=':')
-    ax.set_xlabel('RT(dist) − RT(no-dist)   (s)', fontsize=13)
-    ax.set_ylabel('subject score, PC1 of g_HP across ROIs',
-                   fontsize=13)
-    sig = '*' if p_s < 0.05 else ''
-    ax.set_title(
-        'PCA collapses 8 weak ROI signals into 1 subject score.\n'
-        f'Spearman r = {r_s:+.2f}, p = {p_s:.3f}{sig}'
-        f'   (PC1 var = {pca.explained_variance_ratio_[0]*100:.0f}%)',
-        fontsize=11,
-        color='C2' if (p_s < 0.05) else 'k',
-    )
-    ax.grid(alpha=0.2)
+
+    def _pca_corr(model_metric, behavior_metric):
+        wide_ = (af.pivot_table(index='subject', columns='roi',
+                                  values=model_metric, aggfunc='first')
+                   [rois]).dropna()
+        Z = wide_.rank(axis=0).values
+        Z = (Z - Z.mean(axis=0)) / Z.std(axis=0, ddof=1)
+        pca = PCA(n_components=1).fit(Z)
+        PC1 = pca.transform(Z).ravel()
+        merged_pc = pd.DataFrame({'subject': wide_.index, 'PC1': PC1}).merge(
+            rt, on='subject', how='inner')
+        x = merged_pc[behavior_metric].values
+        y = merged_pc['PC1'].values
+        m = np.isfinite(x) & np.isfinite(y)
+        r, p = stats.spearmanr(x[m], y[m])
+        return x[m], y[m], r, p, float(pca.explained_variance_ratio_[0])
+
+    ax.set_xticks([]); ax.set_yticks([]); ax.spines[:].set_visible(False)
+    inset_locs = [
+        (0.08, 0.55, 0.42, 0.40,
+         'log_ratio', 'RT_HP_minus_LP',
+         'PC1 of log(M_HP/M_LP)',
+         'RT(HP) − RT(LP)  (s)',
+         'targeted HP-suppression test'),
+        (0.55, 0.55, 0.42, 0.40,
+         'g_HP', 'RT_HP_minus_no',
+         'PC1 of g_HP',
+         'RT(HP) − RT(no-dist)  (s)',
+         'overall HP-AF gain × HP cost'),
+    ]
+    for x0, y0, w, h, mm, bm, ylab, xlab, title in inset_locs:
+        ax_in = ax.inset_axes([x0, y0, w, h])
+        x, y, r, p, var = _pca_corr(mm, bm)
+        ax_in.scatter(x, y, s=40, alpha=0.85, color='C0',
+                       edgecolor='k', linewidth=0.4)
+        if len(x) >= 4:
+            slope, intercept = np.polyfit(x, y, 1)
+            xs = np.linspace(x.min(), x.max(), 50)
+            ax_in.plot(xs, slope * xs + intercept, 'k--', lw=1.0)
+        ax_in.axhline(0, color='gray', lw=0.3, ls=':')
+        ax_in.axvline(0, color='gray', lw=0.3, ls=':')
+        ax_in.set_xlabel(xlab, fontsize=10)
+        ax_in.set_ylabel(ylab, fontsize=10)
+        sig = '*' if p < 0.05 else ''
+        ax_in.set_title(
+            f'{title}\nr_s={r:+.2f}, p={p:.3f}{sig}',
+            fontsize=10, weight='bold',
+            color='C2' if p < 0.05 else 'k',
+        )
+        ax_in.tick_params(labelsize=9)
+        ax_in.grid(alpha=0.2)
+    # Caption below the two insets.
+    ax.text(0.5, 0.40,
+             'PCA across ROIs collapses 8 weak per-ROI signals into one\n'
+             'subject score. The TARGETED test (HP-vs-LP × HP-vs-LP) is\n'
+             'null with N=30. The omnibus g_HP × HP-cost test reaches *.',
+             ha='center', va='top', fontsize=11, color='0.25',
+             transform=ax.transAxes)
 
     fig.suptitle(
         '(f)  Correlations with behavior  '
