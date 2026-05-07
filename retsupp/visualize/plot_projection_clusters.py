@@ -53,9 +53,25 @@ def smooth_per_subject_curves(
     bin_edges: np.ndarray,
     smooth_sigma_bins: float,
     clip_projection: float,
+    smoother: str = "lowess",
+    lowess_frac: float = 0.4,
 ) -> dict[str, np.ndarray]:
-    """For each ROI: per-subject Gaussian-smoothed curve of projection
-    away from HP vs distance bin. Returns {roi: (n_subjects, n_bins)}.
+    """For each ROI: per-subject smoothed curve of projection-away-from-HP
+    vs distance, evaluated at the bin centers.
+
+    `smoother`:
+      "kernel"    — Nadaraya-Watson kernel regression with FIXED
+                    Gaussian bandwidth (in degrees). Same effective
+                    smoothing across ROIs regardless of voxel count.
+                    Default — gives comparable curves.
+      "gaussian"  — bin per subject, then Gaussian-smooth across bins
+                    (low statistical power if few voxels per bin).
+      "lowess"    — fit LOWESS directly to all per-voxel (distance,
+                    projection) pairs per subject; evaluate at bin
+                    centers.  Uses all voxel-level data → more power
+                    but adaptive smoothness per ROI.
+
+    Returns {roi: (n_subjects, n_bins)}, bin centers.
     """
     centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
 
@@ -63,38 +79,90 @@ def smooth_per_subject_curves(
     work = work[work["roi_base"].isin(rois)]
     work["proj_away_from_HP"] = -work["dy_rotated"]
     work = work[work["proj_away_from_HP"].abs() <= clip_projection]
-    work["d_bin"] = pd.cut(
-        work["distance_from_distractor_mean"], bin_edges,
-        labels=centers, include_lowest=True,
-    )
-    work = work.dropna(subset=["d_bin"])
-    work["d_bin"] = work["d_bin"].astype(float)
-
-    per_sub_bin = (
-        work.groupby(["subject", "roi_base", "d_bin"], observed=True)
-        ["proj_away_from_HP"].mean().reset_index()
-    )
 
     out = {}
-    for roi in rois:
-        roi_df = per_sub_bin[per_sub_bin["roi_base"] == roi]
-        pivot = roi_df.pivot_table(
-            index="subject", columns="d_bin", values="proj_away_from_HP",
-        ).reindex(columns=centers)
-
-        smoothed_rows = []
-        for sub in pivot.index:
-            row = pivot.loc[sub].values.astype(float)
-            mask = ~np.isnan(row)
-            if mask.sum() < 3:
-                continue
-            row_filled = row.copy()
-            row_filled[~mask] = np.nanmean(row)
-            smoothed_rows.append(gaussian_filter1d(row_filled, smooth_sigma_bins))
-        out[roi] = (
-            np.stack(smoothed_rows) if smoothed_rows
-            else np.empty((0, len(centers)))
+    if smoother == "kernel":
+        # Nadaraya-Watson with fixed Gaussian bandwidth in degrees.
+        # Bandwidth defaults to lowess_frac if no --kernel-bandwidth was given.
+        bw = lowess_frac  # repurpose the arg slot; CLI exposes --kernel-bandwidth.
+        for roi in rois:
+            roi_df = work[work["roi_base"] == roi]
+            smoothed_rows = []
+            for sub, sub_df in roi_df.groupby("subject", observed=True):
+                d = sub_df["distance_from_distractor_mean"].values
+                y = sub_df["proj_away_from_HP"].values
+                if len(d) < 50:
+                    continue
+                # Gaussian kernel weights at each evaluation point.
+                # weight_ij = exp(-(centers_i - d_j)^2 / (2*bw^2))
+                # Estimate_i = sum_j weight_ij * y_j / sum_j weight_ij.
+                diff = centers[:, None] - d[None, :]            # (n_bins, n_voxels)
+                weights = np.exp(-(diff ** 2) / (2 * bw ** 2))
+                w_sum = weights.sum(axis=1)
+                # Don't predict where there's almost no data (effective N < 5)
+                # to avoid wild extrapolation tails.
+                eff_n = (weights / weights.max(axis=1, keepdims=True)).sum(axis=1)
+                vals = (weights @ y) / np.maximum(w_sum, 1e-9)
+                vals = np.where(eff_n >= 5, vals, np.nan)
+                smoothed_rows.append(vals)
+            out[roi] = (
+                np.stack(smoothed_rows) if smoothed_rows
+                else np.empty((0, len(centers)))
+            )
+    elif smoother == "lowess":
+        from statsmodels.nonparametric.smoothers_lowess import lowess
+        for roi in rois:
+            roi_df = work[work["roi_base"] == roi]
+            smoothed_rows = []
+            for sub, sub_df in roi_df.groupby("subject", observed=True):
+                d = sub_df["distance_from_distractor_mean"].values
+                y = sub_df["proj_away_from_HP"].values
+                if len(d) < 50:
+                    continue
+                # LOWESS expects sorted x; statsmodels handles that.
+                # Evaluate at our bin centers.
+                sm = lowess(
+                    y, d, frac=lowess_frac,
+                    it=1, return_sorted=True, missing="drop",
+                )
+                # Linearly interpolate the LOWESS output to bin centers.
+                xs, ys = sm[:, 0], sm[:, 1]
+                vals = np.interp(centers, xs, ys, left=np.nan, right=np.nan)
+                smoothed_rows.append(vals)
+            out[roi] = (
+                np.stack(smoothed_rows) if smoothed_rows
+                else np.empty((0, len(centers)))
+            )
+    else:
+        # Original: bin then Gaussian-smooth.
+        work["d_bin"] = pd.cut(
+            work["distance_from_distractor_mean"], bin_edges,
+            labels=centers, include_lowest=True,
         )
+        work = work.dropna(subset=["d_bin"])
+        work["d_bin"] = work["d_bin"].astype(float)
+        per_sub_bin = (
+            work.groupby(["subject", "roi_base", "d_bin"], observed=True)
+            ["proj_away_from_HP"].mean().reset_index()
+        )
+        for roi in rois:
+            roi_df = per_sub_bin[per_sub_bin["roi_base"] == roi]
+            pivot = roi_df.pivot_table(
+                index="subject", columns="d_bin", values="proj_away_from_HP",
+            ).reindex(columns=centers)
+            smoothed_rows = []
+            for sub in pivot.index:
+                row = pivot.loc[sub].values.astype(float)
+                mask = ~np.isnan(row)
+                if mask.sum() < 3:
+                    continue
+                row_filled = row.copy()
+                row_filled[~mask] = np.nanmean(row)
+                smoothed_rows.append(gaussian_filter1d(row_filled, smooth_sigma_bins))
+            out[roi] = (
+                np.stack(smoothed_rows) if smoothed_rows
+                else np.empty((0, len(centers)))
+            )
     return out, centers
 
 
@@ -218,8 +286,18 @@ def main():
     )
     parser.add_argument("--bin-step", type=float, default=0.25,
                         help="Distance bin width in degrees")
+    parser.add_argument("--smoother", choices=["kernel", "lowess", "gaussian"],
+                        default="kernel",
+                        help="kernel (default): Nadaraya-Watson with FIXED Gaussian "
+                             "bandwidth in degrees — uniform smoothness across ROIs. "
+                             "lowess: adaptive bandwidth (smoother for sparse ROIs). "
+                             "gaussian: bin first, then smooth.")
+    parser.add_argument("--kernel-bandwidth", type=float, default=0.5,
+                        help="Kernel regression Gaussian bandwidth in degrees (kernel only)")
+    parser.add_argument("--lowess-frac", type=float, default=0.4,
+                        help="LOWESS frac (lowess only)")
     parser.add_argument("--smooth-sigma-bins", type=float, default=1.0,
-                        help="Per-subject Gaussian smoothing kernel σ in bins")
+                        help="Per-subject Gaussian smoothing kernel σ in bins (gaussian only)")
     parser.add_argument("--clip-projection", type=float, default=1.5,
                         help="Drop voxel-condition rows with |proj| > this")
     parser.add_argument("--cluster-threshold-t", type=float, default=2.0,
@@ -286,6 +364,92 @@ def main():
             pars_per_thr[r2_thr] = pars
             print(f"  r2>{r2_thr:.2f}: {len(pars):,} rows")
 
+        # ---------- HIERARCHY OVERVIEW PAGE ----------
+        # For ONE chosen R² threshold (use the middle one), per ROI compute
+        # two summary statistics from the smoothed curves:
+        #   near suppression = mean of curve over d ∈ [0.5, 2.0°]
+        #   far attraction   = mean of curve over d ∈ [4.0, 6.0°]
+        # Per subject: same averages from per-subject smoothed curve.
+        # Group: mean ± SEM across subjects, t-test against 0.
+        from scipy import stats as _stats
+        overview_thr = args.r2_thresholds[
+            min(2, len(args.r2_thresholds) - 1)
+        ]  # default index 2 (e.g., 0.30)
+        overview_pars = pars_per_thr[overview_thr]
+        overview_smoothed, centers = smooth_per_subject_curves(
+            overview_pars, args.rois, bin_edges,
+            args.smooth_sigma_bins, args.clip_projection,
+            smoother=args.smoother,
+            lowess_frac=(args.kernel_bandwidth
+                         if args.smoother == "kernel" else args.lowess_frac),
+        )
+        near_mask = (centers >= 0.5) & (centers <= 2.0)
+        far_mask = (centers >= 4.0) & (centers <= 6.0)
+
+        overview_rows = []
+        for roi in args.rois:
+            sm = overview_smoothed[roi]                     # (n_subj, n_bins)
+            if sm.size == 0:
+                continue
+            near_per_subj = np.nanmean(sm[:, near_mask], axis=1)
+            far_per_subj = np.nanmean(sm[:, far_mask], axis=1)
+            near_per_subj = near_per_subj[~np.isnan(near_per_subj)]
+            far_per_subj = far_per_subj[~np.isnan(far_per_subj)]
+            t_n, p_n = (_stats.ttest_1samp(near_per_subj, 0.0)
+                        if len(near_per_subj) >= 3 else (np.nan, np.nan))
+            t_f, p_f = (_stats.ttest_1samp(far_per_subj, 0.0)
+                        if len(far_per_subj) >= 3 else (np.nan, np.nan))
+            overview_rows.append({
+                "roi": roi,
+                "near_mean": float(np.mean(near_per_subj)) if len(near_per_subj) else np.nan,
+                "near_sem": float(_stats.sem(near_per_subj)) if len(near_per_subj) else np.nan,
+                "near_p": p_n,
+                "far_mean": float(np.mean(far_per_subj)) if len(far_per_subj) else np.nan,
+                "far_sem": float(_stats.sem(far_per_subj)) if len(far_per_subj) else np.nan,
+                "far_p": p_f,
+                "n_subj": int(len(near_per_subj)),
+            })
+        overview_df = pd.DataFrame(overview_rows)
+
+        fig_ov, axes_ov = plt.subplots(1, 2, figsize=(11, 4), sharey=True)
+        x_pos = np.arange(len(overview_df))
+        for ax, col_mean, col_sem, col_p, label, color in [
+            (axes_ov[0], "near_mean", "near_sem", "near_p",
+             f"NEAR HP (d∈[0.5,2.0]°) — suppression should be > 0", "#d62728"),
+            (axes_ov[1], "far_mean",  "far_sem",  "far_p",
+             f"FAR FROM HP (d∈[4.0,6.0]°) — attraction would be < 0", "#1f77b4"),
+        ]:
+            ax.errorbar(x_pos, overview_df[col_mean],
+                        yerr=overview_df[col_sem], fmt="o",
+                        color=color, markersize=8, capsize=5, lw=1.5)
+            ax.axhline(0, color="k", lw=0.5, ls="--")
+            ax.set_xticks(x_pos)
+            ax.set_xticklabels(overview_df["roi"])
+            ax.set_xlabel("ROI (visual hierarchy →)")
+            ax.set_title(label, fontsize=10)
+            ax.set_ylabel("smoothed proj. away from HP (deg)")
+            # Significance asterisks.
+            for i, p in enumerate(overview_df[col_p]):
+                if pd.isna(p):
+                    continue
+                marker = ("***" if p < 0.001 else "**" if p < 0.01
+                          else "*" if p < 0.05 else "")
+                if marker:
+                    y = overview_df[col_mean].iloc[i] + np.sign(
+                        overview_df[col_mean].iloc[i] or 1.0
+                    ) * (overview_df[col_sem].iloc[i] + 0.005)
+                    ax.text(i, y, marker, ha="center",
+                            va="bottom" if (overview_df[col_mean].iloc[i] or 0) >= 0 else "top",
+                            fontsize=14, color="black")
+        fig_ov.suptitle(
+            f"Hierarchy overview — per-ROI summary at r²>{overview_thr}\n"
+            f"Each dot = mean across subjects of (subject's mean smoothed curve in band) ± SEM. "
+            f"* p<0.05, ** p<0.01, *** p<0.001 (one-sample t against 0, no FDR).",
+            y=1.02,
+        )
+        fig_ov.tight_layout()
+        pdf.savefig(fig_ov, bbox_inches="tight"); plt.close(fig_ov)
+
         # One page per ROI: columns = R² thresholds.
         for roi in args.rois:
             n_thr = len(args.r2_thresholds)
@@ -298,9 +462,15 @@ def main():
 
             for ax, r2_thr in zip(axes, args.r2_thresholds):
                 pars = pars_per_thr[r2_thr]
+                # For kernel smoother, pass the bandwidth via lowess_frac slot.
+                bw_or_frac = (
+                    args.kernel_bandwidth if args.smoother == "kernel"
+                    else args.lowess_frac
+                )
                 smoothed_per_roi, centers = smooth_per_subject_curves(
                     pars, [roi], bin_edges,
                     args.smooth_sigma_bins, args.clip_projection,
+                    smoother=args.smoother, lowess_frac=bw_or_frac,
                 )
                 smoothed = smoothed_per_roi[roi]
 
