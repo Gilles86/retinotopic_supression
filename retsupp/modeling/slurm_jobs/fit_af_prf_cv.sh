@@ -3,9 +3,9 @@
 #SBATCH --account=zne.uzh
 #SBATCH --partition=standard
 #SBATCH --output=/dev/null
-#SBATCH --cpus-per-task=2
+#SBATCH --cpus-per-task=4
 #SBATCH --mem=24G
-#SBATCH --time=02:00:00
+#SBATCH --time=04:00:00
 
 # Cross-validated DoG-dyn-v3 AF + PRF fit (factorial-class, leave-one-
 # condition-out CV, all 4 folds inside one job).
