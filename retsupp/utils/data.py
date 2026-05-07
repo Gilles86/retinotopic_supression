@@ -21,6 +21,8 @@ def get_retinotopic_labels():
         1: 'V1', 2: 'V2', 3: 'V3', 4: 'hV4', 5: 'VO1', 6: 'VO2', 7: 'LO1', 8: 'LO2',
         9: 'TO1', 10: 'TO2', 11: 'V3A', 12: 'V3B',}
 
+roi_order = ['V1', 'V2', 'V3', 'V3AB', 'hV4', 'LO', 'TO', 'VO']
+
 class Subject(object):
 
     def __init__(self, subject_id, bids_folder='/data/ds-retsupp'):
@@ -224,7 +226,165 @@ class Subject(object):
 
         return stimulus
 
-    def get_confounds(self, session=1, run=1, filter_confounds=True):
+    def get_extended_grid_coordinates(
+        self, resolution=120, session=1, run=1,
+        grid_radius=5.0,
+    ):
+        """Same as get_grid_coordinates but uses a fixed grid_radius
+        (default 5°) so the 4°-ring distractor positions fit inside.
+        """
+        grid_coordinates_1d = np.linspace(-grid_radius, grid_radius, resolution)
+        return np.meshgrid(grid_coordinates_1d, grid_coordinates_1d)
+
+    def get_stimulus_with_distractors(
+        self, session=1, run=1, resolution=120,
+        grid_radius=5.0, distractor_radius=0.4,
+        max_distractor_duration=1.5, debug=False,
+    ):
+        """Bar PRF stimulus + distractor pixels at the 4 ring locations.
+
+        Returns a (T, R, R) stimulus array on a grid that extends to
+        `grid_radius` (default 5°) — wider than the bar aperture (~3.17°)
+        so the distractors at 4° eccentricity fit inside.
+
+        For each trial event with ``distractor_location ∈ {1,3,5,7}`` we
+        add a disk of radius ``distractor_radius`` at the corresponding
+        ring location.  The disk's intensity within a given TR is the
+        FRACTION OF THE TR during which the distractor was on screen
+        (overlap of the on-window with the TR-window divided by the TR
+        duration).  The on-window starts at the target event onset and
+        extends to the next feedback event or, if that's missing/too
+        far, to ``t_on + max_distractor_duration``.
+
+        Bar pixel intensities are kept binary (0/1) inside the bar
+        aperture; distractor pixels are values in [0, 1].  Where bar and
+        distractor overlap (which can't happen since distractors are
+        outside the bar aperture) we take the maximum.
+
+        Parameters
+        ----------
+        session, run : int
+            Session and run identifiers.
+        resolution : int
+            Number of pixels per side for the grid.
+        grid_radius : float
+            Half-width of the square grid in degrees.
+        distractor_radius : float
+            Radius of the distractor disk in degrees.
+        max_distractor_duration : float
+            Cap on the on-window length (s).  Search-array presentation
+            is short (~150 ms) but feedback can come several seconds
+            later and the distractors are off long before that.
+        """
+        settings = self.get_experimental_settings(session, run)
+        tr = self.get_tr(session, run)
+        n_volumes = self.get_n_volumes(session, run)
+        # TR window i = [i*tr, (i+1)*tr];  centre = (i + 0.5) * tr.
+        frametimes = np.arange(tr / 2., tr * n_volumes + tr / 2., tr)
+
+        # Bar stimulus on the extended grid.
+        radius_bar_aperture = settings["radius_bar_aperture"]
+        bar_width = settings["bar_width"]
+        speed = settings["speed"]
+        fov_size = settings["fov_size"]
+
+        grid_x, grid_y = self.get_extended_grid_coordinates(
+            resolution=resolution, session=session, run=run,
+            grid_radius=grid_radius,
+        )
+        # Mask for bar (still confined to bar aperture).
+        bar_mask = np.sqrt(grid_x ** 2 + grid_y ** 2) <= radius_bar_aperture
+
+        onsets = self.get_onsets(session, run)
+        bar = onsets[onsets["event_type"].apply(lambda x: x.startswith("bar"))]
+
+        stimulus = np.zeros((len(frametimes), resolution, resolution),
+                            dtype=np.float32)
+
+        # --- Bar stimulus pass (same logic as get_stimulus). ---
+        ori = 0
+        pos = -fov_size - bar_width
+
+        def draw_bar(pos, ori):
+            bar_img = np.zeros_like(grid_x, dtype=np.float32)
+            if ori == 0:
+                bar_img[np.abs(grid_x - pos) < bar_width / 2] = 1
+            elif ori == 90:
+                bar_img[np.abs(grid_y - pos) < bar_width / 2] = 1
+            return bar_img * bar_mask
+
+        for i, t in enumerate(frametimes):
+            if t < bar["onset"].min():
+                continue
+            current_state = bar[bar["onset"] < t].iloc[-1]["event_type"]
+            dt = t - bar[bar["onset"] < t].iloc[-1]["onset"]
+
+            if current_state in ["bar_rest", "bar_break"]:
+                continue
+            elif current_state == "bar_right":
+                ori = 0; pos = -radius_bar_aperture - bar_width / 2 + dt * speed
+            elif current_state == "bar_left":
+                ori = 0; pos = radius_bar_aperture + bar_width / 2 - dt * speed
+            elif current_state == "bar_up":
+                ori = 90; pos = -radius_bar_aperture - bar_width / 2 + dt * speed
+            elif current_state == "bar_down":
+                ori = 90; pos = radius_bar_aperture + bar_width / 2 - dt * speed
+            stimulus[i] = np.maximum(stimulus[i], draw_bar(pos, ori))
+
+        # --- Distractor stimulus pass. ---
+        # For each target event with a real distractor (locations 1/3/5/7),
+        # paint a disk at the distractor location with intensity equal to
+        # the fraction of the TR during which the distractor was on.
+        targets = onsets[onsets["event_type"] == "target"].sort_values("onset")
+        feedback = onsets[onsets["event_type"] == "feedback"].sort_values("onset")
+        # Map distractor location code → (x, y) on the ring.
+        # 1: upper_right, 3: upper_left, 5: lower_left, 7: lower_right.
+        loc_xy = {
+            1.0: (4 / np.sqrt(2),  4 / np.sqrt(2)),
+            3.0: (-4 / np.sqrt(2),  4 / np.sqrt(2)),
+            5.0: (-4 / np.sqrt(2), -4 / np.sqrt(2)),
+            7.0: (4 / np.sqrt(2), -4 / np.sqrt(2)),
+        }
+        # Pre-compute TR window edges for fast overlap math.
+        tr_starts = frametimes - tr / 2.
+        tr_ends = frametimes + tr / 2.
+
+        for _, trial in targets.iterrows():
+            loc_code = trial["distractor_location"]
+            if pd.isna(loc_code) or loc_code == 10.0:
+                continue
+            cx, cy = loc_xy[loc_code]
+            t_on = trial["onset"]
+            after = feedback[feedback["onset"] > t_on]
+            t_off = after.iloc[0]["onset"] if len(after) else t_on + max_distractor_duration
+            # Cap.
+            t_off = min(t_off, t_on + max_distractor_duration)
+
+            # Fraction of TR overlapping [t_on, t_off].
+            overlap = np.clip(
+                np.minimum(tr_ends, t_off) - np.maximum(tr_starts, t_on),
+                0.0, None,
+            ) / tr  # in [0, 1]
+            disk = (((grid_x - cx) ** 2 + (grid_y - cy) ** 2) <
+                    distractor_radius ** 2).astype(np.float32)
+
+            # Where this distractor is brighter than what's already there,
+            # update.  This handles overlapping distractor windows
+            # (rare, but keeps it idempotent).
+            active = overlap > 0
+            if active.any():
+                contrib = overlap[active, None, None] * disk[None, :, :]
+                # Element-wise max with current stimulus over those frames.
+                stimulus[active] = np.maximum(stimulus[active], contrib)
+
+            if debug:
+                print(
+                    f"[DEBUG] trial @ t={t_on:.2f}s, loc={loc_code}, "
+                    f"on=[{t_on:.2f}, {t_off:.2f}], "
+                    f"max overlap fraction={overlap.max():.3f}"
+                )
+
+        return stimulus
 
         def filter_confounds_(confounds, n_acompcorr=10):
             confound_cols = ['dvars', 'framewise_displacement']
@@ -316,7 +476,7 @@ class Subject(object):
             labels += ['srf_size', 'srf_amplitude']
         elif model == 3:
             labels += ['hrf_delay', 'hrf_dispersion']
-        elif model == 4:
+        elif model in [4,7,8,9,10,11]:
             labels += ['srf_size', 'srf_amplitude', 'hrf_delay', 'hrf_dispersion']
         elif model == 6:
             # Get rid of amplitude parmameter
@@ -643,3 +803,95 @@ class Subject(object):
             return input_data.NiftiMasker(mask_img=img)
         else:
             return img
+
+    def get_conditionwise_summary_prf_pars(self, model=8, ecc_distractor=4.0):
+
+        from retsupp.utils import rotate_x_y
+
+        par_labels = ['x', 'y', 'sd', 'amplitude', 'ecc', 'r2',
+                    'srf_size', 'srf_amplitude', 'hrf_delay', 'hrf_dispersion']
+
+        df = pd.read_csv(
+            self.bids_folder / f'derivatives/prf_summaries.conditionwise/model{model}/sub-{self.subject_id:02d}/sub-{self.subject_id:02d}_model-{model}_prf_voxels.tsv',
+            sep='\t',
+            index_col=[0, 1, 2]  # roi, voxel, condition  (roi includes _L/_R)
+        )
+
+        mean_model_label = 4
+
+        mean_model = pd.read_csv(
+            self.bids_folder / f'derivatives/prf_summaries/model{mean_model_label}/sub-{self.subject_id:02d}/sub-{self.subject_id:02d}_model-{mean_model_label}_prf_voxels.tsv',
+            sep='\t',
+            index_col=[0, 1]
+        )
+
+        df = df.join(mean_model[par_labels], on=['roi', 'voxel'], rsuffix='_mean_model')
+
+        df = df.reset_index()
+        roi_mapping = {'LO1':'LO', 'LO2':'LO', 'V3A':'V3AB', 'V3B':'V3AB', 'TO1':'TO', 'TO2':'TO', 'VO1':'VO', 'VO2':'VO'}
+        df['roi_base'] = df['roi'].str.replace(r'_(L|R)$', '', regex=True)
+        df['roi_base'] = df['roi_base'].replace(roi_mapping)
+
+        # Collision-free, and you still have original roi in the index
+        df = df.set_index(['roi_base', 'roi', 'voxel', 'condition']).sort_index()
+
+        mean_df = df.groupby(['roi', 'voxel']).mean(numeric_only=True)
+        df = df.join(mean_df[par_labels], on=['roi', 'voxel'], rsuffix='_mean')
+
+        for key in distractor_locations:
+            df[f'distance_from_{key}'] =  np.sqrt(
+                (df['x'] - distractor_locations[key][0])**2 +
+                (df['y'] - distractor_locations[key][1])**2
+            )
+
+            df[f'distance_from_{key}_mean'] =  np.sqrt(
+                (df['x_mean'] - distractor_locations[key][0])**2 +
+                (df['y_mean'] - distractor_locations[key][1])**2
+            )
+
+        # Map distractor location to rotation angle (to bring to top)
+        rotate_to_up = {loc: (np.pi/2 - angle) for loc, angle in location_angles.items()}
+
+        for key in distractor_locations:
+            mask = df.index.get_level_values('condition').str.replace('_', ' ') == key
+            df.loc[mask, 'distance_from_distractor'] = df.loc[mask, f'distance_from_{key}']
+            df.loc[mask, 'distance_from_distractor_mean'] = df.loc[mask, f'distance_from_{key}_mean']
+
+            df.loc[mask, 'x_rotated'], df.loc[mask, 'y_rotated'] = rotate_x_y(
+                df.loc[mask, 'x'], df.loc[mask, 'y'],
+                rotate_to_up[key]
+            ) 
+
+            df.loc[mask, 'x_mean_rotated'], df.loc[mask, 'y_mean_rotated'] = rotate_x_y(
+                df.loc[mask, 'x_mean'], df.loc[mask, 'y_mean'],
+                rotate_to_up[key]
+            )
+
+        df['distance_from_distractor_rotated'] = np.sqrt((df['x_rotated'] -0)**2 + (df['y_rotated'] - ecc_distractor)**2)
+        df['distance_from_distractor_mean_rotated'] = np.sqrt((df['x_mean_rotated'] -0)**2 + (df['y_mean_rotated'] - ecc_distractor)**2)
+
+
+        for par in par_labels:
+            df[f'{par}_diff'] = df[par] - df[f'{par}_mean']
+
+        return df            
+
+ecc_distractor = 4
+
+location_angles = {
+    'upper right': np.pi/4,
+    'upper left': 3*np.pi/4,
+    'lower left': 5*np.pi/4,
+    'lower right': 7*np.pi/4
+}
+
+distractor_locations = {
+    'upper left':  (-ecc_distractor/np.sqrt(2),  ecc_distractor/np.sqrt(2)),
+    'upper right': ( ecc_distractor/np.sqrt(2),  ecc_distractor/np.sqrt(2)),
+    'lower left':  (-ecc_distractor/np.sqrt(2), -ecc_distractor/np.sqrt(2)),
+    'lower right': ( ecc_distractor/np.sqrt(2), -ecc_distractor/np.sqrt(2)),
+}
+
+
+
+
