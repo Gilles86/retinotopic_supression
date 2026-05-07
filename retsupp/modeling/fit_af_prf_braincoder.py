@@ -227,7 +227,7 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
          r2_thr: float = 0.05,
          model_label: int = 1,
          max_voxels: int | None = 500,
-         mode: str = 'suppression',
+         mode: str = 'signed',
          learning_rate: float = 0.01,
          paradigm_type: str = 'bar',
          grid_radius: float = 5.0,
@@ -277,8 +277,11 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     # Remap parameter labels and add the AF parameters with sensible inits.
     init_pars = init_pars[['x', 'y', 'sd', 'baseline', 'amplitude']]
     init_pars['sigma_AF'] = 2.0
-    init_pars['g_HP'] = 0.30
-    init_pars['g_LP'] = 0.10
+    # In 'signed' mode gains can take either sign; init small to let the
+    # optimizer pick attraction (+) or suppression (-).  In legacy
+    # suppression / attraction modes the softplus keeps gains > 0.
+    init_pars['g_HP'] = 0.0 if mode == 'signed' else 0.30
+    init_pars['g_LP'] = 0.0 if mode == 'signed' else 0.10
 
     # 3) Build the AF+PRF model and the fitter.
     ring_positions = get_ring_positions()  # (4, 2)
@@ -355,8 +358,14 @@ if __name__ == '__main__':
     parser.add_argument('--max-voxels', type=int, default=500,
                         help='Cap on voxels for the POC (default 500). '
                              'Set 0 for no cap.')
-    parser.add_argument('--mode', choices=['suppression', 'attraction'],
-                        default='suppression')
+    parser.add_argument('--mode',
+                        choices=['suppression', 'attraction', 'signed'],
+                        default='signed',
+                        help="AF modulation sign convention. "
+                             "'signed' (default): g_HP / g_LP can take "
+                             "either sign (attraction = +, suppression = -). "
+                             "'attraction' / 'suppression' force gains > 0 "
+                             "via softplus and fix the overall sign.")
     parser.add_argument('--learning-rate', type=float, default=0.01)
     parser.add_argument('--paradigm-type', choices=['bar', 'full'],
                         default='bar',
