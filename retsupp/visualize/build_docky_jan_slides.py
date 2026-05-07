@@ -1162,13 +1162,21 @@ def slide_hierarchy(pdf, af_tsv: Path, shifts_tsv: Path):
     pdf.savefig(fig); plt.close(fig)
 
 
-def slide_actual_vs_predicted(pdf, shifts_tsv: Path):
+def slide_actual_vs_predicted(pdf, shifts_tsv: Path,
+                                 normalize_pred: bool = True):
     """Per-ROI actual-vs-predicted shift comparison: projection on
     away-from-HP axis as a function of distance from HP.
 
-    Each panel: solid blue = observed median (with SEM band), dashed
-    red = model prediction median. If the dashed line tracks the solid
-    line, the model captures the empirical shift pattern.
+    The qualitative-pattern-match test: do model and data peak at the
+    same distance? Have the same decay shape? If yes, the model
+    captures the spatial structure, even if magnitudes differ
+    (Jensen + kernel mismatch inflate observed). Per-ROI Spearman r
+    between bin-median predicted and bin-median observed annotated
+    on each panel.
+
+    `normalize_pred=True` rescales the predicted curve to have the
+    same per-ROI peak amplitude as observed — turns the comparison
+    into a pure SHAPE test.
     """
     if not shifts_tsv.exists():
         return
@@ -1221,29 +1229,57 @@ def slide_actual_vs_predicted(pdf, shifts_tsv: Path):
                             pred_med=('proj_pred', 'median'),
                             n=('proj_obs', 'size'))
                        .reset_index().sort_values('d_bin'))
+        # Optionally rescale predicted curve to match observed peak —
+        # makes the comparison a pure SHAPE test (magnitude differences
+        # from Jensen & kernel mismatch are expected and not the point).
+        pred_plot = summary['pred_med'].values.astype(float)
+        if normalize_pred:
+            obs_pk = float(np.nanmax(np.abs(summary['obs_med'])))
+            pred_pk = float(np.nanmax(np.abs(pred_plot))) or 1e-9
+            if pred_pk > 1e-9 and obs_pk > 1e-9:
+                pred_plot = pred_plot * (obs_pk / pred_pk)
         ax.fill_between(summary['d_bin'],
                          summary['obs_med'] - summary['obs_sem'],
                          summary['obs_med'] + summary['obs_sem'],
                          color='C0', alpha=0.20)
         ax.plot(summary['d_bin'], summary['obs_med'],
-                 color='C0', lw=2, marker='o', markersize=4,
-                 label='observed')
-        ax.plot(summary['d_bin'], summary['pred_med'],
-                 color='C3', lw=2, ls='--', marker='s', markersize=4,
-                 label='AF model prediction')
-        ax.axhline(0, color='gray', lw=0.4, ls=':')
-        ax.set_title(f'{roi}   n_subj = {sub["subject"].nunique()}',
-                      fontsize=11, weight='bold')
+                 color='C0', lw=2.5, marker='o', markersize=5,
+                 label='observed (data)')
+        ax.plot(summary['d_bin'], pred_plot,
+                 color='C3', lw=2.5, ls='--', marker='s', markersize=5,
+                 label='model prediction (rescaled to obs peak)'
+                       if normalize_pred else 'model prediction')
+        ax.axhline(0, color='gray', lw=0.5, ls=':')
+        # Spearman r of the shapes (bin-median series).
+        valid = (summary['obs_med'].notna()
+                  & np.isfinite(pred_plot))
+        if valid.sum() >= 4:
+            r_sh, p_sh = stats.spearmanr(
+                summary['obs_med'][valid].values,
+                pred_plot[valid],
+            )
+        else:
+            r_sh, p_sh = np.nan, np.nan
+        sig = '*' if (np.isfinite(p_sh) and p_sh < 0.05) else ''
+        col = 'C2' if (np.isfinite(p_sh) and p_sh < 0.05 and r_sh > 0) else '0.3'
+        ax.set_title(
+            f'{roi}   n_subj = {sub["subject"].nunique()}\n'
+            f'shape r_s = {r_sh:+.2f}, p = {p_sh:.3f}{sig}',
+            fontsize=12, weight='bold', color=col,
+        )
         ax.grid(alpha=0.2)
+        ax.tick_params(labelsize=11)
         if i == 0:
-            ax.legend(fontsize=9, loc='upper right')
+            ax.legend(fontsize=10, loc='upper right')
     for j in range(n, nrow * ncol):
         axes[j // ncol, j % ncol].axis('off')
     fig.suptitle(
-        '(g)  Observed vs model-predicted PRF shifts per ROI.\n'
-        'Solid = observed (cond-wise PRF − base PRF) projected on '
-        'away-from-HP axis.   Dashed = AF model prediction.',
-        fontsize=14, weight='bold',
+        '(g)  Qualitative pattern test: model SHAPE vs data SHAPE.\n'
+        'Per ROI: projection on away-from-HP axis vs distance from HP.\n'
+        'Predicted curve rescaled to match observed peak — '
+        'magnitude is confounded by Jensen & kernel mismatch, but the '
+        'SHAPE (peak location, decay) is the test.',
+        fontsize=13, weight='bold',
     )
     fig.text(0.5, 0.02,
               'distance of base PRF from HP (deg)',
