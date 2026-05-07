@@ -135,6 +135,8 @@ def fit_gam_per_roi(
     seed: int = 42,
     ell_mu_log: float = float(np.log(2.0)),
     ell_sigma_log: float = 0.5,
+    nuts_sampler: str = "pymc",
+    init: str = "auto",
 ):
     """Fit GAM `proj ~ hsgp(distance, m=m, c=c) + (1 | subject)` for one ROI.
 
@@ -157,11 +159,21 @@ def fit_gam_per_roi(
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=FutureWarning)
         warnings.filterwarnings("ignore", category=UserWarning)
-        idata = model.fit(
+        fit_kwargs = dict(
             draws=draws, tune=tune, chains=chains,
             target_accept=target_accept, random_seed=seed,
             progressbar=True,
         )
+        # nutpie / numpyro / blackjax handle initialization themselves.
+        # Only pass `init` when using PyMC's NUTS, where it controls the
+        # mass-matrix adaptation strategy ("jitter+adapt_full" estimates a
+        # full off-diagonal mass matrix during tuning, far better than the
+        # default diagonal one for HSGP-style correlated posteriors).
+        if nuts_sampler != "pymc":
+            fit_kwargs["nuts_sampler"] = nuts_sampler
+        else:
+            fit_kwargs["init"] = init
+        idata = model.fit(**fit_kwargs)
     fit_secs = time.perf_counter() - t0
     n_div = int(idata.sample_stats["diverging"].sum().values) if "diverging" in idata.sample_stats else 0
     return model, idata, fit_secs, n_div
@@ -420,6 +432,14 @@ def main():
                              "(default log(2°) — i.e. centered at ~2°).")
     parser.add_argument("--ell-sigma-log", type=float, default=0.5,
                         help="LogNormal `sigma` for HSGP length-scale prior")
+    parser.add_argument("--nuts-sampler", default="pymc",
+                        choices=["pymc", "nutpie", "numpyro", "blackjax"],
+                        help="NUTS backend. 'nutpie' is typically much "
+                             "faster and uses a full mass matrix by default.")
+    parser.add_argument("--init", default="jitter+adapt_full",
+                        help="PyMC NUTS init strategy (only used when "
+                             "--nuts-sampler=pymc). 'jitter+adapt_full' "
+                             "tunes a full off-diagonal mass matrix.")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--threshold", type=float, default=0.95,
                         help="P(>0)/P(<0) threshold for cluster flagging")
@@ -483,6 +503,8 @@ def main():
                 target_accept=args.target_accept, seed=args.seed,
                 ell_mu_log=args.ell_mu_log,
                 ell_sigma_log=args.ell_sigma_log,
+                nuts_sampler=args.nuts_sampler,
+                init=args.init,
             )
             print(f"  fit took {fit_secs:.1f}s, divergences = {n_div}")
 

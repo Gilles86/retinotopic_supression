@@ -44,17 +44,22 @@ out_pdf="${out_dir}/gam_clusters.pdf"
 
 PYTHON="$HOME/data/conda/envs/bauer/bin/python"
 
-# Aggressive sampling for stable posteriors:
-# - draws=4000, tune=4000 (vs 2000 / 2000 locally)
-# - target_accept=0.995 (vs 0.99 locally) — more divergences-killing
-# - chains=4
+# Sampling strategy:
+# - nutpie backend: Rust-based NUTS, ~5-10x faster than PyMC's, uses a
+#   full mass matrix by default. The right tool for HSGP-shaped posteriors
+#   where basis-weight ↔ length-scale correlations make a diagonal mass
+#   matrix inefficient (and bumping target_accept alone doesn't fix it).
+# - draws=3000, tune=3000 (no need to crank target_accept hard with nutpie).
+# - target_accept=0.95 — nutpie default; relax from the previous 0.995.
+# - chains=4.
 "$PYTHON" -u \
     "$HOME/git/retsupp/retsupp/visualize/plot_gam_clusters.py" \
     --bids-folder "$bids_folder" \
     --out "$out_pdf" \
-    --draws 4000 \
-    --tune 4000 \
-    --target-accept 0.995 \
+    --nuts-sampler nutpie \
+    --draws 3000 \
+    --tune 3000 \
+    --target-accept 0.95 \
     --chains 4 \
     --save-traces
 
