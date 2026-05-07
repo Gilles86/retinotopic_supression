@@ -251,10 +251,13 @@ def main(
 
     from glmsingle.glmsingle import GLM_single
     print(f"Fitting GLMsingle ({len(X)} runs, {sum(x.shape[0] for x in X)} upsampled TRs total)...")
+    # NOTE: figuredir omitted on purpose. GLMsingle's HRF-library diagnostic
+    # plot (glmsingle.py:799-800) hits an np.arange floating-point edge case
+    # at TR_UP=0.8 (returns 64 elements when 63 expected), crashing the run.
+    # Skipping the plot avoids the crash without disabling the HRF library.
     results = GLM_single(opt).fit(
         X, data, STIM_DUR, TR_UP,
         outputdir=str(out_dir),
-        figuredir=str(fig_dir),
     )
 
     betas = results["typed"]["betasmd"]  # (x, y, z, n_total_trials)
