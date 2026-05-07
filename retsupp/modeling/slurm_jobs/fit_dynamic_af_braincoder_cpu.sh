@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=af_dyn_cpu
+#SBATCH --job-name=af_dyn2
 #SBATCH --account=zne.uzh
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=8
@@ -77,7 +77,7 @@ bids_folder="/shares/zne.uzh/gdehol/ds-retsupp"
 
 PYTHON="$HOME/data/conda/envs/retsupp_cuda/bin/python"
 
-echo "Running fit_dynamic_af_braincoder.py for sub-${subject}, roi=${roi}"
+echo "Running fit_dynamic_af_braincoder.py (v2) for sub-${subject}, roi=${roi}"
 
 "$PYTHON" -u \
     "$HOME/git/retsupp/retsupp/modeling/fit_dynamic_af_braincoder.py" \
@@ -85,7 +85,8 @@ echo "Running fit_dynamic_af_braincoder.py for sub-${subject}, roi=${roi}"
     --bids-folder "$bids_folder" \
     --roi "$roi" \
     --resolution 50 \
-    --max-voxels 0
+    --max-voxels 0 \
+    --model-version v2
 
 echo "Finished:    $(date)"
 

@@ -1,22 +1,43 @@
 """Joint Dynamic Attention-Field + PRF fit at the BOLD signal level.
 
-Mirrors :mod:`retsupp.modeling.fit_af_prf_braincoder` but uses
-:class:`braincoder.models.DynamicAttentionFieldPRF2DWithHRF`, which adds
-a per-TR dynamic distractor-pulse term on top of the existing per-run
-sustained HP/LP modulation.
+Mirrors :mod:`retsupp.modeling.fit_af_prf_braincoder` but uses one of
+the dynamic-AF braincoder model variants, which adds a per-TR dynamic
+distractor-pulse term on top of the existing per-run sustained HP/LP
+modulation.
 
-Forward model
--------------
-For a per-run HP condition C(t) (constant within a run) and a per-TR
-distractor on-fraction ``d_ℓ(t)`` ∈ [0, 1] at each of the 4 ring
-locations,
+Two model versions are available, controlled by ``--model-version``.
+
+v1 (legacy)
+-----------
+Uses :class:`braincoder.models.DynamicAttentionFieldPRF2DWithHRF`.
 
     M(g, t) = 1 + sign · [ g_HP · A_{H_C(t)}(g)
                           + g_LP · Σ_{ℓ ≠ H_C(t)} A_ℓ(g)
                           + g_dyn · Σ_ℓ d_ℓ(t) · A_ℓ_dyn(g) ]
 
-5 shared parameters (instead of 3 for the static AF model):
-``sigma_AF, g_HP, g_LP, sigma_dyn, g_dyn``.
+5 shared parameters: ``sigma_AF, g_HP, g_LP, sigma_dyn, g_dyn``. The
+sustained AF Gaussian uses ``sigma_AF`` while the dynamic AF Gaussian
+uses an independent ``sigma_dyn``; the per-TR phasic gain ``g_dyn`` is
+SAME for HP and LP locations.
+
+v2 (default — shared σ, split gain)
+-----------------------------------
+Uses :class:`braincoder.models.DynamicAttentionFieldPRF2DWithHRF_v2`.
+
+    M(g, t) = 1 + sign · [
+          g_HP     · A_{H_C(t)}(g)
+        + g_LP     · Σ_{ℓ ≠ H_C(t)} A_ℓ(g)
+        + g_HP_dyn · d_{H_C(t)}(t) · A_{H_C(t)}(g)
+        + g_LP_dyn · Σ_{ℓ ≠ H_C(t)} d_ℓ(t) · A_ℓ(g)
+    ]
+
+5 shared parameters (same total count as v1): ``sigma_AF, g_HP, g_LP,
+g_HP_dyn, g_LP_dyn``. The dynamic AF Gaussian uses the SAME ``sigma_AF``
+as the sustained term (no σ_dyn — biologically the AF size shouldn't
+depend on whether the modulation is sustained or phasic), and the
+phasic gain is split into HP-vs-LP so we can test the sustained AND
+dynamic HP/LP differential separately while killing the σ_AF/σ_dyn
+degeneracy.
 
 This always uses the FULL paradigm (bar + distractor disks at the 4
 ring locations), since the dynamic distractor pulses act on the same
@@ -25,11 +46,15 @@ per-TR distractor presence that drives the bar+distractor stimulus.
 Output
 ------
 A pickle and a TSV under
-``derivatives/af_prf_joint_dynamic/sub-XX/sub-XX_roi-XX_*.{pkl,tsv}``.
+``derivatives/af_prf_joint_dynamic[_v2]/sub-XX/sub-XX_roi-XX_*.{pkl,tsv}``
+(``_v2`` suffix when ``--model-version=v2`` and the default output
+subdir is used). With ``--model-version=v2`` the output filenames also
+include ``dyn-v2`` instead of ``dyn`` so v1 and v2 fits never collide.
 
 Usage
 -----
 ``python -m retsupp.modeling.fit_dynamic_af_braincoder 2 --roi V3AB``
+``python -m retsupp.modeling.fit_dynamic_af_braincoder 2 --roi V3AB --model-version v1``
 """
 from __future__ import annotations
 
@@ -44,7 +69,10 @@ from nilearn import image, input_data
 from tqdm import tqdm
 
 from braincoder.hrf import SPMHRFModel
-from braincoder.models import DynamicAttentionFieldPRF2DWithHRF
+from braincoder.models import (
+    DynamicAttentionFieldPRF2DWithHRF,
+    DynamicAttentionFieldPRF2DWithHRF_v2,
+)
 from braincoder.optimize import ParameterFitter
 from retsupp.utils.data import (
     Subject,
@@ -199,16 +227,21 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
          mode: str = 'signed',
          learning_rate: float = 0.01,
          grid_radius: float = 5.0,
-         output_subdir: str | None = None):
+         output_subdir: str | None = None,
+         model_version: str = 'v2'):
+    if model_version not in ('v1', 'v2'):
+        raise ValueError(
+            f"model_version must be 'v1' or 'v2', got {model_version!r}")
     bids_folder = Path(bids_folder)
     sub = Subject(subject, bids_folder)
     if output_subdir is None:
-        output_subdir = 'af_prf_joint_dynamic'
+        output_subdir = ('af_prf_joint_dynamic_v2' if model_version == 'v2'
+                         else 'af_prf_joint_dynamic')
     out_dir = bids_folder / 'derivatives' / output_subdir / f'sub-{subject:02d}'
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print(f'== sub-{subject:02d} | roi={roi} | mode={mode} | '
-          f'paradigm=full (dynamic AF) ==')
+          f'model-version={model_version} | paradigm=full (dynamic AF) ==')
 
     # 1) Load BOLD + paradigm + condition_indicator + dynamic_indicator.
     (bold_df, paradigm, condition_indicator, dynamic_indicator,
@@ -243,9 +276,17 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     # Sustained gains.
     init_pars['g_HP'] = 0.0 if mode == 'signed' else 0.30
     init_pars['g_LP'] = 0.0 if mode == 'signed' else 0.10
-    # Dynamic-AF parameters.
-    init_pars['sigma_dyn'] = 1.0
-    init_pars['g_dyn'] = 0.0 if mode == 'signed' else 0.10
+
+    if model_version == 'v1':
+        # v1: separate sigma_dyn + single g_dyn.
+        init_pars['sigma_dyn'] = 1.0
+        init_pars['g_dyn'] = 0.0 if mode == 'signed' else 0.10
+        shared_pars = ['sigma_AF', 'g_HP', 'g_LP', 'sigma_dyn', 'g_dyn']
+    else:
+        # v2: shared sigma_AF (already set above) + split HP/LP dynamic gains.
+        init_pars['g_HP_dyn'] = 0.0 if mode == 'signed' else 0.10
+        init_pars['g_LP_dyn'] = 0.0 if mode == 'signed' else 0.10
+        shared_pars = ['sigma_AF', 'g_HP', 'g_LP', 'g_HP_dyn', 'g_LP_dyn']
 
     # 3) Build the dynamic AF + PRF model and the fitter.
     ring_positions = get_ring_positions()  # (4, 2)
@@ -254,7 +295,12 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     hrf_model = SPMHRFModel(tr=sub.get_tr(session=1, run=1),
                             delay=4.5, dispersion=0.75)
 
-    model = DynamicAttentionFieldPRF2DWithHRF(
+    if model_version == 'v1':
+        ModelCls = DynamicAttentionFieldPRF2DWithHRF
+    else:
+        ModelCls = DynamicAttentionFieldPRF2DWithHRF_v2
+
+    model = ModelCls(
         grid_coordinates=grid_coords,
         paradigm=paradigm,
         hrf_model=hrf_model,
@@ -269,32 +315,34 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     # 4) Refine baseline/amplitude given current AF params.
     refined_pars = fitter.refine_baseline_and_amplitude(init_pars, l2_alpha=1e-3)
 
-    # 5) Joint fit. sigma_AF, g_HP, g_LP, sigma_dyn, g_dyn shared.
+    # 5) Joint fit. Shared pars depend on model version.
     fit_pars = fitter.fit(
         init_pars=refined_pars,
         max_n_iterations=max_n_iterations,
-        shared_pars=['sigma_AF', 'g_HP', 'g_LP', 'sigma_dyn', 'g_dyn'],
+        shared_pars=shared_pars,
         learning_rate=learning_rate,
     )
 
     r2 = fitter.get_rsq(fit_pars) if hasattr(fitter, 'get_rsq') else fitter.r2
     print(f'Mean R²: {np.nanmean(r2):.4f}')
     print('Shared parameters:')
-    print(fit_pars[['sigma_AF', 'g_HP', 'g_LP',
-                    'sigma_dyn', 'g_dyn']].iloc[0])
+    print(fit_pars[shared_pars].iloc[0])
 
     fit_pars['r2'] = r2.values if hasattr(r2, 'values') else r2
 
     # 6) Save outputs.
-    out_tsv = out_dir / f'sub-{subject:02d}_roi-{roi}_mode-{mode}_dyn-af-prf-pars.tsv'
+    dyn_tag = 'dyn-v2' if model_version == 'v2' else 'dyn'
+    out_tsv = out_dir / (
+        f'sub-{subject:02d}_roi-{roi}_mode-{mode}_{dyn_tag}-af-prf-pars.tsv')
     fit_pars.to_csv(out_tsv, sep='\t')
-    out_pkl = out_dir / f'sub-{subject:02d}_roi-{roi}_mode-{mode}_dyn-af-prf-fit.pkl'
+    out_pkl = out_dir / (
+        f'sub-{subject:02d}_roi-{roi}_mode-{mode}_{dyn_tag}-af-prf-fit.pkl')
     with open(out_pkl, 'wb') as f:
         pickle.dump({
             'fit_pars': fit_pars,
             'r2': r2,
-            'shared_pars': fit_pars[['sigma_AF', 'g_HP', 'g_LP',
-                                     'sigma_dyn', 'g_dyn']].iloc[0].to_dict(),
+            'shared_pars': fit_pars[shared_pars].iloc[0].to_dict(),
+            'shared_par_labels': shared_pars,
             'voxel_mask_indices': np.where(voxel_mask)[0],
             'mode': mode,
             'roi': roi,
@@ -303,6 +351,7 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
             'paradigm_type': 'full',
             'grid_radius': grid_radius,
             'dynamic': True,
+            'model_version': model_version,
         }, f)
     print(f'Saved: {out_tsv}')
     print(f'Saved: {out_pkl}')
@@ -332,7 +381,12 @@ if __name__ == '__main__':
                         help='Half-width of the extended grid in deg.')
     parser.add_argument('--output-subdir', default=None,
                         help='Output derivatives subdir. Default: '
-                             "'af_prf_joint_dynamic'.")
+                             "'af_prf_joint_dynamic_v2' for --model-version v2, "
+                             "'af_prf_joint_dynamic' for v1.")
+    parser.add_argument('--model-version', choices=['v1', 'v2'], default='v2',
+                        help="v2 (default): shared sigma_AF + split HP/LP "
+                             "dynamic gains (g_HP_dyn, g_LP_dyn). "
+                             "v1 (legacy): separate sigma_dyn + single g_dyn.")
     args = parser.parse_args()
     main(
         args.subject,
@@ -347,4 +401,5 @@ if __name__ == '__main__':
         learning_rate=args.learning_rate,
         grid_radius=args.grid_radius,
         output_subdir=args.output_subdir,
+        model_version=args.model_version,
     )
