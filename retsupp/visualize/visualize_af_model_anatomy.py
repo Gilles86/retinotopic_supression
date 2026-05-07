@@ -27,6 +27,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.patches import Circle
 
@@ -347,15 +348,128 @@ def page_vector_field(pdf, sigma_AF=1.0, g_HP=-0.5, g_LP=-0.1,
     pdf.savefig(fig); plt.close(fig)
 
 
+def page_per_roi_typical(pdf, params_per_roi):
+    """Show each ROI's modulation field at its empirical median params.
+
+    `params_per_roi` is a list of dicts with keys: roi, sigma_AF, g_HP,
+    g_LP, n. Empirical values pulled from notes/af_parameters.tsv.
+    """
+    GX, GY, _ = make_grid()
+    ring = get_ring_positions()
+    n = len(params_per_roi)
+    ncol = 4
+    nrow = int(np.ceil(n / ncol))
+    fig = plt.figure(figsize=(3.0 * ncol, 3.0 * nrow + 1.2))
+    fig.suptitle(
+        'Per-ROI modulation field at the empirical median parameters '
+        '(across all subjects).\n'
+        'HP shown at upper-right (rotation symmetry — only sign of '
+        'g_HP − g_LP matters).',
+        fontsize=11,
+    )
+    for i, p in enumerate(params_per_roi):
+        ax = fig.add_subplot(nrow, ncol, i + 1)
+        M = modulation_field(GX, GY, ring, hp_idx=0,
+                              sigma_AF=p['sigma_AF'],
+                              g_HP=p['g_HP'], g_LP=p['g_LP'], mode='signed')
+        # Symmetric colour scale around 1.
+        d = max(abs(M.max() - 1.0), abs(1.0 - M.min()), 0.05)
+        ax.imshow(M, extent=(-5, 5, -5, 5), origin='lower',
+                  cmap='RdBu_r', vmin=1 - d, vmax=1 + d)
+        add_aperture_and_ring(ax, ring, hp_idx=0)
+        ax.set_aspect('equal'); ax.set_xticks([]); ax.set_yticks([])
+        ax.set_title(
+            f"{p['roi']}  (n={p['n']})\n"
+            f"σ={p['sigma_AF']:.2f}, g_HP={p['g_HP']:+.2f}, "
+            f"g_LP={p['g_LP']:+.2f}",
+            fontsize=8,
+        )
+    fig.tight_layout(rect=[0, 0, 1, 0.93])
+    pdf.savefig(fig); plt.close(fig)
+
+
+def page_per_roi_vector_field(pdf, params_per_roi, prf_sd=1.0,
+                                spacing=0.7, fov=4.0, scale=10.0):
+    """Per-ROI vector field at empirical median params (HP=upper_right)."""
+    s1d = np.arange(-fov, fov + spacing / 2, spacing)
+    SX, SY = np.meshgrid(s1d, s1d)
+    seeds = np.stack([SX.ravel(), SY.ravel()], axis=1).astype(np.float32)
+    ring = get_ring_positions()
+
+    n = len(params_per_roi)
+    ncol = 4
+    nrow = int(np.ceil(n / ncol))
+    fig = plt.figure(figsize=(3.0 * ncol, 3.0 * nrow + 1.2))
+    fig.suptitle(
+        f'Per-ROI predicted shift vector field at empirical median '
+        f'parameters (HP = upper_right; arrows ×{scale} for visibility)',
+        fontsize=11,
+    )
+    for i, p in enumerate(params_per_roi):
+        ax = fig.add_subplot(nrow, ncol, i + 1)
+        pred = predict_shift_field(p['sigma_AF'], p['g_HP'], p['g_LP'],
+                                     seeds, prf_sd=prf_sd)
+        dx = pred[0, :, 0] - seeds[:, 0]
+        dy = pred[0, :, 1] - seeds[:, 1]
+        add_aperture_and_ring(ax, ring, hp_idx=0)
+        ax.quiver(seeds[:, 0], seeds[:, 1], dx, dy,
+                  angles='xy', scale_units='xy',
+                  scale=1.0 / scale, color='C0',
+                  width=0.005, alpha=0.85)
+        ax.scatter(seeds[:, 0], seeds[:, 1], s=1, color='k', alpha=0.4)
+        ax.set_xlim(-5, 5); ax.set_ylim(-5, 5)
+        ax.set_aspect('equal'); ax.set_xticks([]); ax.set_yticks([])
+        ax.set_title(
+            f"{p['roi']}  (n={p['n']})\n"
+            f"σ={p['sigma_AF']:.2f}, g_diff={p['g_HP']-p['g_LP']:+.2f}",
+            fontsize=8,
+        )
+    fig.tight_layout(rect=[0, 0, 1, 0.93])
+    pdf.savefig(fig); plt.close(fig)
+
+
+def load_typical_params(tsv_path: Path):
+    """Per-ROI median parameters from a plot_af_parameters.py TSV dump."""
+    if not tsv_path.exists():
+        return []
+    df = pd.read_csv(tsv_path, sep='\t')
+    out = []
+    # Preserve the canonical hierarchy order.
+    canonical_order = ['V1', 'V2', 'V3', 'V3AB', 'hV4', 'LO', 'TO', 'VO']
+    for roi in canonical_order:
+        sub = df[df['roi'] == roi]
+        if len(sub) == 0:
+            continue
+        out.append(dict(
+            roi=roi, n=len(sub),
+            sigma_AF=float(sub['sigma_AF'].median()),
+            g_HP=float(sub['g_HP'].median()),
+            g_LP=float(sub['g_LP'].median()),
+        ))
+    return out
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path,
                         default=Path('notes/af_model_anatomy.pdf'))
-    # Defaults chosen to look like a "moderate HP-suppression" fit.
-    parser.add_argument('--sigma-af', type=float, default=1.0)
-    parser.add_argument('--g-hp',     type=float, default=-0.5)
-    parser.add_argument('--g-lp',     type=float, default=-0.1)
+    # Defaults match the empirical V3 median (where the HP-suppression
+    # signature is strongest in our data — see plot_af_parameters.py).
+    parser.add_argument('--sigma-af', type=float, default=1.92,
+                        help='σ_AF (default: V3 median across subjects).')
+    parser.add_argument('--g-hp',     type=float, default=+0.14,
+                        help='g_HP (default: V3 median).')
+    parser.add_argument('--g-lp',     type=float, default=+0.29,
+                        help='g_LP (default: V3 median; g_HP < g_LP ⇒ '
+                             'HP-specific suppression).')
+    parser.add_argument('--params-tsv', type=Path,
+                        default=Path('notes/af_parameters.tsv'),
+                        help='Optional: per-fit parameter dump from '
+                             'plot_af_parameters.py for the '
+                             'per-ROI typical-values pages.')
     args = parser.parse_args()
+
+    typical = load_typical_params(args.params_tsv)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with PdfPages(args.out) as pdf:
@@ -373,6 +487,9 @@ def main():
         page_vector_field(pdf,
                             sigma_AF=args.sigma_af,
                             g_HP=args.g_hp, g_LP=args.g_lp)
+        if typical:
+            page_per_roi_typical(pdf, typical)
+            page_per_roi_vector_field(pdf, typical)
     print(f'Wrote {args.out}')
 
 
