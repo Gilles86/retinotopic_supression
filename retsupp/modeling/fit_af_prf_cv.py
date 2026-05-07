@@ -415,6 +415,7 @@ def make_init_pars(prf_pars: pd.DataFrame,
             f'Mean model is missing DoG params {missing}. '
             'Use model 4 for DoG init.')
     init_pars = prf_pars.loc[voxel_mask, init_cols].copy()
+    init_pars = init_pars.reset_index(drop=True)
 
     init_pars['sigma_AF'] = 2.0
     init_pars['sigma_dyn'] = 0.5
