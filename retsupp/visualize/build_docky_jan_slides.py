@@ -657,24 +657,36 @@ def _observed_field_panel(ax, df_sh_roi, ring, scale=None,
                             min_n_subj_per_bin=3):
     """Observed shift vector field (data) side of the per-ROI panel.
 
-    Procedure:
-      1. Rotate every (subject × condition × voxel) to canonical (HP at
-         (0, +4°)).
-      2. Per (subject, bin) compute median observed shift Δx, Δy
-         within a coarse 2D grid (default 5×5 across ±3.5°).
-      3. Average those per-subject medians ACROSS subjects.
-      4. Quiver of mean-of-medians at each bin.
+    Procedure (apples-to-apples with PRED panel):
+      1. Per voxel (subject × voxel_idx), compute the mean of the
+         observed conditionwise positions across the 4 conditions —
+         this is the per-voxel "what would the PRF be without
+         HP-specificity" reference, mirroring the PRED panel which
+         uses mean(pred) across conditions.
+      2. Rotate every (subject × condition × voxel) row to canonical
+         (HP at (0, +4°)). Compute the rotated DEVIATION from this
+         reference: obs_C_rot − mean_obs_rot.
+      3. Bin in a 2D grid (default 2×2 = 4 quadrants).
+      4. Per (subject, bin): median of the rotated deviations.
+      5. Per bin: mean of those per-subject medians across subjects.
     Bins outside the bar aperture are dropped.
     """
     if df_sh_roi is None or len(df_sh_roi) == 0:
         ax.axis('off')
         return
-    # Rotation per row (HP for that condition → canonical (0, +4°)).
+    # Per-voxel mean position across the 4 conditions.
+    mean_obs = (df_sh_roi.groupby(['subject', 'voxel_idx'], observed=True)
+                  [['obs_x', 'obs_y']].transform('mean'))
+    df_sh_roi = df_sh_roi.assign(
+        obs_x_dev=df_sh_roi['obs_x'] - mean_obs['obs_x'],
+        obs_y_dev=df_sh_roi['obs_y'] - mean_obs['obs_y'],
+    )
     R = {c: rotation_to_canonical(c) for c in CONDITIONS}
     bx = df_sh_roi['base_x'].values; by = df_sh_roi['base_y'].values
-    ox = df_sh_roi['obs_x'].values;  oy = df_sh_roi['obs_y'].values
+    odx = df_sh_roi['obs_x_dev'].values
+    ody = df_sh_roi['obs_y_dev'].values
     rb_x = np.empty_like(bx); rb_y = np.empty_like(by)
-    do_x = np.empty_like(ox); do_y = np.empty_like(oy)
+    do_x = np.empty_like(odx); do_y = np.empty_like(ody)
     for c in CONDITIONS:
         m = (df_sh_roi['condition'] == c).values
         if not m.any():
@@ -682,8 +694,8 @@ def _observed_field_panel(ax, df_sh_roi, ring, scale=None,
         Rc = R[c]
         rb_x[m] = Rc[0, 0] * bx[m] + Rc[0, 1] * by[m]
         rb_y[m] = Rc[1, 0] * bx[m] + Rc[1, 1] * by[m]
-        do_x[m] = Rc[0, 0] * (ox[m] - bx[m]) + Rc[0, 1] * (oy[m] - by[m])
-        do_y[m] = Rc[1, 0] * (ox[m] - bx[m]) + Rc[1, 1] * (oy[m] - by[m])
+        do_x[m] = Rc[0, 0] * odx[m] + Rc[0, 1] * ody[m]
+        do_y[m] = Rc[1, 0] * odx[m] + Rc[1, 1] * ody[m]
     # Bin.
     edges = np.linspace(-grid_extent, grid_extent, grid_n + 1)
     centers = 0.5 * (edges[:-1] + edges[1:])
