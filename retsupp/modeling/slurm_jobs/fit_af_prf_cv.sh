@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=af_cv
 #SBATCH --account=zne.uzh
-#SBATCH --partition=generic
+#SBATCH --partition=standard
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=8G
