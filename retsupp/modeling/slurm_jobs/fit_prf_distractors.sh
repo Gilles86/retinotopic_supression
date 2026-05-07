@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --constraint=L4
 #SBATCH --time=4:00:00
-#SBATCH --mem=64G
+#SBATCH --mem=48G
 #SBATCH --cpus-per-task=4
 
 # Mean-fit baseline PRF on the FULL paradigm (bar + distractor disks).
@@ -62,6 +62,6 @@ nvidia-smi || true
     --grid_radius 5.0 \
     --distractor_radius 0.4 \
     --max_n_iterations 4000 \
-    --voxel_chunk_size 5000
+    --voxel_chunk_size 25000
 
 echo "Finished: $(date)"
