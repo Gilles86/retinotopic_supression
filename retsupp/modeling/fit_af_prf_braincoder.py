@@ -225,7 +225,7 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
          resolution: int = 40,
          max_n_iterations: int = 1500,
          r2_thr: float = 0.05,
-         model_label: int = 1,
+         model_label: int = 4,
          max_voxels: int | None = 500,
          mode: str = 'signed',
          learning_rate: float = 0.01,
@@ -353,8 +353,10 @@ if __name__ == '__main__':
                              'cluster-friendly).')
     parser.add_argument('--max-n-iterations', type=int, default=1500)
     parser.add_argument('--r2-thr', type=float, default=0.05)
-    parser.add_argument('--model-label', type=int, default=1,
-                        help='Mean-model PRF model used for initialization.')
+    parser.add_argument('--model-label', type=int, default=4,
+                        help='Mean-model PRF used for x/y/sd/amplitude/'
+                             'baseline initialization. Model 4 (DoG + flexible '
+                             'HRF) is what is available on the cluster.')
     parser.add_argument('--max-voxels', type=int, default=500,
                         help='Cap on voxels for the POC (default 500). '
                              'Set 0 for no cap.')
