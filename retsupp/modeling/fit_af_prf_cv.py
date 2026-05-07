@@ -565,17 +565,33 @@ def main(subject: int,
     train_run_meta_per_fold: list[list[tuple[int, int, str]]] = []
     held_run_meta_per_fold: list[list[tuple[int, int, str]]] = []
 
+    n_voxels_fit = int(voxel_mask.sum())
+
     for cv_fold in range(4):
         held_out = held_out_condition(cv_fold)
         print()
         print(f'=== CV fold {cv_fold} : held-out = {held_out} ===')
 
-        split = restrict_to_train_condition(
-            bold=bold, paradigm=paradigm,
-            condition_indicator=condition_indicator,
-            run_meta=run_meta, held_out_cond_idx=cv_fold,
-            dynamic_indicator=dynamic_indicator,
-        )
+        try:
+            split = restrict_to_train_condition(
+                bold=bold, paradigm=paradigm,
+                condition_indicator=condition_indicator,
+                run_meta=run_meta, held_out_cond_idx=cv_fold,
+                dynamic_indicator=dynamic_indicator,
+            )
+        except RuntimeError as e:
+            # This subject has no runs with this HP condition (or no
+            # train data without it). Skip the fold gracefully.
+            print(f'  -> SKIPPING fold {cv_fold}: {e}')
+            nan_arr = np.full(n_voxels_fit, np.nan, dtype=np.float32)
+            shared_pars_per_fold.append(None)
+            cv_r2_per_fold.append(nan_arr)
+            train_r2_per_fold.append(nan_arr.copy())
+            fit_pars_per_fold.append(None)
+            train_run_meta_per_fold.append([])
+            held_run_meta_per_fold.append([])
+            continue
+
         train, held = split['train'], split['held']
         print(summarize_split(run_meta, held_out))
 
