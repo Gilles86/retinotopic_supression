@@ -707,6 +707,83 @@ def slide_dynamic_intro(pdf):
     pdf.savefig(fig); plt.close(fig)
 
 
+def slide_dynamic_raw_gains(pdf, v2_tsv: Path):
+    """Per-ROI test: are g_HP_dyn AND g_LP_dyn ≠ 0 across subjects?
+
+    This is the "is there transient attentional capture / suppression
+    at all?" question — independent of whether HP and LP differ. Tests
+    each gain against zero with a two-sided Wilcoxon, plus g_dyn_avg
+    = ½(g_HP_dyn + g_LP_dyn).
+    """
+    if not v2_tsv.exists():
+        return
+    df = pd.read_csv(v2_tsv, sep='\t')
+    df['g_dyn_avg'] = 0.5 * (df['g_HP_dyn'] + df['g_LP_dyn'])
+    rois = [r for r in ROI_ORDER if r in df['roi'].unique()]
+    YLIM = 1.5
+    rng = np.random.default_rng(0)
+    n_boot = 2000
+    import seaborn as sns
+
+    fig, axes = plt.subplots(1, 3, figsize=(20, 6.5))
+    panels = [
+        ('g_HP_dyn',  'g_HP_dyn  (transient gain at HP)'),
+        ('g_LP_dyn',  'g_LP_dyn  (transient gain at LP)'),
+        ('g_dyn_avg', '½(g_HP_dyn + g_LP_dyn)'),
+    ]
+    for ax, (metric, label) in zip(axes, panels):
+        d_plot = df.assign(_clip=df[metric].clip(-YLIM, YLIM))
+        sns.stripplot(data=d_plot, x='roi', y='_clip', ax=ax,
+                       order=rois, hue='roi', palette='Set2', legend=False,
+                       jitter=0.18, alpha=0.55, size=8)
+        ax.axhline(0, color='gray', lw=0.7, ls='--')
+        for i, roi in enumerate(rois):
+            x = df.loc[df['roi'] == roi, metric].dropna().values
+            if len(x) < 3:
+                continue
+            med = float(np.median(x))
+            boots = rng.choice(x, size=(n_boot, len(x)), replace=True)
+            boot_meds = np.median(boots, axis=1)
+            lo, hi = np.quantile(boot_meds, [0.025, 0.975])
+            ax.errorbar([i], [med], yerr=[[med - lo], [hi - med]],
+                         fmt='s', color='k', markersize=12, ecolor='k',
+                         elinewidth=2.5, capsize=8, zorder=10)
+            try:
+                _, p = stats.wilcoxon(x, alternative='two-sided',
+                                        zero_method='pratt')
+            except ValueError:
+                p = np.nan
+            sig = ('***' if p < 0.001 else '**' if p < 0.01
+                    else '*' if p < 0.05 else 'n.s.')
+            # Color: GREEN for sig + positive (capture), RED for sig + negative.
+            if np.isfinite(p) and p < 0.05:
+                col = 'C2' if med > 0 else 'C3'
+            else:
+                col = '0.4'
+            direction = '+' if med > 0 else '−'
+            ax.text(i, YLIM + 0.10,
+                     f'{direction} p={p:.3f}\n{sig}',
+                     ha='center', va='bottom', fontsize=11,
+                     color=col,
+                     weight='bold' if (np.isfinite(p) and p < 0.05) else 'normal')
+        ax.set_ylim(-YLIM - 0.05, YLIM + 0.45)
+        ax.set_xlabel('')
+        ax.set_ylabel(label, fontsize=14)
+        ax.set_title(label, fontsize=14, weight='bold')
+        ax.tick_params(axis='x', labelsize=13)
+        ax.tick_params(axis='y', labelsize=12)
+        ax.grid(alpha=0.2)
+    fig.suptitle(
+        '(e)  Is there transient attention at all?  '
+        'g_HP_dyn and g_LP_dyn vs zero per ROI.\n'
+        'GREEN = significant CAPTURE (attraction).  '
+        'RED = significant SUPPRESSION.',
+        fontsize=15, weight='bold',
+    )
+    fig.tight_layout(rect=[0, 0, 1, 0.91])
+    pdf.savefig(fig); plt.close(fig)
+
+
 def slide_dynamic_results(pdf, v2_tsv: Path):
     """Headline dynamic-model findings: 3-panel HP-vs-LP test
     (sustained / dynamic / total)."""
@@ -904,6 +981,7 @@ def main():
                           '5 shared parameters per ROI; same per-voxel '
                           'Gaussian kernel.')
         slide_dynamic_intro(pdf)
+        slide_dynamic_raw_gains(pdf, args.v2_tsv)
         slide_dynamic_results(pdf, args.v2_tsv)
 
         slide_summary(pdf)
