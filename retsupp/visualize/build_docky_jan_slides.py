@@ -855,6 +855,71 @@ def slide_per_subject_vector_fields(pdf, df: pd.DataFrame,
                        agg='median')
 
 
+def slide_sigma_AF_vs_sigma_dyn(pdf, v3_tsv: Path):
+    """v3 model finding: σ_AF (sustained) vs σ_dyn (phasic) per ROI.
+
+    Per-ROI paired Wilcoxon shows σ_dyn significantly smaller than
+    σ_AF in V1/V2/V3 — the priority map is broad, the phasic
+    distractor-response AF is narrow. Two distinct spatial scales.
+    """
+    if not v3_tsv.exists():
+        return
+    df = pd.read_csv(v3_tsv, sep='\t')
+    rois = [r for r in ROI_ORDER if r in df['roi'].unique()]
+    fig, ax = plt.subplots(figsize=(13, 6.5))
+    YLIM = 6.0
+    for i, roi in enumerate(rois):
+        sub = df[df['roi'] == roi]
+        if len(sub) < 4:
+            continue
+        x = i + np.linspace(-0.18, +0.18, 2)
+        # Pair lines.
+        for sf, sd in zip(sub['sigma_AF'].values, sub['sigma_dyn'].values):
+            sf = min(sf, YLIM); sd = min(sd, YLIM)
+            ax.plot(x, [sf, sd], color='0.6', lw=0.6, alpha=0.5)
+        # Per-fit dots.
+        ax.scatter([x[0]] * len(sub), np.clip(sub.sigma_AF, 0, YLIM),
+                    color='C0', s=30, alpha=0.6, edgecolor='k', linewidth=0.4)
+        ax.scatter([x[1]] * len(sub), np.clip(sub.sigma_dyn, 0, YLIM),
+                    color='C3', s=30, alpha=0.6, edgecolor='k', linewidth=0.4)
+        # Median markers.
+        ax.scatter([x[0]], [np.median(np.clip(sub.sigma_AF, 0, YLIM))],
+                    marker='_', s=400, color='k', zorder=10, lw=3)
+        ax.scatter([x[1]], [np.median(np.clip(sub.sigma_dyn, 0, YLIM))],
+                    marker='_', s=400, color='k', zorder=10, lw=3)
+        # p-value annotation.
+        try:
+            _, p = stats.wilcoxon(sub.sigma_dyn, sub.sigma_AF)
+        except ValueError:
+            p = np.nan
+        sig = ('***' if p < 0.001 else '**' if p < 0.01 else
+                '*' if p < 0.05 else 'n.s.')
+        col = 'C2' if p < 0.05 else '0.4'
+        ax.text(i, YLIM + 0.30,
+                 f'p={p:.3f}\n{sig}',
+                 ha='center', va='bottom', fontsize=11,
+                 color=col, weight='bold' if p < 0.05 else 'normal')
+    ax.set_xticks(np.arange(len(rois)))
+    ax.set_xticklabels(rois, fontsize=14)
+    ax.set_ylabel('σ (deg)', fontsize=15)
+    ax.set_ylim(0, YLIM + 1.2)
+    ax.set_title(
+        'σ_AF (sustained, blue) vs σ_dyn (phasic distractor, red)  '
+        '— v3 model, per-fit paired comparison\n'
+        'In early visual cortex, the phasic AF is narrower than the '
+        'sustained priority map → two distinct spatial scales.',
+        fontsize=13, weight='bold',
+    )
+    # Legend.
+    ax.scatter([], [], color='C0', label='σ_AF (sustained)', s=40,
+                edgecolor='k', linewidth=0.4)
+    ax.scatter([], [], color='C3', label='σ_dyn (phasic)', s=40,
+                edgecolor='k', linewidth=0.4)
+    ax.legend(loc='upper left', fontsize=11)
+    ax.grid(alpha=0.2, axis='y')
+    pdf.savefig(fig); plt.close(fig)
+
+
 def slide_dynamic_intro(pdf):
     """Visual intro to the v2 dynamic model — schematic + formula."""
     fig = plt.figure(figsize=(13, 8))
@@ -1570,6 +1635,10 @@ def main():
         slide_dynamic_intro(pdf)
         slide_dynamic_raw_gains(pdf, args.v2_tsv)
         slide_dynamic_results(pdf, args.v2_tsv)
+        # NEW: v3 σ_AF vs σ_dyn comparison.
+        v3_tsv = Path('notes/af_v3_parameters.tsv')
+        if v3_tsv.exists():
+            slide_sigma_AF_vs_sigma_dyn(pdf, v3_tsv)
 
         # Pick whichever predict_shifts TSV exists (apples-to-apples
         # Gaussian preferred if available).
