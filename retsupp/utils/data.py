@@ -725,18 +725,86 @@ class Subject(object):
 
         return varea_img
 
+    def get_wang_labels(self):
+        """Return the Wang 2015 maximum-probability retinotopy atlas labels.
+
+        Label values 1..25 correspond to the named visual areas in the
+        Wang 2015 max-probability atlas. V1d/V1v etc. are split here
+        (dorsal/ventral); :meth:`get_retinotopic_roi` aliases such as
+        ``'IPS'`` collapse the IPS sub-fields into a union mask.
+        """
+        return {
+            1: 'V1v', 2: 'V1d', 3: 'V2v', 4: 'V2d', 5: 'V3v', 6: 'V3d',
+            7: 'hV4', 8: 'VO1', 9: 'VO2', 10: 'PHC1', 11: 'PHC2',
+            12: 'TO2', 13: 'TO1', 14: 'LO2', 15: 'LO1', 16: 'V3B', 17: 'V3A',
+            18: 'IPS0', 19: 'IPS1', 20: 'IPS2', 21: 'IPS3', 22: 'IPS4',
+            23: 'IPS5', 24: 'SPL1', 25: 'FEF',
+        }
+
+    def get_wang_atlas(self, bold_space=False):
+        """Return the Wang 2015 atlas (label values 1..25) as a NIfTI image.
+
+        Loads ``mri/wang15_atlas.mgz`` from the subject's freesurfer
+        directory. If ``bold_space=True``, resamples nearest-neighbour
+        into the BOLD (functional) grid.
+        """
+        wang_file = (
+            self.bids_folder
+            / "derivatives"
+            / "fmriprep"
+            / "sourcedata"
+            / "freesurfer"
+            / f"sub-{self.subject_id:02d}"
+            / "mri"
+            / "wang15_atlas.mgz"
+        )
+        wang_img = image.load_img(str(wang_file))
+
+        # Make Nifti1Image out of MGZImage
+        wang_img = nib.Nifti1Image(wang_img.get_fdata(), affine=wang_img.affine)
+
+        if bold_space:
+            func_mask = self.get_bold_mask()
+            wang_img = image.resample_to_img(wang_img, target_img=func_mask, interpolation='nearest', force_resample=True, copy_header=True)
+
+        return wang_img
+
+    # ROIs sourced from the Wang 2015 atlas (rather than the Benson
+    # neuropythy ``inferred_varea.mgz`` atlas). Used by
+    # :meth:`get_retinotopic_roi` to dispatch.
+    _WANG_ONLY_ROIS = {
+        'IPS0', 'IPS1', 'IPS2', 'IPS3', 'IPS4', 'IPS5',
+        'SPL1', 'FEF',
+    }
+    # Aliases that map onto a union of Wang labels.
+    _WANG_ALIASES = {
+        'IPS': ['IPS0', 'IPS1', 'IPS2', 'IPS3', 'IPS4', 'IPS5'],
+    }
+    # Aliases that map onto a union of Benson labels.
+    _BENSON_ALIASES = {
+        'V3AB': ['V3A', 'V3B'],
+        'LO': ['LO1', 'LO2'],
+        'TO': ['TO1', 'TO2'],
+        'VO': ['VO1', 'VO2'],
+    }
+
     def get_retinotopic_roi(self, roi=None, bold_space=False,):
         """
         Returns a mask image for the specified retinotopic ROI (e.g., 'V1', 'V2', etc.).
         If hemi is 'L' or 'R', restricts to that hemisphere.
-        Uses nilearn.image.load_img and image.math_img for masking.
+
+        Sources the atlas based on the ROI name:
+        - Benson (``inferred_varea.mgz``) for V1, V2, V3, hV4, VO1, VO2,
+          LO1, LO2, TO1, TO2, V3A, V3B, plus the alias ``V3AB`` (=V3A∪V3B).
+        - Wang 2015 (``wang15_atlas.mgz``) for IPS0..IPS5, SPL1, FEF,
+          plus the alias ``IPS`` (=IPS0∪..∪IPS5).
+
+        ROI names ending in ``_L`` or ``_R`` are restricted to the
+        corresponding hemisphere via :meth:`get_hemisphere_mask`.
         """
-        # Invert the label dictionary for fast lookup
-
-        atlas = self.get_retinotopic_atlas(bold_space=bold_space)
-        labels = self.get_retinotopic_labels()
-
         if roi is None:
+            atlas = self.get_retinotopic_atlas(bold_space=bold_space)
+            labels = self.get_retinotopic_labels()
             return atlas, [label for _, label in sorted(labels.items())]
 
         if roi.endswith('_L'):
@@ -748,12 +816,41 @@ class Subject(object):
         else:
             hemi = None
 
-        name_to_idx = {v.lower(): k for k, v in labels.items()}
-        idx = name_to_idx.get(roi.lower())
-        if idx is None:
-            raise ValueError(f"ROI '{roi}' not found in label names.")
+        # Decide which atlas to source from.
+        use_wang = (roi in self._WANG_ONLY_ROIS) or (roi in self._WANG_ALIASES)
 
-        roi_mask = image.math_img(f"img == {idx}", img=atlas)
+        if use_wang:
+            atlas = self.get_wang_atlas(bold_space=bold_space)
+            labels = self.get_wang_labels()
+            name_to_idx = {v.lower(): k for k, v in labels.items()}
+            if roi in self._WANG_ALIASES:
+                component_rois = self._WANG_ALIASES[roi]
+            else:
+                component_rois = [roi]
+            indices = []
+            for r in component_rois:
+                idx = name_to_idx.get(r.lower())
+                if idx is None:
+                    raise ValueError(f"ROI '{r}' not found in Wang label names.")
+                indices.append(idx)
+            cond = ' | '.join(f'(img == {i})' for i in indices)
+            roi_mask = image.math_img(cond, img=atlas)
+        else:
+            atlas = self.get_retinotopic_atlas(bold_space=bold_space)
+            labels = self.get_retinotopic_labels()
+            name_to_idx = {v.lower(): k for k, v in labels.items()}
+            if roi in self._BENSON_ALIASES:
+                component_rois = self._BENSON_ALIASES[roi]
+            else:
+                component_rois = [roi]
+            indices = []
+            for r in component_rois:
+                idx = name_to_idx.get(r.lower())
+                if idx is None:
+                    raise ValueError(f"ROI '{r}' not found in label names.")
+                indices.append(idx)
+            cond = ' | '.join(f'(img == {i})' for i in indices)
+            roi_mask = image.math_img(cond, img=atlas)
 
         if hemi is not None:
             hemi_mask = self.get_hemisphere_mask(hemi, bold_space=bold_space)
