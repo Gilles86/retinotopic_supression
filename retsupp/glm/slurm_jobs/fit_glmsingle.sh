@@ -4,7 +4,7 @@
 #SBATCH --output=/dev/null
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
-#SBATCH --mem=160G
+#SBATCH --mem=128G
 #SBATCH --time=06:00:00
 #
 # Fit GLMsingle single-trial betas for the retsupp visual-search task.
