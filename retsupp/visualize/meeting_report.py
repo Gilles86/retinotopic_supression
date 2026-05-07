@@ -550,7 +550,9 @@ def figure_3b_cluster_stats(
 
     rng = np.random.default_rng(seed)
     if bin_edges is None:
-        bin_edges = np.arange(0.0, 7.5, 0.5)
+        # Finer bins (0.25°) for smoother interpolation; smoothing kernel
+        # then handles the per-bin noise.
+        bin_edges = np.arange(0.0, 7.25, 0.25)
     centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
 
     work = pars.reset_index().copy()
@@ -601,12 +603,15 @@ def figure_3b_cluster_stats(
 
         smoothed_arr = smoothed.dropna(how="all").values  # (n_subj, n_bins)
 
-        # Per-bin t-test against 0.
+        # Per-bin t-test against 0. Require ≥60% of subjects to have
+        # data in this bin (else the bin is too sparse and clusters
+        # there are noise-driven).
+        min_subj_per_bin = max(3, int(0.6 * smoothed_arr.shape[0]))
         t_obs = np.full(len(centers), np.nan)
         for j in range(len(centers)):
             col = smoothed_arr[:, j]
             col = col[~np.isnan(col)]
-            if len(col) >= 3:
+            if len(col) >= min_subj_per_bin:
                 t_obs[j], _ = stats.ttest_1samp(col, 0.0)
 
         # Threshold + find connected clusters where |t| > thr.
@@ -640,7 +645,7 @@ def figure_3b_cluster_stats(
             for j in range(len(centers)):
                 col = perm[:, j]
                 col = col[~np.isnan(col)]
-                if len(col) >= 3:
+                if len(col) >= min_subj_per_bin:
                     t_perm[j], _ = stats.ttest_1samp(col, 0.0)
             perm_clusters = find_clusters(t_perm, cluster_threshold_t)
             null_max_stats[k] = max((abs(c[2]) for c in perm_clusters), default=0.0)
@@ -671,7 +676,7 @@ def figure_3b_cluster_stats(
         ax.axhline(0, color="k", lw=0.5, ls="--")
         ax.set_xlabel("distance of mean PRF from HP (deg)")
         ax.set_ylabel("smoothed proj. away from HP (deg)")
-        ax.set_ylim(-0.25, 0.25)
+        ax.set_ylim(-0.10, 0.15)
 
         # Highlight significant clusters in red, non-significant in light red.
         for (i_start, i_end, cs), p in zip(obs_clusters, cluster_ps):
@@ -693,10 +698,17 @@ def figure_3b_cluster_stats(
 
     fig.suptitle(
         f"Figure 3b — Smoothed per-subject curves + 1D cluster-based permutation test\n"
-        f"σ_smooth = {smooth_sigma_bins} bins.  "
-        f"|t| > {cluster_threshold_t} threshold, cluster stat = Σ t inside.  "
-        f"{n_perm} sign-flip permutations.  Red = p<0.05, pink = n.s.",
-        y=1.02,
+        f"Per (subject, ROI) bin {bin_edges[1]-bin_edges[0]:.2f}° wide; "
+        f"per-subject Gaussian smoothing σ = {smooth_sigma_bins} bins.  "
+        f"Bold line = group mean of per-subject smoothed curves; "
+        f"shaded band = ±1 SEM across subjects.\n"
+        f"At each bin, one-sample t against 0; cluster = consecutive bins with |t|>"
+        f"{cluster_threshold_t}; cluster stat = Σ t.  "
+        f"{n_perm} sign-flip permutations of per-subject curves give null max-cluster-stat;\n"
+        f"observed cluster significant if its |stat| > 95th percentile of null.  "
+        f"Red = p<0.05, pink = n.s.  "
+        f"Bins with <60% subjects skipped (sparse-far-distance).",
+        y=1.04,
     )
     fig.tight_layout()
     return fig, cluster_results
@@ -859,14 +871,20 @@ def figure_r2_distributions(
     pars: pd.DataFrame,
     rois: list[str],
     r2_threshold: float = 0.3,
+    bids_folder: str = "/data/ds-retsupp",
     fig=None,
 ):
     """Per-ROI distribution of mean-model PRF R², with cutoff line.
 
-    Diagnostic figure: how many voxels survive at r²>thr per ROI per
-    subject, what the typical R² is, how strict the threshold actually is.
+    Loads conditionwise data with r2_thr=0.0 (no inclusion filter) to
+    show the FULL R² distribution, since the default `load_all_conditionwise`
+    filters at r²>0.2 already.
     """
-    work = pars.reset_index().copy()
+    # Reload with no inclusion filter to see the true distribution.
+    full = load_all_conditionwise(
+        bids_folder=bids_folder, r2_thr=0.0, ecc_thr=10.0, sd_thr=0.0,
+    )
+    work = full.reset_index().copy()
     work = work[work["roi_base"].isin(rois)]
     # Drop duplicates per voxel — r2_mean_model is the same across conditions.
     per_voxel = work.drop_duplicates(["subject", "roi_base", "voxel"])
@@ -934,27 +952,26 @@ def figure_r2_distributions(
 # Figure 6: 4-AF competing model fits (suppression vs attraction)
 # -----------------------------------------------------------------------------
 
-def figure_6_four_af_fits(pars, rois, fig=None):
-    """Per-ROI distributions of σ_AF, g_HP, g_LP from the 4-AF model,
-    fit separately under suppression and attraction modes.
+def figure_6_four_af_fits(rois, fits_tsv: Path, fig=None):
+    """Plot 4-AF model fit results FROM a precomputed TSV.
+
+    The TSV is produced by `python -m retsupp.modeling.fit_four_af`,
+    which is the slow step (~6 min). Plotting just reads the table.
 
     Per voxel × condition, the model predicts:
         suppression: R = (1 − g_HP·A_HP − g_LP·Σ A_LP) · S
         attraction:  R = (1 + g_HP·A_HP + g_LP·Σ A_LP) · S
-    with all 4 AFs centered at the actual ring positions.
 
     log_g_HP_over_g_LP > 0 → HP-AF stronger than LP-AFs.
     """
-    from retsupp.modeling.af_model import fit_four_af_per_subject
     from scipy import stats
 
-    print("  fitting 4-AF model (suppression + attraction) per subject per ROI ...")
-    print("  R²>0.3 filter + iterative base refit + final per-voxel scipy base fit ...")
-    df = fit_four_af_per_subject(
-        pars, rois, modes=("suppression", "attraction"),
-        min_r2_mean_model=0.3, refit_base=True, n_iter=3,
-        joint_base_fit=True,
-    )
+    if not fits_tsv.exists():
+        print(f"  4-AF fits TSV not found at {fits_tsv}.")
+        print(f"  Generate with: python -m retsupp.modeling.fit_four_af "
+              f"--out {fits_tsv} --joint-base-fit")
+        return None, None
+    df = pd.read_csv(fits_tsv, sep="\t")
     if df.empty:
         return None, None
 
@@ -1030,6 +1047,11 @@ def main():
     parser.add_argument(
         "--rois", nargs="+",
         default=["V1", "V2", "V3", "V3AB", "hV4", "LO", "TO", "VO"],
+    )
+    parser.add_argument(
+        "--four-af-fits", type=Path, default=None,
+        help="Path to TSV with 4-AF fit results (from fit_four_af.py). "
+             "If omitted, defaults to <out>_four_af_fits.tsv next to the report.",
     )
     parser.add_argument("--n-perm", type=int, default=200)
     args = parser.parse_args()
@@ -1161,20 +1183,19 @@ RICHTER 2025 (just read):
         print("Figure — R² distributions per ROI (diagnostic) ...")
         fig, r2_summary = figure_r2_distributions(
             pars, rois=args.rois, r2_threshold=0.3,
+            bids_folder=args.bids_folder,
         )
         pdf.savefig(fig, bbox_inches="tight"); plt.close(fig)
         print("R² summary:")
         print(r2_summary.to_string(index=False, float_format=lambda v: f"{v:7.3f}"))
 
-        print("Figure 6 — 4-AF competing model ...")
-        result = figure_6_four_af_fits(pars, rois=args.rois)
+        print("Figure 6 — 4-AF competing model (reading precomputed TSV) ...")
+        fits_tsv = (args.four_af_fits if args.four_af_fits
+                    else args.out.with_name(args.out.stem + "_four_af_fits.tsv"))
+        result = figure_6_four_af_fits(rois=args.rois, fits_tsv=fits_tsv)
         if result is not None and result[0] is not None:
-            fig, four_af_df = result
+            fig, _ = result
             pdf.savefig(fig, bbox_inches="tight"); plt.close(fig)
-            # Also save the per-subject parameter table.
-            tsv = args.out.with_name(args.out.stem + "_four_af_fits.tsv")
-            four_af_df.to_csv(tsv, sep="\t", index=False)
-            print(f"  saved per-subject 4-AF fits to {tsv}")
 
     print(f"Wrote {args.out}")
 

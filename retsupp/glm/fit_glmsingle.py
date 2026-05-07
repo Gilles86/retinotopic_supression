@@ -85,10 +85,18 @@ def make_condition_label(row) -> str:
 
 
 def build_condition_index(all_events) -> dict[str, int]:
-    """{condition_label: column_index} — globally consistent across all runs."""
+    """{condition_label: column_index} — globally consistent across all runs.
+
+    Iterates only over TARGET events (one per trial) so the condition
+    set doesn't include NaN-distractor labels from unrelated event types
+    (pulse, instruction, etc.) that have no distractor_location.
+    """
     conditions = set()
     for ev in all_events:
-        conditions.update(ev.apply(make_condition_label, axis=1).unique())
+        target_ev = ev[ev["event_type"] == "target"]
+        if len(target_ev) == 0:
+            continue
+        conditions.update(target_ev.apply(make_condition_label, axis=1).unique())
     # Stable ordering: by the float code, NaN last.
     def _key(c):
         suffix = c.replace("distractor_", "")
