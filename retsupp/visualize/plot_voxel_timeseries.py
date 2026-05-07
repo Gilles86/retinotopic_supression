@@ -213,6 +213,55 @@ def plot_voxel_panel(ax, t, obs, pred, run_meta, hp_legend=None,
     ax.set_ylabel('BOLD', fontsize=9)
 
 
+def average_per_condition(bold: np.ndarray, pred: np.ndarray,
+                            run_meta: list, n_T_run: int):
+    """Average BOLD and predictions per HP condition across runs.
+
+    Returns dict: cond → (mean_bold (T, V), mean_pred (T, V), n_runs).
+    """
+    out = {}
+    for cond in CONDITIONS:
+        idx = [i for i, m in enumerate(run_meta) if m['hp'] == cond]
+        if not idx:
+            continue
+        bold_runs = np.stack(
+            [bold[m['t_start']:m['t_end']] for m in
+             (run_meta[i] for i in idx)],
+            axis=0,
+        )           # (n_runs, T_run, V)
+        pred_runs = np.stack(
+            [pred[m['t_start']:m['t_end']] for m in
+             (run_meta[i] for i in idx)],
+            axis=0,
+        )
+        out[cond] = (bold_runs.mean(axis=0), pred_runs.mean(axis=0),
+                      len(idx))
+    return out
+
+
+def predict_with_zero_gains(fit_pars: pd.DataFrame, paradigm, ci, grid,
+                              hrf_model, mode: str):
+    """Run forward pass with g_HP = g_LP = 0 — yields the no-AF (pure
+    Gaussian PRF) BOLD prediction at each voxel's fitted (x, y, sd,
+    baseline, amplitude)."""
+    pars_no_af = fit_pars.copy()
+    pars_no_af['g_HP'] = 0.0
+    pars_no_af['g_LP'] = 0.0
+    model = AttentionFieldPRF2DWithHRF(
+        grid_coordinates=grid, paradigm=paradigm,
+        hrf_model=hrf_model,
+        condition_indicator=ci,
+        ring_positions=get_ring_positions(),
+        mode=mode,
+    )
+    pars_arr = pars_no_af[model.parameter_labels].values.astype(np.float32)
+    pred_tf = model._predict(
+        tf.constant(paradigm[np.newaxis, ...]),
+        tf.constant(pars_arr[np.newaxis, ...]),
+    )
+    return pred_tf.numpy()[0]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--subject', type=int, default=2)
@@ -221,13 +270,22 @@ def main():
                         default=Path('/data/ds-retsupp'))
     parser.add_argument('--fit-dir-name', default='af_prf_joint_full')
     parser.add_argument('--mode', default='signed')
-    parser.add_argument('--n-voxels', type=int, default=8,
-                        help='Top-N voxels by R² to display.')
+    parser.add_argument('--n-voxels', type=int, default=6,
+                        help='Top-N voxels by combined R² × predicted '
+                             'condition-shift magnitude.')
+    parser.add_argument('--r2-thr', type=float, default=0.20,
+                        help='Min R² for voxel inclusion.')
+    parser.add_argument('--mode-display',
+                        choices=['per-condition', 'concat'],
+                        default='per-condition',
+                        help="'per-condition': avg BOLD across runs per HP, "
+                             "show 4 conditions overlaid + no-AF baseline. "
+                             "'concat': raw time-series concatenation.")
     parser.add_argument('--out', type=Path,
                         default=Path('notes/voxel_timeseries.pdf'))
     parser.add_argument('--max-tr', type=int, default=None,
                         help='Crop the time-series to this many TRs '
-                             'for plotting (default: full concatenation).')
+                             'for plotting.')
     args = parser.parse_args()
 
     sub = Subject(args.subject, args.bids_folder)
@@ -244,15 +302,46 @@ def main():
         fit_pkl, sub
     )
     r2 = fit_pars['r2'].values
-    order = np.argsort(r2)[::-1]
-    top = order[:args.n_voxels]
-    print(f'Top-{args.n_voxels} voxel R²: '
-          f'[{r2[top].min():.2f}, {r2[top].max():.2f}]')
 
-    T = bold.shape[0]
-    if args.max_tr is not None:
-        T = min(T, args.max_tr)
-    t = np.arange(T)
+    n_T_run = run_meta[0]['t_end'] - run_meta[0]['t_start']
+    cond_avg = average_per_condition(bold, pred, run_meta, n_T_run)
+
+    # No-AF baseline predictions FIRST (need them for the voxel selector).
+    print('Computing no-AF baseline predictions (gains = 0)...')
+    paradigm_, _, ci_, grid_, _, _ = reload_data_and_paradigm(
+        sub, resolution=50,
+        paradigm_type='full', grid_radius=5.0,
+    )
+    hrf_model = SPMHRFModel(tr=sub.get_tr(session=1, run=1),
+                              delay=4.5, dispersion=0.75)
+    pred_no_af = predict_with_zero_gains(fit_pars, paradigm_, ci_, grid_,
+                                            hrf_model, args.mode)
+    cond_avg_no_af = average_per_condition(bold, pred_no_af,
+                                              run_meta, n_T_run)
+
+    # ΔR² selector: voxels where the AF model explains substantially
+    # more variance than the no-AF baseline. SS_res computed against the
+    # SAME observed BOLD for both models.
+    def per_voxel_r2(obs_, pred_):
+        ss_res = ((obs_ - pred_) ** 2).sum(axis=0)
+        ss_tot = ((obs_ - obs_.mean(axis=0)) ** 2).sum(axis=0) + 1e-9
+        return 1.0 - ss_res / ss_tot
+    r2_af = per_voxel_r2(bold, pred)
+    r2_noaf = per_voxel_r2(bold, pred_no_af)
+    dr2 = r2_af - r2_noaf
+
+    # Score: high ΔR² AND minimum-quality R² so we don't pick noise.
+    valid = (r2 >= args.r2_thr) & (dr2 > 0)
+    score = dr2.copy()
+    score[~valid] = -np.inf
+    order = np.argsort(score)[::-1]
+    top = order[:args.n_voxels]
+    print(f'Top-{args.n_voxels} voxels by ΔR² (AF − no-AF):')
+    for vox in top:
+        print(f'  voxel {vox}: R²(AF)={r2_af[vox]:.3f}, '
+              f'R²(no-AF)={r2_noaf[vox]:.3f}, ΔR²={dr2[vox]:+.3f}, '
+              f'PRF=({fit_pars["x"].iloc[vox]:+.2f}, '
+              f'{fit_pars["y"].iloc[vox]:+.2f})')
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with PdfPages(args.out) as pdf:
@@ -261,48 +350,73 @@ def main():
         sh = pickle.load(open(fit_pkl, 'rb'))['shared_pars']
         ax.text(0.5, 0.95,
                  f'sub-{args.subject:02d}  {args.roi}  '
-                 'voxel BOLD: observed vs AF+PRF fit',
-                 ha='center', va='top', fontsize=18, weight='bold',
+                 'BOLD: data vs AF+PRF model vs no-AF baseline',
+                 ha='center', va='top', fontsize=17, weight='bold',
                  transform=ax.transAxes)
         body = (
-            f'  Top-{args.n_voxels} voxels by R² (range {r2[top].min():.2f}'
-            f' - {r2[top].max():.2f}).\n'
-            f'  Concatenated across {len(run_meta)} runs '
-            f'(showing {T} TRs of {bold.shape[0]} total).\n'
+            f'  Per-condition BOLD averaged across runs of that HP-condition.\n'
+            f'  Voxels selected by R² ≥ {args.r2_thr} AND high predicted\n'
+            f'  between-condition variance.\n'
+            f'  Top-{args.n_voxels} shown. Lines:\n'
+            f'    solid    = observed BOLD (mean across runs of that HP).\n'
+            f'    dashed   = AF+PRF model fit.\n'
+            f'    dotted   = no-AF baseline (g_HP=g_LP=0, same PRF).\n'
+            f'  Colours = HP condition.\n'
             f'\n'
-            f'  Shared AF parameters:\n'
+            f'  Shared AF parameters this fit:\n'
             f"    σ_AF    = {sh['sigma_AF']:.2f}\n"
             f"    g_HP    = {sh['g_HP']:+.3f}\n"
             f"    g_LP    = {sh['g_LP']:+.3f}\n"
             f"    g_diff  = {sh['g_HP'] - sh['g_LP']:+.3f}\n"
         )
-        ax.text(0.05, 0.85, body, ha='left', va='top',
+        ax.text(0.05, 0.86, body, ha='left', va='top',
                  family='monospace', fontsize=10,
                  transform=ax.transAxes)
         pdf.savefig(fig); plt.close(fig)
 
-        # Voxel panels: 4 per page.
-        per_page = 4
-        n_pages = int(np.ceil(args.n_voxels / per_page))
-        for p in range(n_pages):
-            fig, axes = plt.subplots(per_page, 1, figsize=(14, 10),
-                                       sharex=True)
-            for k, ax in enumerate(axes):
-                vi = p * per_page + k
-                if vi >= len(top):
-                    ax.axis('off'); continue
-                vox = top[vi]
-                ax = plot_voxel_panel(
-                    ax, t, bold[:T, vox], pred[:T, vox], run_meta,
-                    title=(f'voxel #{vi+1}  global_idx={voxel_idx[vox]}  '
-                            f'R²={r2[vox]:.2f}    '
-                            f'PRF (x,y)=({fit_pars["x"].iloc[vox]:+.2f}, '
-                            f'{fit_pars["y"].iloc[vox]:+.2f}), '
-                            f'sd={fit_pars["sd"].iloc[vox]:.2f}'),
-                )
-            axes[-1].set_xlabel('time (TRs)', fontsize=10)
-            if k == 0:
-                axes[0].legend(fontsize=10, loc='upper right')
+        # One panel per voxel: 4 conditions overlaid, observed/AF/no-AF.
+        cond_colors = {'upper_right': 'C0', 'upper_left': 'C1',
+                        'lower_left': 'C2', 'lower_right': 'C3'}
+        for vi, vox in enumerate(top):
+            fig, axes = plt.subplots(2, 1, figsize=(13, 9), sharex=True)
+            ax_top, ax_bot = axes
+            for cond, col in cond_colors.items():
+                if cond not in cond_avg:
+                    continue
+                obs_c = cond_avg[cond][0][:, vox]
+                pred_c = cond_avg[cond][1][:, vox]
+                no_c = cond_avg_no_af[cond][1][:, vox]
+                t = np.arange(len(obs_c))
+                ax_top.plot(t, obs_c, color=col, lw=2.0,
+                             label=f'observed | HP={cond}')
+                ax_top.plot(t, pred_c, color=col, lw=1.5, ls='--',
+                             alpha=0.85)
+                ax_bot.plot(t, obs_c, color=col, lw=2.0,
+                             label=f'observed | HP={cond}')
+                ax_bot.plot(t, no_c, color=col, lw=1.5, ls=':',
+                             alpha=0.85)
+            ax_top.set_title(
+                f'voxel #{vi+1}   '
+                f'PRF=({fit_pars["x"].iloc[vox]:+.2f}, '
+                f'{fit_pars["y"].iloc[vox]:+.2f}), '
+                f'sd={fit_pars["sd"].iloc[vox]:.2f}, '
+                f'R²(AF)={r2_af[vox]:.2f},   '
+                f'R²(no-AF)={r2_noaf[vox]:.2f},   '
+                f'ΔR²={dr2[vox]:+.3f}\n'
+                'TOP: observed (solid) vs AF+PRF FIT (dashed)',
+                fontsize=11, weight='bold',
+            )
+            ax_bot.set_title(
+                'BOTTOM: observed (solid) vs NO-AF baseline '
+                '(dotted, g_HP=g_LP=0) — '
+                'difference between the two = "what AF buys"',
+                fontsize=11,
+            )
+            for ax in axes:
+                ax.grid(alpha=0.2)
+                ax.set_ylabel('BOLD', fontsize=11)
+            axes[-1].set_xlabel('TR within run', fontsize=11)
+            ax_top.legend(fontsize=8, loc='upper right', ncol=2)
             fig.tight_layout()
             pdf.savefig(fig); plt.close(fig)
     print(f'Wrote {args.out}')
