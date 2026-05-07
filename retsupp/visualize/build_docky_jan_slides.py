@@ -599,8 +599,22 @@ def _draw_af_visual(ax, ring, sigma_AF, g_HP, g_LP, hp_idx=0,
                           ec='0.4', ls='--', lw=1.0))
 
 
+def _auto_quiver_scale(dxs, dys, bin_width=1.0,
+                         target_fraction=0.6, percentile=85):
+    """Pick quiver scale so the percentile-th arrow occupies
+    target_fraction of bin_width."""
+    mags = np.sqrt(np.asarray(dxs) ** 2 + np.asarray(dys) ** 2)
+    mags = mags[np.isfinite(mags)]
+    if len(mags) == 0:
+        return 1.0
+    p = float(np.percentile(mags, percentile))
+    if p <= 0:
+        return 1.0
+    return max(1.0, target_fraction * bin_width / p)
+
+
 def _vector_field_panel(ax, sigma_AF, g_HP, g_LP, ring, prf_sd=1.0,
-                         spacing=0.6, scale=10.0):
+                         spacing=0.6, scale=None):
     """Per-condition shift relative to the mean prediction across all 4
     conditions. Arrows START at the MEAN-across-conditions prediction
     and POINT toward the per-condition (HP=UR) prediction. So the arrow
@@ -616,6 +630,10 @@ def _vector_field_panel(ax, sigma_AF, g_HP, g_LP, ring, prf_sd=1.0,
     # Condition-specific shift at HP=UR.
     dx = pred[0, :, 0] - mean_pred[:, 0]
     dy = pred[0, :, 1] - mean_pred[:, 1]
+    # Auto-scale arrows to fit the panel (each panel gets its own scale).
+    if scale is None:
+        scale = _auto_quiver_scale(dx, dy, bin_width=spacing,
+                                      target_fraction=0.7, percentile=85)
     # AF circles + aperture.
     _draw_af_visual(ax, ring, sigma_AF, g_HP, g_LP, hp_idx=0)
     # Mark the MEAN positions (small grey dots) — arrow START points.
@@ -628,9 +646,13 @@ def _vector_field_panel(ax, sigma_AF, g_HP, g_LP, ring, prf_sd=1.0,
               width=0.007, alpha=0.95, zorder=10)
     ax.set_xlim(-4.7, 4.7); ax.set_ylim(-4.7, 4.7)
     ax.set_aspect('equal'); ax.set_xticks([]); ax.set_yticks([])
+    # Annotate scale.
+    ax.text(0.02, 0.02, f'×{scale:.0f}',
+             ha='left', va='bottom', fontsize=10, color='0.4',
+             transform=ax.transAxes)
 
 
-def _observed_field_panel(ax, df_sh_roi, ring, scale=20.0,
+def _observed_field_panel(ax, df_sh_roi, ring, scale=None,
                             grid_extent=3.5, grid_n=5,
                             min_n_subj_per_bin=3):
     """Observed shift vector field (data) side of the per-ROI panel.
@@ -695,6 +717,11 @@ def _observed_field_panel(ax, df_sh_roi, ring, scale=20.0,
         vx.append(m[0]); vy.append(m[1])
     cx = np.array(cx); cy = np.array(cy); vx = np.array(vx); vy = np.array(vy)
 
+    bin_w = (2.0 * grid_extent) / grid_n
+    if scale is None:
+        scale = _auto_quiver_scale(vx, vy, bin_width=bin_w,
+                                      target_fraction=0.7, percentile=85)
+
     # Aperture + ring positions (canonical orientation).
     canon_ring = np.array([
         [0.0, +RING_R], [-RING_R, 0.0],
@@ -715,12 +742,16 @@ def _observed_field_panel(ax, df_sh_roi, ring, scale=20.0,
                    width=0.01, alpha=0.95, zorder=10)
     ax.set_xlim(-4.7, 4.7); ax.set_ylim(-4.7, 4.7)
     ax.set_aspect('equal'); ax.set_xticks([]); ax.set_yticks([])
+    # Annotate scale.
+    ax.text(0.02, 0.02, f'×{scale:.0f}',
+             ha='left', va='bottom', fontsize=10, color='0.4',
+             transform=ax.transAxes)
 
 
 def _per_roi_grid(pdf, df: pd.DataFrame, label: str,
                     shifts_df: pd.DataFrame | None = None,
                     agg: str = 'median',
-                    scale: float = 30.0):
+                    scale: float | None = None):
     """Render ROI grid: each ROI gets a (predicted | observed) pair.
     8 ROIs × 2 panels = 16 panels in a 4×4 grid."""
     rois = [r for r in ROI_ORDER if r in df['roi'].unique()]
@@ -735,8 +766,9 @@ def _per_roi_grid(pdf, df: pd.DataFrame, label: str,
         '   For each ROI: LEFT = model prediction, RIGHT = data.\n'
         '   Arrows: condition-specific shift   (HP=★ − mean across 4 conditions for PRED;\n'
         '            mean-across-subjects of per-subject median shift for OBS).\n'
-        '   Circles: each AF (size = σ_AF, shading ∝ |gain|, red = suppression, blue = attraction). '
-        f'arrows ×{int(scale)}.',
+        '   Circles: each AF (size = σ_AF, shading ∝ |gain|, red = suppression, blue = attraction).\n'
+        '   Arrow ×N annotation in each panel = auto-scale '
+        '(85th-pctile arrow ≈ 70% of a bin width, so PRED and OBS are comparable in shape).',
         fontsize=13, weight='bold',
     )
     for i, roi in enumerate(rois):
@@ -808,7 +840,7 @@ def slide_per_subject_vector_fields(pdf, df: pd.DataFrame,
         _per_roi_grid(pdf, sub_df,
                        label=f'Subject sub-{int(sub_id):02d}',
                        shifts_df=sub_shifts,
-                       agg='median', scale=30.0)
+                       agg='median')
 
 
 def slide_dynamic_intro(pdf):
