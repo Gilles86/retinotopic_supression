@@ -121,7 +121,7 @@ def cover(pdf, v2: pd.DataFrame, v1: pd.DataFrame):
 
 def page_distributions(pdf, df: pd.DataFrame):
     metrics = [
-        ('sigma_AF',  'σ_AF (deg)',                      0,    5.0,  False),
+        ('sigma_AF',  'σ_AF (deg)',                      0,    8.0,  False),
         ('g_HP',      'g_HP (sustained)',                -2.0, +2.0, True),
         ('g_LP',      'g_LP (sustained)',                -2.0, +2.0, True),
         ('g_HP_dyn',  'g_HP_dyn (per-TR distractor)',    -2.0, +2.0, True),
@@ -342,7 +342,7 @@ def page_dynamic_capture_test(pdf, df: pd.DataFrame):
     Tests g_dyn_avg = ½(g_HP_dyn + g_LP_dyn) against zero (Wilcoxon).
     Significant POSITIVE = attentional CAPTURE.
     Significant NEGATIVE = dynamic SUPPRESSION of distractor.
-    Reports both for ALL fits and for σ-filtered (σ_AF < 5°) fits.
+    Reports both for ALL fits and for σ-filtered (σ_AF < 7°) fits.
     """
     df = df.copy()
     df['g_dyn_avg'] = 0.5 * (df['g_HP_dyn'] + df['g_LP_dyn'])
@@ -354,8 +354,8 @@ def page_dynamic_capture_test(pdf, df: pd.DataFrame):
     n_boot = 2000
     for ax, sub_df, label in zip(
             axes,
-            [df, df[df['sigma_AF'] < 5.0]],
-            ['ALL fits', 'σ_AF < 5°  (drops degenerate)']):
+            [df, df[df['sigma_AF'] < 7.0]],
+            ['ALL fits', 'σ_AF < 7°  (drops saturated 8–11° fits)']):
         d_plot = sub_df.assign(_clip=sub_df['g_dyn_avg'].clip(-YLIM, YLIM))
         sns.stripplot(data=d_plot, x='roi', y='_clip', ax=ax,
                        order=rois,
