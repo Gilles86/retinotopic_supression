@@ -370,9 +370,11 @@ if __name__ == '__main__':
                              "via softplus and fix the overall sign.")
     parser.add_argument('--learning-rate', type=float, default=0.01)
     parser.add_argument('--paradigm-type', choices=['bar', 'full'],
-                        default='bar',
-                        help="Stimulus paradigm: 'bar' (default, legacy) "
-                             "or 'full' (extended grid + distractor disks).")
+                        default='full',
+                        help="Stimulus paradigm: 'full' (default — extended "
+                             "grid + distractor disks at the 4 ring "
+                             "locations, intensity = TR-on-fraction) or "
+                             "'bar' (legacy bar-only).")
     parser.add_argument('--grid-radius', type=float, default=5.0,
                         help='Half-width of the extended grid in deg '
                              "(only used when --paradigm-type=full).")
