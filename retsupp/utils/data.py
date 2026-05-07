@@ -386,6 +386,72 @@ class Subject(object):
 
         return stimulus
 
+    def get_dynamic_indicator(self, session=1, run=1,
+                              max_distractor_duration=1.5):
+        """Per-TR distractor-on indicator at each of the 4 ring locations.
+
+        Returns
+        -------
+        d : ndarray, shape (n_volumes, 4)
+            Fraction of each TR during which a distractor was on screen
+            at each ring location, in [0, 1]. The 4 channels are
+            ordered as
+            ``['upper_right', 'upper_left', 'lower_left', 'lower_right']``
+            to match the ``CONDITIONS`` list used by
+            :mod:`retsupp.modeling.fit_af_prf_braincoder` /
+            :mod:`retsupp.modeling.fit_dynamic_af_braincoder` (and the
+            ``ring_positions`` ordering passed to the
+            ``DynamicAttentionFieldPRF2DWithHRF`` model).
+
+        Notes
+        -----
+        Logic mirrors the distractor pass of
+        :meth:`get_stimulus_with_distractors`, but does not paint any
+        spatial grid — it only returns the per-TR-per-location overlap
+        fraction.
+        """
+        # Ring location code -> channel index. Channel order MUST stay
+        # in sync with `CONDITIONS` in fit_*_af_braincoder.py.
+        # 1: upper_right, 3: upper_left, 5: lower_left, 7: lower_right.
+        loc_to_channel = {1.0: 0, 3.0: 1, 5.0: 2, 7.0: 3}
+        n_channels = 4
+
+        tr = self.get_tr(session, run)
+        n_volumes = self.get_n_volumes(session, run)
+        frametimes = np.arange(tr / 2., tr * n_volumes + tr / 2., tr)
+        tr_starts = frametimes - tr / 2.
+        tr_ends = frametimes + tr / 2.
+
+        onsets = self.get_onsets(session, run)
+        targets = onsets[onsets["event_type"] == "target"].sort_values("onset")
+        feedback = onsets[onsets["event_type"] == "feedback"].sort_values("onset")
+
+        d = np.zeros((len(frametimes), n_channels), dtype=np.float32)
+
+        for _, trial in targets.iterrows():
+            loc_code = trial["distractor_location"]
+            if pd.isna(loc_code) or loc_code == 10.0:
+                continue
+            if loc_code not in loc_to_channel:
+                continue
+            ch = loc_to_channel[loc_code]
+
+            t_on = trial["onset"]
+            after = feedback[feedback["onset"] > t_on]
+            t_off = (after.iloc[0]["onset"] if len(after)
+                     else t_on + max_distractor_duration)
+            t_off = min(t_off, t_on + max_distractor_duration)
+
+            overlap = np.clip(
+                np.minimum(tr_ends, t_off) - np.maximum(tr_starts, t_on),
+                0.0, None,
+            ) / tr  # in [0, 1]
+
+            # Element-wise max in case of overlapping windows.
+            d[:, ch] = np.maximum(d[:, ch], overlap.astype(np.float32))
+
+        return d
+
         def filter_confounds_(confounds, n_acompcorr=10):
             confound_cols = ['dvars', 'framewise_displacement']
 
