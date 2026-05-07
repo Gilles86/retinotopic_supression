@@ -630,60 +630,185 @@ def _vector_field_panel(ax, sigma_AF, g_HP, g_LP, ring, prf_sd=1.0,
     ax.set_aspect('equal'); ax.set_xticks([]); ax.set_yticks([])
 
 
+def _observed_field_panel(ax, df_sh_roi, ring, scale=20.0,
+                            grid_extent=3.5, grid_n=5,
+                            min_n_subj_per_bin=3):
+    """Observed shift vector field (data) side of the per-ROI panel.
+
+    Procedure:
+      1. Rotate every (subject × condition × voxel) to canonical (HP at
+         (0, +4°)).
+      2. Per (subject, bin) compute median observed shift Δx, Δy
+         within a coarse 2D grid (default 5×5 across ±3.5°).
+      3. Average those per-subject medians ACROSS subjects.
+      4. Quiver of mean-of-medians at each bin.
+    Bins outside the bar aperture are dropped.
+    """
+    if df_sh_roi is None or len(df_sh_roi) == 0:
+        ax.axis('off')
+        return
+    # Rotation per row (HP for that condition → canonical (0, +4°)).
+    R = {c: rotation_to_canonical(c) for c in CONDITIONS}
+    bx = df_sh_roi['base_x'].values; by = df_sh_roi['base_y'].values
+    ox = df_sh_roi['obs_x'].values;  oy = df_sh_roi['obs_y'].values
+    rb_x = np.empty_like(bx); rb_y = np.empty_like(by)
+    do_x = np.empty_like(ox); do_y = np.empty_like(oy)
+    for c in CONDITIONS:
+        m = (df_sh_roi['condition'] == c).values
+        if not m.any():
+            continue
+        Rc = R[c]
+        rb_x[m] = Rc[0, 0] * bx[m] + Rc[0, 1] * by[m]
+        rb_y[m] = Rc[1, 0] * bx[m] + Rc[1, 1] * by[m]
+        do_x[m] = Rc[0, 0] * (ox[m] - bx[m]) + Rc[0, 1] * (oy[m] - by[m])
+        do_y[m] = Rc[1, 0] * (ox[m] - bx[m]) + Rc[1, 1] * (oy[m] - by[m])
+    # Bin.
+    edges = np.linspace(-grid_extent, grid_extent, grid_n + 1)
+    centers = 0.5 * (edges[:-1] + edges[1:])
+    ix = np.digitize(rb_x, edges) - 1
+    iy = np.digitize(rb_y, edges) - 1
+    valid = (ix >= 0) & (ix < grid_n) & (iy >= 0) & (iy < grid_n)
+    sub = df_sh_roi['subject'].values
+
+    # Per-(subject, bin) median.
+    per_sb = {}
+    for k in np.where(valid)[0]:
+        key = (int(sub[k]), int(ix[k]), int(iy[k]))
+        per_sb.setdefault(key, []).append((do_x[k], do_y[k]))
+    # Per-bin: mean (across subjects) of (per-subject median Δx, Δy).
+    grid = {}
+    for (s, i, j), vec_list in per_sb.items():
+        arr = np.array(vec_list)
+        med = np.median(arr, axis=0)        # per-subject median
+        grid.setdefault((i, j), []).append(med)
+
+    cx, cy = [], []; vx, vy = [], []
+    for (i, j), per_subj_medians in grid.items():
+        if len(per_subj_medians) < min_n_subj_per_bin:
+            continue
+        ax_pt, ay_pt = centers[i], centers[j]
+        # Aperture filter on bin CENTER.
+        if np.sqrt(ax_pt ** 2 + ay_pt ** 2) > APERTURE:
+            continue
+        m = np.mean(per_subj_medians, axis=0)
+        cx.append(ax_pt); cy.append(ay_pt)
+        vx.append(m[0]); vy.append(m[1])
+    cx = np.array(cx); cy = np.array(cy); vx = np.array(vx); vy = np.array(vy)
+
+    # Aperture + ring positions (canonical orientation).
+    canon_ring = np.array([
+        [0.0, +RING_R], [-RING_R, 0.0],
+        [0.0, -RING_R], [+RING_R, 0.0],
+    ], dtype=np.float32)
+    ax.add_patch(Circle((0, 0), APERTURE, fill=False,
+                          ec='0.4', ls='--', lw=1.0))
+    for k, mu in enumerate(canon_ring):
+        is_hp = (k == 0)
+        ax.plot(mu[0], mu[1],
+                '*' if is_hp else 'o',
+                color='gold' if is_hp else 'k', mec='k',
+                markersize=18 if is_hp else 9, zorder=8)
+    if len(cx):
+        ax.quiver(cx, cy, vx, vy,
+                   angles='xy', scale_units='xy',
+                   scale=1.0 / scale, color='C0',
+                   width=0.01, alpha=0.95, zorder=10)
+    ax.set_xlim(-4.7, 4.7); ax.set_ylim(-4.7, 4.7)
+    ax.set_aspect('equal'); ax.set_xticks([]); ax.set_yticks([])
+
+
 def _per_roi_grid(pdf, df: pd.DataFrame, label: str,
+                    shifts_df: pd.DataFrame | None = None,
                     agg: str = 'median',
-                    scale: float = 10.0):
-    """Render an 8-ROI vector-field grid for the given (sub-)dataframe."""
+                    scale: float = 30.0):
+    """Render ROI grid: each ROI gets a (predicted | observed) pair.
+    8 ROIs × 2 panels = 16 panels in a 4×4 grid."""
     rois = [r for r in ROI_ORDER if r in df['roi'].unique()]
-    n = len(rois); ncol = 4; nrow = int(np.ceil(n / ncol))
+    n = len(rois)
     ring = get_ring_positions()
-    fig, axes = plt.subplots(nrow, ncol, figsize=(4 * ncol, 4 * nrow))
-    axes = np.atleast_2d(axes)
+
+    # 4x4 grid: 4 rows × 4 columns. Each ROI takes 2 horizontally
+    # adjacent cells (PRED, OBS).
+    fig, axes = plt.subplots(4, 4, figsize=(20, 20))
     fig.suptitle(
-        f'(d)  {label}  —  per-ROI predicted PRF-center shifts.\n'
-        '   Arrows: condition-specific shift = '
-        '(predicted at HP=★) − (average across all 4 conditions).\n'
-        '   Circles: each AF (size = σ_AF, '
-        'shading ∝ |gain|, red = suppression, blue = attraction). '
+        f'(d)  {label}  —  per-ROI predicted vs observed PRF-center shifts.\n'
+        '   For each ROI: LEFT = model prediction, RIGHT = data.\n'
+        '   Arrows: condition-specific shift   (HP=★ − mean across 4 conditions for PRED;\n'
+        '            mean-across-subjects of per-subject median shift for OBS).\n'
+        '   Circles: each AF (size = σ_AF, shading ∝ |gain|, red = suppression, blue = attraction). '
         f'arrows ×{int(scale)}.',
-        fontsize=14, weight='bold',
+        fontsize=13, weight='bold',
     )
     for i, roi in enumerate(rois):
-        ax = axes[i // ncol, i % ncol]
+        # Layout: 4 ROIs per row, 2 panels each. So ROI i goes to:
+        #   row = i // 2  (2 ROIs per row)
+        #   col_base = (i % 2) * 2  (each ROI takes 2 cols)
+        row = i // 2
+        col_base = (i % 2) * 2
+        ax_pred = axes[row, col_base]
+        ax_obs  = axes[row, col_base + 1]
+
         sub = df[df['roi'] == roi]
         if len(sub) < 1:
-            ax.axis('off'); continue
+            ax_pred.axis('off'); ax_obs.axis('off'); continue
         sigma_AF, g_HP, g_LP = _pick_params(df, roi, agg=agg)
         if not np.isfinite(sigma_AF) or not np.isfinite(g_HP):
-            ax.axis('off'); continue
-        _vector_field_panel(ax, sigma_AF, g_HP, g_LP, ring, scale=scale)
-        ax.set_title(
-            f'{roi}   n = {len(sub)}\n'
-            f'σ={sigma_AF:.2f},  g_HP={g_HP:+.2f},  g_LP={g_LP:+.2f}',
-            fontsize=12,
+            ax_pred.axis('off'); ax_obs.axis('off'); continue
+        _vector_field_panel(ax_pred, sigma_AF, g_HP, g_LP, ring, scale=scale)
+        ax_pred.set_title(
+            f'{roi}  PRED   σ={sigma_AF:.2f}  '
+            f'g_HP={g_HP:+.2f}  g_LP={g_LP:+.2f}',
+            fontsize=11, weight='bold',
         )
-    for j in range(n, nrow * ncol):
-        axes[j // ncol, j % ncol].axis('off')
-    fig.tight_layout(rect=[0, 0, 1, 0.92])
+        # Observed.
+        if shifts_df is not None:
+            _observed_field_panel(ax_obs,
+                                     shifts_df[shifts_df['roi'] == roi],
+                                     ring, scale=scale)
+            ax_obs.set_title(f'{roi}  DATA   n_subj = '
+                             f'{shifts_df[shifts_df["roi"]==roi]["subject"].nunique()}',
+                              fontsize=11, weight='bold')
+        else:
+            ax_obs.axis('off')
+    fig.tight_layout(rect=[0, 0, 1, 0.94])
     pdf.savefig(fig); plt.close(fig)
 
 
-def slide_per_roi_vector_field(pdf, df: pd.DataFrame):
-    """Group page (8 ROIs) at empirical median params."""
-    _per_roi_grid(pdf, df, label='Group  (median across all 30 subjects)',
+# Helper: rotation_to_canonical (also used by plot_rotated_shift_heatmaps).
+def rotation_to_canonical(condition: str):
+    ring_idx = CONDITIONS.index(condition)
+    ring = get_ring_positions()
+    hp_actual = ring[ring_idx]
+    target = np.array([0.0, RING_R])
+    a_actual = np.arctan2(hp_actual[1], hp_actual[0])
+    a_target = np.arctan2(target[1], target[0])
+    theta = a_target - a_actual
+    c, s = np.cos(theta), np.sin(theta)
+    return np.array([[c, -s], [s, c]], dtype=np.float32)
+
+
+def slide_per_roi_vector_field(pdf, df: pd.DataFrame, shifts_df=None):
+    """Group page: per-ROI PRED + OBS at empirical median params."""
+    _per_roi_grid(pdf, df,
+                    label='Group  (median across all 30 subjects)',
+                    shifts_df=shifts_df,
                     agg='median')
 
 
-def slide_per_subject_vector_fields(pdf, df: pd.DataFrame, subjects: list[int]):
+def slide_per_subject_vector_fields(pdf, df: pd.DataFrame,
+                                       subjects: list[int],
+                                       shifts_df=None):
     """One page per well-fitting subject."""
     for sub_id in subjects:
         sub_df = df[df['subject'] == sub_id]
         if len(sub_df) == 0:
             continue
+        sub_shifts = (shifts_df[shifts_df['subject'] == sub_id]
+                      if shifts_df is not None else None)
         _per_roi_grid(pdf, sub_df,
-                       label=f'Subject sub-{int(sub_id):02d}  '
-                              '(individual fits, not average)',
-                       agg='median', scale=10.0)
+                       label=f'Subject sub-{int(sub_id):02d}',
+                       shifts_df=sub_shifts,
+                       agg='median', scale=30.0)
 
 
 def slide_dynamic_intro(pdf):
@@ -1204,7 +1329,7 @@ def slide_behavior(pdf, af_tsv: Path, rt_tsv: Path):
 
     fig.suptitle(
         '(f)  Correlations with behavior  '
-        f'(N = {len(pc_df)} subjects)',
+        f'(N = {merged.subject.nunique()} subjects)',
         fontsize=15, weight='bold',
     )
     fig.tight_layout(rect=[0, 0, 1, 0.93])
@@ -1319,9 +1444,17 @@ def main():
 
         section_divider(pdf, 'd',
                           'What the model predicts per ROI',
-                          'Condition-specific PRF-center shift = '
-                          '(predicted at HP) − (mean across all 4 conditions).')
-        slide_per_roi_vector_field(pdf, df)
+                          'Per-voxel mean across 4 conditions vs HP=★ '
+                          'condition. Model on the left, data on the right.')
+        # Load shifts TSV once (apples-to-apples Gaussian preferred).
+        shifts_df = None
+        gauss_tsv = Path('notes/predict_shifts_gauss.tsv')
+        load_tsv = (gauss_tsv if gauss_tsv.exists()
+                     else args.shifts_tsv)
+        if load_tsv.exists():
+            shifts_df = pd.read_csv(load_tsv, sep='\t')
+            print(f'  observed shifts: {len(shifts_df):,} rows from {load_tsv}')
+        slide_per_roi_vector_field(pdf, df, shifts_df=shifts_df)
 
         # NEW: hierarchy slide.
         if args.shifts_tsv.exists():
@@ -1340,6 +1473,7 @@ def main():
             )
             slide_per_subject_vector_fields(
                 pdf, df, args.example_subjects,
+                shifts_df=shifts_df,
             )
 
         section_divider(pdf, 'e',
