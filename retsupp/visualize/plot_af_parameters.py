@@ -257,6 +257,86 @@ def page_sigma_gain_correlation(pdf, df):
     pdf.savefig(fig); plt.close(fig)
 
 
+def page_inter_roi_stability(pdf, df: pd.DataFrame):
+    """8x8 ROI inter-correlation matrix per AF parameter.
+
+    For each parameter (σ_AF, g_HP, g_LP, g_diff), build a
+    `(subject, ROI)` wide matrix and compute the Spearman correlation
+    matrix across ROIs.  High off-diagonals → subjects' parameter
+    values are stable across the visual hierarchy (trait-like); low →
+    each ROI does its own thing.
+    """
+    if df.empty:
+        return
+    rois = [r for r in df['roi'].cat.categories if (df['roi'] == r).any()]
+    metrics = [
+        ('sigma_AF', 'σ_AF', '°'),
+        ('g_HP',    'g_HP',  ''),
+        ('g_LP',    'g_LP',  ''),
+        ('g_diff',  'g_HP − g_LP', ''),
+    ]
+    fig, axes = plt.subplots(2, 4, figsize=(18, 9))
+    from scipy import stats as st
+    for col_i, (col, label, _u) in enumerate(metrics):
+        wide = df.pivot_table(index='subject', columns='roi',
+                                values=col, aggfunc='first',
+                                observed=True)
+        wide = wide[rois]   # canonical order
+        n_subj = len(wide)
+        # Spearman correlation matrix (rank-based, robust).
+        ax_top = axes[0, col_i]
+        if len(wide) >= 4:
+            corr = wide.corr(method='spearman')
+            sns.heatmap(corr, ax=ax_top, vmin=-1, vmax=+1,
+                         cmap='RdBu_r', annot=True, fmt='.2f',
+                         square=True, cbar_kws=dict(shrink=0.7),
+                         annot_kws=dict(fontsize=7))
+        ax_top.set_title(f'{label}  —  Spearman r across {n_subj} subjects',
+                          fontsize=10)
+        ax_top.set_xlabel(''); ax_top.set_ylabel('')
+
+        # Mean off-diagonal correlation as a single "stability" number.
+        ax_bot = axes[1, col_i]
+        if len(wide) >= 4:
+            corr_arr = corr.values
+            n = corr_arr.shape[0]
+            off_diag = corr_arr[np.triu_indices(n, k=1)]
+            mean_r = float(np.nanmean(off_diag))
+            median_r = float(np.nanmedian(off_diag))
+        else:
+            mean_r = median_r = np.nan
+        # Per-ROI strip plot of subject values (so we can see the spread).
+        sns.stripplot(data=df, x='roi', y=col, ax=ax_bot,
+                       hue='roi', palette='Set2', legend=False,
+                       jitter=0.2, alpha=0.65, size=4)
+        # Median per ROI.
+        ax_bot.axhline(0, color='gray', lw=0.4, ls='--')
+        for i, roi in enumerate(rois):
+            x = df.loc[df['roi'] == roi, col].dropna().values
+            if len(x):
+                ax_bot.scatter([i], [np.median(x)], marker='_',
+                                s=300, color='k', zorder=10, lw=2)
+        # Clip y for visibility (especially σ_AF outliers at 9°).
+        if col == 'sigma_AF':
+            ax_bot.set_ylim(0, 5.5)
+        else:
+            ax_bot.set_ylim(-2.5, 2.5)
+        ax_bot.set_xlabel('')
+        ax_bot.set_title(
+            f'mean off-diag r = {mean_r:+.2f}\n'
+            f'(higher = more trait-like across ROIs)',
+            fontsize=9,
+        )
+    fig.suptitle(
+        'Inter-ROI stability of AF parameters across subjects.\n'
+        'Are these traits of the subject (high inter-ROI r), or '
+        'specific to each visual area (low r)?',
+        fontsize=12,
+    )
+    fig.tight_layout(rect=[0, 0, 1, 0.94])
+    pdf.savefig(fig); plt.close(fig)
+
+
 def page_pairwise(pdf, df):
     """Pairwise scatter + Pearson r of the 3 shared AF params."""
     cols = ['sigma_AF', 'g_HP', 'g_LP']
@@ -471,24 +551,25 @@ def page_hp_vs_lp_test(pdf, df: pd.DataFrame,
     ax.axhline(0, color='gray', lw=0.7, ls='--')
     ax.set_xlabel('')
     ax.set_ylabel(f'{metric_label}   (negative ⇒ HP suppressed more than LP)')
-    # Natural-factor ticks for log-ratio plots (so the eye reads
-    # ".2× / .5× / 1× / 2× / 3×" instead of "log(2)").
+    # Percent ticks for log-ratio plots — interpretable as
+    # "M_HP is X% bigger/smaller than M_LP". For small log-ratios this
+    # is approximately the raw log; for larger ones the percent reading
+    # becomes the cleaner statement.
     if metric == 'log_ratio':
-        # Build symmetric set of natural factors that fit inside YLIM.
-        factor_set = [2, 3, 4, 5, 6, 8, 10]
-        ratio_ticks = [1.0]
-        labels = ['1×']
-        for f in factor_set:
-            if np.log(f) <= YLIM:
-                ratio_ticks.append(f)
-                labels.append(f'{f}×')
-                ratio_ticks.append(1.0 / f)
-                labels.append(f'1/{f}×')
-        order = np.argsort(np.log(ratio_ticks))
-        ratio_ticks = [ratio_ticks[i] for i in order]
-        labels = [labels[i] for i in order]
-        ax.set_yticks(np.log(ratio_ticks))
+        # Symmetric set of percent changes that fit inside YLIM (in log).
+        # log(1 + x/100) for tick x = ±10%, ±25%, ±50%, ±100%, ±200%.
+        candidates = [-90, -75, -50, -33, -25, -10, 0,
+                       +10, +25, +50, +75, +100, +150, +200, +300, +500]
+        ticks = []
+        labels = []
+        for pct in candidates:
+            v = np.log(1.0 + pct / 100.0)
+            if -YLIM <= v <= +YLIM:
+                ticks.append(v)
+                labels.append(f'{pct:+d}%' if pct != 0 else '0')
+        ax.set_yticks(ticks)
         ax.set_yticklabels(labels)
+        ax.set_ylabel('M_HP relative to M_LP (% change)')
     ax.set_title(
         f'HP-vs-LP test ({h0_text}):  per-fit median ± 95 % bootstrap CI  '
         f'(outlier-resistant; {n_outliers}/{n_total_for_outliers} fits '
@@ -919,6 +1000,7 @@ def main():
                             h0_text='M_HP < M_LP  (scale-invariant)',
                             ylim_clip=1.5)
         page_distributions(pdf, df)
+        page_inter_roi_stability(pdf, df)
         page_sigma_gain_correlation(pdf, df)
         page_pairwise(pdf, df)
         page_g_hp_vs_g_lp(pdf, df)
