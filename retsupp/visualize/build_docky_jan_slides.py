@@ -378,7 +378,7 @@ def slide_model_panels(pdf):
                                   sigma_AF=sigma_AF, g_HP=g_HP, g_LP=g_LP)
             vmax = 0.6
             ax.imshow(M, extent=(-5, 5, -5, 5), origin='lower',
-                       cmap='RdBu_r', vmin=1 - vmax, vmax=1 + vmax)
+                       cmap='RdBu', vmin=1 - vmax, vmax=1 + vmax)
             add_aperture_and_ring(ax, ring, hp_idx=hp_idx)
             ax.set_xlim(-5, 5); ax.set_ylim(-5, 5)
             ax.set_aspect('equal'); ax.set_xticks([]); ax.set_yticks([])
@@ -423,7 +423,7 @@ def slide_model_panels(pdf):
 
     fig.suptitle(
         '(b)  What the model predicts at different parameter settings.\n'
-        'Top: modulation field M(g)  (red = attraction,  blue = suppression).   '
+        'Top: modulation field M(g)  (RED = suppression,  BLUE = attraction).   '
         'Bottom: predicted PRF-center shifts under HP=★.',
         fontsize=15, weight='bold',
     )
@@ -901,6 +901,290 @@ def slide_dynamic_results(pdf, v2_tsv: Path):
     pdf.savefig(fig); plt.close(fig)
 
 
+def slide_hierarchy(pdf, af_tsv: Path, shifts_tsv: Path):
+    """Shifts grow up the visual hierarchy — clean 3-panel.
+
+    Left:    |g_HP − g_LP|  per ROI in hierarchy order, mean ± SEM.
+    Middle:  median |predicted shift|  per ROI (model-implied).
+    Right:   median |observed shift|   per ROI (data, with Jensen caveat).
+    Each panel annotated with overall Spearman r vs hierarchy index.
+    """
+    if not (af_tsv.exists() and shifts_tsv.exists()):
+        return
+    af = pd.read_csv(af_tsv, sep='\t')
+    sh = pd.read_csv(shifts_tsv, sep='\t')
+    inside = np.sqrt(sh['base_x'].values ** 2
+                      + sh['base_y'].values ** 2) <= APERTURE
+    sh = sh.loc[inside].copy()
+    sh['shift_pred_mag'] = np.sqrt(
+        (sh['pred_x'] - sh['base_x']) ** 2
+        + (sh['pred_y'] - sh['base_y']) ** 2)
+    sh['shift_obs_mag'] = np.sqrt(
+        (sh['obs_x'] - sh['base_x']) ** 2
+        + (sh['obs_y'] - sh['base_y']) ** 2)
+
+    rois = [r for r in ROI_ORDER if r in af['roi'].unique()]
+    af['hier_idx'] = af['roi'].map({r: i for i, r in enumerate(rois)})
+    sh['hier_idx'] = sh['roi'].map({r: i for i, r in enumerate(rois)})
+
+    # Per-ROI mean ± SEM of |g_diff| (model parameter).
+    af_abs = af.assign(g_diff_abs=af['g_diff'].abs())
+    g_means = af_abs.groupby('roi', observed=True).agg(
+        m=('g_diff_abs', 'mean'),
+        sem=('g_diff_abs',
+              lambda v: v.std(ddof=1) / np.sqrt(max(len(v), 1))),
+    ).loc[rois]
+
+    # Per-ROI per-subject median |predicted shift| → mean ± SEM across subjects.
+    pred_subj = (sh.groupby(['subject', 'roi'], observed=True)
+                    ['shift_pred_mag'].median().reset_index())
+    pred_summary = pred_subj.groupby('roi', observed=True).agg(
+        m=('shift_pred_mag', 'mean'),
+        sem=('shift_pred_mag',
+              lambda v: v.std(ddof=1) / np.sqrt(max(len(v), 1))),
+    ).loc[rois]
+    obs_subj = (sh.groupby(['subject', 'roi'], observed=True)
+                   ['shift_obs_mag'].median().reset_index())
+    obs_summary = obs_subj.groupby('roi', observed=True).agg(
+        m=('shift_obs_mag', 'mean'),
+        sem=('shift_obs_mag',
+              lambda v: v.std(ddof=1) / np.sqrt(max(len(v), 1))),
+    ).loc[rois]
+
+    # Spearman r vs hierarchy index using per-(subject, ROI) rows.
+    af_abs2 = af_abs.dropna(subset=['hier_idx', 'g_diff_abs'])
+    r_g, p_g = stats.spearmanr(af_abs2['hier_idx'], af_abs2['g_diff_abs'])
+    pred_subj_h = pred_subj.dropna()
+    pred_subj_h['hier_idx'] = pred_subj_h['roi'].map({r: i for i, r in enumerate(rois)})
+    r_p, p_p = stats.spearmanr(pred_subj_h['hier_idx'], pred_subj_h['shift_pred_mag'])
+    obs_subj_h = obs_subj.dropna()
+    obs_subj_h['hier_idx'] = obs_subj_h['roi'].map({r: i for i, r in enumerate(rois)})
+    r_o, p_o = stats.spearmanr(obs_subj_h['hier_idx'], obs_subj_h['shift_obs_mag'])
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    panels = [
+        (g_means,    '|g_HP − g_LP|   (model param)',
+         f'Spearman r = {r_g:+.2f},  p = {p_g:.2e}',
+         '|g_HP − g_LP|'),
+        (pred_summary, 'median |predicted shift|   (deg)',
+         f'r = {r_p:+.2f},  p = {p_p:.2e}',
+         '|predicted shift| (deg)'),
+        (obs_summary, 'median |observed shift|   (deg)',
+         f'r = {r_o:+.2f},  p = {p_o:.2e}',
+         '|observed shift| (deg)'),
+    ]
+    pal = plt.get_cmap('viridis')(np.linspace(0.15, 0.85, len(rois)))
+    for ax, (summary, title, sub_title, ylabel) in zip(axes, panels):
+        x = np.arange(len(rois))
+        ax.bar(x, summary['m'], yerr=summary['sem'],
+                color=pal, edgecolor='k', linewidth=0.7,
+                error_kw=dict(lw=1.5, capsize=5, color='k'))
+        ax.set_xticks(x); ax.set_xticklabels(rois, fontsize=12)
+        ax.set_ylabel(ylabel, fontsize=13)
+        ax.set_title(f'{title}\n{sub_title}', fontsize=12, weight='bold')
+        ax.grid(alpha=0.2, axis='y')
+    fig.suptitle(
+        '(d″)  Shifts grow up the visual hierarchy.\n'
+        'V1 → V2 → V3 → V3AB → hV4 → LO → TO → VO  '
+        '(mean across 30 subjects ± SEM).',
+        fontsize=15, weight='bold',
+    )
+    fig.tight_layout(rect=[0, 0, 1, 0.91])
+    pdf.savefig(fig); plt.close(fig)
+
+
+def slide_actual_vs_predicted(pdf, shifts_tsv: Path):
+    """Per-ROI actual-vs-predicted shift comparison: projection on
+    away-from-HP axis as a function of distance from HP.
+
+    Each panel: solid blue = observed median (with SEM band), dashed
+    red = model prediction median. If the dashed line tracks the solid
+    line, the model captures the empirical shift pattern.
+    """
+    if not shifts_tsv.exists():
+        return
+    df = pd.read_csv(shifts_tsv, sep='\t')
+    # Aperture filter so we only test the visual-field region the
+    # experiment probes.
+    inside = np.sqrt(df['base_x'].values ** 2 + df['base_y'].values ** 2) <= APERTURE
+    df = df.loc[inside].copy()
+    # Distance from HP per row.
+    ring = get_ring_positions()
+    cond_to_idx = {c: i for i, c in enumerate(CONDITIONS)}
+    hp_x = np.zeros(len(df), dtype=np.float32)
+    hp_y = np.zeros(len(df), dtype=np.float32)
+    for c in CONDITIONS:
+        m = (df['condition'] == c).values
+        if not m.any():
+            continue
+        hp_x[m] = ring[cond_to_idx[c], 0]
+        hp_y[m] = ring[cond_to_idx[c], 1]
+    df['dist_HP'] = np.sqrt((df['base_x'].values - hp_x) ** 2
+                              + (df['base_y'].values - hp_y) ** 2)
+
+    bin_edges = np.arange(0.0, 7.5, 0.5)
+    centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+    df['d_bin'] = pd.cut(df['dist_HP'], bin_edges, labels=centers,
+                          include_lowest=True)
+    df = df.dropna(subset=['d_bin', 'proj_obs', 'proj_pred'])
+    df['d_bin'] = df['d_bin'].astype(float)
+
+    rois = [r for r in ROI_ORDER if r in df['roi'].unique()]
+    n = len(rois)
+    ncol = 4; nrow = int(np.ceil(n / ncol))
+    fig, axes = plt.subplots(nrow, ncol, figsize=(4 * ncol, 3.0 * nrow),
+                              sharex=True, sharey=True)
+    axes = np.atleast_2d(axes)
+    for i, roi in enumerate(rois):
+        ax = axes[i // ncol, i % ncol]
+        sub = df[df['roi'] == roi]
+        if len(sub) == 0:
+            ax.axis('off'); continue
+        # Per-(subject, bin) means → per-bin median across subjects ± SEM.
+        per_subj = (sub.groupby(['subject', 'd_bin'], observed=True)
+                       [['proj_obs', 'proj_pred']]
+                       .mean().reset_index())
+        summary = (per_subj.groupby('d_bin', observed=True)
+                       .agg(obs_med=('proj_obs', 'median'),
+                            obs_sem=('proj_obs',
+                                      lambda v: v.std(ddof=1)
+                                                 / np.sqrt(max(len(v), 1))),
+                            pred_med=('proj_pred', 'median'),
+                            n=('proj_obs', 'size'))
+                       .reset_index().sort_values('d_bin'))
+        ax.fill_between(summary['d_bin'],
+                         summary['obs_med'] - summary['obs_sem'],
+                         summary['obs_med'] + summary['obs_sem'],
+                         color='C0', alpha=0.20)
+        ax.plot(summary['d_bin'], summary['obs_med'],
+                 color='C0', lw=2, marker='o', markersize=4,
+                 label='observed')
+        ax.plot(summary['d_bin'], summary['pred_med'],
+                 color='C3', lw=2, ls='--', marker='s', markersize=4,
+                 label='AF model prediction')
+        ax.axhline(0, color='gray', lw=0.4, ls=':')
+        ax.set_title(f'{roi}   n_subj = {sub["subject"].nunique()}',
+                      fontsize=11, weight='bold')
+        ax.grid(alpha=0.2)
+        if i == 0:
+            ax.legend(fontsize=9, loc='upper right')
+    for j in range(n, nrow * ncol):
+        axes[j // ncol, j % ncol].axis('off')
+    fig.suptitle(
+        '(g)  Observed vs model-predicted PRF shifts per ROI.\n'
+        'Solid = observed (cond-wise PRF − base PRF) projected on '
+        'away-from-HP axis.   Dashed = AF model prediction.',
+        fontsize=14, weight='bold',
+    )
+    fig.text(0.5, 0.02,
+              'distance of base PRF from HP (deg)',
+              ha='center', fontsize=12)
+    fig.text(0.005, 0.5,
+              'projection on away-from-HP axis (deg)',
+              va='center', rotation='vertical', fontsize=12)
+    fig.tight_layout(rect=[0.02, 0.04, 1, 0.93])
+    pdf.savefig(fig); plt.close(fig)
+
+
+def slide_behavior(pdf, af_tsv: Path, rt_tsv: Path):
+    """Behavioral correlations.
+
+    Panel (left): per-ROI scatter of behavioral RT(HP)−RT(LP)
+    against the model log-ratio (g_HP vs g_LP), with Spearman r.
+    Panel (right): PCA across ROIs of g_HP (collapses 8 weak per-ROI
+    tests into one omnibus subject score), correlated with the
+    "any-distractor cost" RT(dist)−RT(no-dist).
+    """
+    if not (af_tsv.exists() and rt_tsv.exists()):
+        return
+    from sklearn.decomposition import PCA
+
+    af = pd.read_csv(af_tsv, sep='\t')
+    rt = pd.read_csv(rt_tsv, sep='\t')
+    rt['subject'] = rt['subject'].astype(int)
+    merged = af.merge(rt, on='subject', how='inner')
+
+    fig, axes = plt.subplots(1, 2, figsize=(15, 6.5))
+
+    # ---- (left) per-ROI Spearman of log_ratio × RT_HP-LP, summary bar.
+    ax = axes[0]
+    rois = [r for r in ROI_ORDER if r in merged['roi'].unique()]
+    rs, ps = [], []
+    for roi in rois:
+        sub = merged[merged['roi'] == roi]
+        x = sub['RT_HP_minus_LP'].values
+        y = sub['log_ratio'].values
+        m = np.isfinite(x) & np.isfinite(y)
+        r_s, p_s = stats.spearmanr(x[m], y[m]) if m.sum() >= 4 else (np.nan, np.nan)
+        rs.append(r_s); ps.append(p_s)
+    cols = ['C2' if (np.isfinite(p) and p < 0.05 and r > 0)
+             else 'C3' if (np.isfinite(p) and p < 0.05 and r < 0)
+             else '0.55' for r, p in zip(rs, ps)]
+    ax.bar(np.arange(len(rois)), rs, color=cols, edgecolor='k', linewidth=0.7)
+    ax.axhline(0, color='gray', lw=0.5)
+    for i, (r, p) in enumerate(zip(rs, ps)):
+        if np.isfinite(r):
+            sig = '*' if (np.isfinite(p) and p < 0.05) else ''
+            ax.text(i, r + (0.04 if r >= 0 else -0.04),
+                     f'{r:+.2f}{sig}',
+                     ha='center', va='bottom' if r >= 0 else 'top',
+                     fontsize=10)
+    ax.set_xticks(np.arange(len(rois)))
+    ax.set_xticklabels(rois, fontsize=12)
+    ax.set_ylim(-0.6, 0.6)
+    ax.set_ylabel('Spearman r', fontsize=13)
+    ax.set_title(
+        'log( M_HP / M_LP )  ×  RT(HP) − RT(LP)\n'
+        'per-ROI Spearman across subjects (no per-ROI test reaches p<0.05)',
+        fontsize=11,
+    )
+    ax.grid(alpha=0.2, axis='y')
+
+    # ---- (right) PCA of g_HP across ROIs vs RT(dist)−RT(no-dist).
+    ax = axes[1]
+    wide = (af.pivot_table(index='subject', columns='roi',
+                              values='g_HP', aggfunc='first')
+              [rois]).dropna()
+    Z = wide.rank(axis=0).values
+    Z = (Z - Z.mean(axis=0)) / Z.std(axis=0, ddof=1)
+    pca = PCA(n_components=2).fit(Z)
+    PC1 = pca.transform(Z)[:, 0]
+    pc_df = pd.DataFrame({'subject': wide.index, 'PC1': PC1}).merge(
+        rt, on='subject', how='inner')
+    x = pc_df['RT_dist_minus_no'].values
+    y = pc_df['PC1'].values
+    m = np.isfinite(x) & np.isfinite(y)
+    r_s, p_s = stats.spearmanr(x[m], y[m])
+    ax.scatter(x[m], y[m], s=70, alpha=0.85, color='C0',
+                edgecolor='k', linewidth=0.5)
+    if m.sum() >= 4:
+        slope, intercept = np.polyfit(x[m], y[m], 1)
+        xs = np.linspace(x[m].min(), x[m].max(), 50)
+        ax.plot(xs, slope * xs + intercept, 'k--', lw=1.4)
+    ax.axhline(0, color='gray', lw=0.4, ls=':')
+    ax.axvline(0, color='gray', lw=0.4, ls=':')
+    ax.set_xlabel('RT(dist) − RT(no-dist)   (s)', fontsize=13)
+    ax.set_ylabel('subject score, PC1 of g_HP across ROIs',
+                   fontsize=13)
+    sig = '*' if p_s < 0.05 else ''
+    ax.set_title(
+        'PCA collapses 8 weak ROI signals into 1 subject score.\n'
+        f'Spearman r = {r_s:+.2f}, p = {p_s:.3f}{sig}'
+        f'   (PC1 var = {pca.explained_variance_ratio_[0]*100:.0f}%)',
+        fontsize=11,
+        color='C2' if (p_s < 0.05) else 'k',
+    )
+    ax.grid(alpha=0.2)
+
+    fig.suptitle(
+        '(f)  Correlations with behavior  '
+        f'(N = {len(pc_df)} subjects)',
+        fontsize=15, weight='bold',
+    )
+    fig.tight_layout(rect=[0, 0, 1, 0.93])
+    pdf.savefig(fig); plt.close(fig)
+
+
 def slide_summary(pdf):
     fig, ax = plt.subplots(figsize=(11, 8.5))
     ax.axis('off')
@@ -1013,6 +1297,12 @@ def main():
                           '(predicted at HP) − (mean across all 4 conditions).')
         slide_per_roi_vector_field(pdf, df)
 
+        # NEW: hierarchy slide.
+        if args.shifts_tsv.exists():
+            slide_hierarchy(pdf, args.af_tsv,
+                              args.shifts_tsv if args.shifts_tsv.exists()
+                              else Path('notes/predict_shifts_cluster.tsv'))
+
         if args.example_subjects:
             section_divider(
                 pdf, 'd′',
@@ -1034,6 +1324,31 @@ def main():
         slide_dynamic_intro(pdf)
         slide_dynamic_raw_gains(pdf, args.v2_tsv)
         slide_dynamic_results(pdf, args.v2_tsv)
+
+        # Pick whichever predict_shifts TSV exists (apples-to-apples
+        # Gaussian preferred if available).
+        gauss_tsv = Path('notes/predict_shifts_gauss.tsv')
+        shifts_tsv_for_actual = (gauss_tsv if gauss_tsv.exists()
+                                  else args.shifts_tsv)
+        if shifts_tsv_for_actual.exists():
+            section_divider(
+                pdf, 'g',
+                'Observed vs predicted shifts',
+                'Per-ROI projection-vs-distance from HP. '
+                'Solid = data, dashed = model.',
+            )
+            slide_actual_vs_predicted(pdf, shifts_tsv_for_actual)
+
+        # Behavior correlations.
+        rt_tsv = Path('notes/rt_summary.tsv')
+        if rt_tsv.exists():
+            section_divider(
+                pdf, 'f',
+                'Correlations with behavior',
+                'Subject-level co-variation between AF parameters and '
+                'distractor RT cost.',
+            )
+            slide_behavior(pdf, args.af_tsv, rt_tsv)
 
         slide_summary(pdf)
 
