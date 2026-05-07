@@ -418,7 +418,7 @@ def make_init_pars(prf_pars: pd.DataFrame,
     init_pars = init_pars.reset_index(drop=True)
 
     init_pars['sigma_AF'] = 2.0
-    init_pars['sigma_dyn'] = 0.5
+    init_pars['sigma_dyn'] = 2.0
 
     # Initial usable-space values per gain — picked to match each gain's
     # sign constraint with a small magnitude so the optimiser starts

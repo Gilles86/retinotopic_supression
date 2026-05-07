@@ -205,7 +205,9 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
          learning_rate: float = 0.01,
          grid_radius: float = 5.0,
          output_subdir: str | None = None,
-         model_version: str = 'v2'):
+         model_version: str = 'v2',
+         sigma_af_init: float = 2.0,
+         sigma_dyn_init: float = 2.0):
     if model_version not in ('v2', 'v3'):
         raise ValueError(
             f"model_version must be 'v2' or 'v3', got {model_version!r}")
@@ -263,7 +265,7 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     init_pars = prf_pars.loc[voxel_mask, init_cols].copy()
 
     # AF inits.
-    init_pars['sigma_AF'] = 2.0
+    init_pars['sigma_AF'] = sigma_af_init
     init_pars['g_HP'] = 0.0 if mode == 'signed' else 0.30
     init_pars['g_LP'] = 0.0 if mode == 'signed' else 0.10
 
@@ -275,7 +277,7 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     else:
         # v3: separate sigma_dyn (smaller default — distractor ~0.4°) AND
         # split HP/LP dynamic gains. 6 shared parameters total.
-        init_pars['sigma_dyn'] = 0.5
+        init_pars['sigma_dyn'] = sigma_dyn_init
         init_pars['g_HP_dyn'] = 0.0 if mode == 'signed' else 0.10
         init_pars['g_LP_dyn'] = 0.0 if mode == 'signed' else 0.10
         shared_pars = ['sigma_AF', 'g_HP', 'g_LP',
@@ -382,6 +384,13 @@ if __name__ == '__main__':
                         help='Output derivatives subdir. Default: '
                              "'af_prf_joint_dynamic_v2_dog' for v2, "
                              "'af_prf_joint_dynamic_v3_dog' for v3.")
+    parser.add_argument('--sigma-af-init', type=float, default=2.0,
+                        help='Initial value for sigma_AF (default 2.0).')
+    parser.add_argument('--sigma-dyn-init', type=float, default=2.0,
+                        help='Initial value for sigma_dyn (default 2.0; v3 only). '
+                             'Both σ inits are now neutral/equal so the '
+                             'optimizer must find σ_AF vs σ_dyn from data, '
+                             'not the prior.')
     parser.add_argument('--model-version',
                         choices=['v2', 'v3'], default='v2',
                         help="v2 (default): shared sigma_AF + split HP/LP "
@@ -403,4 +412,6 @@ if __name__ == '__main__':
         grid_radius=args.grid_radius,
         output_subdir=args.output_subdir,
         model_version=args.model_version,
+        sigma_af_init=args.sigma_af_init,
+        sigma_dyn_init=args.sigma_dyn_init,
     )
