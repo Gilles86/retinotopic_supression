@@ -64,8 +64,10 @@ echo "ROI:         ${roi}"
 
 # --- Conda env (CPU). ---
 source "$HOME/data/miniforge3/etc/profile.d/conda.sh"
-conda activate retsupp
+conda activate retsupp_cuda
 
+# CPU-only run: hide any GPUs so TF doesn't try to register CUDA.
+export CUDA_VISIBLE_DEVICES=-1
 export PYTHONUNBUFFERED=1
 # Cap intra-op threads to fit cpus-per-task.
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
@@ -74,7 +76,7 @@ export TF_NUM_INTEROP_THREADS=2
 
 bids_folder="/shares/zne.uzh/gdehol/ds-retsupp"
 
-PYTHON="$HOME/data/conda/envs/retsupp/bin/python"
+PYTHON="$HOME/data/conda/envs/retsupp_cuda/bin/python"
 
 echo "Running fit_af_prf_braincoder.py for sub-${subject}, roi=${roi}, paradigm=${PARADIGM_TYPE}"
 
