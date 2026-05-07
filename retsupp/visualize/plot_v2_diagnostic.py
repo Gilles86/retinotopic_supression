@@ -266,6 +266,143 @@ def page_sustained_vs_dynamic_scatter(pdf, df: pd.DataFrame):
     pdf.savefig(fig); plt.close(fig)
 
 
+def page_total_hp_vs_lp(pdf, df: pd.DataFrame):
+    """Per-ROI Wilcoxon test on TOTAL HP-LP differential.
+
+    metric = (g_HP + g_HP_dyn) − (g_LP + g_LP_dyn)
+           = g_diff_sus + g_diff_dyn
+
+    Tests whether the COMBINED (sustained + dynamic) gain at HP is
+    smaller than at LP. Crucially, in early visual cortex (V2/V3) the
+    sustained suppression and dynamic response go OPPOSITE directions
+    and the total cancels; in V3AB/VO they add and the total reaches
+    high significance.
+    """
+    df = df.copy()
+    df['g_diff_total'] = df['g_diff_sus'] + df['g_diff_dyn']
+    rois = [r for r in ROI_ORDER if r in df['roi'].unique()]
+    YLIM = 2.0
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5.5))
+    rng = np.random.default_rng(0)
+    n_boot = 2000
+
+    panels = [
+        ('g_diff_sus',   'SUSTAINED:  g_HP − g_LP',                df),
+        ('g_diff_dyn',   'DYNAMIC:    g_HP_dyn − g_LP_dyn',        df),
+        ('g_diff_total', 'TOTAL:      sustained + dynamic',         df),
+    ]
+    for ax, (metric, label, sub_df) in zip(axes, panels):
+        d_plot = sub_df.assign(_clip=sub_df[metric].clip(-YLIM, YLIM))
+        sns.stripplot(data=d_plot, x='roi', y='_clip', ax=ax,
+                       order=rois,
+                       hue='roi', palette='Set2', legend=False,
+                       jitter=0.18, alpha=0.7, size=5)
+        ax.axhline(0, color='gray', lw=0.7, ls='--')
+        for i, roi in enumerate(rois):
+            x = sub_df.loc[sub_df['roi'] == roi, metric].dropna().values
+            if len(x) < 3:
+                continue
+            med = float(np.median(x))
+            boots = rng.choice(x, size=(n_boot, len(x)), replace=True)
+            boot_meds = np.median(boots, axis=1)
+            lo, hi = np.quantile(boot_meds, [0.025, 0.975])
+            ax.errorbar([i], [med], yerr=[[med - lo], [hi - med]],
+                         fmt='s', color='k', markersize=10, ecolor='k',
+                         elinewidth=2, capsize=6, zorder=10)
+            try:
+                _, p_w = stats.wilcoxon(x, alternative='less',
+                                          zero_method='pratt')
+            except ValueError:
+                p_w = np.nan
+            sig = ('***' if p_w < 0.001 else
+                    '**' if p_w < 0.01 else
+                    '*' if p_w < 0.05 else '')
+            col = 'C3' if (np.isfinite(p_w) and p_w < 0.05) else '0.4'
+            ax.text(i, YLIM + 0.05,
+                     f'p={p_w:.3f}{sig}\n<0: {(x<0).mean()*100:.0f}%',
+                     ha='center', va='bottom', fontsize=8, color=col)
+        ax.set_ylim(-YLIM - 0.05, YLIM + 0.45)
+        ax.set_xlabel('')
+        ax.set_ylabel(label.split(':')[1].strip())
+        ax.set_title(label, fontsize=11)
+    fig.suptitle(
+        'HP−LP differential — sustained, dynamic, and total per ROI.\n'
+        'In V2/V3, sustained (negative) and dynamic (positive) cancel '
+        '→ total ~0.   In V3AB/VO, they add → total strongly negative.',
+        fontsize=11,
+    )
+    fig.tight_layout(rect=[0, 0, 1, 0.93])
+    pdf.savefig(fig); plt.close(fig)
+
+
+def page_dynamic_capture_test(pdf, df: pd.DataFrame):
+    """Per-ROI test: is the dynamic gain ≠ 0?
+
+    Tests g_dyn_avg = ½(g_HP_dyn + g_LP_dyn) against zero (Wilcoxon).
+    Significant POSITIVE = attentional CAPTURE.
+    Significant NEGATIVE = dynamic SUPPRESSION of distractor.
+    Reports both for ALL fits and for σ-filtered (σ_AF < 5°) fits.
+    """
+    df = df.copy()
+    df['g_dyn_avg'] = 0.5 * (df['g_HP_dyn'] + df['g_LP_dyn'])
+    rois = [r for r in ROI_ORDER if r in df['roi'].unique()]
+    YLIM = 2.5
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    rng = np.random.default_rng(0)
+    n_boot = 2000
+    for ax, sub_df, label in zip(
+            axes,
+            [df, df[df['sigma_AF'] < 5.0]],
+            ['ALL fits', 'σ_AF < 5°  (drops degenerate)']):
+        d_plot = sub_df.assign(_clip=sub_df['g_dyn_avg'].clip(-YLIM, YLIM))
+        sns.stripplot(data=d_plot, x='roi', y='_clip', ax=ax,
+                       order=rois,
+                       hue='roi', palette='Set2', legend=False,
+                       jitter=0.18, alpha=0.7, size=5)
+        ax.axhline(0, color='gray', lw=0.7, ls='--')
+        for i, roi in enumerate(rois):
+            x = sub_df.loc[sub_df['roi'] == roi, 'g_dyn_avg'].dropna().values
+            if len(x) < 4:
+                continue
+            med = float(np.median(x))
+            boots = rng.choice(x, size=(n_boot, len(x)), replace=True)
+            boot_meds = np.median(boots, axis=1)
+            lo, hi = np.quantile(boot_meds, [0.025, 0.975])
+            ax.errorbar([i], [med], yerr=[[med - lo], [hi - med]],
+                         fmt='s', color='k', markersize=10, ecolor='k',
+                         elinewidth=2, capsize=6, zorder=10)
+            try:
+                _, p_two = stats.wilcoxon(x, alternative='two-sided',
+                                            zero_method='pratt')
+            except ValueError:
+                p_two = np.nan
+            sig = ('***' if p_two < 0.001 else
+                    '**' if p_two < 0.01 else
+                    '*' if p_two < 0.05 else '')
+            col = ('C2' if (np.isfinite(p_two) and p_two < 0.05 and med > 0)
+                   else 'C3' if (np.isfinite(p_two) and p_two < 0.05 and med < 0)
+                   else '0.4')
+            direction = ('+' if med > 0 else '−')
+            ax.text(i, YLIM + 0.10,
+                     f'p={p_two:.3f}{sig}\n{direction} n={len(x)}',
+                     ha='center', va='bottom', fontsize=8, color=col)
+        ax.set_ylim(-YLIM - 0.05, YLIM + 0.50)
+        ax.set_xlabel('')
+        ax.set_ylabel('g_dyn_avg = ½(g_HP_dyn + g_LP_dyn)')
+        ax.set_title(label, fontsize=11)
+    fig.suptitle(
+        'Is there a dynamic distractor effect?  '
+        'Wilcoxon test of g_dyn_avg ≠ 0 per ROI.\n'
+        'Green = significant CAPTURE (gain > 0), '
+        'Red = significant SUPPRESSION (gain < 0).',
+        fontsize=11,
+    )
+    fig.tight_layout(rect=[0, 0, 1, 0.93])
+    pdf.savefig(fig); plt.close(fig)
+
+
 def page_v1_vs_v2(pdf, v1: pd.DataFrame, v2: pd.DataFrame):
     """Per-ROI scatter of v1 vs v2 sustained-only params."""
     merged = v2.merge(v1, on=['subject', 'roi'], how='inner')
@@ -333,6 +470,8 @@ def main():
         cover(pdf, v2, v1)
         page_distributions(pdf, v2)
         page_hp_vs_lp_v2(pdf, v2)
+        page_total_hp_vs_lp(pdf, v2)
+        page_dynamic_capture_test(pdf, v2)
         page_sustained_vs_dynamic_scatter(pdf, v2)
         if not v1.empty:
             page_v1_vs_v2(pdf, v1, v2)
