@@ -5,6 +5,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
 #SBATCH --gres=gpu:1
+#SBATCH --constraint=L4
 #SBATCH --time=00:45:00
 
 # Joint Dynamic AF + PRF braincoder fit on the cluster (single GPU).
