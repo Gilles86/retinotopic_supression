@@ -61,6 +61,9 @@ from braincoder.models import (
     DoGDynamicAttentionFieldPRF2DWithHRF_v3,
 )
 from braincoder.optimize import ParameterFitter
+from retsupp.modeling.local_models import (
+    DoGDynamicAttentionFieldPRF2DWithHRF_v3_target,
+)
 from retsupp.utils.data import (
     Subject,
     distractor_locations,
@@ -77,11 +80,21 @@ def get_ring_positions():
 
 
 def build_data_and_paradigm(sub: Subject, resolution: int = 50,
-                            grid_radius: float = 5.0):
+                            grid_radius: float = 5.0,
+                            with_target: bool = False):
     """Load cleaned BOLD + paradigm + condition_indicator + dynamic_indicator.
 
     Always uses the FULL paradigm (bar + distractor disks). Identical to
     the Gaussian dynamic loader.
+
+    Parameters
+    ----------
+    with_target : bool, default False
+        If True, also assemble a per-TR target_indicator
+        (n_T_total, 4) by concatenating
+        :meth:`Subject.get_target_indicator` across runs (same channel
+        order as ``dynamic_indicator``). Returned as the last element of
+        the tuple; otherwise that slot is ``None``.
     """
     bold_mask = sub.get_bold_mask()
     masker = input_data.NiftiMasker(mask_img=bold_mask)
@@ -100,6 +113,7 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
     paradigm_chunks = []
     cond_indicator_chunks = []
     dyn_indicator_chunks = []
+    tgt_indicator_chunks = [] if with_target else None
     masker.fit(bold_mask)
 
     session_runs = [(s, r) for s in [1, 2] for r in sub.get_runs(s)]
@@ -147,6 +161,18 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
         elif dyn_indicator.shape[0] > n_T_run:
             dyn_indicator = dyn_indicator[:n_T_run]
 
+        if with_target:
+            tgt_indicator = sub.get_target_indicator(
+                session=session, run=run,
+            ).astype(np.float32)
+            if tgt_indicator.shape[0] < n_T_run:
+                pad = np.zeros((n_T_run - tgt_indicator.shape[0],
+                                tgt_indicator.shape[1]), dtype=np.float32)
+                tgt_indicator = np.vstack([tgt_indicator, pad])
+            elif tgt_indicator.shape[0] > n_T_run:
+                tgt_indicator = tgt_indicator[:n_T_run]
+            tgt_indicator_chunks.append(tgt_indicator)
+
         bold_chunks.append(data)
         paradigm_chunks.append(par_run_flat)
         cond_indicator_chunks.append(cond_indicator)
@@ -156,6 +182,8 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
     paradigm_full = np.vstack(paradigm_chunks)
     condition_indicator = np.vstack(cond_indicator_chunks)
     dynamic_indicator = np.vstack(dyn_indicator_chunks)
+    target_indicator = (np.vstack(tgt_indicator_chunks)
+                        if with_target else None)
 
     print(f'Loaded BOLD: shape {bold.shape}, paradigm {paradigm_full.shape}, '
           f'condition_indicator {condition_indicator.shape}, '
@@ -163,6 +191,11 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
           f'(min={dynamic_indicator.min():.3f}, '
           f'max={dynamic_indicator.max():.3f}, '
           f'mean={dynamic_indicator.mean():.4f})')
+    if with_target:
+        print(f'target_indicator {target_indicator.shape} '
+              f'(min={target_indicator.min():.3f}, '
+              f'max={target_indicator.max():.3f}, '
+              f'mean={target_indicator.mean():.4f})')
     return (
         pd.DataFrame(bold),
         paradigm_full,
@@ -170,6 +203,7 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
         dynamic_indicator,
         grid_coordinates,
         masker,
+        target_indicator,
     )
 
 
@@ -207,30 +241,43 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
          output_subdir: str | None = None,
          model_version: str = 'v2',
          sigma_af_init: float = 2.0,
-         sigma_dyn_init: float = 2.0):
+         sigma_dyn_init: float = 2.0,
+         with_target: bool = False,
+         g_t_dyn_init: float = 0.0,
+         sigma_t_dyn_init: float = 2.0):
     if model_version not in ('v2', 'v3'):
         raise ValueError(
             f"model_version must be 'v2' or 'v3', got {model_version!r}")
+    if with_target and model_version != 'v3':
+        raise ValueError(
+            "--with-target is only supported with --model-version v3 "
+            f"(got {model_version!r}).")
     bids_folder = Path(bids_folder)
     sub = Subject(subject, bids_folder)
     if output_subdir is None:
-        output_subdir = {
-            'v2': 'af_prf_joint_dynamic_v2_dog',
-            'v3': 'af_prf_joint_dynamic_v3_dog',
-        }[model_version]
+        if with_target:
+            output_subdir = 'af_prf_joint_dynamic_v3_dog_with_target'
+        else:
+            output_subdir = {
+                'v2': 'af_prf_joint_dynamic_v2_dog',
+                'v3': 'af_prf_joint_dynamic_v3_dog',
+            }[model_version]
     out_dir = bids_folder / 'derivatives' / output_subdir / f'sub-{subject:02d}'
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print(f'== sub-{subject:02d} | roi={roi} | mode={mode} | '
-          f'model-version={model_version} | paradigm=full '
+          f'model-version={model_version}'
+          f'{" + target" if with_target else ""} | paradigm=full '
           f'(DoG voxel kernel, dynamic AF) ==')
 
-    # 1) Load BOLD + paradigm + condition_indicator + dynamic_indicator.
+    # 1) Load BOLD + paradigm + condition_indicator + dynamic_indicator
+    #    (+ target_indicator if requested).
     (bold_df, paradigm, condition_indicator, dynamic_indicator,
-     grid_coords, masker) = build_data_and_paradigm(
+     grid_coords, masker, target_indicator) = build_data_and_paradigm(
         sub,
         resolution=resolution,
         grid_radius=grid_radius,
+        with_target=with_target,
     )
 
     # 2) Restrict to ROI voxels with decent mean-model PRF R².
@@ -282,6 +329,11 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
         init_pars['g_LP_dyn'] = 0.0 if mode == 'signed' else 0.10
         shared_pars = ['sigma_AF', 'g_HP', 'g_LP',
                        'sigma_dyn', 'g_HP_dyn', 'g_LP_dyn']
+        if with_target:
+            # v3 + target: 2 additional shared parameters.
+            init_pars['g_T_dyn'] = g_t_dyn_init
+            init_pars['sigma_T_dyn'] = sigma_t_dyn_init
+            shared_pars = shared_pars + ['g_T_dyn', 'sigma_T_dyn']
 
     # 4) Build the dynamic DoG-AF + PRF model and the fitter.
     ring_positions = get_ring_positions()  # (4, 2)
@@ -292,10 +344,12 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
 
     if model_version == 'v2':
         ModelCls = DoGDynamicAttentionFieldPRF2DWithHRF_v2
+    elif with_target:
+        ModelCls = DoGDynamicAttentionFieldPRF2DWithHRF_v3_target
     else:
         ModelCls = DoGDynamicAttentionFieldPRF2DWithHRF_v3
 
-    model = ModelCls(
+    model_kwargs = dict(
         grid_coordinates=grid_coords,
         paradigm=paradigm,
         hrf_model=hrf_model,
@@ -304,6 +358,10 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
         ring_positions=ring_positions,
         mode=mode,
     )
+    if with_target:
+        model_kwargs['target_indicator'] = target_indicator
+
+    model = ModelCls(**model_kwargs)
 
     fitter = ParameterFitter(model, bold_sub, paradigm)
 
@@ -326,7 +384,10 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     fit_pars['r2'] = r2.values if hasattr(r2, 'values') else r2
 
     # 7) Save outputs.
-    dyn_tag = {'v2': 'dog-dyn-v2', 'v3': 'dog-dyn-v3'}[model_version]
+    if with_target:
+        dyn_tag = 'dog-dyn-v3-target'
+    else:
+        dyn_tag = {'v2': 'dog-dyn-v2', 'v3': 'dog-dyn-v3'}[model_version]
     out_tsv = out_dir / (
         f'sub-{subject:02d}_roi-{roi}_mode-{mode}_{dyn_tag}-af-prf-pars.tsv')
     fit_pars.to_csv(out_tsv, sep='\t')
@@ -346,6 +407,7 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
             'paradigm_type': 'full',
             'grid_radius': grid_radius,
             'dynamic': True,
+            'with_target': with_target,
             'voxel_kernel': 'DoG',
             'model_version': model_version,
             'model_label_init': model_label,
@@ -397,6 +459,17 @@ if __name__ == '__main__':
                              "dynamic gains (g_HP_dyn, g_LP_dyn). "
                              "v3: separate sigma_dyn AND split HP/LP "
                              "dynamic gains (6 shared params).")
+    parser.add_argument('--with-target', action='store_true',
+                        help='Add a phasic-target spatial-modulation term '
+                             '(g_T_dyn, sigma_T_dyn). Only valid with '
+                             '--model-version v3.')
+    parser.add_argument('--g-t-dyn-init', type=float, default=0.0,
+                        help='Initial value for g_T_dyn (default 0.0; signed '
+                             'mode is neutral at 0).')
+    parser.add_argument('--sigma-t-dyn-init', type=float, default=2.0,
+                        help='Initial value for sigma_T_dyn (default 2.0; '
+                             'matches the neutral sigma_AF / sigma_dyn '
+                             'inits).')
     args = parser.parse_args()
     main(
         args.subject,
@@ -414,4 +487,7 @@ if __name__ == '__main__':
         model_version=args.model_version,
         sigma_af_init=args.sigma_af_init,
         sigma_dyn_init=args.sigma_dyn_init,
+        with_target=args.with_target,
+        g_t_dyn_init=args.g_t_dyn_init,
+        sigma_t_dyn_init=args.sigma_t_dyn_init,
     )

@@ -452,6 +452,69 @@ class Subject(object):
 
         return d
 
+    def get_target_indicator(self, session=1, run=1,
+                             max_target_duration=1.5):
+        """Per-TR target-on indicator at each of the 4 ring locations.
+
+        Identical machinery to :meth:`get_dynamic_indicator`, but reads
+        the ``target_location`` column instead of ``distractor_location``
+        — i.e. tracks the per-TR overlap fraction of the SEARCH TARGET
+        (not the singleton distractor) at each of the 4 ring positions.
+
+        Used by the v3 + target model
+        (``DoGDynamicAttentionFieldPRF2DWithHRF_v3_target``) as a
+        positive-control "phasic capture" channel: the same visual
+        transient that suppresses at the distractor should produce
+        positive gain at the target.
+
+        Returns
+        -------
+        t : ndarray, shape (n_volumes, 4)
+            Fraction of each TR during which a target was on screen at
+            each ring location, in [0, 1]. Channel order is
+            ``['upper_right', 'upper_left', 'lower_left', 'lower_right']``
+            (same as ``get_dynamic_indicator``).
+        """
+        # Same channel mapping as get_dynamic_indicator.
+        loc_to_channel = {1.0: 0, 3.0: 1, 5.0: 2, 7.0: 3}
+        n_channels = 4
+
+        tr = self.get_tr(session, run)
+        n_volumes = self.get_n_volumes(session, run)
+        frametimes = np.arange(tr / 2., tr * n_volumes + tr / 2., tr)
+        tr_starts = frametimes - tr / 2.
+        tr_ends = frametimes + tr / 2.
+
+        onsets = self.get_onsets(session, run)
+        targets = onsets[onsets["event_type"] == "target"].sort_values("onset")
+        feedback = onsets[onsets["event_type"] == "feedback"].sort_values("onset")
+
+        t = np.zeros((len(frametimes), n_channels), dtype=np.float32)
+
+        for _, trial in targets.iterrows():
+            loc_code = trial["target_location"]
+            if pd.isna(loc_code) or loc_code == 10.0:
+                continue
+            if loc_code not in loc_to_channel:
+                continue
+            ch = loc_to_channel[loc_code]
+
+            t_on = trial["onset"]
+            after = feedback[feedback["onset"] > t_on]
+            t_off = (after.iloc[0]["onset"] if len(after)
+                     else t_on + max_target_duration)
+            t_off = min(t_off, t_on + max_target_duration)
+
+            overlap = np.clip(
+                np.minimum(tr_ends, t_off) - np.maximum(tr_starts, t_on),
+                0.0, None,
+            ) / tr  # in [0, 1]
+
+            # Element-wise max in case of overlapping windows.
+            t[:, ch] = np.maximum(t[:, ch], overlap.astype(np.float32))
+
+        return t
+
         def filter_confounds_(confounds, n_acompcorr=10):
             confound_cols = ['dvars', 'framewise_displacement']
 
