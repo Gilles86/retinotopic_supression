@@ -653,7 +653,7 @@ def _vector_field_panel(ax, sigma_AF, g_HP, g_LP, ring, prf_sd=1.0,
 
 
 def _observed_field_panel(ax, df_sh_roi, ring, scale=None,
-                            grid_extent=3.5, grid_n=5,
+                            grid_extent=3.5, grid_n=2,
                             min_n_subj_per_bin=3):
     """Observed shift vector field (data) side of the per-ROI panel.
 
@@ -1418,6 +1418,10 @@ def main():
                         help='v2 dynamic-model parameters (optional).')
     parser.add_argument('--out', type=Path,
                         default=Path('notes/talk_docky_jan.pdf'))
+    parser.add_argument('--skip-vector-fields', action='store_true',
+                        help='Drop the per-ROI predicted+observed '
+                             'vector-field grids (sections d and d′). '
+                             'Use for the email-ready clean deck.')
     parser.add_argument('--example-subjects', nargs='+', type=int,
                         default=None,
                         help='Subject IDs for individual example pages. '
@@ -1474,10 +1478,6 @@ def main():
         slide_parameter_distributions(pdf, df)
         slide_hp_lp_test(pdf, df)
 
-        section_divider(pdf, 'd',
-                          'What the model predicts per ROI',
-                          'Per-voxel mean across 4 conditions vs HP=★ '
-                          'condition. Model on the left, data on the right.')
         # Load shifts TSV once (apples-to-apples Gaussian preferred).
         shifts_df = None
         gauss_tsv = Path('notes/predict_shifts_gauss.tsv')
@@ -1486,15 +1486,21 @@ def main():
         if load_tsv.exists():
             shifts_df = pd.read_csv(load_tsv, sep='\t')
             print(f'  observed shifts: {len(shifts_df):,} rows from {load_tsv}')
-        slide_per_roi_vector_field(pdf, df, shifts_df=shifts_df)
 
-        # NEW: hierarchy slide.
+        if not args.skip_vector_fields:
+            section_divider(pdf, 'd',
+                              'What the model predicts per ROI',
+                              'Per-voxel mean across 4 conditions vs HP=★ '
+                              'condition. Model on the left, data on the right.')
+            slide_per_roi_vector_field(pdf, df, shifts_df=shifts_df)
+
+        # Hierarchy slide.
         if args.shifts_tsv.exists():
             slide_hierarchy(pdf, args.af_tsv,
                               args.shifts_tsv if args.shifts_tsv.exists()
                               else Path('notes/predict_shifts_cluster.tsv'))
 
-        if args.example_subjects:
+        if args.example_subjects and not args.skip_vector_fields:
             section_divider(
                 pdf, 'd′',
                 'Individual example subjects',
