@@ -316,16 +316,21 @@ def predict_shift_field(sigma_AF, g_HP, g_LP,
 
 
 def page_vector_field(pdf, sigma_AF=1.0, g_HP=-0.5, g_LP=-0.1,
-                        prf_sd=1.0, spacing=0.6, fov=4.0, scale=5.0):
+                        prf_sd=1.0, spacing=0.6, fov=4.0, scale=5.0,
+                        aperture_only=False):
     s1d = np.arange(-fov, fov + spacing / 2, spacing)
     SX, SY = np.meshgrid(s1d, s1d)
     seeds = np.stack([SX.ravel(), SY.ravel()], axis=1).astype(np.float32)
+    if aperture_only:
+        keep = np.linalg.norm(seeds, axis=1) <= APERTURE
+        seeds = seeds[keep]
     pred = predict_shift_field(sigma_AF, g_HP, g_LP, seeds, prf_sd=prf_sd)
     ring = get_ring_positions()
 
     fig = plt.figure(figsize=(11, 11))
+    label = 'inside aperture only' if aperture_only else 'full FOV'
     fig.suptitle(
-        f'(7/7)  Predicted PRF-center shift field  '
+        f'(7/7)  Predicted PRF-center shift field  ({label})  '
         f'(σ_AF={sigma_AF}, g_HP={g_HP}, g_LP={g_LP}, prf_sd={prf_sd})\n'
         f'Each arrow goes from a seed PRF center to the predicted AD-pRF '
         f'center (arrows scaled ×{scale}).',
@@ -351,7 +356,8 @@ def page_vector_field(pdf, sigma_AF=1.0, g_HP=-0.5, g_LP=-0.1,
 def page_projection_field(pdf, sigma_AF=2.0, g_HP=+0.14, g_LP=+0.29,
                             prf_sd=1.0, spacing=0.4, fov=4.5,
                             integration_resolution=81,
-                            integration_radius=5.0):
+                            integration_radius=5.0,
+                            aperture_only=False):
     """Why the away-from-HP projection is small at large distance from HP.
 
     For each seed PRF position the model predicts a 2D shift vector
@@ -369,6 +375,7 @@ def page_projection_field(pdf, sigma_AF=2.0, g_HP=+0.14, g_LP=+0.29,
                                  integration_resolution=integration_resolution,
                                  integration_radius=integration_radius,
                                  prf_sd=prf_sd)
+    inside_mask = np.linalg.norm(seeds, axis=1) <= APERTURE
     ring = get_ring_positions()
     hp_idx = 0  # UR
     hp = ring[hp_idx]
@@ -378,6 +385,9 @@ def page_projection_field(pdf, sigma_AF=2.0, g_HP=+0.14, g_LP=+0.29,
     dy = pred[hp_idx, :, 1] - seeds[:, 1]
     proj = dx * u[0] + dy * u[1]              # away-from-HP projection
     mag = np.sqrt(dx ** 2 + dy ** 2)
+    if aperture_only:
+        proj = np.where(inside_mask, proj, np.nan)
+        mag = np.where(inside_mask, mag, np.nan)
 
     # Reshape onto the seed grid for imshow.
     n_side = SX.shape[0]
@@ -386,8 +396,10 @@ def page_projection_field(pdf, sigma_AF=2.0, g_HP=+0.14, g_LP=+0.29,
 
     fig = plt.figure(figsize=(13, 5.5))
     fig.suptitle(
-        'Why projection on the away-from-HP axis is small at large distance.\n'
-        f'σ_AF={sigma_AF}, g_HP={g_HP:+.2f}, g_LP={g_LP:+.2f}, '
+        'Why projection on the away-from-HP axis is small at large distance.'
+        + ('  (Aperture-only — voxels with |position| > 3.17° masked.)'
+           if aperture_only else '') +
+        f'\nσ_AF={sigma_AF}, g_HP={g_HP:+.2f}, g_LP={g_LP:+.2f}, '
         f'prf_sd={prf_sd}.  HP = upper-right (red star).',
         fontsize=11,
     )
@@ -426,10 +438,17 @@ def page_projection_field(pdf, sigma_AF=2.0, g_HP=+0.14, g_LP=+0.29,
 
     # (3) shift VECTORS (so direction is explicit).
     ax = fig.add_subplot(1, 3, 3)
-    ax.quiver(seeds[:, 0], seeds[:, 1], dx, dy,
-              angles='xy', scale_units='xy',
-              scale=1.0 / 5.0, color='C0',
-              width=0.005, alpha=0.85)
+    if aperture_only:
+        ix = inside_mask
+        ax.quiver(seeds[ix, 0], seeds[ix, 1], dx[ix], dy[ix],
+                  angles='xy', scale_units='xy',
+                  scale=1.0 / 5.0, color='C0',
+                  width=0.005, alpha=0.85)
+    else:
+        ax.quiver(seeds[:, 0], seeds[:, 1], dx, dy,
+                  angles='xy', scale_units='xy',
+                  scale=1.0 / 5.0, color='C0',
+                  width=0.005, alpha=0.85)
     add_aperture_and_ring(ax, ring, hp_idx=hp_idx)
     ax.plot(hp[0], hp[1], '*', markersize=18, color='C3', mec='k', zorder=5)
     ax.set_xlim(-fov, fov); ax.set_ylim(-fov, fov)
@@ -520,11 +539,14 @@ def page_per_roi_typical(pdf, params_per_roi):
 
 
 def page_per_roi_vector_field(pdf, params_per_roi, prf_sd=1.0,
-                                spacing=0.7, fov=4.0, scale=10.0):
+                                spacing=0.7, fov=4.0, scale=10.0,
+                                aperture_only=False):
     """Per-ROI vector field at empirical median params (HP=upper_right)."""
     s1d = np.arange(-fov, fov + spacing / 2, spacing)
     SX, SY = np.meshgrid(s1d, s1d)
     seeds = np.stack([SX.ravel(), SY.ravel()], axis=1).astype(np.float32)
+    if aperture_only:
+        seeds = seeds[np.linalg.norm(seeds, axis=1) <= APERTURE]
     ring = get_ring_positions()
 
     n = len(params_per_roi)
@@ -621,9 +643,21 @@ def main():
         page_projection_field(pdf,
                                 sigma_AF=args.sigma_af,
                                 g_HP=args.g_hp, g_LP=args.g_lp)
+        # Same two pages, restricted to seeds INSIDE the bar aperture
+        # (radius 3.17°) — i.e. the visual-field region the experiment
+        # actually probes with stimuli.
+        page_vector_field(pdf,
+                            sigma_AF=args.sigma_af,
+                            g_HP=args.g_hp, g_LP=args.g_lp,
+                            aperture_only=True)
+        page_projection_field(pdf,
+                                sigma_AF=args.sigma_af,
+                                g_HP=args.g_hp, g_LP=args.g_lp,
+                                aperture_only=True)
         if typical:
             page_per_roi_typical(pdf, typical)
             page_per_roi_vector_field(pdf, typical)
+            page_per_roi_vector_field(pdf, typical, aperture_only=True)
     print(f'Wrote {args.out}')
 
 
