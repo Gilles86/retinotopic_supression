@@ -58,7 +58,7 @@ from retsupp.utils.data import Subject
 warnings.filterwarnings("ignore")
 
 TR = 1.6          # retsupp acquisition TR
-TR_UP = 0.4       # upsampled TR (factor 4)
+TR_UP = 0.8       # upsampled TR (factor 2 — keeps sub-TR alignment without 4× memory cost)
 STIM_DUR = 1.0    # search-array effective duration; not critical (GLMsingle is robust)
 
 

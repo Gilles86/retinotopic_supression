@@ -724,13 +724,22 @@ def fit_four_af_per_subject(
     work = pars.reset_index()
     work = work[work["roi_base"].isin(rois)]
 
+    try:
+        from tqdm import tqdm
+    except ImportError:
+        tqdm = lambda x, **k: x
+
     rows = []
-    for sub in sorted(work["subject"].unique()):
+    subjects = sorted(work["subject"].unique())
+    n_total = len(subjects) * len(rois) * len(modes)
+    pbar = tqdm(total=n_total, desc="4-AF fits", unit="fit")
+    for sub in subjects:
         for roi in rois:
             sub_df = work[(work["subject"] == sub) & (work["roi_base"] == roi)]
             if min_r2_mean_model > 0 and "r2_mean_model" in sub_df.columns:
                 sub_df = sub_df[sub_df["r2_mean_model"] > min_r2_mean_model]
             if len(sub_df) < 40:
+                pbar.update(len(modes))
                 continue
 
             pivot = sub_df.pivot_table(
@@ -743,6 +752,7 @@ def fit_four_af_per_subject(
             keep &= pivot[("sd_mean_model", conditions[0])].notna()
             pivot = pivot[keep]
             if len(pivot) < 40:
+                pbar.update(len(modes))
                 continue
 
             obs_arrays = []
@@ -829,8 +839,10 @@ def fit_four_af_per_subject(
                         **fit,
                     })
                 except Exception as e:
-                    print(f"  fit failed for sub-{sub} {roi} mode={mode}: {e}")
-                    continue
+                    print(f"\n  fit failed for sub-{sub} {roi} mode={mode}: {e}")
+                pbar.update(1)
+                pbar.set_postfix(sub=sub, roi=roi, mode=mode[:4])
+    pbar.close()
     return pd.DataFrame(rows)
 
 

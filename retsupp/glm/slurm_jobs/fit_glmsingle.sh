@@ -4,16 +4,16 @@
 #SBATCH --output=/dev/null
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
-#SBATCH --mem=96G
+#SBATCH --mem=160G
 #SBATCH --time=06:00:00
 #
 # Fit GLMsingle single-trial betas for the retsupp visual-search task.
 # Both sessions of a subject are fitted jointly (recommended: GLMsingle
 # uses the session indicator to handle session-to-session scaling).
 #
-# Memory: 96 GB requested because we upsample 2 sessions × ~6 runs ×
-# 258 vols × upsampling factor 4 = ~12k upsampled TRs of full BOLD,
-# plus glmsingle's internal copies.
+# Memory: 160 GB. Initial 96 GB attempt OOM'd at GLMsingle's TYPE-A
+# ONOFF step. With TR_UP=0.8 (factor 2) we have ~6k upsampled TRs total
+# (down from 12k with TR_UP=0.4); 160 GB is comfortable.
 #
 # Usage (single subject):
 #   sbatch --export=PARTICIPANT_LABEL=05 fit_glmsingle.sh
