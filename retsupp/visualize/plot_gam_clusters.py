@@ -311,7 +311,7 @@ def plot_roi_page(
     )
     ax.legend(loc="upper right", fontsize=8)
     fig.tight_layout()
-    pdf.savefig(fig, bbox_inches="tight")
+    pdf.savefig(fig)
     plt.close(fig)
 
 
@@ -377,7 +377,7 @@ ROIs fit: {args.rois}
 """
     ax.text(0.04, 0.85, text, ha="left", va="top",
             fontsize=10, family="monospace", transform=ax.transAxes)
-    pdf.savefig(fig, bbox_inches="tight")
+    pdf.savefig(fig)
     plt.close(fig)
 
 
