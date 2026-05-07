@@ -213,6 +213,76 @@ def plot_voxel_panel(ax, t, obs, pred, run_meta, hp_legend=None,
     ax.set_ylabel('BOLD', fontsize=9)
 
 
+def get_bar_direction_per_tr(sub: Subject, session: int, run: int) -> np.ndarray:
+    """Return (n_T_run,) array of bar-direction labels at each TR.
+
+    Labels: 'right', 'left', 'up', 'down', 'rest'/'break'/'' (the latter
+    three lumped as 'rest'). Built from the events.tsv bar_* events:
+    bar_right/bar_left/bar_up/bar_down events mark the start of each
+    bar pass and persist until the next bar_rest/bar_break/end of run.
+    """
+    onsets = sub.get_onsets(session, run)
+    tr = sub.get_tr(session, run)
+    n_T = sub.get_n_volumes(session, run)
+    frametimes = (np.arange(n_T) + 0.5) * tr
+    bar_events = onsets[onsets['event_type'].apply(
+        lambda x: x.startswith('bar'))]
+    out = np.array(['rest'] * n_T, dtype=object)
+    for i, t in enumerate(frametimes):
+        prev = bar_events[bar_events['onset'] < t]
+        if len(prev) == 0:
+            continue
+        ev = prev.iloc[-1]['event_type']
+        if ev == 'bar_right':
+            out[i] = 'right'
+        elif ev == 'bar_left':
+            out[i] = 'left'
+        elif ev == 'bar_up':
+            out[i] = 'up'
+        elif ev == 'bar_down':
+            out[i] = 'down'
+        # bar_rest / bar_break → leave as 'rest'.
+    return out
+
+
+def annotate_bar_directions(ax, dirs: np.ndarray, y_frac: float = 0.95,
+                              lower=False):
+    """Shade horizontal bars at the top of `ax` indicating bar direction
+    at each TR. Uses unicode arrows as labels at the centre of each
+    contiguous segment."""
+    colors = {
+        'right': '#ffe0b2', 'left':  '#bbdefb',
+        'up':    '#c8e6c9', 'down':  '#ffcdd2',
+        'rest':  '#ffffff',
+    }
+    arrows = {
+        'right': '→', 'left': '←',
+        'up':    '↑', 'down': '↓',
+        'rest':  '·',
+    }
+    n = len(dirs)
+    # Scan for contiguous segments.
+    i = 0
+    ymin, ymax = ax.get_ylim()
+    band_h = (ymax - ymin) * 0.05    # 5% of axis height
+    band_y = ymin if lower else ymax - band_h
+    while i < n:
+        j = i + 1
+        while j < n and dirs[j] == dirs[i]:
+            j += 1
+        ax.add_patch(plt.Rectangle(
+            (i, band_y), j - i, band_h,
+            color=colors.get(dirs[i], '#dddddd'),
+            alpha=0.55, zorder=0,
+        ))
+        if dirs[i] != 'rest' and (j - i) >= 4:
+            ax.text((i + j) / 2, band_y + band_h / 2,
+                     arrows[dirs[i]],
+                     ha='center', va='center', fontsize=18,
+                     color='0.25')
+        i = j
+
+
 def average_per_condition(bold: np.ndarray, pred: np.ndarray,
                             run_meta: list, n_T_run: int):
     """Average BOLD and predictions per HP condition across runs.
@@ -374,6 +444,12 @@ def main():
                  transform=ax.transAxes)
         pdf.savefig(fig); plt.close(fig)
 
+        # Bar-direction annotation (compute once from a representative run).
+        bar_dirs = get_bar_direction_per_tr(
+            sub,
+            run_meta[0]['session'], run_meta[0]['run'],
+        )
+
         # One panel per voxel: 4 conditions overlaid, observed/AF/no-AF.
         cond_colors = {'upper_right': 'C0', 'upper_left': 'C1',
                         'lower_left': 'C2', 'lower_right': 'C3'}
@@ -415,6 +491,8 @@ def main():
             for ax in axes:
                 ax.grid(alpha=0.2)
                 ax.set_ylabel('BOLD', fontsize=11)
+                # Direction band (top edge).
+                annotate_bar_directions(ax, bar_dirs, lower=False)
             axes[-1].set_xlabel('TR within run', fontsize=11)
             ax_top.legend(fontsize=8, loc='upper right', ncol=2)
             fig.tight_layout()
