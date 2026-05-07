@@ -84,7 +84,7 @@ echo "ROI:         ${roi}"
 
 # --- Conda env (CPU). ---
 source "$HOME/data/miniforge3/etc/profile.d/conda.sh"
-conda activate retsupp_cpu
+conda activate retsupp_cuda
 
 export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-2}"
@@ -92,7 +92,7 @@ export TF_NUM_INTRAOP_THREADS="${SLURM_CPUS_PER_TASK:-2}"
 export TF_NUM_INTEROP_THREADS=1
 
 bids_folder="/shares/zne.uzh/gdehol/ds-retsupp"
-PYTHON="$HOME/data/conda/envs/retsupp_cpu/bin/python"
+PYTHON="$HOME/data/conda/envs/retsupp_cuda/bin/python"
 SCRIPT="$HOME/git/retsupp/retsupp/modeling/fit_af_prf_cv.py"
 
 echo "Running fit_af_prf_cv.py (all 4 folds) for sub-${subject}, roi=${roi}, class=${CLS}"
