@@ -103,6 +103,9 @@ def main(subject: int,
     r2_mean = init_full.loc[roi_mask, 'r2'].values
     keep = r2_mean > r2_thr
     init = init.loc[keep].copy()
+    # ParameterFitter aligns by index — give init a clean 0..N-1 index
+    # so it matches the RangeIndex of the mean_ts DataFrame columns.
+    init = init.reset_index(drop=True)
     n_keep = int(keep.sum())
     print(f'After R² > {r2_thr}: {n_keep} ROI voxels kept.')
 
