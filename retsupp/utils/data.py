@@ -823,11 +823,25 @@ class Subject(object):
 
     def get_bold_mask(self, session=1, run=1, return_masker=False):
         fn = self.bids_folder / 'derivatives' / 'fmriprep' / f'sub-{self.subject_id:02d}' / f'ses-{session}' / 'func' / f'sub-{self.subject_id:02d}_ses-{session}_task-search_rec-NORDIC_run-{run}_space-T1w_desc-brain_mask.nii.gz'
-        
+
         if return_masker:
             return input_data.NiftiMasker(mask_img=fn)
-        else:
-            return image.load_img(fn)
+        # Retry-on-not-found: shared NFS sometimes hands compute nodes
+        # a stale view of the BIDS dir; the file exists but isn't
+        # visible until the mount cache refreshes.
+        import time
+        for attempt in range(4):
+            try:
+                return image.load_img(fn)
+            except (FileNotFoundError, ValueError) as e:
+                if 'File not found' not in str(e) and not isinstance(
+                        e, FileNotFoundError):
+                    raise
+                wait = 15 * (attempt + 1)
+                print(f'  [retry {attempt+1}/4] mask not yet visible '
+                      f'on this node; sleeping {wait}s', flush=True)
+                time.sleep(wait)
+        return image.load_img(fn)  # final attempt, let it raise
 
     def get_surf_info(self):
         info = {'L':{}, 'R':{}}
