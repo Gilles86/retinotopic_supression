@@ -42,12 +42,12 @@ echo "Test:        v3 + target + sharedSigma (sigma_T_dyn := sigma_dyn)"
 
 # --- Subject + ROI decoding from SLURM_ARRAY_TASK_ID. ---
 SUB_IDS=(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30)
-ROIS=(V1 V2 V3 V3AB hV4 LO TO VO)
+ROIS=(V1 V2 V3 V3AB hV4 LO TO VO IPS SPL1 FEF)
 N_ROIS=${#ROIS[@]}
 N_SUBS=${#SUB_IDS[@]}
 
 if [[ -z "${SLURM_ARRAY_TASK_ID:-}" ]]; then
-    echo "ERROR: SLURM_ARRAY_TASK_ID is not set. Submit with --array=1-240." >&2
+    echo "ERROR: SLURM_ARRAY_TASK_ID is not set. Submit with --array=1-330." >&2
     exit 2
 fi
 
