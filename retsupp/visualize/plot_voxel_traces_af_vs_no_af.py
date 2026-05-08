@@ -688,9 +688,10 @@ def make_subject_roi_page(pdf, sub: Subject, roi: str,
     # ---- Plot the page. ----
     # Layout: a grid sized to fit n_pick voxels at ~5 columns wide.
     n = len(voxel_traces)
-    ncols = 5 if n >= 5 else max(1, n)
+    # Wider, fewer-column layout: panels roughly 6×4 in (was 3.6×4.2).
+    ncols = 3 if n >= 3 else max(1, n)
     nrows = int(np.ceil(n / ncols))
-    fig, axes = plt.subplots(nrows, ncols, figsize=(3.6 * ncols, 4.2 * nrows),
+    fig, axes = plt.subplots(nrows, ncols, figsize=(6.0 * ncols, 4.0 * nrows),
                               sharex=True, sharey=False, squeeze=False)
     axes = axes.flatten()
     cat_colors = {'close': '#d62728', 'orth': '#7f7f7f', 'far': '#1f77b4'}
@@ -775,11 +776,14 @@ def make_subject_roi_page(pdf, sub: Subject, roi: str,
         # Legend in upper-right of first panel only.
         if ax_i == 0:
             from matplotlib.lines import Line2D
+            from matplotlib.patches import Patch
             handles = [
                 Line2D([0], [0], color='#d62728', lw=2,
                         label='HP-close (obs)'),
                 Line2D([0], [0], color='#7f7f7f', lw=2, label='HP-orth (obs)'),
                 Line2D([0], [0], color='#1f77b4', lw=2, label='HP-far (obs)'),
+                Patch(facecolor='gray', alpha=0.3, edgecolor='none',
+                      label='shaded = ± SEM (across sweeps)'),
                 Line2D([0], [0], color='k', lw=1.2, ls='-', label='AF model'),
                 Line2D([0], [0], color='k', lw=1.0, ls='--',
                         label='no-AF model'),
