@@ -22,8 +22,10 @@ TSV = REPO / 'notes' / 'data' / 'af_dog_v3_target_parameters.tsv'
 OUT = REPO / 'notes' / 'figures' / 'attention_field_movie.gif'
 
 ROI_FOR_DEMO = 'V3AB'
-SIGMA_AF = 2.0
-SIGMA_DYN = 2.0
+DEMO_SUBJECT = 28
+# σ values get filled at runtime from the actual fit (see main()).
+SIGMA_AF = None
+SIGMA_DYN = None
 
 RING_R = 4.0
 RING_POS = np.array([
@@ -107,16 +109,21 @@ def load_real_params():
 
 
 def demo_params():
-    """Hand-picked qualitative parameters that exaggerate the HP/LP
-    contrast for clear visualization. Real fits give g_HP-g_LP ≈ -0.5
-    at most (in TO/VO); here we use a wider gap so the heatmap shows
-    the asymmetry visibly."""
+    """Real parameters from sub-28 V3AB — an 'extreme' but well-fitting
+    subject. Exhibits opposite-sign sustained gains (HP suppressed,
+    LP captured), strong target capture, and reasonable σ values so
+    the AF Gaussians are spatially localized."""
+    global SIGMA_AF, SIGMA_DYN
+    df = pd.read_csv(TSV, sep='\t')
+    row = df[(df.subject == DEMO_SUBJECT) & (df.roi == ROI_FOR_DEMO)].iloc[0]
+    SIGMA_AF = float(row.sigma_AF)
+    SIGMA_DYN = float(row.sigma_dyn)
     return (
-        -1.6,   # g_HP   (strong sustained suppression at HP)
-        -0.4,   # g_LP   (weaker sustained suppression at LPs)
-        -0.5,   # g_HP_dyn (phasic distractor suppression at HP)
-        -0.2,   # g_LP_dyn (weaker phasic at LP)
-        +3.0,   # g_T_dyn  (target attraction)
+        float(row.g_HP),
+        float(row.g_LP),
+        float(row.g_HP_dyn),
+        float(row.g_LP_dyn),
+        float(row.g_T_dyn),
     )
 
 
@@ -179,7 +186,12 @@ def main():
     im = ax_field.imshow(M0, extent=[-GRID_R, GRID_R, -GRID_R, GRID_R],
                           cmap='RdBu_r', vmin=vmin, vmax=vmax,
                           origin='lower', aspect='equal')
-    cbar = fig.colorbar(im, ax=ax_field, fraction=0.04, pad=0.02)
+    # Use make_axes_locatable to PIN the colorbar position so it doesn't
+    # flicker when contours are added/removed each frame.
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+    div = make_axes_locatable(ax_field)
+    cax = div.append_axes('right', size='4%', pad=0.08)
+    cbar = fig.colorbar(im, cax=cax)
     cbar.set_label('M(g, t)  ( >1 capture, <1 suppress )', fontsize=10)
     # crop view to just the aperture + small margin around distractors
     ax_field.set_xlim(-5.0, 5.0)
@@ -225,49 +237,59 @@ def main():
         ax_field.add_patch(c)
         distr_patches.append(c)
 
-    # example PRFs — original positions (faint dashed) + shifting blob
+    # example PRFs:
+    #   - dashed circle = original PRF (1σ contour) without modulation
+    #   - magenta contour = HALF-MAX isoline of (PRF × max(M, 0)) per frame
+    #     (the actual asymmetric "effective RF" shape, not a moved circle)
     prf_orig_patches = []
-    prf_shifted_patches = []
-    prf_arrows = []
+    prf_contours = [None] * len(PRF_EXAMPLES)
     for (px, py), sigma_prf in PRF_EXAMPLES:
-        # Static dashed circle = where the PRF "lives" without modulation
         orig = plt.Circle((px, py), sigma_prf, fill=False,
                            edgecolor='magenta', lw=1.0, ls=':',
-                           alpha=0.6, zorder=9)
+                           alpha=0.7, zorder=9)
         ax_field.add_patch(orig)
         prf_orig_patches.append(orig)
-        # Filled (translucent) magenta circle = current shifted center
-        shifted = plt.Circle((px, py), sigma_prf, fill=True,
-                              facecolor='magenta', edgecolor='magenta',
-                              lw=1.5, alpha=0.18, zorder=10)
-        ax_field.add_patch(shifted)
-        prf_shifted_patches.append(shifted)
-        # Arrow from original to shifted — start invisible
-        arr = ax_field.annotate('', xy=(px, py), xytext=(px, py),
-                                  arrowprops=dict(arrowstyle='-|>',
-                                                   color='magenta', lw=2,
-                                                   alpha=0.9),
-                                  zorder=11)
-        prf_arrows.append(arr)
+        # mark center
+        ax_field.scatter([px], [py], color='magenta', marker='+', s=60,
+                          alpha=0.7, zorder=10)
 
-    # quiver overlay — gradient of M (always on, shows sustained too)
-    SUB = 6
-    sub_x = g1d[::SUB]; sub_y = g1d[::SUB]
-    SX, SY = np.meshgrid(sub_x, sub_y)
+    # quiver overlay — gradient of M, on a SYMMETRIC grid that includes
+    # the ring eccentricity (±2.83°) and the fovea.
+    quiv_offsets = np.array([-4.2, -2.83, -1.4, 0.0, 1.4, 2.83, 4.2])
+    SX, SY = np.meshgrid(quiv_offsets, quiv_offsets)
+    # Pre-compute nearest-index lookup for sampling np.gradient output
+    QUIV_IX = np.array([np.argmin(np.abs(g1d - x)) for x in quiv_offsets])
+    QUIV_IY = np.array([np.argmin(np.abs(g1d - y)) for y in quiv_offsets])
     quiv = ax_field.quiver(SX, SY,
                             np.zeros_like(SX), np.zeros_like(SY),
-                            color='black', alpha=0.55, scale=4,
-                            scale_units='inches', width=0.004,
+                            color='black', alpha=0.7, scale=2,
+                            scale_units='inches', width=0.009,
+                            headwidth=4, headlength=5,
                             zorder=5)
+
+    # COM-shift arrows per PRF (will update each frame).
+    # Pre-allocate as FancyArrowPatch we can rewire.
+    from matplotlib.patches import FancyArrowPatch
+    com_arrows = []
+    for (px, py), _ in PRF_EXAMPLES:
+        arr = FancyArrowPatch((px, py), (px, py),
+                                arrowstyle='-|>',
+                                mutation_scale=20, lw=2.5,
+                                color='magenta', alpha=0.9, zorder=11)
+        ax_field.add_patch(arr)
+        com_arrows.append(arr)
 
     ax_field.set_xlabel('x (deg)')
     ax_field.set_ylabel('y (deg)')
     ax_field.set_title(
-        f'Attention field M(g, t)  —  demo params (HP-LP contrast amplified)\n'
+        f'Attention field M(g, t) — sub-28 V3AB (real fit)\n'
         f'g_HP={g_HP:+.2f}  g_LP={g_LP:+.2f}  '
         f'g_HP_dyn={g_HP_dyn:+.2f}  g_LP_dyn={g_LP_dyn:+.2f}  '
         f'g_T_dyn={g_T_dyn:+.2f}',
-        fontsize=11)
+        fontsize=14, weight='bold')
+    ax_field.tick_params(labelsize=12)
+    ax_field.set_xlabel('x (deg)', fontsize=13)
+    ax_field.set_ylabel('y (deg)', fontsize=13)
 
     # event timeline at bottom — minimal
     for trial in TRIALS:
@@ -324,7 +346,9 @@ def main():
         M = field_at(frame)
         im.set_data(M)
         gy, gx = np.gradient(M, g1d, g1d)
-        quiv.set_UVC(gx[::SUB, ::SUB], gy[::SUB, ::SUB])
+        u = gx[np.ix_(QUIV_IY, QUIV_IX)]
+        v = gy[np.ix_(QUIV_IY, QUIV_IX)]
+        quiv.set_UVC(u, v)
         cursor.set_xdata([t, t])
 
         # HP marker follows the current block's HP
@@ -338,23 +362,40 @@ def main():
         for k, p in enumerate(distr_patches):
             p.set_visible(k == dst_idx)
 
-        # shifted PRF centers — center-of-mass under PRF * M
+        # effective RF contours + COM arrows per PRF.
+        M_pos = np.maximum(M, 0.0)
         for k, ((px, py), _) in enumerate(PRF_EXAMPLES):
-            weighted = prf_kernels[k] * M
-            total = weighted.sum()
-            if total > 1e-6:
-                new_x = (GX * weighted).sum() / total
-                new_y = (GY * weighted).sum() / total
+            old = prf_contours[k]
+            if old is not None:
+                try:
+                    old.remove()
+                except (AttributeError, ValueError):
+                    if hasattr(old, 'collections'):
+                        for coll in old.collections:
+                            try: coll.remove()
+                            except ValueError: pass
+            eff = prf_kernels[k] * M_pos
+            mx = eff.max()
+            tot = eff.sum()
+            if mx > 1e-6:
+                cs = ax_field.contour(
+                    GX, GY, eff, levels=[mx * 0.5],
+                    colors='magenta', linewidths=2.5, alpha=0.95,
+                    zorder=10,
+                )
+                prf_contours[k] = cs
+                com_x = (GX * eff).sum() / tot
+                com_y = (GY * eff).sum() / tot
             else:
-                new_x, new_y = px, py
-            prf_shifted_patches[k].center = (new_x, new_y)
-            prf_arrows[k].xy = (new_x, new_y)
-            prf_arrows[k].set_position((px, py))
+                prf_contours[k] = None
+                com_x, com_y = px, py
+            # update arrow from original to current COM
+            com_arrows[k].set_positions((px, py), (com_x, com_y))
 
         title_text.set_text(f't = {t:5.1f} s')
         return (im, hp_marker, title_text, quiv, cursor,
                 *target_patches, *distr_patches,
-                *prf_shifted_patches, *prf_arrows)
+                )
 
     anim = FuncAnimation(fig, update, frames=len(TIME), interval=100,
                          blit=False)
