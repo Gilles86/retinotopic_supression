@@ -189,11 +189,19 @@ def main(subject: int, model_label: int,
          bids_folder: str = '/data/ds-retsupp',
          resolution: int = 50, voxel_chunk_size: int = 10000,
          max_n_iterations: int = 2000, paradigm_kind: str = 'full',
-         debug: bool = False):
+         debug: bool = False,
+         chunk_index: int | None = None,
+         n_chunks: int | None = None):
+    """Fit one PRF model. If chunk_index/n_chunks given, fit ONLY voxels
+    in that chunk and save partial results to a chunks/ subdir; a
+    separate merge step concatenates all chunks into final NIfTIs."""
     cfg = MODEL_CFG[model_label]
     bids = Path(bids_folder)
     sub = Subject(subject, bids)
     derivs = bids / 'derivatives'
+    chunked_mode = chunk_index is not None
+    if chunked_mode and n_chunks is None:
+        raise ValueError("chunk_index requires n_chunks")
 
     bold_mask = sub.get_bold_mask()
     if debug:
@@ -211,8 +219,18 @@ def main(subject: int, model_label: int,
     print(f"  BOLD: T={data.shape[0]} (= n_runs × 258), V={data.shape[1]}")
     print(f"  paradigm: {paradigm.shape}, grid: {grid_coords.shape}, "
           f"kind={paradigm_kind!r}")
-    hrf = SPMHRFModel(tr=1.6, delay=4.5, dispersion=0.75)
 
+    # If chunked mode: subset data to just THIS chunk's voxels.
+    if chunked_mode:
+        n_vox = data.shape[1]
+        all_chunks = np.array_split(np.arange(n_vox), n_chunks)
+        chunk_idx = all_chunks[chunk_index]
+        print(f"  chunked mode: chunk {chunk_index}/{n_chunks}, "
+              f"voxels {chunk_idx[0]}..{chunk_idx[-1]} ({len(chunk_idx)})")
+    else:
+        chunk_idx = np.arange(data.shape[1])
+
+    hrf = SPMHRFModel(tr=1.6, delay=4.5, dispersion=0.75)
     factory = lambda d, p: cfg['cls'](  # noqa: E731
         grid_coordinates=grid_coords, paradigm=p, hrf_model=hrf, data=d,
         flexible_hrf_parameters=cfg['flex_hrf'])
@@ -220,12 +238,19 @@ def main(subject: int, model_label: int,
     if cfg['init_from'] is None:
         # Model 1: grid + GD.
         print("\n=== model 1: Gaussian + fixed HRF (grid + GD) ===")
-        init = grid_fit(factory(data, paradigm), data, paradigm,
-                        voxel_chunk_size, debug=debug)
+        if chunked_mode:
+            d_chunk = data[:, chunk_idx]
+            init = grid_fit(factory(d_chunk, paradigm), d_chunk, paradigm,
+                             voxel_chunk_size, debug=debug)
+        else:
+            init = grid_fit(factory(data, paradigm), data, paradigm,
+                             voxel_chunk_size, debug=debug)
     else:
         # Models 2-6: load prior fit, add extras, GD only.
         print(f"\n=== model {model_label} (init from model {cfg['init_from']}) ===")
         init = load_prior_pars(subject, cfg['init_from'], derivs, masker)
+        if chunked_mode:
+            init = init.iloc[chunk_idx].reset_index(drop=True)
         # Drop r2/theta/ecc — recomputed on save.
         init = init.drop(columns=['r2', 'theta', 'ecc'], errors='ignore')
         for k, v in cfg['extra_init'].items():
@@ -236,9 +261,28 @@ def main(subject: int, model_label: int,
             else:
                 init[k] = v
 
-    pars = gd_fit(factory, data, paradigm, init,
-                  voxel_chunk_size, max_n_iterations)
+    if chunked_mode:
+        d_chunk = data[:, chunk_idx]
+        pars = gd_fit(factory, d_chunk, paradigm, init,
+                      voxel_chunk_size, max_n_iterations)
+    else:
+        pars = gd_fit(factory, data, paradigm, init,
+                      voxel_chunk_size, max_n_iterations)
     print(f"  median R²: {pars['r2'].median():.3f}")
+
+    if chunked_mode:
+        # Save partial chunk: an NPZ with the voxel indices and a column
+        # array per parameter. Cheap; merger reassembles.
+        chunks_dir = (derivs / ('prf.debug' if debug else 'prf')
+                      / f'model{model_label}' / f'sub-{subject:02d}'
+                      / 'chunks')
+        chunks_dir.mkdir(parents=True, exist_ok=True)
+        npz_path = chunks_dir / f'chunk-{chunk_index:04d}-of-{n_chunks:04d}.npz'
+        cols = {f'col_{c}': pars[c].values for c in pars.columns}
+        np.savez(npz_path, voxel_indices=chunk_idx, columns=list(pars.columns),
+                 **cols)
+        print(f"Saved chunk: {npz_path}")
+        return
 
     target_dir = derivs / ('prf.debug' if debug else 'prf') \
         / f'model{model_label}' / f'sub-{subject:02d}'
@@ -256,8 +300,16 @@ if __name__ == "__main__":
     p.add_argument('--max-n-iterations', type=int, default=2000)
     p.add_argument('--paradigm-kind', choices=['full', 'bar'], default='full')
     p.add_argument('--debug', action='store_true')
+    p.add_argument('--chunk-index', type=int, default=None,
+                   help='SLURM-array chunk index (0-based). When given, '
+                        'fit only this chunk; --n-chunks must also be set. '
+                        'Saves a partial NPZ instead of NIfTIs; run '
+                        'merge_prf_chunks.py to assemble.')
+    p.add_argument('--n-chunks', type=int, default=None,
+                   help='Total number of voxel chunks across SLURM tasks.')
     a = p.parse_args()
     main(a.subject, a.model, bids_folder=a.bids_folder,
          resolution=a.resolution, voxel_chunk_size=a.voxel_chunk_size,
          max_n_iterations=a.max_n_iterations,
-         paradigm_kind=a.paradigm_kind, debug=a.debug)
+         paradigm_kind=a.paradigm_kind, debug=a.debug,
+         chunk_index=a.chunk_index, n_chunks=a.n_chunks)

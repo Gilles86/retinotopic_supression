@@ -1,0 +1,78 @@
+#!/bin/bash
+#SBATCH --job-name=prf_chk
+#SBATCH --account=hare.econ.uzh
+#SBATCH --output=/dev/null
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=12G
+#SBATCH --time=00:30:00
+
+# Chunked PRF fit: ONE voxel-chunk per array task, distributed across
+# CPU nodes. After all tasks finish, run merge_prf_chunks.sh per
+# subject to assemble the final NIfTIs.
+#
+# Sizing (Gaussian model 1, T=3096, V_per_chunk=5000):
+#   - Base load (BOLD + paradigm + masker)        ~5 GB
+#   - Per-voxel activations during GD backprop    ~5 GB
+#   - Total peak                                  ~10-11 GB  -> 12G request
+#   - DoG/DN models will need larger mem (use --mem on resubmit).
+#
+# Layout: array task ID maps to (subject_idx, chunk_idx).
+#
+# Usage:
+#   sbatch --array=1-1620 --export=ALL,MODEL=1,N_CHUNKS=54,N_SUBS=30 \
+#          retsupp/modeling/slurm_jobs/fit_prf_chunked.sh
+#
+# 30 subjects × 54 chunks = 1620 array tasks. Each task is small
+# (16 CPU, 12 GB, ~6-10 min wall) so the cluster can schedule many
+# in parallel.
+
+set -euo pipefail
+
+LOGFILE="$HOME/logs/prf_chk_m${MODEL:-?}_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID:-0}.txt"
+mkdir -p "$(dirname "$LOGFILE")"
+exec >"$LOGFILE" 2>&1
+
+if [[ -z "${SLURM_ARRAY_TASK_ID:-}" ]]; then
+    echo "ERROR: SLURM_ARRAY_TASK_ID not set." >&2; exit 2
+fi
+if [[ -z "${MODEL:-}" || -z "${N_CHUNKS:-}" || -z "${N_SUBS:-}" ]]; then
+    echo "ERROR: MODEL, N_CHUNKS, N_SUBS env vars required." >&2; exit 2
+fi
+
+idx0=$(( SLURM_ARRAY_TASK_ID - 1 ))
+sub_idx=$(( idx0 / N_CHUNKS ))
+chunk_idx=$(( idx0 % N_CHUNKS ))
+subject=$(( sub_idx + 1 ))
+
+if [[ "$subject" -gt "$N_SUBS" ]]; then
+    echo "Array index out of range." >&2; exit 2
+fi
+
+echo "Host: $(hostname) | Job ${SLURM_JOB_ID}.${SLURM_ARRAY_TASK_ID}"
+echo "  sub-${subject} | model ${MODEL} | chunk ${chunk_idx}/${N_CHUNKS}"
+echo "Started: $(date)"
+
+source "$HOME/data/miniforge3/etc/profile.d/conda.sh"
+conda activate retsupp_cuda
+export PYTHONUNBUFFERED=1
+export CUDA_VISIBLE_DEVICES=-1
+export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-16}"
+export TF_NUM_INTRAOP_THREADS="${SLURM_CPUS_PER_TASK:-16}"
+export TF_NUM_INTEROP_THREADS=2
+
+PYTHON="$HOME/data/conda/envs/retsupp_cuda/bin/python"
+
+$PYTHON -u "$HOME/git/retsupp/retsupp/modeling/fit_prf.py" \
+    "$subject" --model "$MODEL" \
+    --bids-folder /shares/zne.uzh/gdehol/ds-retsupp \
+    --resolution 50 \
+    --voxel-chunk-size 100000 \
+    --max-n-iterations 2000 \
+    --paradigm-kind full \
+    --chunk-index "$chunk_idx" \
+    --n-chunks "$N_CHUNKS"
+# Note: --voxel-chunk-size 100000 means "no internal batching" — the
+# task processes all its voxels in one GD call (per-task voxel count
+# ~5000 with N_CHUNKS=54).
+
+echo "Finished: $(date)"
