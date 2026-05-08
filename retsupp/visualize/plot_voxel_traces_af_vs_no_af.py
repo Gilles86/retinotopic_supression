@@ -403,15 +403,26 @@ def per_voxel_r2(obs, pred):
 # ----------------------------------------------------------------------
 # Main per (subject, ROI) figure.
 # ----------------------------------------------------------------------
-def make_subject_roi_page(pdf, sub: Subject, roi: str,
-                            af_pkl_path: Path,
-                            mean_prf_full: pd.DataFrame,
-                            opts):
+def compute_voxel_traces(sub: Subject, roi: str,
+                          af_pkl_path: Path,
+                          mean_prf_full: pd.DataFrame,
+                          opts):
+    """Heavy compute: load BOLD, fit forward AF + no-AF predictions,
+    pick top-N voxels, build per-condition averaged traces.
+
+    Returns a dict with:
+      'voxel_traces': list of per-voxel dicts (keys 'vi', 'x', 'y', 'sd',
+                      'r2_af', 'r2_no_af', 'r2_meanfit', 'closest_cond',
+                      'farthest_cond', 'per_cat', 'run_segments').
+      'AFCls', 'with_target', 'mode', 'radius' (bar aperture, deg),
+      'win' (window TRs), 'n_picked'.
+    Returns None on skip (no fits, no valid voxels, etc.).
+    """
     print(f'\n=== sub-{sub.subject_id:02d} | ROI={roi} ===')
     print(f'AF pkl: {af_pkl_path}')
     if not af_pkl_path.exists():
         print(f'  [SKIP] AF pkl not found.')
-        return False
+        return None
 
     with open(af_pkl_path, 'rb') as f:
         d = pickle.load(f)
@@ -428,15 +439,19 @@ def make_subject_roi_page(pdf, sub: Subject, roi: str,
           f'mode={mode}, n_voxels_in_pkl={len(voxel_idx)})')
 
     # ---- Load BOLD + paradigm + indicators (once per subject/ROI). ----
-    (run_meta, bold_chunks, par_chunks,
-     cond_chunks, dyn_chunks, tgt_chunks,
-     grid_coords, n_T_run, masker, hp_per_run) = load_paradigm_and_bold(
-        sub, resolution=resolution, grid_radius=grid_radius,
-        with_target=with_target,
-    )
+    try:
+        (run_meta, bold_chunks, par_chunks,
+         cond_chunks, dyn_chunks, tgt_chunks,
+         grid_coords, n_T_run, masker, hp_per_run) = load_paradigm_and_bold(
+            sub, resolution=resolution, grid_radius=grid_radius,
+            with_target=with_target,
+        )
+    except Exception as e:
+        print(f'  [SKIP] load_paradigm_and_bold failed: {e}')
+        return None
     if not run_meta:
         print('  [SKIP] No runs loaded.')
-        return False
+        return None
     bold_full = np.vstack(bold_chunks)        # (T_total, V_full)
     paradigm = np.vstack(par_chunks)
     cond_ind = np.vstack(cond_chunks)
@@ -498,7 +513,7 @@ def make_subject_roi_page(pdf, sub: Subject, roi: str,
     print(f'  voxels passing ALL filters: {n_valid}')
     if n_valid < 2:
         print('  [SKIP] not enough valid voxels.')
-        return False
+        return None
 
     # ---- Compute AF + no-AF predictions only for valid voxels. ----
     valid_idx = np.where(valid)[0]
@@ -514,7 +529,7 @@ def make_subject_roi_page(pdf, sub: Subject, roi: str,
     missing = [c for c in no_af_cols if c not in mean_sub.columns]
     if missing:
         print(f'  [SKIP] mean PRF missing cols {missing}')
-        return False
+        return None
 
     print(f'  Building AF model & forward pass (V={len(valid_idx)})...')
     hrf_model = SPMHRFModel(tr=sub.get_tr(1, 1),
@@ -572,7 +587,7 @@ def make_subject_roi_page(pdf, sub: Subject, roi: str,
               f'range [{s_min:+.3f} ... {s_max:+.3f}]')
     else:
         print('  Picked 0 voxels.')
-        return False
+        return None
 
     # ---- Build per-voxel time-locked traces. ----
     # For each picked voxel, find ALL bar-pass TRs (one per qualifying
@@ -622,11 +637,27 @@ def make_subject_roi_page(pdf, sub: Subject, roi: str,
                     'no_af': pred_no_af[t0:t1, vi],
                 })
 
-        # Aggregate per category. If --by-direction, split each cat
-        # into TOWARD vs AWAY sub-conditions (keys 'close_toward',
-        # 'close_away', etc.).
+        # Aggregate per category. ALWAYS compute the combined-aggregate
+        # entry per category ('close', 'orth', 'far'). If --by-direction,
+        # ALSO compute the toward/away split (keys 'close_toward',
+        # 'close_away', etc.). This lets the renderer show both layers.
         per_cat = {}
         cat_list = ('close', 'orth', 'far')
+        for cat in cat_list:
+            segs = [s for s in run_segments if s['cat'] == cat]
+            if not segs:
+                continue
+            obs_arr = np.stack([s['obs'] for s in segs], axis=0)
+            af_arr = np.stack([s['af'] for s in segs], axis=0)
+            no_arr = np.stack([s['no_af'] for s in segs], axis=0)
+            per_cat[cat] = {
+                'n': len(segs),
+                'obs_mean': obs_arr.mean(axis=0),
+                'obs_sem': obs_arr.std(axis=0, ddof=1) / np.sqrt(len(segs))
+                            if len(segs) > 1 else np.zeros(win),
+                'af_mean': af_arr.mean(axis=0),
+                'no_af_mean': no_arr.mean(axis=0),
+            }
         if opts.by_direction:
             keys = [(c, r) for c in cat_list for r in ('toward', 'away')]
             for c, r in keys:
@@ -638,22 +669,6 @@ def make_subject_roi_page(pdf, sub: Subject, roi: str,
                 af_arr = np.stack([s['af'] for s in segs], axis=0)
                 no_arr = np.stack([s['no_af'] for s in segs], axis=0)
                 per_cat[f'{c}_{r}'] = {
-                    'n': len(segs),
-                    'obs_mean': obs_arr.mean(axis=0),
-                    'obs_sem': obs_arr.std(axis=0, ddof=1) / np.sqrt(len(segs))
-                                if len(segs) > 1 else np.zeros(win),
-                    'af_mean': af_arr.mean(axis=0),
-                    'no_af_mean': no_arr.mean(axis=0),
-                }
-        else:
-            for cat in cat_list:
-                segs = [s for s in run_segments if s['cat'] == cat]
-                if not segs:
-                    continue
-                obs_arr = np.stack([s['obs'] for s in segs], axis=0)
-                af_arr = np.stack([s['af'] for s in segs], axis=0)
-                no_arr = np.stack([s['no_af'] for s in segs], axis=0)
-                per_cat[cat] = {
                     'n': len(segs),
                     'obs_mean': obs_arr.mean(axis=0),
                     'obs_sem': obs_arr.std(axis=0, ddof=1) / np.sqrt(len(segs))
@@ -939,7 +954,7 @@ def main():
                           help='Split sweeps by their direction-of-motion '
                                'relative to the HP location (TOWARDS vs '
                                'AWAY from HP after passing the voxel).')
-    parser.add_argument('--min-eccentricity', type=float, default=1.5,
+    parser.add_argument('--min-eccentricity', type=float, default=1.0,
                           help='Drop voxels with PRF eccentricity < this (°). '
                                'Foveal voxels have tiny PRFs and the bar '
                                'sweeps past them too fast to read off the '
