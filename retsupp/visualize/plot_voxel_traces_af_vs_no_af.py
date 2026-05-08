@@ -677,6 +677,18 @@ def compute_voxel_traces(sub: Subject, roi: str,
                     'no_af_mean': no_arr.mean(axis=0),
                 }
 
+        # Convincing-ness score:
+        #   convincing = ΔR²_HP_close × |peak_BOLD_HP_close − peak_BOLD_HP_far|
+        # Use the AGGREGATE close/far mean traces (always present;
+        # by-direction sub-keys are extras).
+        delta_r2_close = float(score[vi])
+        if 'close' in per_cat and 'far' in per_cat:
+            peak_close = float(np.max(np.abs(per_cat['close']['obs_mean'])))
+            peak_far = float(np.max(np.abs(per_cat['far']['obs_mean'])))
+            convincing = delta_r2_close * abs(peak_close - peak_far)
+        else:
+            convincing = -np.inf
+
         voxel_traces.append({
             'vi': vi,
             'x': x, 'y': y,
@@ -688,6 +700,8 @@ def compute_voxel_traces(sub: Subject, roi: str,
             'farthest_cond': farthest_cond,
             'per_cat': per_cat,
             'run_segments': run_segments,
+            'delta_r2_close': delta_r2_close,
+            'convincing_score': convincing,
         })
 
     # ---- Print sanity stats (n events per category, summed across
@@ -695,7 +709,7 @@ def compute_voxel_traces(sub: Subject, roi: str,
     print(f'\n  Picked voxels (sub-{sub.subject_id:02d}, {roi}):')
     print(f'  {"vi":>4}  {"x":>7}  {"y":>7}  {"sd":>5}  '
           f'{"R²(mean)":>9}  {"R²(AF)":>7}  {"R²(noAF)":>9}  '
-          f'n_close/orth/far')
+          f'n_close/orth/far  conv')
     for v in voxel_traces:
         # Sum n events across direction sub-keys for sanity print.
         def n_in(cat):
@@ -705,25 +719,31 @@ def compute_voxel_traces(sub: Subject, roi: str,
         print(f'  {v["vi"]:>4}  {v["x"]:+.3f}  {v["y"]:+.3f}  '
               f'{v["sd"]:.2f}  {v["r2_meanfit"]:>9.3f}  '
               f'{v["r2_af"]:>7.3f}  {v["r2_no_af"]:>9.3f}   '
-              f'{n_close}/{n_orth}/{n_far}')
+              f'{n_close}/{n_orth}/{n_far}  '
+              f'{v["convincing_score"]:+.3f}')
 
-    # ---- Plot the page. ----
-    # Layout: a grid sized to fit n_pick voxels at ~5 columns wide.
-    n = len(voxel_traces)
-    # Wider, fewer-column layout: panels roughly 6×4 in (was 3.6×4.2).
-    ncols = 3 if n >= 3 else max(1, n)
-    nrows = int(np.ceil(n / ncols))
-    fig, axes = plt.subplots(nrows, ncols, figsize=(6.0 * ncols, 4.0 * nrows),
-                              sharex=True, sharey=False, squeeze=False)
-    axes = axes.flatten()
-    cat_colors = {'close': '#d62728', 'orth': '#7f7f7f', 'far': '#1f77b4'}
-    cat_labels = {'close': 'HP-close', 'orth': 'HP-orth', 'far': 'HP-far'}
-    rel_alpha = {'toward': 1.0, 'away': 0.55}
-    rel_obs_lw = {'toward': 2.2, 'away': 1.6}
-    t_axis = np.arange(win) - half  # TRs relative to bar-pass.
+    return {
+        'voxel_traces': voxel_traces,
+        'AFCls': AFCls,
+        'with_target': with_target,
+        'mode': mode,
+        'radius': radius,
+        'win': win,
+        'n_picked': len(voxel_traces),
+    }
 
-    # Optional cubic upsampling for SMOOTHER PLOTTING ONLY (does NOT
-    # affect averaging, fitting, or selection). Default: dt = 0.1s.
+
+# ----------------------------------------------------------------------
+# Single-panel renderer.
+# ----------------------------------------------------------------------
+CAT_COLORS = {'close': '#d62728', 'orth': '#7f7f7f', 'far': '#1f77b4'}
+CAT_LABELS = {'close': 'HP-close', 'orth': 'HP-orth', 'far': 'HP-far'}
+
+
+def _make_smoother(win: int, opts):
+    """Return (t_axis_for_plot, smooth_fn). Cubic-upsampled for plotting."""
+    half = win // 2
+    t_axis = np.arange(win) - half
     TR = 1.6
     upsample_dt = getattr(opts, 'plot_upsample_dt', 0.1)
     if upsample_dt and upsample_dt < TR:
@@ -735,133 +755,180 @@ def compute_voxel_traces(sub: Subject, roi: str,
             f = interp1d(t_axis_sec, y, kind='cubic',
                          bounds_error=False, fill_value='extrapolate')
             return f(t_plot)
-        t_axis_for_plot = t_plot / TR  # plot still labels "TR (relative to bar-pass)"
-    else:
-        t_plot = t_axis * TR
-        t_axis_for_plot = t_axis
-        _smooth = lambda y: y  # noqa: E731
+        return t_plot / TR, _smooth
+    return t_axis, (lambda y: y)
+
+
+def render_voxel_panel(ax, voxel_trace, opts, *, radius: float,
+                        is_first: bool = False, win: int = 21,
+                        title_extra: str = ''):
+    """Plot one voxel's per-cat (and optionally directional) traces.
+
+    Layered overlay if opts.by_direction:
+      - aggregate (combined toward+away) as the THICK main line
+      - toward as a thinner solid line (alpha lower)
+      - away as a thinner dashed line (alpha lower)
+    """
+    v = voxel_trace
+    t_axis_for_plot, _smooth = _make_smoother(win, opts)
+
+    # ---------------- Aggregate layer (always plotted). ----------------
+    # Order so HP-close is on top.
+    for cat in ('far', 'orth', 'close'):
+        if cat not in v['per_cat']:
+            continue
+        data = v['per_cat'][cat]
+        color = CAT_COLORS[cat]
+        obs_mean_p = _smooth(data['obs_mean'])
+        obs_sem_p = _smooth(data['obs_sem'])
+        af_mean_p = _smooth(data['af_mean'])
+        no_af_mean_p = _smooth(data['no_af_mean'])
+        ax.fill_between(
+            t_axis_for_plot, obs_mean_p - obs_sem_p,
+            obs_mean_p + obs_sem_p,
+            color=color, alpha=0.18, linewidth=0,
+        )
+        ax.plot(t_axis_for_plot, obs_mean_p, color=color, lw=2.4,
+                 alpha=1.0, label=f"{CAT_LABELS[cat]} n={data['n']}",
+                 zorder=4)
+        ax.plot(t_axis_for_plot, af_mean_p, color=color, lw=1.2,
+                 ls='-', alpha=0.85, zorder=3.0)
+        # no-AF model is BLACK (condition-agnostic baseline), thick +
+        # transparent so it sits behind the AF & observed traces.
+        ax.plot(t_axis_for_plot, no_af_mean_p, color='k', lw=2.0,
+                 ls='--', alpha=0.35, zorder=1.8)
+
+    # ---------------- Directional overlay (thinner, lower alpha). -----
+    if opts.by_direction:
+        rel_dash = {'toward': '-', 'away': '--'}
+        rel_alpha = 0.55
+        rel_lw = 1.2
+        for cat in ('far', 'orth', 'close'):
+            for rel in ('toward', 'away'):
+                key = f'{cat}_{rel}'
+                if key not in v['per_cat']:
+                    continue
+                data = v['per_cat'][key]
+                color = CAT_COLORS[cat]
+                obs_mean_p = _smooth(data['obs_mean'])
+                ax.plot(t_axis_for_plot, obs_mean_p, color=color,
+                         lw=rel_lw, ls=rel_dash[rel], alpha=rel_alpha,
+                         zorder=2.0)
+
+    ax.axvline(0, color='k', lw=0.5, alpha=0.3)
+    ax.grid(alpha=0.15)
+    d_r2 = v['r2_af'] - v['r2_no_af']
+    title = (f"v={v['vi']}  ({v['x']:+.1f},{v['y']:+.1f}) σ={v['sd']:.1f}\n"
+             f"R²: mean={v['r2_meanfit']:.2f}  "
+             f"AF={v['r2_af']:.2f}  noAF={v['r2_no_af']:.2f}  "
+             f"ΔR²={d_r2:+.2f}")
+    if title_extra:
+        title = title_extra + '\n' + title
+    ax.set_title(title, fontsize=8)
+
+    # Legend on first panel only.
+    if is_first:
+        from matplotlib.lines import Line2D
+        from matplotlib.patches import Patch
+        handles = [
+            Line2D([0], [0], color='#d62728', lw=2.4,
+                    label='HP-close (obs, aggregate)'),
+            Line2D([0], [0], color='#7f7f7f', lw=2.4,
+                    label='HP-orth (obs, aggregate)'),
+            Line2D([0], [0], color='#1f77b4', lw=2.4,
+                    label='HP-far (obs, aggregate)'),
+            Patch(facecolor='gray', alpha=0.3, edgecolor='none',
+                  label='shaded = ± SEM'),
+            Line2D([0], [0], color='k', lw=1.2, ls='-', label='AF model'),
+            Line2D([0], [0], color='k', lw=1.0, ls='--',
+                    label='no-AF model'),
+        ]
+        if opts.by_direction:
+            handles += [
+                Line2D([0], [0], color='k', lw=1.2, ls='-', alpha=0.55,
+                        label='toward HP (thin solid)'),
+                Line2D([0], [0], color='k', lw=1.2, ls='--', alpha=0.55,
+                        label='away from HP (thin dashed)'),
+            ]
+        ax.legend(handles=handles, loc='upper right', fontsize=6,
+                   frameon=True, framealpha=0.85)
+
+    # Inset: PRF + ring positions coloured by condition.
+    try:
+        ax_in = ax.inset_axes([0.02, 0.62, 0.32, 0.35])
+        ax_in.set_xlim(-5, 5); ax_in.set_ylim(-5, 5)
+        ax_in.set_aspect('equal')
+        ax_in.axhline(0, color='0.85', lw=0.4)
+        ax_in.axvline(0, color='0.85', lw=0.4)
+        theta = np.linspace(0, 2 * np.pi, 100)
+        ax_in.plot(radius * np.cos(theta), radius * np.sin(theta),
+                    color='0.7', lw=0.4)
+        half_fwhm = v['sd'] * np.sqrt(2.0 * np.log(2.0))
+        ax_in.add_patch(plt.Circle(
+            (v['x'], v['y']), half_fwhm, fill=False, edgecolor='k',
+            lw=1.0,
+        ))
+        ax_in.plot(v['x'], v['y'], 'k.', markersize=3)
+        for cond, xy in COND_TO_XY.items():
+            if cond == v['closest_cond']:
+                cat = 'close'
+            elif cond == v['farthest_cond']:
+                cat = 'far'
+            else:
+                cat = 'orth'
+            ax_in.plot(xy[0], xy[1], 'o',
+                        color=CAT_COLORS[cat], markersize=6,
+                        markeredgecolor='k', markeredgewidth=0.4)
+        ax_in.set_xticks([]); ax_in.set_yticks([])
+        for spine in ax_in.spines.values():
+            spine.set_linewidth(0.4); spine.set_color('0.6')
+    except Exception as e:
+        print(f'  [WARN] inset failed: {e}')
+
+
+def make_subject_roi_page(pdf, sub: Subject, roi: str,
+                            af_pkl_path: Path,
+                            mean_prf_full: pd.DataFrame,
+                            opts):
+    """Compute traces and render one (subject, ROI) page to PDF.
+
+    Returns True on success (page rendered), False on skip.
+    """
+    result = compute_voxel_traces(sub, roi, af_pkl_path,
+                                    mean_prf_full, opts)
+    if result is None:
+        return False
+    voxel_traces = result['voxel_traces']
+    if not voxel_traces:
+        return False
+
+    AFCls = result['AFCls']
+    radius = result['radius']
+    win = result['win']
+
+    n = len(voxel_traces)
+    ncols = 3 if n >= 3 else max(1, n)
+    nrows = int(np.ceil(n / ncols))
+    fig, axes = plt.subplots(nrows, ncols,
+                              figsize=(6.0 * ncols, 4.0 * nrows),
+                              sharex=True, sharey=False, squeeze=False)
+    axes = axes.flatten()
 
     for ax_i, v in enumerate(voxel_traces):
         ax = axes[ax_i]
-        # Plot order: far → orth → close so the close lines are on top.
-        if opts.by_direction:
-            order_keys = []
-            for cat in ('far', 'orth', 'close'):
-                for rel in ('away', 'toward'):
-                    k = f'{cat}_{rel}'
-                    if k in v['per_cat']:
-                        order_keys.append((k, cat, rel))
-        else:
-            order_keys = [(c, c, None)
-                          for c in ('far', 'orth', 'close')
-                          if c in v['per_cat']]
-
-        for key, cat, rel in order_keys:
-            data = v['per_cat'][key]
-            color = cat_colors[cat]
-            obs_alpha = rel_alpha[rel] if rel else 1.0
-            obs_lw = rel_obs_lw[rel] if rel else 2.0
-            obs_mean_p = _smooth(data['obs_mean'])
-            obs_sem_p = _smooth(data['obs_sem'])
-            af_mean_p = _smooth(data['af_mean'])
-            no_af_mean_p = _smooth(data['no_af_mean'])
-            ax.fill_between(
-                t_axis_for_plot, obs_mean_p - obs_sem_p,
-                obs_mean_p + obs_sem_p,
-                color=color, alpha=0.15 * obs_alpha, linewidth=0,
-            )
-            label = f"{cat_labels[cat]}"
-            if rel is not None:
-                label += f" ({rel})"
-            label += f" n={data['n']}"
-            ax.plot(t_axis_for_plot, obs_mean_p, color=color, lw=obs_lw,
-                     alpha=obs_alpha, label=label, zorder=3)
-            ax.plot(t_axis_for_plot, no_af_mean_p, color=color, lw=0.9,
-                     ls='--', alpha=0.7 * obs_alpha, zorder=2)
-            ax.plot(t_axis_for_plot, af_mean_p, color=color, lw=1.1,
-                     ls='-', alpha=0.85 * obs_alpha, zorder=2.5)
-        ax.axvline(0, color='k', lw=0.5, alpha=0.3)
-        ax.grid(alpha=0.15)
-        d_r2 = v['r2_af'] - v['r2_no_af']
-        ax.set_title(
-            f"v={v['vi']}  ({v['x']:+.1f},{v['y']:+.1f}) σ={v['sd']:.1f}\n"
-            f"R²: mean={v['r2_meanfit']:.2f}  "
-            f"AF={v['r2_af']:.2f}  noAF={v['r2_no_af']:.2f}  "
-            f"ΔR²={d_r2:+.2f}",
-            fontsize=8,
+        render_voxel_panel(
+            ax, v, opts,
+            radius=radius, is_first=(ax_i == 0), win=win,
         )
         if ax_i % ncols == 0:
             ax.set_ylabel('BOLD (z)', fontsize=8)
         if ax_i // ncols == nrows - 1:
             ax.set_xlabel('TR (relative to bar-pass)', fontsize=8)
 
-        # Legend in upper-right of first panel only.
-        if ax_i == 0:
-            from matplotlib.lines import Line2D
-            from matplotlib.patches import Patch
-            handles = [
-                Line2D([0], [0], color='#d62728', lw=2,
-                        label='HP-close (obs)'),
-                Line2D([0], [0], color='#7f7f7f', lw=2, label='HP-orth (obs)'),
-                Line2D([0], [0], color='#1f77b4', lw=2, label='HP-far (obs)'),
-                Patch(facecolor='gray', alpha=0.3, edgecolor='none',
-                      label='shaded = ± SEM (across sweeps)'),
-                Line2D([0], [0], color='k', lw=1.2, ls='-', label='AF model'),
-                Line2D([0], [0], color='k', lw=1.0, ls='--',
-                        label='no-AF model'),
-            ]
-            if opts.by_direction:
-                handles += [
-                    Line2D([0], [0], color='k', lw=2.2, alpha=1.0,
-                            label='toward HP'),
-                    Line2D([0], [0], color='k', lw=1.6, alpha=0.55,
-                            label='away from HP'),
-                ]
-            ax.legend(handles=handles, loc='upper right', fontsize=6,
-                       frameon=True, framealpha=0.85)
-
-        # Inset: PRF + ring positions colored by category.
-        try:
-            ax_in = ax.inset_axes([0.02, 0.62, 0.32, 0.35])
-            ax_in.set_xlim(-5, 5); ax_in.set_ylim(-5, 5)
-            ax_in.set_aspect('equal')
-            ax_in.axhline(0, color='0.85', lw=0.4)
-            ax_in.axvline(0, color='0.85', lw=0.4)
-            # Bar aperture ring.
-            theta = np.linspace(0, 2 * np.pi, 100)
-            ax_in.plot(radius * np.cos(theta), radius * np.sin(theta),
-                        color='0.7', lw=0.4)
-            # PRF: open circle at (x, y), radius = half-FWHM
-            # (= sd × √(2 ln 2) ≈ 1.177 × sd) so the outline shows
-            # where the Gaussian RF response is at half-max.
-            half_fwhm = v['sd'] * np.sqrt(2.0 * np.log(2.0))
-            ax_in.add_patch(plt.Circle(
-                (v['x'], v['y']), half_fwhm, fill=False, edgecolor='k',
-                lw=1.0,
-            ))
-            ax_in.plot(v['x'], v['y'], 'k.', markersize=3)
-            # 4 ring positions colored by category.
-            for cond, xy in COND_TO_XY.items():
-                if cond == v['closest_cond']:
-                    cat = 'close'
-                elif cond == v['farthest_cond']:
-                    cat = 'far'
-                else:
-                    cat = 'orth'
-                ax_in.plot(xy[0], xy[1], 'o',
-                            color=cat_colors[cat], markersize=6,
-                            markeredgecolor='k', markeredgewidth=0.4)
-            ax_in.set_xticks([]); ax_in.set_yticks([])
-            for spine in ax_in.spines.values():
-                spine.set_linewidth(0.4); spine.set_color('0.6')
-        except Exception as e:
-            print(f'  [WARN] inset failed: {e}')
-
-    # Hide unused axes.
     for ax_i in range(len(voxel_traces), len(axes)):
         axes[ax_i].axis('off')
 
-    sweep_descr = ('all 4 sweeps × by-direction'
+    sweep_descr = ('all 4 sweeps + by-direction overlay'
                     if opts.by_direction
                     else 'all 4 sweep directions pooled')
     fig.suptitle(
