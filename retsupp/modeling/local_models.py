@@ -53,6 +53,31 @@ Currently provides
     parameterization. Subclasses the factorial machinery for the
     dynamic + target gains; the 6 new sustained gains are always
     signed-free (no factorial sign pattern is applied to them).
+
+``GaussianAFDriveModel`` / ``GaussianAFAnalyticalShiftModel`` /
+``GaussianAFNumericalShiftModel``
+    Three formulations of attention-field-modulated PRFs on a
+    *Gaussian* (not DoG) backbone, used to compare three different
+    ways of injecting the AF effect on the prediction:
+
+    - DRIVE   (Model A): amplitude/drive modulation via "1 + ..." on
+      the stimulus paradigm before integration. This is the
+      AF+ formulation of Sumiya et al., implemented numerically.
+    - ANALYTICAL  (Model B): closed-form precision-weighted shift of
+      the PRF center per TR (no offset). Departure from Sumiya's
+      strict-positive-gain formulation: signed gains are allowed and
+      contribute *signed* precision (gain<0 pushes COM away).
+    - NUMERICAL  (Model C): build the modulated effective PRF
+      ``M(g, t) · PRF_v(g)`` numerically per TR per voxel, extract the
+      |eff_PRF| centre-of-mass as the per-TR shifted centre, and
+      refit a symmetric Gaussian with the original σ_PRF. This
+      mirrors what the conditionwise PRF analysis does (a Gaussian is
+      always re-fit to the shifted RF).
+
+    All three classes share an 8-shared-parameter setup (σ_AF, σ_dyn,
+    g_HP, g_LP, g_HP_dyn, g_LP_dyn, g_T_dyn, σ_T_dyn := σ_dyn) and a
+    13-slot encoding parameter vector before HRF; see the class
+    docstrings.
 """
 from __future__ import annotations
 
@@ -66,6 +91,8 @@ import tensorflow_probability as tfp
 from braincoder.models import (
     DoGDynamicAttentionFieldPRF2D_v3,
     DoGDynamicAttentionFieldPRF2DWithHRF_v3,
+    DynamicAttentionFieldPRF2D_v3,
+    DynamicAttentionFieldPRF2DWithHRF_v3,
     HRFEncodingModel,
 )
 
@@ -1100,3 +1127,698 @@ class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_runPosition(
         baseline = parameters[:, tf.newaxis, :, 3]
         result = result + baseline
         return result
+
+
+# ---------------------------------------------------------------------------
+# Three Gaussian-backbone AF formulations for the model-comparison sweep.
+#
+# Common encoding-side parameter layout (13 slots, before optional HRF tail):
+#     0  x
+#     1  y
+#     2  sd                 (per-voxel)
+#     3  baseline           (per-voxel)
+#     4  amplitude          (per-voxel)
+#     5  sigma_AF           (shared)
+#     6  g_HP               (shared)
+#     7  g_LP               (shared)
+#     8  sigma_dyn          (shared)
+#     9  g_HP_dyn           (shared)
+#     10 g_LP_dyn           (shared)
+#     11 g_T_dyn            (shared)
+#     12 sigma_T_dyn        (shared, tied to sigma_dyn — sharedSigma)
+#
+# The three subclasses differ ONLY in ``_basis_predictions``. They share the
+# constructor (target_indicator + dynamic_indicator + condition_indicator),
+# parameter labels, parameter transforms (forward/backward) and the
+# ``sharedSigma`` constraint sigma_T_dyn := sigma_dyn.
+# ---------------------------------------------------------------------------
+class _GaussianAFTargetBase(DynamicAttentionFieldPRF2D_v3):
+    """Common Gaussian-backbone v3 + target encoding-only base.
+
+    Adds two new shared parameters at the END of the parent's encoding
+    block (slots 11, 12):
+
+    - ``g_T_dyn``     — gain on the per-TR phasic TARGET-onset modulation.
+    - ``sigma_T_dyn`` — extent of the target-onset Gaussian. Tied to
+      ``sigma_dyn`` in every forward pass (sharedSigma constraint —
+      cf. ``DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma``).
+
+    This class is NOT meant to be used directly — it provides only the
+    parameter-vector machinery and the target-modulation field. The
+    three concrete model classes below override ``_basis_predictions``
+    to implement the DRIVE / ANALYTICAL-SHIFT / NUMERICAL-SHIFT
+    forward models.
+    """
+
+    parameter_labels = [
+        'x', 'y', 'sd', 'baseline', 'amplitude',
+        'sigma_AF', 'g_HP', 'g_LP',
+        'sigma_dyn', 'g_HP_dyn', 'g_LP_dyn',
+        'g_T_dyn', 'sigma_T_dyn',
+    ]
+
+    # Number of v3 (parent) encoding params.
+    _N_V3_ENC_PARS = 11
+
+    def __init__(self, grid_coordinates=None, paradigm=None, data=None,
+                 parameters=None, condition_indicator=None,
+                 dynamic_indicator=None,
+                 target_indicator=None,
+                 ring_positions=None, mode='suppression',
+                 weights=None, omega=None,
+                 positive_image_values_only=True,
+                 verbosity=logging.INFO, **kwargs):
+        if target_indicator is None:
+            raise ValueError(
+                "Gaussian AF + target model requires a "
+                "`target_indicator` array of shape "
+                "(n_timepoints, n_ring_positions).")
+
+        super().__init__(
+            grid_coordinates=grid_coordinates, paradigm=paradigm, data=data,
+            parameters=parameters,
+            condition_indicator=condition_indicator,
+            dynamic_indicator=dynamic_indicator,
+            ring_positions=ring_positions, mode=mode,
+            weights=weights, omega=omega,
+            positive_image_values_only=positive_image_values_only,
+            verbosity=verbosity, **kwargs)
+
+        target_indicator = np.asarray(target_indicator, dtype=np.float32)
+        if target_indicator.ndim != 2:
+            raise ValueError(
+                f"target_indicator must be 2-D (T, n_ring_positions); "
+                f"got shape {target_indicator.shape}.")
+        if target_indicator.shape[1] != self.n_conditions:
+            raise ValueError(
+                f"target_indicator has {target_indicator.shape[1]} "
+                f"channels but ring_positions has {self.n_conditions}; "
+                "channels must align with ring_positions.")
+        if target_indicator.shape[0] != self.dynamic_indicator.shape[0]:
+            raise ValueError(
+                f"target_indicator has {target_indicator.shape[0]} "
+                f"timepoints but dynamic_indicator has "
+                f"{self.dynamic_indicator.shape[0]}; they must match.")
+        self.target_indicator = target_indicator
+        self._tf_target_indicator = tf.constant(self.target_indicator,
+                                                dtype=tf.float32)
+
+    # ----- Per-TR effective gain × Gaussian helpers ------------------------
+
+    @tf.function
+    def _gaussian_field_per_ring(self, sigma):
+        """Peak-normalized Gaussian per ring on the stimulus grid.
+
+        Returns ``A`` of shape ``(n_C, G)`` with
+        ``A[ℓ, g] = exp(-||g - r_ℓ||² / (2 σ²))``.
+        """
+        gx = self._grid_coordinates[:, 0][tf.newaxis, :]   # (1, G)
+        gy = self._grid_coordinates[:, 1][tf.newaxis, :]
+        rx = self._tf_ring_positions[:, 0][:, tf.newaxis]  # (n_C, 1)
+        ry = self._tf_ring_positions[:, 1][:, tf.newaxis]
+        diff_sq = (gx - rx) ** 2 + (gy - ry) ** 2          # (n_C, G)
+        return tf.exp(-diff_sq / (2.0 * sigma ** 2))
+
+    @tf.function
+    def _per_tr_modulation_field(self, parameters):
+        """Build ``M(g, t)`` on the stimulus grid (excluding the +1).
+
+        Returns ``mod_tg`` of shape ``(T, G)`` with
+        ``mod_tg = sign · ( g_HP · ci · A_AF + g_LP · (1-ci) · A_AF
+                           + g_HP_dyn · d · ci · A_dyn
+                           + g_LP_dyn · d · (1-ci) · A_dyn
+                           + g_T_dyn  · tgt · A_T )``.
+
+        Note this returns the *additive* modulation; callers add 1 to
+        get the AF+ multiplicative drive used by Model A.
+        """
+        # Shared scalars.
+        sigma_AF = parameters[0, 0, 5]
+        g_HP = parameters[0, 0, 6]
+        g_LP = parameters[0, 0, 7]
+        sigma_dyn = parameters[0, 0, 8]
+        g_HP_dyn = parameters[0, 0, 9]
+        g_LP_dyn = parameters[0, 0, 10]
+        g_T_dyn = parameters[0, 0, 11]
+        # sigma_T_dyn := sigma_dyn (sharedSigma); slot 12 is functionally
+        # inert (raw variable still exists in the optimiser's set, but
+        # the forward transform overwrites it).
+        sigma_T_dyn = sigma_dyn
+
+        # Per-ring Gaussians.
+        A_AF = self._gaussian_field_per_ring(sigma_AF)        # (n_C, G)
+        A_dyn = self._gaussian_field_per_ring(sigma_dyn)
+        A_T = self._gaussian_field_per_ring(sigma_T_dyn)
+
+        ci = self._tf_condition_indicator                     # (T, n_C)
+        d = self._tf_dynamic_indicator                        # (T, n_C)
+        tgt = self._tf_target_indicator                       # (T, n_C)
+
+        # Sustained: g_HP * ci * A_AF + g_LP * (1-ci) * A_AF.
+        sus_hp = tf.einsum('tl,lg->tg', ci, A_AF)              # (T, G)
+        sus_lp = tf.einsum('tl,lg->tg', 1.0 - ci, A_AF)
+        # Dynamic distractor.
+        dyn_hp = tf.einsum('tl,lg->tg', d * ci, A_dyn)
+        dyn_lp = tf.einsum('tl,lg->tg', d * (1.0 - ci), A_dyn)
+        # Dynamic target.
+        tgt_field = tf.einsum('tl,lg->tg', tgt, A_T)
+
+        sign = self._tf_sign
+        mod = sign * (
+            g_HP * sus_hp + g_LP * sus_lp
+            + g_HP_dyn * dyn_hp + g_LP_dyn * dyn_lp
+            + g_T_dyn * tgt_field
+        )
+        return mod                                            # (T, G)
+
+    @tf.function
+    def _per_tr_signed_precision_centers(self, parameters):
+        """Per-TR per-ring signed precision contribution and centres.
+
+        For the analytical-shift formulation we need, per (t, ℓ):
+
+        - effective signed precision c_ℓ(t) (= gain / σ²), summing the
+          three signed-gain contributions:
+            * sustained:  (g_HP · ci + g_LP · (1-ci)) / σ_AF²
+            * dynamic-d:  d · (g_HP_dyn · ci + g_LP_dyn · (1-ci)) / σ_dyn²
+            * target:     tgt · g_T_dyn / σ_T_dyn²
+          (Sumiya's strict no-offset model assumes positive gains. Our
+          ``mode='signed'`` extension allows c_ℓ(t) to be negative,
+          which shifts the COM AWAY from ring ℓ. See the class
+          docstring.)
+        - the ring centres r_ℓ.
+
+        Returns
+        -------
+        c : tf.Tensor, shape (T, n_C)
+            Signed per-TR per-ring precision contribution.
+        rx, ry : tf.Tensor, shape (n_C,)
+            Ring centres (cached on the model).
+        """
+        sigma_AF = parameters[0, 0, 5]
+        g_HP = parameters[0, 0, 6]
+        g_LP = parameters[0, 0, 7]
+        sigma_dyn = parameters[0, 0, 8]
+        g_HP_dyn = parameters[0, 0, 9]
+        g_LP_dyn = parameters[0, 0, 10]
+        g_T_dyn = parameters[0, 0, 11]
+        sigma_T_dyn = sigma_dyn  # sharedSigma
+
+        ci = self._tf_condition_indicator                     # (T, n_C)
+        d = self._tf_dynamic_indicator                        # (T, n_C)
+        tgt = self._tf_target_indicator                       # (T, n_C)
+
+        c_sus = (g_HP * ci + g_LP * (1.0 - ci)) / (sigma_AF ** 2)
+        c_dyn = d * (g_HP_dyn * ci + g_LP_dyn * (1.0 - ci)) / (sigma_dyn ** 2)
+        c_tgt = tgt * g_T_dyn / (sigma_T_dyn ** 2)
+
+        c = c_sus + c_dyn + c_tgt                              # (T, n_C)
+
+        rx = self._tf_ring_positions[:, 0]                     # (n_C,)
+        ry = self._tf_ring_positions[:, 1]
+        return c, rx, ry
+
+    # ----- Parameter transforms -------------------------------------------
+
+    @tf.function
+    def _transform_parameters_forward(self, parameters):
+        """Forward transform.
+
+        Slots 0..10 = parent's v3 encoding pars. Slots 11/12 = NEW.
+        ``sigma_T_dyn`` (slot 12) is OVERWRITTEN with ``sigma_dyn``
+        (slot 8) — the sharedSigma constraint. ``g_T_dyn`` (slot 11)
+        is sign-aware (signed mode passes through; otherwise softplus).
+        """
+        v3_pars = DynamicAttentionFieldPRF2D_v3._transform_parameters_forward(
+            self, parameters[:, :self._N_V3_ENC_PARS])
+
+        if self._signed_gains:
+            g_T_dyn = parameters[:, 11][:, tf.newaxis]
+        else:
+            g_T_dyn = tf.math.softplus(parameters[:, 11][:, tf.newaxis])
+
+        # sigma_T_dyn := sigma_dyn (post-softplus). v3_pars[:, 8] is
+        # the post-softplus sigma_dyn.
+        sigma_T_dyn = v3_pars[:, 8:9]
+
+        return tf.concat([v3_pars, g_T_dyn, sigma_T_dyn], axis=1)
+
+    @tf.function
+    def _transform_parameters_backward(self, parameters):
+        v3_pars = DynamicAttentionFieldPRF2D_v3._transform_parameters_backward(
+            self, parameters[:, :self._N_V3_ENC_PARS])
+
+        if self._signed_gains:
+            g_T_dyn_unb = parameters[:, 11][:, tf.newaxis]
+        else:
+            g_T_dyn_unb = tfp.math.softplus_inverse(
+                parameters[:, 11][:, tf.newaxis])
+
+        # Tie raw σ_T_dyn := raw σ_dyn so the recovered raw vector is
+        # internally consistent (both use softplus -> equal raw -> equal
+        # post-softplus).
+        sigma_T_dyn_raw = v3_pars[:, 8:9]
+        return tf.concat([v3_pars, g_T_dyn_unb, sigma_T_dyn_raw], axis=1)
+
+
+# ---------------------------------------------------------------------------
+# Model A: DRIVE — multiplicative AF+ on the paradigm.
+# ---------------------------------------------------------------------------
+class GaussianAFDriveModel(_GaussianAFTargetBase):
+    """Gaussian-PRF + AF+ DRIVE forward model (Sumiya AF+ numerical).
+
+    For each TR ``t`` and voxel ``v``::
+
+        M(g, t) = 1 + sign · ( sustained_HP/LP + dynamic_HP/LP + target )
+        prediction(t, v) = ∫ PRF_v(g) · paradigm(g, t) · M(g, t) dg
+
+    The PRF centre is held fixed; spatial modulation acts as a per-grid
+    scalar on the stimulus drive. This is the "current" formulation
+    used in the rest of retsupp.
+
+    Free parameters (encoding side, 13 slots): see
+    :class:`_GaussianAFTargetBase`. ``sigma_T_dyn`` is tied to
+    ``sigma_dyn`` (sharedSigma).
+    """
+
+    @tf.function
+    def _basis_predictions(self, paradigm, parameters):
+        # paradigm:    (B, T, G)
+        # parameters:  (B, V, 13[ + n_hrf])
+
+        rf = self._get_rf(self.grid_coordinates, parameters)   # (B, V, G)
+
+        mod_tg = self._per_tr_modulation_field(parameters)     # (T, G)
+        # AF+: 1 + signed sum of attention contributions; clamp ≥ 0.
+        m_full = tf.maximum(1.0 + mod_tg, 0.0)                  # (T, G)
+
+        eff_paradigm = paradigm * m_full[tf.newaxis, :, :]     # (B, T, G)
+        result = tf.einsum('btg,bvg->btv', eff_paradigm, rf)   # (B, T, V)
+
+        baseline = parameters[:, tf.newaxis, :, 3]
+        return result + baseline
+
+
+# ---------------------------------------------------------------------------
+# Model B: ANALYTICAL SHIFT — precision-weighted COM (Sumiya no-offset).
+# ---------------------------------------------------------------------------
+class GaussianAFAnalyticalShiftModel(_GaussianAFTargetBase):
+    """Analytical precision-weighted-mean shift of the PRF centre.
+
+    For each TR ``t`` and voxel ``v``, build a *per-TR* shifted
+    Gaussian centre as the precision-weighted mean of the voxel's PRF
+    centre and the four ring-position AF Gaussians, with per-ring
+    effective signed precision::
+
+        c_ℓ(t) = (g_HP · ci_ℓ + g_LP · (1-ci_ℓ)) / σ_AF²
+               + d_ℓ(t) · (g_HP_dyn · ci_ℓ + g_LP_dyn · (1-ci_ℓ)) / σ_dyn²
+               + tgt_ℓ(t) · g_T_dyn / σ_T_dyn²
+
+        τ_v = 1 / σ_PRF²
+        τ_total(t) = τ_v + Σ_ℓ c_ℓ(t)
+        μ_x(t, v) = ( τ_v · μ_PRF_x_v + Σ_ℓ c_ℓ(t) · r_ℓ_x ) / τ_total(t)
+        μ_y(t, v) = ( τ_v · μ_PRF_y_v + Σ_ℓ c_ℓ(t) · r_ℓ_y ) / τ_total(t)
+
+    Then evaluate a per-TR symmetric Gaussian centred at (μ_x, μ_y)
+    with the SAME σ_PRF and amplitude as the original PRF, integrate
+    against the paradigm.
+
+    For Sumiya's strict positive-gain formulation, c_ℓ ≥ 0. Here
+    ``mode='signed'`` allows c_ℓ < 0 (gain<0 pushes COM AWAY from
+    ring ℓ), which is the natural extension.
+
+    Numerical safety
+    ----------------
+    τ_total(t) can vanish or go negative under signed-gain extreme
+    cases. We clamp τ_total to a small positive floor before dividing
+    so the per-TR Gaussian remains well-defined; in practice the
+    optimiser stays well away from this floor at sensible parameter
+    values.
+    """
+
+    # Floor on total precision to avoid divisions by ~0 in signed mode.
+    _TAU_FLOOR = 1e-6
+
+    @tf.function
+    def _basis_predictions(self, paradigm, parameters):
+        # paradigm:   (B, T, G)
+        # parameters: (B, V, 13[+n_hrf])
+        B = tf.shape(paradigm)[0]
+        T = tf.shape(paradigm)[1]
+        V = tf.shape(parameters)[1]
+
+        # Per-voxel PRF: μ_x, μ_y, σ_PRF, amplitude.
+        mu_x_v = parameters[:, :, 0]                           # (B, V)
+        mu_y_v = parameters[:, :, 1]
+        sd_v = parameters[:, :, 2]
+        amplitude_v = parameters[:, :, 4]
+        baseline_v = parameters[:, :, 3]
+
+        # Per-TR per-ring signed precision contribution (T, n_C) and
+        # ring centres (n_C,).
+        c_tl, rx, ry = self._per_tr_signed_precision_centers(parameters)
+        # c_tl: (T, n_C). Sums to (T,).
+        c_sum_t = tf.reduce_sum(c_tl, axis=1)                  # (T,)
+        # Σ_ℓ c_ℓ(t) · r_ℓ : (T,).
+        c_x_t = tf.einsum('tl,l->t', c_tl, rx)                 # (T,)
+        c_y_t = tf.einsum('tl,l->t', c_tl, ry)
+
+        # Per-voxel precision τ_v = 1/σ_PRF².
+        tau_v = 1.0 / (sd_v ** 2)                              # (B, V)
+
+        # Broadcast to (B, V, T): tau_v[:, :, None] + c_sum_t[None, None, :].
+        tau_total = (
+            tau_v[:, :, tf.newaxis]
+            + c_sum_t[tf.newaxis, tf.newaxis, :]
+        )                                                       # (B, V, T)
+        tau_total_safe = tf.maximum(tau_total, self._TAU_FLOOR)
+
+        num_x = (
+            tau_v[:, :, tf.newaxis] * mu_x_v[:, :, tf.newaxis]
+            + c_x_t[tf.newaxis, tf.newaxis, :]
+        )                                                       # (B, V, T)
+        num_y = (
+            tau_v[:, :, tf.newaxis] * mu_y_v[:, :, tf.newaxis]
+            + c_y_t[tf.newaxis, tf.newaxis, :]
+        )
+
+        mu_x_tv = num_x / tau_total_safe                       # (B, V, T)
+        mu_y_tv = num_y / tau_total_safe
+
+        # Build a per-(B, V, T) Gaussian on the grid: shape (B, V, T, G).
+        # We then take the einsum with paradigm to get predictions.
+        # Memory: (B, V, T, G). For B=1, V=500, T=2500, G=2500: too big.
+        # So compute the integral directly without materialising the
+        # full (V, T, G) tensor by writing
+        #
+        #   pred[b, t, v] = amp_v * Σ_g paradigm[b, t, g]
+        #                   · gauss(g; μ_x_tv[b, v, t], μ_y_tv[b, v, t], σ_v)
+        #
+        # via tf.scan over T (each step holds a (V, G) RF) — but for
+        # eager-mode TF a simple Python loop is fine and respects
+        # gradient flow.
+        gx = self._grid_coordinates[:, 0]                      # (G,)
+        gy = self._grid_coordinates[:, 1]
+        pixel_area = tf.constant(self.pixel_area, dtype=tf.float32)
+        norm_factor = sd_v * tf.sqrt(2.0 * np.pi) / pixel_area  # (B, V)
+
+        def _per_t_step(t_idx):
+            mu_x_t = mu_x_tv[:, :, t_idx]                      # (B, V)
+            mu_y_t = mu_y_tv[:, :, t_idx]
+            # (B, V, G) Gaussian centred at (mu_x_t, mu_y_t) with σ=sd_v.
+            dx = gx[tf.newaxis, tf.newaxis, :] - mu_x_t[:, :, tf.newaxis]
+            dy = gy[tf.newaxis, tf.newaxis, :] - mu_y_t[:, :, tf.newaxis]
+            gauss = tf.exp(
+                -(dx * dx + dy * dy)
+                / (2.0 * sd_v[:, :, tf.newaxis] ** 2)
+            ) * amplitude_v[:, :, tf.newaxis]                  # (B, V, G)
+            gauss = gauss / norm_factor[:, :, tf.newaxis]      # (B, V, G)
+
+            par_t = paradigm[:, t_idx, :]                      # (B, G)
+            # Σ_g par_t · gauss : (B, V).
+            return tf.einsum('bg,bvg->bv', par_t, gauss)
+
+        # tf.map_fn over T -> (T, B, V); transpose to (B, T, V).
+        pred_t = tf.map_fn(
+            _per_t_step, tf.range(T),
+            fn_output_signature=tf.TensorSpec(
+                shape=[None, None], dtype=tf.float32),
+        )                                                       # (T, B, V)
+        pred = tf.transpose(pred_t, perm=[1, 0, 2])            # (B, T, V)
+
+        return pred + baseline_v[:, tf.newaxis, :]
+
+
+# ---------------------------------------------------------------------------
+# Model C: NUMERICAL SHIFT — AF+ then re-fit Gaussian to COM of |eff|.
+# ---------------------------------------------------------------------------
+class GaussianAFNumericalShiftModel(_GaussianAFTargetBase):
+    """AF+ numerical product, then refit a symmetric Gaussian.
+
+    For each TR ``t`` and voxel ``v``::
+
+        M(g, t)            = 1 + sign · attention_modulation
+        eff_PRF(g, t, v)   = M(g, t) · PRF_v(g)
+        (μ_x, μ_y)(t, v)   = COM of |eff_PRF(g, t, v)| over g
+        prediction(t, v)   = amp_v · ∫ paradigm(g, t)
+                              · Gauss(g; (μ_x, μ_y)(t, v), σ_PRF_v) dg
+
+    This is the AF+ Sumiya formulation done numerically: a real "1+"
+    offset enters via M(g, t), but the *prediction* uses a refitted
+    SYMMETRIC Gaussian (centre = COM of |eff|, σ = original σ_PRF,
+    amplitude = original PRF amplitude). This mirrors what the
+    conditionwise PRF analysis does (a Gaussian is always re-fit to
+    the shifted RF).
+
+    Memory
+    ------
+    A naive (T, V, G) eff_PRF tensor is large. We stream per TR via
+    ``tf.map_fn`` over the time axis: each step holds an intermediate
+    of shape ``(B, V, G)`` (the per-TR effective PRF and the per-TR
+    refitted Gaussian). Gradients still flow correctly.
+    """
+
+    # |eff| total mass below this is treated as "no signal at this TR
+    # for this voxel" -> fall back to original PRF centre.
+    _MASS_FLOOR = 1e-8
+
+    @tf.function
+    def _basis_predictions(self, paradigm, parameters):
+        # paradigm:   (B, T, G)
+        # parameters: (B, V, 13[+n_hrf])
+        T = tf.shape(paradigm)[1]
+
+        rf = self._get_rf(self.grid_coordinates, parameters)   # (B, V, G)
+
+        mod_tg = self._per_tr_modulation_field(parameters)     # (T, G)
+        # AF+: M(g, t) = 1 + signed sum, clamped ≥ 0.
+        m_full = tf.maximum(1.0 + mod_tg, 0.0)                  # (T, G)
+
+        # Per-voxel original PRF centre + size + amplitude.
+        mu_x_v = parameters[:, :, 0]                            # (B, V)
+        mu_y_v = parameters[:, :, 1]
+        sd_v = parameters[:, :, 2]
+        amplitude_v = parameters[:, :, 4]
+        baseline_v = parameters[:, :, 3]
+
+        gx = self._grid_coordinates[:, 0]                       # (G,)
+        gy = self._grid_coordinates[:, 1]
+        pixel_area = tf.constant(self.pixel_area, dtype=tf.float32)
+        norm_factor = sd_v * tf.sqrt(2.0 * np.pi) / pixel_area  # (B, V)
+
+        def _per_t_step(t_idx):
+            m_t = m_full[t_idx, :]                              # (G,)
+            # Effective per-voxel RF on grid: (B, V, G).
+            eff = rf * m_t[tf.newaxis, tf.newaxis, :]
+            # COM of |eff| per voxel.
+            abs_eff = tf.abs(eff)                               # (B, V, G)
+            mass = tf.reduce_sum(abs_eff, axis=2)               # (B, V)
+            mass_safe = tf.maximum(mass, self._MASS_FLOOR)
+            com_x = (
+                tf.reduce_sum(abs_eff * gx[tf.newaxis, tf.newaxis, :],
+                              axis=2) / mass_safe
+            )                                                   # (B, V)
+            com_y = (
+                tf.reduce_sum(abs_eff * gy[tf.newaxis, tf.newaxis, :],
+                              axis=2) / mass_safe
+            )
+            # Where mass is degenerate, fall back to original centre so
+            # the Gaussian is still well-defined.
+            mass_ok = mass > self._MASS_FLOOR                   # (B, V)
+            com_x = tf.where(mass_ok, com_x, mu_x_v)
+            com_y = tf.where(mass_ok, com_y, mu_y_v)
+
+            # Refitted symmetric Gaussian at the COM with original σ_v.
+            dx = gx[tf.newaxis, tf.newaxis, :] - com_x[:, :, tf.newaxis]
+            dy = gy[tf.newaxis, tf.newaxis, :] - com_y[:, :, tf.newaxis]
+            gauss = tf.exp(
+                -(dx * dx + dy * dy)
+                / (2.0 * sd_v[:, :, tf.newaxis] ** 2)
+            ) * amplitude_v[:, :, tf.newaxis]                   # (B, V, G)
+            gauss = gauss / norm_factor[:, :, tf.newaxis]
+
+            par_t = paradigm[:, t_idx, :]                       # (B, G)
+            # Σ_g par_t · gauss : (B, V).
+            return tf.einsum('bg,bvg->bv', par_t, gauss)
+
+        pred_t = tf.map_fn(
+            _per_t_step, tf.range(T),
+            fn_output_signature=tf.TensorSpec(
+                shape=[None, None], dtype=tf.float32),
+        )                                                        # (T, B, V)
+        pred = tf.transpose(pred_t, perm=[1, 0, 2])             # (B, T, V)
+
+        return pred + baseline_v[:, tf.newaxis, :]
+
+
+# ---------------------------------------------------------------------------
+# HRF-convolved wrappers for the three Gaussian-AF models. Mirrors the
+# pattern used by ``DoGDynamicAttentionFieldPRF2DWithHRF_v3_target`` and
+# friends above. Each wrapper just delegates the parameter transform to
+# its encoding-side base via ``_GaussianAFTargetBase`` while letting the
+# HRF tail (if flexible) pass through the HRF model's transform.
+# ---------------------------------------------------------------------------
+class _GaussianAFTargetWithHRFBase:
+    """Mixin: parameter transform + HRF tail handling.
+
+    Used by the three concrete WithHRF subclasses below. Each
+    inherits from ``HRFEncodingModel`` and one of the three encoding
+    classes; this mixin provides the shared
+    ``_transform_parameters_forward`` / ``..._backward``.
+    """
+
+    @tf.function
+    def _transform_parameters_forward(self, parameters):
+        if self.flexible_hrf_parameters:
+            n_hrf_pars = len(self.hrf_model.parameter_labels)
+            encoding_pars = (
+                _GaussianAFTargetBase._transform_parameters_forward(
+                    self, parameters[:, :-n_hrf_pars])
+            )
+            hrf_pars = self.hrf_model._transform_parameters_forward(
+                parameters[:, -n_hrf_pars:])
+            return tf.concat([encoding_pars, hrf_pars], axis=1)
+        return _GaussianAFTargetBase._transform_parameters_forward(
+            self, parameters)
+
+    @tf.function
+    def _transform_parameters_backward(self, parameters):
+        if self.flexible_hrf_parameters:
+            n_hrf_pars = len(self.hrf_model.parameter_labels)
+            encoding_pars = (
+                _GaussianAFTargetBase._transform_parameters_backward(
+                    self, parameters[:, :-n_hrf_pars])
+            )
+            hrf_pars = self.hrf_model._transform_parameters_backward(
+                parameters[:, -n_hrf_pars:])
+            return tf.concat([encoding_pars, hrf_pars], axis=1)
+        return _GaussianAFTargetBase._transform_parameters_backward(
+            self, parameters)
+
+
+def _gaussian_af_with_hrf_init(self, *, grid_coordinates, paradigm, data,
+                               parameters, condition_indicator,
+                               dynamic_indicator, target_indicator,
+                               ring_positions, mode,
+                               positive_image_values_only,
+                               weights, hrf_model,
+                               flexible_hrf_parameters,
+                               verbosity, **kwargs):
+    """Shared __init__ for the three Gaussian-AF WithHRF subclasses."""
+    # Encoding side: routes through whichever concrete encoding class
+    # this subclass inherits from (DRIVE / ANALYTICAL / NUMERICAL),
+    # all of which extend _GaussianAFTargetBase.
+    # We intentionally call the encoding base directly (not super())
+    # so the MRO with HRFEncodingModel doesn't pick up the wrong
+    # constructor.
+    # Find the concrete encoding base in the MRO.
+    encoding_cls = None
+    for cls in type(self).__mro__:
+        if (cls is not type(self)
+                and issubclass(cls, _GaussianAFTargetBase)
+                and cls is not _GaussianAFTargetBase):
+            encoding_cls = cls
+            break
+    if encoding_cls is None:
+        raise RuntimeError(
+            f"Could not locate a concrete _GaussianAFTargetBase "
+            f"subclass in MRO of {type(self).__name__}.")
+    encoding_cls.__init__(
+        self, grid_coordinates=grid_coordinates, paradigm=paradigm,
+        data=data, parameters=parameters,
+        condition_indicator=condition_indicator,
+        dynamic_indicator=dynamic_indicator,
+        target_indicator=target_indicator,
+        ring_positions=ring_positions, mode=mode,
+        weights=weights, verbosity=verbosity,
+        positive_image_values_only=positive_image_values_only, **kwargs)
+    HRFEncodingModel.__init__(
+        self, hrf_model=hrf_model,
+        flexible_hrf_parameters=flexible_hrf_parameters, **kwargs)
+
+
+class GaussianAFDriveModelWithHRF(
+    _GaussianAFTargetWithHRFBase,
+    HRFEncodingModel,
+    GaussianAFDriveModel,
+):
+    """HRF-convolved version of :class:`GaussianAFDriveModel`."""
+
+    def __init__(self, grid_coordinates=None, paradigm=None, data=None,
+                 parameters=None, condition_indicator=None,
+                 dynamic_indicator=None,
+                 target_indicator=None,
+                 ring_positions=None, mode='suppression',
+                 positive_image_values_only=True,
+                 weights=None, hrf_model=None,
+                 flexible_hrf_parameters=False,
+                 verbosity=logging.INFO, **kwargs):
+        _gaussian_af_with_hrf_init(
+            self, grid_coordinates=grid_coordinates, paradigm=paradigm,
+            data=data, parameters=parameters,
+            condition_indicator=condition_indicator,
+            dynamic_indicator=dynamic_indicator,
+            target_indicator=target_indicator,
+            ring_positions=ring_positions, mode=mode,
+            positive_image_values_only=positive_image_values_only,
+            weights=weights, hrf_model=hrf_model,
+            flexible_hrf_parameters=flexible_hrf_parameters,
+            verbosity=verbosity, **kwargs)
+
+
+class GaussianAFAnalyticalShiftModelWithHRF(
+    _GaussianAFTargetWithHRFBase,
+    HRFEncodingModel,
+    GaussianAFAnalyticalShiftModel,
+):
+    """HRF-convolved version of :class:`GaussianAFAnalyticalShiftModel`."""
+
+    def __init__(self, grid_coordinates=None, paradigm=None, data=None,
+                 parameters=None, condition_indicator=None,
+                 dynamic_indicator=None,
+                 target_indicator=None,
+                 ring_positions=None, mode='suppression',
+                 positive_image_values_only=True,
+                 weights=None, hrf_model=None,
+                 flexible_hrf_parameters=False,
+                 verbosity=logging.INFO, **kwargs):
+        _gaussian_af_with_hrf_init(
+            self, grid_coordinates=grid_coordinates, paradigm=paradigm,
+            data=data, parameters=parameters,
+            condition_indicator=condition_indicator,
+            dynamic_indicator=dynamic_indicator,
+            target_indicator=target_indicator,
+            ring_positions=ring_positions, mode=mode,
+            positive_image_values_only=positive_image_values_only,
+            weights=weights, hrf_model=hrf_model,
+            flexible_hrf_parameters=flexible_hrf_parameters,
+            verbosity=verbosity, **kwargs)
+
+
+class GaussianAFNumericalShiftModelWithHRF(
+    _GaussianAFTargetWithHRFBase,
+    HRFEncodingModel,
+    GaussianAFNumericalShiftModel,
+):
+    """HRF-convolved version of :class:`GaussianAFNumericalShiftModel`."""
+
+    def __init__(self, grid_coordinates=None, paradigm=None, data=None,
+                 parameters=None, condition_indicator=None,
+                 dynamic_indicator=None,
+                 target_indicator=None,
+                 ring_positions=None, mode='suppression',
+                 positive_image_values_only=True,
+                 weights=None, hrf_model=None,
+                 flexible_hrf_parameters=False,
+                 verbosity=logging.INFO, **kwargs):
+        _gaussian_af_with_hrf_init(
+            self, grid_coordinates=grid_coordinates, paradigm=paradigm,
+            data=data, parameters=parameters,
+            condition_indicator=condition_indicator,
+            dynamic_indicator=dynamic_indicator,
+            target_indicator=target_indicator,
+            ring_positions=ring_positions, mode=mode,
+            positive_image_values_only=positive_image_values_only,
+            weights=weights, hrf_model=hrf_model,
+            flexible_hrf_parameters=flexible_hrf_parameters,
+            verbosity=verbosity, **kwargs)
