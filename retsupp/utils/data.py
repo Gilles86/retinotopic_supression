@@ -319,7 +319,7 @@ class Subject(object):
         grid_radius=5.0, distractor_radius=0.4,
         max_distractor_duration=1.5, debug=False,
         distractor_shape='circle',
-        distractor_long_side=1.5, distractor_short_side=0.5,
+        distractor_long_side=1.5, distractor_short_side=0.375,
     ):
         """Bar PRF stimulus + distractor pixels at the 4 ring locations.
 
@@ -440,33 +440,61 @@ class Subject(object):
                 ori = 90; pos = radius_bar_aperture + bar_width / 2 - dt * speed
             stimulus[i] = np.maximum(stimulus[i], draw_bar(pos, ori))
 
-        # --- Distractor stimulus pass. ---
-        # For each target event with a real distractor (locations 1/3/5/7),
-        # paint a disk at the distractor location with intensity equal to
-        # the fraction of the TR during which the distractor was on.
+        # --- Search-array pass: paint ALL 8 items at the actual ring
+        # positions during each trial's target-on window. ---
+        #
+        # Per the experiment code (experiment/stimuli.py:107-188), the
+        # search array contains 8 oriented rectangles at positions
+        # (eccentricity·cos(i·45°), eccentricity·sin(i·45°)) for i=0..7.
+        # Diagonals (1, 3, 5, 7) can be target/distractor; cardinals
+        # (0, 2, 4, 6) are filler-only. The TARGET rectangle has
+        # ``target_orientation``; all 7 OTHERS (including the color-
+        # singleton distractor) share ``90 - target_orientation``.
+        # The distractor singleton is a colour outlier — irrelevant
+        # for the luminance paradigm tensor.
         targets = onsets[onsets["event_type"] == "target"].sort_values("onset")
         feedback = onsets[onsets["event_type"] == "feedback"].sort_values("onset")
-        # Map distractor location code → (x, y) on the ring.
-        # 1: upper_right, 3: upper_left, 5: lower_left, 7: lower_right.
-        loc_xy = {
-            1.0: (4 / np.sqrt(2),  4 / np.sqrt(2)),
-            3.0: (-4 / np.sqrt(2),  4 / np.sqrt(2)),
-            5.0: (-4 / np.sqrt(2), -4 / np.sqrt(2)),
-            7.0: (4 / np.sqrt(2), -4 / np.sqrt(2)),
-        }
+        ecc = settings.get("eccentricity_stimuli", 4.0)
+        # 8 ring positions in PsychoPy convention (angle = i·45°,
+        # measured CCW from +x axis; +y is up on the screen).
+        ring_xy = np.array([
+            (ecc * np.cos(np.deg2rad(i * 45.0)),
+             ecc * np.sin(np.deg2rad(i * 45.0)))
+            for i in range(8)
+        ], dtype=np.float64)
+        # Distractor disk radius: kept for shape='circle' fallback only.
         # Pre-compute TR window edges for fast overlap math.
         tr_starts = frametimes - tr / 2.
         tr_ends = frametimes + tr / 2.
 
+        def _footprint(cx, cy, ori_deg):
+            """One-rectangle (or disk) binary footprint on the grid."""
+            if distractor_shape == 'circle':
+                return (((grid_x - cx) ** 2 + (grid_y - cy) ** 2)
+                        < distractor_radius ** 2).astype(np.float32)
+            if pd.isna(ori_deg):
+                # No orientation info in events.tsv — fall back to disk.
+                return (((grid_x - cx) ** 2 + (grid_y - cy) ** 2)
+                        < distractor_radius ** 2).astype(np.float32)
+            # Rotate the pixel grid into the rectangle's local frame.
+            # ori_deg is the rectangle's screen orientation in degrees.
+            # Inverse rotation: pixel-frame -> rect-frame.
+            ang = -float(ori_deg) * np.pi / 180.0
+            cos_a = np.cos(ang)
+            sin_a = np.sin(ang)
+            dx = grid_x - cx
+            dy = grid_y - cy
+            xr = dx * cos_a + dy * sin_a
+            yr = -dx * sin_a + dy * cos_a
+            return ((np.abs(xr) <= distractor_long_side / 2.0)
+                    & (np.abs(yr) <= distractor_short_side / 2.0)
+                    ).astype(np.float32)
+
         for _, trial in targets.iterrows():
-            loc_code = trial["distractor_location"]
-            if pd.isna(loc_code) or loc_code == 10.0:
-                continue
-            cx, cy = loc_xy[loc_code]
             t_on = trial["onset"]
             after = feedback[feedback["onset"] > t_on]
-            t_off = after.iloc[0]["onset"] if len(after) else t_on + max_distractor_duration
-            # Cap.
+            t_off = (after.iloc[0]["onset"] if len(after)
+                     else t_on + max_distractor_duration)
             t_off = min(t_off, t_on + max_distractor_duration)
 
             # Fraction of TR overlapping [t_on, t_off].
@@ -474,50 +502,39 @@ class Subject(object):
                 np.minimum(tr_ends, t_off) - np.maximum(tr_starts, t_on),
                 0.0, None,
             ) / tr  # in [0, 1]
-            if distractor_shape == 'circle':
-                footprint = (((grid_x - cx) ** 2 + (grid_y - cy) ** 2) <
-                             distractor_radius ** 2).astype(np.float32)
-            else:
-                # Rectangle: rotate pixel grid into the rectangle's local
-                # frame and binary inside-test on |xr| <= long/2,
-                # |yr| <= short/2. ``distractor_orientation`` is in
-                # degrees; 0° = long axis horizontal, 90° = vertical.
-                ori_deg = trial.get('distractor_orientation', np.nan)
-                if pd.isna(ori_deg):
-                    # Fall back to circle if we somehow lack the
-                    # orientation (e.g. older events.tsv without
-                    # target_orientation). Should not happen in practice.
-                    footprint = (
-                        ((grid_x - cx) ** 2 + (grid_y - cy) ** 2)
-                        < distractor_radius ** 2
-                    ).astype(np.float32)
-                else:
-                    ang = -float(ori_deg) * np.pi / 180.0
-                    cos_a = np.cos(ang)
-                    sin_a = np.sin(ang)
-                    dx = grid_x - cx
-                    dy = grid_y - cy
-                    xr = dx * cos_a + dy * sin_a
-                    yr = -dx * sin_a + dy * cos_a
-                    footprint = (
-                        (np.abs(xr) <= distractor_long_side / 2.0) &
-                        (np.abs(yr) <= distractor_short_side / 2.0)
-                    ).astype(np.float32)
-
-            # Where this distractor is brighter than what's already there,
-            # update.  This handles overlapping distractor windows
-            # (rare, but keeps it idempotent).
             active = overlap > 0
-            if active.any():
-                contrib = overlap[active, None, None] * footprint[None, :, :]
-                # Element-wise max with current stimulus over those frames.
-                stimulus[active] = np.maximum(stimulus[active], contrib)
+            if not active.any():
+                continue
+
+            # Per-trial orientations: target gets target_orientation;
+            # all 7 others get (90 - target_orientation). Skip if no
+            # orientation info → all 8 paint as disks (rare).
+            target_ori = trial.get("target_orientation", np.nan)
+            other_ori = (90.0 - float(target_ori)
+                         if not pd.isna(target_ori) else np.nan)
+            target_loc = trial.get("target_location", np.nan)
+            try:
+                target_loc_int = int(target_loc) if not pd.isna(target_loc) else None
+            except (TypeError, ValueError):
+                target_loc_int = None
+
+            # Combined footprint for this trial: union over the 8 items.
+            combined = np.zeros_like(grid_x, dtype=np.float32)
+            for i in range(8):
+                cx, cy = ring_xy[i]
+                ori_deg = target_ori if i == target_loc_int else other_ori
+                fp = _footprint(cx, cy, ori_deg)
+                combined = np.maximum(combined, fp)
+
+            contrib = overlap[active, None, None] * combined[None, :, :]
+            stimulus[active] = np.maximum(stimulus[active], contrib)
 
             if debug:
-                ori_dbg = trial.get('distractor_orientation', np.nan)
+                d_loc = trial.get("distractor_location", np.nan)
                 print(
-                    f"[DEBUG] trial @ t={t_on:.2f}s, loc={loc_code}, "
-                    f"shape={distractor_shape}, ori={ori_dbg}, "
+                    f"[DEBUG] trial @ t={t_on:.2f}s, "
+                    f"target_loc={target_loc_int}, dist_loc={d_loc}, "
+                    f"target_ori={target_ori}, other_ori={other_ori}, "
                     f"on=[{t_on:.2f}, {t_off:.2f}], "
                     f"max overlap fraction={overlap.max():.3f}"
                 )
@@ -605,6 +622,74 @@ class Subject(object):
             ) / dt  # in [0, 1]
 
             # Element-wise max in case of overlapping windows.
+            d[:, ch] = np.maximum(d[:, ch], overlap.astype(np.float32))
+
+        return d
+
+    def get_repeat_distractor_indicator(self, session=1, run=1,
+                                        max_distractor_duration=1.5,
+                                        oversampling=1):
+        """Per-TR distractor-on indicator restricted to REPEAT trials.
+
+        A trial counts as a "repeat" iff its distractor is at the SAME
+        ring location as the immediately preceding trial's distractor
+        (and both trials had a distractor — distractor_location ∈
+        {1,3,5,7}). The first trial of a run is never a repeat (no
+        previous trial). Trials following a no-distractor trial are
+        not repeats.
+
+        Returns
+        -------
+        d_repeat : ndarray, shape (n_volumes * oversampling, 4)
+            Same shape and channel ordering as
+            :meth:`get_dynamic_indicator`, but with on-fractions set
+            only for repeat trials. Subtracting this from the regular
+            dynamic indicator gives the SWITCH-trial indicator.
+        """
+        if int(oversampling) < 1:
+            raise ValueError(f"oversampling must be >= 1, got {oversampling}")
+        oversampling = int(oversampling)
+
+        loc_to_channel = {1.0: 0, 3.0: 1, 5.0: 2, 7.0: 3}
+        n_channels = 4
+
+        tr = self.get_tr(session, run)
+        n_volumes = self.get_n_volumes(session, run)
+        dt = tr / oversampling
+        n_bins = n_volumes * oversampling
+        frametimes = (np.arange(n_bins, dtype=np.float64) + 0.5) * dt
+        tr_starts = frametimes - dt / 2.
+        tr_ends = frametimes + dt / 2.
+
+        onsets = self.get_onsets(session, run)
+        targets = onsets[onsets["event_type"] == "target"].sort_values("onset")
+        feedback = onsets[onsets["event_type"] == "feedback"].sort_values("onset")
+
+        d = np.zeros((len(frametimes), n_channels), dtype=np.float32)
+
+        prev_loc = None
+        for _, trial in targets.iterrows():
+            loc_code = trial["distractor_location"]
+            this_loc = (loc_code if (not pd.isna(loc_code)
+                                     and loc_code in loc_to_channel)
+                        else None)
+            is_repeat = (this_loc is not None) and (this_loc == prev_loc)
+            prev_loc = this_loc  # update history regardless of paint
+
+            if not is_repeat:
+                continue
+
+            ch = loc_to_channel[this_loc]
+            t_on = trial["onset"]
+            after = feedback[feedback["onset"] > t_on]
+            t_off = (after.iloc[0]["onset"] if len(after)
+                     else t_on + max_distractor_duration)
+            t_off = min(t_off, t_on + max_distractor_duration)
+
+            overlap = np.clip(
+                np.minimum(tr_ends, t_off) - np.maximum(tr_starts, t_on),
+                0.0, None,
+            ) / dt
             d[:, ch] = np.maximum(d[:, ch], overlap.astype(np.float32))
 
         return d

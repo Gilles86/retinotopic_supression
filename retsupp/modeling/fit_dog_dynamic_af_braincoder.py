@@ -66,6 +66,8 @@ from retsupp.modeling.local_models import (
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_oversampled,
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma,
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_runPosition,
+    DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_runPosition_dynHP,
+    DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_repeat,
 )
 from retsupp.utils.data import (
     Subject,
@@ -87,6 +89,7 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
                             with_target: bool = False,
                             temporal_oversampling: int = 1,
                             with_run_position: bool = False,
+                            with_repeat_split: bool = False,
                             distractor_shape: str = 'circle',
                             distractor_long_side: float = 1.5,
                             distractor_short_side: float = 0.5):
@@ -143,6 +146,7 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
     dyn_indicator_chunks = []
     tgt_indicator_chunks = [] if with_target else None
     runpos_chunks = [] if with_run_position else None
+    repeat_indicator_chunks = [] if with_repeat_split else None
     masker.fit(bold_mask)
 
     session_runs = [(s, r) for s in [1, 2] for r in sub.get_runs(s)]
@@ -218,6 +222,18 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
                   f'run-position={pos_int}')
             runpos_chunks.append(runpos_run)
 
+        if with_repeat_split:
+            rep_indicator = sub.get_repeat_distractor_indicator(
+                session=session, run=run, oversampling=N,
+            ).astype(np.float32)
+            if rep_indicator.shape[0] < n_T_run_fine:
+                pad = np.zeros((n_T_run_fine - rep_indicator.shape[0],
+                                rep_indicator.shape[1]), dtype=np.float32)
+                rep_indicator = np.vstack([rep_indicator, pad])
+            elif rep_indicator.shape[0] > n_T_run_fine:
+                rep_indicator = rep_indicator[:n_T_run_fine]
+            repeat_indicator_chunks.append(rep_indicator)
+
         # Repeat-expand paradigm and condition_indicator along the time
         # axis when oversampling. Paradigm and HP-condition state are
         # constant within a TR. np.repeat with axis=0 turns row i of
@@ -242,6 +258,8 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
                         if with_target else None)
     run_position_indicator = (np.vstack(runpos_chunks)
                               if with_run_position else None)
+    repeat_indicator = (np.vstack(repeat_indicator_chunks)
+                        if with_repeat_split else None)
 
     print(f'Loaded BOLD: shape {bold.shape}, paradigm {paradigm_full.shape}, '
           f'condition_indicator {condition_indicator.shape}, '
@@ -258,6 +276,13 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
         print(f'run_position_indicator {run_position_indicator.shape} '
               f'(per-position counts: '
               f'{run_position_indicator.sum(axis=0).astype(int).tolist()})')
+    if with_repeat_split:
+        rep_sum = repeat_indicator.sum()
+        dyn_sum = dynamic_indicator.sum()
+        rep_frac = (rep_sum / dyn_sum) if dyn_sum > 0 else 0.0
+        print(f'repeat_indicator {repeat_indicator.shape} '
+              f'(repeat fraction: {rep_frac:.3f}; '
+              f'switch indicator implied)')
     if N > 1:
         print(f'temporal_oversampling: N={N} '
               f'(BOLD at TR={bold.shape[0]} rows; '
@@ -271,6 +296,7 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
         masker,
         target_indicator,
         run_position_indicator,
+        repeat_indicator,
     )
 
 
@@ -315,6 +341,8 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
          temporal_oversampling: int | None = None,
          shared_target_sigma: bool = False,
          per_run_position_gains: bool = False,
+         per_run_position_dyn_hp: bool = False,
+         with_repeat_split: bool = False,
          distractor_shape: str = 'circle',
          distractor_long_side: float = 1.5,
          distractor_short_side: float = 0.5):
@@ -348,6 +376,19 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
         raise ValueError(
             "--per-run-position-gains requires --model-version v3 + "
             "--with-target + --shared-target-sigma.")
+    if per_run_position_dyn_hp and not per_run_position_gains:
+        raise ValueError(
+            "--per-run-position-dyn-hp requires --per-run-position-gains "
+            "(it extends the runPosition model).")
+    if with_repeat_split and not (with_target and shared_target_sigma
+                                  and model_version == 'v3'):
+        raise ValueError(
+            "--with-repeat-split requires --model-version v3 + "
+            "--with-target + --shared-target-sigma.")
+    if with_repeat_split and per_run_position_gains:
+        raise ValueError(
+            "--with-repeat-split is not currently combined with "
+            "--per-run-position-gains. Pick one extension.")
     use_oversampled_codepath = temporal_oversampling is not None
     if use_oversampled_codepath:
         if int(temporal_oversampling) < 1:
@@ -391,6 +432,10 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
             base = f'{base}_sharedSigma'
         if per_run_position_gains:
             base = f'{base}_runPosition'
+        if per_run_position_dyn_hp:
+            base = f'{base}_dynHP'
+        if with_repeat_split:
+            base = f'{base}_repeat'
         if use_oversampled_codepath:
             base = f'{base}_tos{temporal_oversampling}'
         if distractor_shape == 'rectangle':
@@ -405,6 +450,9 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
                if use_oversampled_codepath else '')
     shared_str = ' | sharedSigma' if shared_target_sigma else ''
     runpos_str = ' | runPosition' if per_run_position_gains else ''
+    if per_run_position_dyn_hp:
+        runpos_str = f'{runpos_str}+dynHP'
+    repeat_str = ' | repeat-split' if with_repeat_split else ''
     shape_str = (f' | shape={distractor_shape}'
                  f'({distractor_long_side}x{distractor_short_side})'
                  if distractor_shape == 'rectangle'
@@ -412,20 +460,21 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     print(f'== sub-{subject:02d} | roi={roi} | mode={mode} | '
           f'model-version={model_version}'
           f'{" + target" if with_target else ""}'
-          f'{shared_str}{runpos_str}{tos_str}{shape_str} | paradigm=full '
-          f'(DoG voxel kernel, dynamic AF) ==')
+          f'{shared_str}{runpos_str}{repeat_str}{tos_str}{shape_str} | '
+          f'paradigm=full (DoG voxel kernel, dynamic AF) ==')
 
     # 1) Load BOLD + paradigm + condition_indicator + dynamic_indicator
     #    (+ target_indicator if requested).
     (bold_df, paradigm, condition_indicator, dynamic_indicator,
      grid_coords, masker, target_indicator,
-     run_position_indicator) = build_data_and_paradigm(
+     run_position_indicator, repeat_indicator) = build_data_and_paradigm(
         sub,
         resolution=resolution,
         grid_radius=grid_radius,
         with_target=with_target,
         temporal_oversampling=temporal_oversampling,
         with_run_position=per_run_position_gains,
+        with_repeat_split=with_repeat_split,
         distractor_shape=distractor_shape,
         distractor_long_side=distractor_long_side,
         distractor_short_side=distractor_short_side,
@@ -507,6 +556,25 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
                 'g_LP_pos0', 'g_LP_pos1', 'g_LP_pos2',
             ]
 
+        if per_run_position_dyn_hp:
+            # 3 new gains splitting g_HP_dyn by run-position.
+            # The legacy g_HP_dyn slot is forced to 0 by the model.
+            init_pars['g_HP_dyn'] = 0.0
+            for r in (0, 1, 2):
+                init_pars[f'g_HP_dyn_pos{r}'] = 0.0
+            shared_pars = shared_pars + [
+                'g_HP_dyn_pos0', 'g_HP_dyn_pos1', 'g_HP_dyn_pos2',
+            ]
+
+        if with_repeat_split:
+            # 2 new gains splitting dyn HP/LP by repeat-vs-switch trial.
+            # The existing g_HP_dyn / g_LP_dyn become the SWITCH gains.
+            init_pars['g_HP_dyn_repeat'] = 0.0
+            init_pars['g_LP_dyn_repeat'] = 0.0
+            shared_pars = shared_pars + [
+                'g_HP_dyn_repeat', 'g_LP_dyn_repeat',
+            ]
+
     # 4) Build the dynamic DoG-AF + PRF model and the fitter.
     ring_positions = get_ring_positions()  # (4, 2)
     print('Ring positions:\n', ring_positions)
@@ -523,9 +591,15 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     elif with_target:
         if use_oversampled_codepath:
             ModelCls = DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_oversampled
+        elif per_run_position_dyn_hp:
+            ModelCls = (
+                DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_runPosition_dynHP)
         elif per_run_position_gains:
             ModelCls = (
                 DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_runPosition)
+        elif with_repeat_split:
+            ModelCls = (
+                DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_repeat)
         elif shared_target_sigma:
             ModelCls = DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma
         else:
@@ -548,6 +622,8 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
         model_kwargs['oversampling'] = temporal_oversampling
     if per_run_position_gains:
         model_kwargs['run_position_indicator'] = run_position_indicator
+    if with_repeat_split:
+        model_kwargs['repeat_indicator'] = repeat_indicator
 
     model = ModelCls(**model_kwargs)
 
@@ -580,6 +656,10 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
         dyn_tag = f'{dyn_tag}-sharedSigma'
     if per_run_position_gains:
         dyn_tag = f'{dyn_tag}-runPosition'
+    if per_run_position_dyn_hp:
+        dyn_tag = f'{dyn_tag}-dynHP'
+    if with_repeat_split:
+        dyn_tag = f'{dyn_tag}-repeat'
     if use_oversampled_codepath:
         dyn_tag = f'{dyn_tag}-tos{temporal_oversampling}'
     if distractor_shape == 'rectangle':
@@ -611,6 +691,8 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
                                       if use_oversampled_codepath else None),
             'shared_target_sigma': shared_target_sigma,
             'per_run_position_gains': per_run_position_gains,
+            'per_run_position_dyn_hp': per_run_position_dyn_hp,
+            'with_repeat_split': with_repeat_split,
             'distractor_shape': distractor_shape,
             'distractor_long_side': distractor_long_side,
             'distractor_short_side': distractor_short_side,
@@ -689,6 +771,23 @@ if __name__ == '__main__':
                              '--with-target --shared-target-sigma '
                              '--model-version v3. Routes through '
                              'DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_runPosition.')
+    parser.add_argument('--per-run-position-dyn-hp', action='store_true',
+                        help='ALSO split the dynamic-HP gain (g_HP_dyn) '
+                             'into 3 per-run-position gains '
+                             '(g_HP_dyn_pos0/1/2). Requires '
+                             '--per-run-position-gains. Tests whether '
+                             'phasic HP suppression deepens across the '
+                             '3-run HP block. Routes through '
+                             'DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_runPosition_dynHP.')
+    parser.add_argument('--with-repeat-split', action='store_true',
+                        help='Split the dynamic HP/LP gains by whether '
+                             "this trial's distractor is at the SAME "
+                             'ring location as the previous trial '
+                             '(repeat) or not (switch). Adds 2 new '
+                             'gains: g_HP_dyn_repeat, g_LP_dyn_repeat. '
+                             'Requires --with-target --shared-target-sigma '
+                             '--model-version v3. Cannot combine with '
+                             '--per-run-position-gains.')
     parser.add_argument('--distractor-shape',
                         choices=['circle', 'rectangle'], default='circle',
                         help="Distractor footprint in the paradigm. "
@@ -743,6 +842,8 @@ if __name__ == '__main__':
         temporal_oversampling=args.temporal_oversampling,
         shared_target_sigma=args.shared_target_sigma,
         per_run_position_gains=args.per_run_position_gains,
+        per_run_position_dyn_hp=args.per_run_position_dyn_hp,
+        with_repeat_split=args.with_repeat_split,
         distractor_shape=args.distractor_shape,
         distractor_long_side=args.distractor_long_side,
         distractor_short_side=args.distractor_short_side,
