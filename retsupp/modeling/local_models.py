@@ -36,6 +36,13 @@ Currently provides
     is unchanged), but its raw value is overridden in
     ``_transform_parameters_forward`` and therefore has no effect on
     the loss.
+
+``DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_factorial``
+    sharedSigma v3+target with per-gain sign-constraints. Used by
+    ``fit_af_prf_cv_v2.py`` for the 18-class CV-v2 factorial: each of
+    the five gains (``g_HP``, ``g_LP``, ``g_HP_dyn``, ``g_LP_dyn``,
+    ``g_T_dyn``) is mapped through one of {``plus``, ``minus``,
+    ``zero``, ``free``}.  σ_T_dyn := σ_dyn is preserved.
 """
 from __future__ import annotations
 
@@ -563,3 +570,204 @@ class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma(
         after = out[:, 15:]                                   # (V, rest)
         out_tied = tf.concat([before, raw_sigma_dyn_col, after], axis=1)
         return out_tied
+
+
+# ---------------------------------------------------------------------------
+# Factorial sign-constraint variant of the shared-σ + target model.
+# Used by ``fit_af_prf_cv_v2.py`` (CV-v2 18-class factorial).
+# ---------------------------------------------------------------------------
+
+def _gain_forward_factorial(raw, sign):
+    """Per-gain sign-constraint applied to the raw variable in forward pass.
+
+    ``raw`` is the (V, 1) raw parameter column for one gain.  ``sign`` is
+    one of {'plus', 'minus', 'zero', 'free'}.
+
+    - ``plus``  : ``+softplus(raw)``           (sign ≥ 0, optimised)
+    - ``minus`` : ``-softplus(raw)``           (sign ≤ 0, optimised)
+    - ``zero``  : ``0`` (the raw variable is also marked fixed by the
+      caller via ``fixed_pars`` so its gradient is zeroed; the forward
+      transform additionally clamps to exact 0).
+    - ``free``  : pass through (fully signed-unconstrained).
+    """
+    if sign == 'plus':
+        return tf.math.softplus(raw)
+    if sign == 'minus':
+        return -tf.math.softplus(raw)
+    if sign == 'zero':
+        return tf.zeros_like(raw)
+    if sign == 'free':
+        return raw
+    raise ValueError(f'Unknown sign {sign!r}')
+
+
+def _gain_backward_factorial(usable, sign):
+    """Inverse transform of :func:`_gain_forward_factorial`.
+
+    Used to map a usable-space init value (e.g. ``-0.10``) back to the
+    raw variable used by the optimiser.  ``zero`` and ``free`` pass
+    through; ``plus``/``minus`` use ``softplus_inverse`` on the
+    magnitude.
+    """
+    if sign == 'plus':
+        return tfp.math.softplus_inverse(tf.maximum(usable, 1e-4))
+    if sign == 'minus':
+        return tfp.math.softplus_inverse(tf.maximum(-usable, 1e-4))
+    if sign == 'zero':
+        return tf.zeros_like(usable)
+    if sign == 'free':
+        return usable
+    raise ValueError(f'Unknown sign {sign!r}')
+
+
+class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_factorial(
+    DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma,
+):
+    """sharedSigma v3+target with per-gain sign-constraints (CV-v2).
+
+    Identical forward model and parameter vector as
+    :class:`DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma`
+    (σ_T_dyn is still tied to σ_dyn at every forward pass), but each of
+    the five gain parameters --- ``g_HP``, ``g_LP``, ``g_HP_dyn``,
+    ``g_LP_dyn``, ``g_T_dyn`` --- is mapped through one of four
+    constraint transforms picked at construction:
+
+        plus    g = +softplus(raw)   — optimised, sign ≥ 0
+        minus   g = -softplus(raw)   — optimised, sign ≤ 0
+        zero    g = 0.0              — clamped to 0; raw also fixed by
+                                        the caller via ``fixed_pars``
+        free    g = raw              — signed-unconstrained
+
+    The factorial design used by ``fit_af_prf_cv_v2.py`` crosses the
+    sustained pair (g_HP, g_LP) and the dynamic pair (g_HP_dyn,
+    g_LP_dyn) over three sign-patterns each, plus a binary on/off on
+    g_T_dyn (free vs zero) — 3 × 3 × 2 = 18 cells in total.
+
+    The model is always constructed with ``mode='signed'`` so that the
+    parent's own ``_signed_gains`` logic stays out of the way; this
+    subclass owns the full forward/backward parameter transform
+    end-to-end (DoG transforms, σ_AF / σ_dyn softplus, per-gain
+    constraints, σ_T_dyn := σ_dyn tying, optional HRF tail).
+    """
+
+    _GAIN_SLOT_INDEX = {
+        'g_HP': 8,
+        'g_LP': 9,
+        'g_HP_dyn': 11,
+        'g_LP_dyn': 12,
+        'g_T_dyn': 13,
+    }
+    _GAIN_NAMES = ('g_HP', 'g_LP', 'g_HP_dyn', 'g_LP_dyn', 'g_T_dyn')
+
+    def __init__(self, *, sign_pattern, **kwargs):
+        # sign_pattern: dict with the 5 _GAIN_NAMES -> str sign tag.
+        missing = [g for g in self._GAIN_NAMES if g not in sign_pattern]
+        if missing:
+            raise ValueError(
+                f"sign_pattern is missing entries for {missing}. "
+                f"Required keys: {list(self._GAIN_NAMES)}.")
+        bad = {g: s for g, s in sign_pattern.items()
+               if s not in ('plus', 'minus', 'zero', 'free')}
+        if bad:
+            raise ValueError(
+                f"sign_pattern values must be in "
+                f"{{'plus','minus','zero','free'}}; got {bad}.")
+        # Force signed mode so the parent's _signed_gains branch is
+        # taken (passes raw gains through unchanged); we re-apply our
+        # own per-gain sign transforms in this subclass's forward.
+        kwargs['mode'] = 'signed'
+        super().__init__(**kwargs)
+        self._sign_pattern = dict(sign_pattern)
+
+    # ---- Forward / backward parameter transforms -------------------------
+
+    @tf.function
+    def _transform_parameters_forward(self, parameters):
+        # Split off optional HRF tail.
+        if self.flexible_hrf_parameters:
+            n_hrf = len(self.hrf_model.parameter_labels)
+            enc = parameters[:, :-n_hrf]
+            hrf_tail = parameters[:, -n_hrf:]
+        else:
+            enc = parameters
+            hrf_tail = None
+
+        x = enc[:, 0:1]
+        y = enc[:, 1:2]
+        sd = tf.math.softplus(enc[:, 2:3])
+        baseline = enc[:, 3:4]
+        amplitude = enc[:, 4:5]
+        srf_amp = tf.math.softplus(enc[:, 5:6])
+        srf_size = tf.math.softplus(enc[:, 6:7])
+        sigma_AF = tf.math.softplus(enc[:, 7:8])
+        g_HP = _gain_forward_factorial(enc[:, 8:9],
+                                       self._sign_pattern['g_HP'])
+        g_LP = _gain_forward_factorial(enc[:, 9:10],
+                                       self._sign_pattern['g_LP'])
+        sigma_dyn = tf.math.softplus(enc[:, 10:11])
+        g_HP_dyn = _gain_forward_factorial(enc[:, 11:12],
+                                           self._sign_pattern['g_HP_dyn'])
+        g_LP_dyn = _gain_forward_factorial(enc[:, 12:13],
+                                           self._sign_pattern['g_LP_dyn'])
+        g_T_dyn = _gain_forward_factorial(enc[:, 13:14],
+                                          self._sign_pattern['g_T_dyn'])
+        # σ_T_dyn := σ_dyn (the whole point of the sharedSigma class).
+        sigma_T_dyn = sigma_dyn
+
+        out_enc = tf.concat([
+            x, y, sd, baseline, amplitude, srf_amp, srf_size,
+            sigma_AF, g_HP, g_LP,
+            sigma_dyn, g_HP_dyn, g_LP_dyn,
+            g_T_dyn, sigma_T_dyn,
+        ], axis=1)
+
+        if hrf_tail is not None:
+            hrf_pars = self.hrf_model._transform_parameters_forward(hrf_tail)
+            return tf.concat([out_enc, hrf_pars], axis=1)
+        return out_enc
+
+    @tf.function
+    def _transform_parameters_backward(self, parameters):
+        if self.flexible_hrf_parameters:
+            n_hrf = len(self.hrf_model.parameter_labels)
+            enc = parameters[:, :-n_hrf]
+            hrf_tail = parameters[:, -n_hrf:]
+        else:
+            enc = parameters
+            hrf_tail = None
+
+        x = enc[:, 0:1]
+        y = enc[:, 1:2]
+        sd = tfp.math.softplus_inverse(enc[:, 2:3])
+        baseline = enc[:, 3:4]
+        amplitude = enc[:, 4:5]
+        srf_amp = tfp.math.softplus_inverse(enc[:, 5:6])
+        srf_size = tfp.math.softplus_inverse(enc[:, 6:7])
+        sigma_AF = tfp.math.softplus_inverse(enc[:, 7:8])
+        g_HP = _gain_backward_factorial(enc[:, 8:9],
+                                        self._sign_pattern['g_HP'])
+        g_LP = _gain_backward_factorial(enc[:, 9:10],
+                                        self._sign_pattern['g_LP'])
+        sigma_dyn = tfp.math.softplus_inverse(enc[:, 10:11])
+        g_HP_dyn = _gain_backward_factorial(enc[:, 11:12],
+                                            self._sign_pattern['g_HP_dyn'])
+        g_LP_dyn = _gain_backward_factorial(enc[:, 12:13],
+                                            self._sign_pattern['g_LP_dyn'])
+        g_T_dyn = _gain_backward_factorial(enc[:, 13:14],
+                                           self._sign_pattern['g_T_dyn'])
+        # Tie raw σ_T_dyn := raw σ_dyn so the recovered raw parameter
+        # vector is internally consistent.  Both use softplus, so equal
+        # raw values give equal post-softplus values.
+        sigma_T_dyn = sigma_dyn
+
+        out_enc = tf.concat([
+            x, y, sd, baseline, amplitude, srf_amp, srf_size,
+            sigma_AF, g_HP, g_LP,
+            sigma_dyn, g_HP_dyn, g_LP_dyn,
+            g_T_dyn, sigma_T_dyn,
+        ], axis=1)
+
+        if hrf_tail is not None:
+            hrf_pars = self.hrf_model._transform_parameters_backward(hrf_tail)
+            return tf.concat([out_enc, hrf_pars], axis=1)
+        return out_enc
