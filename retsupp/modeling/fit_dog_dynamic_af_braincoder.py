@@ -86,7 +86,10 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
                             grid_radius: float = 5.0,
                             with_target: bool = False,
                             temporal_oversampling: int = 1,
-                            with_run_position: bool = False):
+                            with_run_position: bool = False,
+                            distractor_shape: str = 'circle',
+                            distractor_long_side: float = 1.5,
+                            distractor_short_side: float = 0.5):
     """Load cleaned BOLD + paradigm + condition_indicator + dynamic_indicator.
 
     Always uses the FULL paradigm (bar + distractor disks). Identical to
@@ -152,6 +155,9 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
         par_run = sub.get_stimulus_with_distractors(
             session=session, run=run, resolution=resolution,
             grid_radius=grid_radius,
+            distractor_shape=distractor_shape,
+            distractor_long_side=distractor_long_side,
+            distractor_short_side=distractor_short_side,
         ).astype(np.float32)
         par_run_flat = par_run.reshape((par_run.shape[0], -1))
         n_T_run = par_run_flat.shape[0]
@@ -308,7 +314,10 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
          sigma_t_dyn_init: float = 2.0,
          temporal_oversampling: int | None = None,
          shared_target_sigma: bool = False,
-         per_run_position_gains: bool = False):
+         per_run_position_gains: bool = False,
+         distractor_shape: str = 'circle',
+         distractor_long_side: float = 1.5,
+         distractor_short_side: float = 0.5):
     """Top-level fit driver.
 
     Parameters
@@ -364,6 +373,10 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
         # Legacy path -> always use N=1 internally for the few code
         # paths (build_data_and_paradigm) that take the kwarg.
         temporal_oversampling = 1
+    if distractor_shape not in ('circle', 'rectangle'):
+        raise ValueError(
+            f"distractor_shape must be 'circle' or 'rectangle', "
+            f"got {distractor_shape!r}")
     bids_folder = Path(bids_folder)
     sub = Subject(subject, bids_folder)
     if output_subdir is None:
@@ -379,9 +392,12 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
         if per_run_position_gains:
             base = f'{base}_runPosition'
         if use_oversampled_codepath:
-            output_subdir = f'{base}_tos{temporal_oversampling}'
-        else:
-            output_subdir = base
+            base = f'{base}_tos{temporal_oversampling}'
+        if distractor_shape == 'rectangle':
+            # Keep rectangle fits in their own folder so they don't
+            # overwrite the canonical circle baseline.
+            base = f'{base}_rect'
+        output_subdir = base
     out_dir = bids_folder / 'derivatives' / output_subdir / f'sub-{subject:02d}'
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -389,10 +405,14 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
                if use_oversampled_codepath else '')
     shared_str = ' | sharedSigma' if shared_target_sigma else ''
     runpos_str = ' | runPosition' if per_run_position_gains else ''
+    shape_str = (f' | shape={distractor_shape}'
+                 f'({distractor_long_side}x{distractor_short_side})'
+                 if distractor_shape == 'rectangle'
+                 else f' | shape={distractor_shape}')
     print(f'== sub-{subject:02d} | roi={roi} | mode={mode} | '
           f'model-version={model_version}'
           f'{" + target" if with_target else ""}'
-          f'{shared_str}{runpos_str}{tos_str} | paradigm=full '
+          f'{shared_str}{runpos_str}{tos_str}{shape_str} | paradigm=full '
           f'(DoG voxel kernel, dynamic AF) ==')
 
     # 1) Load BOLD + paradigm + condition_indicator + dynamic_indicator
@@ -406,6 +426,9 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
         with_target=with_target,
         temporal_oversampling=temporal_oversampling,
         with_run_position=per_run_position_gains,
+        distractor_shape=distractor_shape,
+        distractor_long_side=distractor_long_side,
+        distractor_short_side=distractor_short_side,
     )
 
     # 2) Restrict to ROI voxels with decent mean-model PRF R².
@@ -559,6 +582,8 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
         dyn_tag = f'{dyn_tag}-runPosition'
     if use_oversampled_codepath:
         dyn_tag = f'{dyn_tag}-tos{temporal_oversampling}'
+    if distractor_shape == 'rectangle':
+        dyn_tag = f'{dyn_tag}-rect'
     out_tsv = out_dir / (
         f'sub-{subject:02d}_roi-{roi}_mode-{mode}_{dyn_tag}-af-prf-pars.tsv')
     fit_pars.to_csv(out_tsv, sep='\t')
@@ -586,6 +611,9 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
                                       if use_oversampled_codepath else None),
             'shared_target_sigma': shared_target_sigma,
             'per_run_position_gains': per_run_position_gains,
+            'distractor_shape': distractor_shape,
+            'distractor_long_side': distractor_long_side,
+            'distractor_short_side': distractor_short_side,
         }, f)
     print(f'Saved: {out_tsv}')
     print(f'Saved: {out_pkl}')
@@ -661,6 +689,25 @@ if __name__ == '__main__':
                              '--with-target --shared-target-sigma '
                              '--model-version v3. Routes through '
                              'DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_runPosition.')
+    parser.add_argument('--distractor-shape',
+                        choices=['circle', 'rectangle'], default='circle',
+                        help="Distractor footprint in the paradigm. "
+                             "'circle' (default, backward-compatible) uses "
+                             "a 0.4-deg disk. 'rectangle' uses an oriented "
+                             "rectangle (long×short = "
+                             "--distractor-long-side x --distractor-short-side) "
+                             "rotated by the trial's distractor_orientation "
+                             "(= 90 - target_orientation). Output subdir "
+                             "is tagged with `_rect` so circle and "
+                             "rectangle fits never collide.")
+    parser.add_argument('--distractor-long-side', type=float, default=1.5,
+                        help='Rectangle long-axis length, deg '
+                             '(default 1.5). Only used with '
+                             '--distractor-shape=rectangle.')
+    parser.add_argument('--distractor-short-side', type=float, default=0.5,
+                        help='Rectangle short-axis length, deg '
+                             '(default 0.5). Only used with '
+                             '--distractor-shape=rectangle.')
     parser.add_argument('--temporal-oversampling', type=int, default=None,
                         help='Temporal oversampling factor N for the HRF '
                              'convolution (only valid with v3 + '
@@ -696,4 +743,7 @@ if __name__ == '__main__':
         temporal_oversampling=args.temporal_oversampling,
         shared_target_sigma=args.shared_target_sigma,
         per_run_position_gains=args.per_run_position_gains,
+        distractor_shape=args.distractor_shape,
+        distractor_long_side=args.distractor_long_side,
+        distractor_short_side=args.distractor_short_side,
     )

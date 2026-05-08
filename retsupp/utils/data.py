@@ -207,6 +207,18 @@ class Subject(object):
 
         pulses = onsets[onsets['event_type'] == 'pulse']
         onsets['onset'] = onsets['onset'] - pulses['onset'].min()
+
+        # Add distractor_orientation column = 90 - target_orientation.
+        # In the visual search task all distractors share ONE orientation
+        # and the target has the OPPOSITE orientation (90 deg apart). The
+        # events.tsv only stores ``target_orientation`` (0.0 or 90.0); we
+        # derive the distractor orientation as 90 - target_orientation.
+        # ``target_orientation`` is filled in on every event row of the
+        # trial (trial_start, pre-target, target, response, feedback, iti),
+        # so the column-wise transform is well-defined.
+        if 'target_orientation' in onsets.columns:
+            onsets['distractor_orientation'] = 90.0 - onsets['target_orientation']
+
         return onsets
 
     def get_grid_coordinates(self, resolution=100, session=1, run=1,):
@@ -306,6 +318,8 @@ class Subject(object):
         self, session=1, run=1, resolution=120,
         grid_radius=5.0, distractor_radius=0.4,
         max_distractor_duration=1.5, debug=False,
+        distractor_shape='circle',
+        distractor_long_side=1.5, distractor_short_side=0.5,
     ):
         """Bar PRF stimulus + distractor pixels at the 4 ring locations.
 
@@ -314,13 +328,25 @@ class Subject(object):
         so the distractors at 4° eccentricity fit inside.
 
         For each trial event with ``distractor_location ∈ {1,3,5,7}`` we
-        add a disk of radius ``distractor_radius`` at the corresponding
-        ring location.  The disk's intensity within a given TR is the
-        FRACTION OF THE TR during which the distractor was on screen
-        (overlap of the on-window with the TR-window divided by the TR
-        duration).  The on-window starts at the target event onset and
-        extends to the next feedback event or, if that's missing/too
-        far, to ``t_on + max_distractor_duration``.
+        add a distractor footprint at the corresponding ring location.
+        The footprint shape is controlled by ``distractor_shape``:
+
+        - ``'circle'`` (default, BACKWARD-COMPATIBLE): a disk of radius
+          ``distractor_radius``.
+        - ``'rectangle'``: an oriented rectangle of size
+          ``distractor_long_side × distractor_short_side`` whose long
+          axis is rotated by the trial's ``distractor_orientation``
+          (= ``90 - target_orientation``). 0° → long axis horizontal,
+          90° → long axis vertical. This matches the actual
+          PsychoPy ``visual.Rect`` rendering of search-array items
+          (where ``ori=0`` is horizontal, ``ori=90`` is vertical).
+
+        The footprint's intensity within a given TR is the FRACTION OF
+        THE TR during which the distractor was on screen (overlap of
+        the on-window with the TR-window divided by the TR duration).
+        The on-window starts at the target event onset and extends to
+        the next feedback event or, if that's missing/too far, to
+        ``t_on + max_distractor_duration``.
 
         Bar pixel intensities are kept binary (0/1) inside the bar
         aperture; distractor pixels are values in [0, 1].  Where bar and
@@ -336,12 +362,29 @@ class Subject(object):
         grid_radius : float
             Half-width of the square grid in degrees.
         distractor_radius : float
-            Radius of the distractor disk in degrees.
+            Radius of the distractor disk in degrees (used only for
+            ``distractor_shape='circle'``).
         max_distractor_duration : float
             Cap on the on-window length (s).  Search-array presentation
             is short (~150 ms) but feedback can come several seconds
             later and the distractors are off long before that.
+        distractor_shape : {'circle', 'rectangle'}, default 'circle'
+            Distractor footprint. ``'circle'`` matches the original
+            implementation bit-for-bit.  ``'rectangle'`` uses the
+            ``distractor_long_side / distractor_short_side`` dimensions
+            and the trial's ``distractor_orientation``.
+        distractor_long_side, distractor_short_side : float
+            Long- and short-axis lengths of the rectangle (deg). Defaults
+            (1.5, 0.5) approximate the actual search-array rectangles
+            (PsychoPy ``visual.Rect(width=size_stimuli,
+            height=size_stimuli/4)`` with ``size_stimuli=1.5``, i.e.
+            1.5 × 0.375; we round the short side up slightly to 0.5 deg
+            to soften aliasing on the 50-pixel grid).
         """
+        if distractor_shape not in ('circle', 'rectangle'):
+            raise ValueError(
+                f"distractor_shape must be 'circle' or 'rectangle', "
+                f"got {distractor_shape!r}")
         settings = self.get_experimental_settings(session, run)
         tr = self.get_tr(session, run)
         n_volumes = self.get_n_volumes(session, run)
@@ -431,21 +474,50 @@ class Subject(object):
                 np.minimum(tr_ends, t_off) - np.maximum(tr_starts, t_on),
                 0.0, None,
             ) / tr  # in [0, 1]
-            disk = (((grid_x - cx) ** 2 + (grid_y - cy) ** 2) <
-                    distractor_radius ** 2).astype(np.float32)
+            if distractor_shape == 'circle':
+                footprint = (((grid_x - cx) ** 2 + (grid_y - cy) ** 2) <
+                             distractor_radius ** 2).astype(np.float32)
+            else:
+                # Rectangle: rotate pixel grid into the rectangle's local
+                # frame and binary inside-test on |xr| <= long/2,
+                # |yr| <= short/2. ``distractor_orientation`` is in
+                # degrees; 0° = long axis horizontal, 90° = vertical.
+                ori_deg = trial.get('distractor_orientation', np.nan)
+                if pd.isna(ori_deg):
+                    # Fall back to circle if we somehow lack the
+                    # orientation (e.g. older events.tsv without
+                    # target_orientation). Should not happen in practice.
+                    footprint = (
+                        ((grid_x - cx) ** 2 + (grid_y - cy) ** 2)
+                        < distractor_radius ** 2
+                    ).astype(np.float32)
+                else:
+                    ang = -float(ori_deg) * np.pi / 180.0
+                    cos_a = np.cos(ang)
+                    sin_a = np.sin(ang)
+                    dx = grid_x - cx
+                    dy = grid_y - cy
+                    xr = dx * cos_a + dy * sin_a
+                    yr = -dx * sin_a + dy * cos_a
+                    footprint = (
+                        (np.abs(xr) <= distractor_long_side / 2.0) &
+                        (np.abs(yr) <= distractor_short_side / 2.0)
+                    ).astype(np.float32)
 
             # Where this distractor is brighter than what's already there,
             # update.  This handles overlapping distractor windows
             # (rare, but keeps it idempotent).
             active = overlap > 0
             if active.any():
-                contrib = overlap[active, None, None] * disk[None, :, :]
+                contrib = overlap[active, None, None] * footprint[None, :, :]
                 # Element-wise max with current stimulus over those frames.
                 stimulus[active] = np.maximum(stimulus[active], contrib)
 
             if debug:
+                ori_dbg = trial.get('distractor_orientation', np.nan)
                 print(
                     f"[DEBUG] trial @ t={t_on:.2f}s, loc={loc_code}, "
+                    f"shape={distractor_shape}, ori={ori_dbg}, "
                     f"on=[{t_on:.2f}, {t_off:.2f}], "
                     f"max overlap fraction={overlap.max():.3f}"
                 )
