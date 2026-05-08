@@ -19,14 +19,15 @@ MODEL="${1:-1}"
 N_CHUNKS="${2:-54}"
 N_SUBS="${3:-30}"
 
-# Approx total cortical voxels (sub-3 had 273539; use 280k as upper).
-TOTAL_VOX=280000
-VOX_PER_CHUNK=$(( TOTAL_VOX / N_CHUNKS ))
+# Voxel counts across subjects vary substantially (sub-11=245k -> sub-08=376k).
+# Size mem for the LARGEST subject + headroom so all tasks fit.
+MAX_TOTAL_VOX=400000   # > observed max 376475
+VOX_PER_CHUNK=$(( MAX_TOTAL_VOX / N_CHUNKS ))
 
-# Memory: 6 GB base + 1.2 GB per 1000 voxels, +50% safety, rounded up.
+# Memory: 6 GB base + 1.2 GB per 1000 voxels, +70% safety, rounded up.
 MEM_GB=$(awk -v v=$VOX_PER_CHUNK 'BEGIN{
     raw = 6 + 1.2 * v / 1000;
-    safe = raw * 1.5;
+    safe = raw * 1.7;
     printf "%d\n", (safe == int(safe) ? safe : int(safe) + 1)
 }')
 # Bump model 4 (DoG flex HRF) by 1.5x; models 5/6 (DN) by 2x.
