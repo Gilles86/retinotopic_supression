@@ -16,12 +16,22 @@ Currently provides
     POSITIVE gain when it appears at the search TARGET location
     ('attentional capture'). Fitting both gains in the same model
     provides an internal positive control for the AF framework.
+
+``DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_oversampled``
+    Same model as above but built to operate the entire convolution
+    chain at a *fine* timestep ``dt = TR / N``. The paradigm,
+    condition_indicator, dynamic_indicator and target_indicator must be
+    supplied at fine dt; the HRF must be constructed at fine dt; the
+    BOLD predictions are downsampled by ``[::N]`` along the time axis
+    before being returned, so they line up with the BOLD data at TR
+    resolution. Use ``N=1`` for current-behaviour parity.
 """
 from __future__ import annotations
 
 import logging
 
 import numpy as np
+import pandas as pd
 import tensorflow as tf
 import tensorflow_probability as tfp
 
@@ -357,3 +367,115 @@ class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target(
                 DoGDynamicAttentionFieldPRF2D_v3_target
                 ._transform_parameters_backward(self, parameters)
             )
+
+
+# ---------------------------------------------------------------------------
+# Temporally-oversampled HRF-convolved variant.
+# ---------------------------------------------------------------------------
+class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_oversampled(
+    DoGDynamicAttentionFieldPRF2DWithHRF_v3_target,
+):
+    """Temporally-oversampled v3 + target model.
+
+    Identical free parameters and forward model as
+    :class:`DoGDynamicAttentionFieldPRF2DWithHRF_v3_target`, but the
+    entire convolution chain is run at a fine timestep ``dt = TR /
+    oversampling``. The caller is responsible for supplying every
+    time-indexed input on that fine grid:
+
+    - ``paradigm``           — shape ``(T*N, G)``
+    - ``condition_indicator`` — shape ``(T*N, n_C)``
+    - ``dynamic_indicator``   — shape ``(T*N, n_C)``
+    - ``target_indicator``    — shape ``(T*N, n_C)``
+    - ``hrf_model``           — built with ``tr=original_tr/N`` so its
+      kernel is sampled at fine dt.
+
+    The BOLD data passed to the fitter remains at TR resolution
+    (``T`` rows). After the parent's ``_predict`` (which produces a
+    ``(B, T*N, V)`` HRF-convolved prediction tensor), this subclass
+    subsamples along the time axis with ``[:, ::N, :]`` to reduce the
+    output to ``(B, T, V)``, matching the BOLD shape used in the loss.
+
+    With ``oversampling=1`` the subsample is ``[:, ::1, :]`` i.e. a
+    no-op, and the model is mathematically identical to the parent.
+
+    Notes
+    -----
+    The HRF convolution always uses ``unique_hrfs=False`` here (shared
+    canonical HRF). braincoder's ``_convolve_shared`` takes the time
+    axis from ``timeseries.shape[1]`` so it works at any timestep.
+    """
+
+    def __init__(self, grid_coordinates=None, paradigm=None, data=None,
+                 parameters=None, condition_indicator=None,
+                 dynamic_indicator=None,
+                 target_indicator=None,
+                 ring_positions=None, mode='suppression',
+                 positive_image_values_only=True,
+                 weights=None, hrf_model=None,
+                 flexible_hrf_parameters=False,
+                 oversampling=1,
+                 verbosity=logging.INFO, **kwargs):
+        if int(oversampling) < 1:
+            raise ValueError(
+                f"oversampling must be >= 1, got {oversampling}")
+        self.oversampling = int(oversampling)
+
+        super().__init__(
+            grid_coordinates=grid_coordinates, paradigm=paradigm,
+            data=data, parameters=parameters,
+            condition_indicator=condition_indicator,
+            dynamic_indicator=dynamic_indicator,
+            target_indicator=target_indicator,
+            ring_positions=ring_positions, mode=mode,
+            positive_image_values_only=positive_image_values_only,
+            weights=weights, hrf_model=hrf_model,
+            flexible_hrf_parameters=flexible_hrf_parameters,
+            verbosity=verbosity, **kwargs)
+
+    @tf.function
+    def _predict(self, paradigm, parameters, weights):
+        """Run the parent forward pass, then subsample by ``oversampling``.
+
+        The parent's ``_predict`` returns ``(B, T_fine, V)``. We slice
+        ``[:, ::N, :]`` along axis 1 to align with the BOLD data at TR
+        resolution.
+        """
+        pred_fine = super()._predict(paradigm, parameters, weights)
+        # tf.strided_slice via Python slice on axis 1.
+        return pred_fine[:, ::self.oversampling, :]
+
+    def predict(self, paradigm=None, parameters=None, weights=None):
+        """Public wrapper that returns a TR-indexed DataFrame.
+
+        We cannot simply call the inherited ``predict`` because it uses
+        the (fine) paradigm's index for the result rows — but our
+        ``_predict`` already downsamples to ``T`` rows. So we
+        re-implement the wrapper with a subsampled index.
+        """
+        weights, weights_ = self._get_weights(weights)
+
+        paradigm = self.get_paradigm(paradigm)
+        paradigm_ = self._get_paradigm(paradigm)[np.newaxis, ...]
+
+        parameters = self._get_parameters(parameters)
+        parameters_ = (parameters.values[np.newaxis, ...]
+                       if parameters is not None else None)
+
+        # _predict subsamples to TR resolution.
+        predictions = self._predict(paradigm_, parameters_, weights_)[0]
+
+        # Subsample paradigm.index (which is at fine dt) to match.
+        idx = paradigm.index[::self.oversampling]
+        # Defensive: shapes must agree after subsampling.
+        if len(idx) != int(predictions.shape[0]):
+            # Fall back to a plain RangeIndex if the user passed a paradigm
+            # whose length isn't an exact multiple of oversampling.
+            idx = pd.RangeIndex(int(predictions.shape[0]))
+
+        if weights is None:
+            return pd.DataFrame(
+                predictions.numpy(), index=idx, columns=parameters.index)
+        else:
+            return pd.DataFrame(
+                predictions.numpy(), index=idx, columns=weights.columns)

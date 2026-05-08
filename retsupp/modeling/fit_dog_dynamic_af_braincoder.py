@@ -63,6 +63,7 @@ from braincoder.models import (
 from braincoder.optimize import ParameterFitter
 from retsupp.modeling.local_models import (
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target,
+    DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_oversampled,
 )
 from retsupp.utils.data import (
     Subject,
@@ -81,7 +82,8 @@ def get_ring_positions():
 
 def build_data_and_paradigm(sub: Subject, resolution: int = 50,
                             grid_radius: float = 5.0,
-                            with_target: bool = False):
+                            with_target: bool = False,
+                            temporal_oversampling: int = 1):
     """Load cleaned BOLD + paradigm + condition_indicator + dynamic_indicator.
 
     Always uses the FULL paradigm (bar + distractor disks). Identical to
@@ -95,7 +97,27 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
         :meth:`Subject.get_target_indicator` across runs (same channel
         order as ``dynamic_indicator``). Returned as the last element of
         the tuple; otherwise that slot is ``None``.
+    temporal_oversampling : int, default 1
+        Temporal oversampling factor ``N``. When ``N > 1``, the
+        paradigm and condition_indicator are repeat-expanded along the
+        time axis (each TR row repeated ``N`` times — paradigm and
+        condition state are constant within a TR), and the
+        dynamic_indicator / target_indicator are recomputed at fine
+        timestep ``dt = TR / N``. The BOLD data remains at TR
+        resolution. Returned shapes:
+
+        - ``bold``                : ``(T,    V)``
+        - ``paradigm_full``       : ``(T*N,  G)``
+        - ``condition_indicator`` : ``(T*N,  4)``
+        - ``dynamic_indicator``   : ``(T*N,  4)``
+        - ``target_indicator``    : ``(T*N,  4)`` or ``None``
     """
+    if int(temporal_oversampling) < 1:
+        raise ValueError(
+            f"temporal_oversampling must be >= 1, got {temporal_oversampling}")
+    temporal_oversampling = int(temporal_oversampling)
+    N = temporal_oversampling
+
     bold_mask = sub.get_bold_mask()
     masker = input_data.NiftiMasker(mask_img=bold_mask)
 
@@ -151,27 +173,38 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
                                   dtype=np.float32)
         cond_indicator[:, hp_idx] = 1.0
 
+        # Dynamic indicator at fine dt (or TR if N=1).
         dyn_indicator = sub.get_dynamic_indicator(
-            session=session, run=run,
+            session=session, run=run, oversampling=N,
         ).astype(np.float32)
-        if dyn_indicator.shape[0] < n_T_run:
-            pad = np.zeros((n_T_run - dyn_indicator.shape[0],
+        # Pad / crop to (n_T_run * N, 4).
+        n_T_run_fine = n_T_run * N
+        if dyn_indicator.shape[0] < n_T_run_fine:
+            pad = np.zeros((n_T_run_fine - dyn_indicator.shape[0],
                             dyn_indicator.shape[1]), dtype=np.float32)
             dyn_indicator = np.vstack([dyn_indicator, pad])
-        elif dyn_indicator.shape[0] > n_T_run:
-            dyn_indicator = dyn_indicator[:n_T_run]
+        elif dyn_indicator.shape[0] > n_T_run_fine:
+            dyn_indicator = dyn_indicator[:n_T_run_fine]
 
         if with_target:
             tgt_indicator = sub.get_target_indicator(
-                session=session, run=run,
+                session=session, run=run, oversampling=N,
             ).astype(np.float32)
-            if tgt_indicator.shape[0] < n_T_run:
-                pad = np.zeros((n_T_run - tgt_indicator.shape[0],
+            if tgt_indicator.shape[0] < n_T_run_fine:
+                pad = np.zeros((n_T_run_fine - tgt_indicator.shape[0],
                                 tgt_indicator.shape[1]), dtype=np.float32)
                 tgt_indicator = np.vstack([tgt_indicator, pad])
-            elif tgt_indicator.shape[0] > n_T_run:
-                tgt_indicator = tgt_indicator[:n_T_run]
+            elif tgt_indicator.shape[0] > n_T_run_fine:
+                tgt_indicator = tgt_indicator[:n_T_run_fine]
             tgt_indicator_chunks.append(tgt_indicator)
+
+        # Repeat-expand paradigm and condition_indicator along the time
+        # axis when oversampling. Paradigm and HP-condition state are
+        # constant within a TR. np.repeat with axis=0 turns row i of
+        # length-T into rows i*N..(i+1)*N-1 of length-T*N.
+        if N > 1:
+            par_run_flat = np.repeat(par_run_flat, N, axis=0)
+            cond_indicator = np.repeat(cond_indicator, N, axis=0)
 
         bold_chunks.append(data)
         paradigm_chunks.append(par_run_flat)
@@ -196,6 +229,10 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
               f'(min={target_indicator.min():.3f}, '
               f'max={target_indicator.max():.3f}, '
               f'mean={target_indicator.mean():.4f})')
+    if N > 1:
+        print(f'temporal_oversampling: N={N} '
+              f'(BOLD at TR={bold.shape[0]} rows; '
+              f'paradigm/indicators at fine dt={paradigm_full.shape[0]} rows)')
     return (
         pd.DataFrame(bold),
         paradigm_full,
@@ -244,7 +281,22 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
          sigma_dyn_init: float = 2.0,
          with_target: bool = False,
          g_t_dyn_init: float = 0.0,
-         sigma_t_dyn_init: float = 2.0):
+         sigma_t_dyn_init: float = 2.0,
+         temporal_oversampling: int | None = None):
+    """Top-level fit driver.
+
+    Parameters
+    ----------
+    temporal_oversampling : int or None, default None
+        ``None`` means "do not run the oversampled code path" — the
+        legacy path is used and no ``_tos{N}`` tag is appended to the
+        output subdir, preserving exact behaviour for callers that
+        don't pass ``--temporal-oversampling``. Any integer ``>= 1``
+        routes through the temporally-oversampled subclass and tags the
+        output subdir with ``_tos{N}`` (so even ``N=1`` lives in its
+        own folder, segregated from the legacy fits). Only valid with
+        ``model_version='v3'`` and ``with_target=True``.
+    """
     if model_version not in ('v2', 'v3'):
         raise ValueError(
             f"model_version must be 'v2' or 'v3', got {model_version!r}")
@@ -252,22 +304,44 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
         raise ValueError(
             "--with-target is only supported with --model-version v3 "
             f"(got {model_version!r}).")
+    use_oversampled_codepath = temporal_oversampling is not None
+    if use_oversampled_codepath:
+        if int(temporal_oversampling) < 1:
+            raise ValueError(
+                f"temporal_oversampling must be >= 1, "
+                f"got {temporal_oversampling}")
+        temporal_oversampling = int(temporal_oversampling)
+        if not (with_target and model_version == 'v3'):
+            raise ValueError(
+                "--temporal-oversampling is only supported with "
+                "--model-version v3 + --with-target (which routes "
+                "through the oversampled local-models subclass).")
+    else:
+        # Legacy path -> always use N=1 internally for the few code
+        # paths (build_data_and_paradigm) that take the kwarg.
+        temporal_oversampling = 1
     bids_folder = Path(bids_folder)
     sub = Subject(subject, bids_folder)
     if output_subdir is None:
         if with_target:
-            output_subdir = 'af_prf_joint_dynamic_v3_dog_with_target'
+            base = 'af_prf_joint_dynamic_v3_dog_with_target'
         else:
-            output_subdir = {
+            base = {
                 'v2': 'af_prf_joint_dynamic_v2_dog',
                 'v3': 'af_prf_joint_dynamic_v3_dog',
             }[model_version]
+        if use_oversampled_codepath:
+            output_subdir = f'{base}_tos{temporal_oversampling}'
+        else:
+            output_subdir = base
     out_dir = bids_folder / 'derivatives' / output_subdir / f'sub-{subject:02d}'
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    tos_str = (f' | tos={temporal_oversampling}'
+               if use_oversampled_codepath else '')
     print(f'== sub-{subject:02d} | roi={roi} | mode={mode} | '
           f'model-version={model_version}'
-          f'{" + target" if with_target else ""} | paradigm=full '
+          f'{" + target" if with_target else ""}{tos_str} | paradigm=full '
           f'(DoG voxel kernel, dynamic AF) ==')
 
     # 1) Load BOLD + paradigm + condition_indicator + dynamic_indicator
@@ -278,6 +352,7 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
         resolution=resolution,
         grid_radius=grid_radius,
         with_target=with_target,
+        temporal_oversampling=temporal_oversampling,
     )
 
     # 2) Restrict to ROI voxels with decent mean-model PRF R².
@@ -339,13 +414,20 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     ring_positions = get_ring_positions()  # (4, 2)
     print('Ring positions:\n', ring_positions)
 
-    hrf_model = SPMHRFModel(tr=sub.get_tr(session=1, run=1),
+    # When oversampling, the HRF kernel must be sampled at the same
+    # fine timestep as the paradigm and indicators.
+    tr_orig = sub.get_tr(session=1, run=1)
+    tr_for_hrf = tr_orig / temporal_oversampling
+    hrf_model = SPMHRFModel(tr=tr_for_hrf,
                             delay=4.5, dispersion=0.75)
 
     if model_version == 'v2':
         ModelCls = DoGDynamicAttentionFieldPRF2DWithHRF_v2
     elif with_target:
-        ModelCls = DoGDynamicAttentionFieldPRF2DWithHRF_v3_target
+        if use_oversampled_codepath:
+            ModelCls = DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_oversampled
+        else:
+            ModelCls = DoGDynamicAttentionFieldPRF2DWithHRF_v3_target
     else:
         ModelCls = DoGDynamicAttentionFieldPRF2DWithHRF_v3
 
@@ -360,6 +442,8 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     )
     if with_target:
         model_kwargs['target_indicator'] = target_indicator
+    if use_oversampled_codepath:
+        model_kwargs['oversampling'] = temporal_oversampling
 
     model = ModelCls(**model_kwargs)
 
@@ -388,6 +472,8 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
         dyn_tag = 'dog-dyn-v3-target'
     else:
         dyn_tag = {'v2': 'dog-dyn-v2', 'v3': 'dog-dyn-v3'}[model_version]
+    if use_oversampled_codepath:
+        dyn_tag = f'{dyn_tag}-tos{temporal_oversampling}'
     out_tsv = out_dir / (
         f'sub-{subject:02d}_roi-{roi}_mode-{mode}_{dyn_tag}-af-prf-pars.tsv')
     fit_pars.to_csv(out_tsv, sep='\t')
@@ -411,6 +497,8 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
             'voxel_kernel': 'DoG',
             'model_version': model_version,
             'model_label_init': model_label,
+            'temporal_oversampling': (temporal_oversampling
+                                      if use_oversampled_codepath else None),
         }, f)
     print(f'Saved: {out_tsv}')
     print(f'Saved: {out_pkl}')
@@ -470,6 +558,18 @@ if __name__ == '__main__':
                         help='Initial value for sigma_T_dyn (default 2.0; '
                              'matches the neutral sigma_AF / sigma_dyn '
                              'inits).')
+    parser.add_argument('--temporal-oversampling', type=int, default=None,
+                        help='Temporal oversampling factor N for the HRF '
+                             'convolution (only valid with v3 + '
+                             '--with-target). When omitted, the legacy '
+                             'TR-resolution code path is used. When '
+                             'given (e.g. 1, 4, 8), the paradigm and '
+                             'indicators are built at fine dt = TR/N, '
+                             'the HRF is constructed at fine dt, and '
+                             'the model output is subsampled by N '
+                             'before computing the BOLD-space loss. '
+                             'Output subdir is tagged with `_tos{N}` '
+                             'so even N=1 lives in its own folder.')
     args = parser.parse_args()
     main(
         args.subject,
@@ -490,4 +590,5 @@ if __name__ == '__main__':
         with_target=args.with_target,
         g_t_dyn_init=args.g_t_dyn_init,
         sigma_t_dyn_init=args.sigma_t_dyn_init,
+        temporal_oversampling=args.temporal_oversampling,
     )

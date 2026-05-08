@@ -387,14 +387,26 @@ class Subject(object):
         return stimulus
 
     def get_dynamic_indicator(self, session=1, run=1,
-                              max_distractor_duration=1.5):
+                              max_distractor_duration=1.5,
+                              oversampling=1):
         """Per-TR distractor-on indicator at each of the 4 ring locations.
+
+        Parameters
+        ----------
+        oversampling : int, default 1
+            Temporal oversampling factor. When ``> 1``, the indicator is
+            computed on a fine time grid with step ``dt = tr /
+            oversampling`` instead of TR. Each output row then represents
+            the on-fraction of one fine sub-bin (length ``dt``), not of a
+            full TR. Returned shape becomes ``(n_volumes * oversampling,
+            4)``. With ``oversampling=1`` the result is exactly the
+            previous behaviour.
 
         Returns
         -------
-        d : ndarray, shape (n_volumes, 4)
-            Fraction of each TR during which a distractor was on screen
-            at each ring location, in [0, 1]. The 4 channels are
+        d : ndarray, shape (n_volumes * oversampling, 4)
+            Fraction of each (sub-)bin during which a distractor was on
+            screen at each ring location, in [0, 1]. The 4 channels are
             ordered as
             ``['upper_right', 'upper_left', 'lower_left', 'lower_right']``
             to match the ``CONDITIONS`` list used by
@@ -407,9 +419,13 @@ class Subject(object):
         -----
         Logic mirrors the distractor pass of
         :meth:`get_stimulus_with_distractors`, but does not paint any
-        spatial grid — it only returns the per-TR-per-location overlap
+        spatial grid — it only returns the per-bin per-location overlap
         fraction.
         """
+        if int(oversampling) < 1:
+            raise ValueError(f"oversampling must be >= 1, got {oversampling}")
+        oversampling = int(oversampling)
+
         # Ring location code -> channel index. Channel order MUST stay
         # in sync with `CONDITIONS` in fit_*_af_braincoder.py.
         # 1: upper_right, 3: upper_left, 5: lower_left, 7: lower_right.
@@ -418,9 +434,12 @@ class Subject(object):
 
         tr = self.get_tr(session, run)
         n_volumes = self.get_n_volumes(session, run)
-        frametimes = np.arange(tr / 2., tr * n_volumes + tr / 2., tr)
-        tr_starts = frametimes - tr / 2.
-        tr_ends = frametimes + tr / 2.
+        dt = tr / oversampling
+        n_bins = n_volumes * oversampling
+        # Bin centres at dt/2, 3*dt/2, ... ; bin edges = centre ± dt/2.
+        frametimes = (np.arange(n_bins, dtype=np.float64) + 0.5) * dt
+        tr_starts = frametimes - dt / 2.
+        tr_ends = frametimes + dt / 2.
 
         onsets = self.get_onsets(session, run)
         targets = onsets[onsets["event_type"] == "target"].sort_values("onset")
@@ -445,7 +464,7 @@ class Subject(object):
             overlap = np.clip(
                 np.minimum(tr_ends, t_off) - np.maximum(tr_starts, t_on),
                 0.0, None,
-            ) / tr  # in [0, 1]
+            ) / dt  # in [0, 1]
 
             # Element-wise max in case of overlapping windows.
             d[:, ch] = np.maximum(d[:, ch], overlap.astype(np.float32))
@@ -453,7 +472,8 @@ class Subject(object):
         return d
 
     def get_target_indicator(self, session=1, run=1,
-                             max_target_duration=1.5):
+                             max_target_duration=1.5,
+                             oversampling=1):
         """Per-TR target-on indicator at each of the 4 ring locations.
 
         Identical machinery to :meth:`get_dynamic_indicator`, but reads
@@ -467,23 +487,35 @@ class Subject(object):
         transient that suppresses at the distractor should produce
         positive gain at the target.
 
+        Parameters
+        ----------
+        oversampling : int, default 1
+            Temporal oversampling factor. See
+            :meth:`get_dynamic_indicator` for details.
+
         Returns
         -------
-        t : ndarray, shape (n_volumes, 4)
-            Fraction of each TR during which a target was on screen at
-            each ring location, in [0, 1]. Channel order is
+        t : ndarray, shape (n_volumes * oversampling, 4)
+            Fraction of each (sub-)bin during which a target was on
+            screen at each ring location, in [0, 1]. Channel order is
             ``['upper_right', 'upper_left', 'lower_left', 'lower_right']``
             (same as ``get_dynamic_indicator``).
         """
+        if int(oversampling) < 1:
+            raise ValueError(f"oversampling must be >= 1, got {oversampling}")
+        oversampling = int(oversampling)
+
         # Same channel mapping as get_dynamic_indicator.
         loc_to_channel = {1.0: 0, 3.0: 1, 5.0: 2, 7.0: 3}
         n_channels = 4
 
         tr = self.get_tr(session, run)
         n_volumes = self.get_n_volumes(session, run)
-        frametimes = np.arange(tr / 2., tr * n_volumes + tr / 2., tr)
-        tr_starts = frametimes - tr / 2.
-        tr_ends = frametimes + tr / 2.
+        dt = tr / oversampling
+        n_bins = n_volumes * oversampling
+        frametimes = (np.arange(n_bins, dtype=np.float64) + 0.5) * dt
+        tr_starts = frametimes - dt / 2.
+        tr_ends = frametimes + dt / 2.
 
         onsets = self.get_onsets(session, run)
         targets = onsets[onsets["event_type"] == "target"].sort_values("onset")
@@ -508,7 +540,7 @@ class Subject(object):
             overlap = np.clip(
                 np.minimum(tr_ends, t_off) - np.maximum(tr_starts, t_on),
                 0.0, None,
-            ) / tr  # in [0, 1]
+            ) / dt  # in [0, 1]
 
             # Element-wise max in case of overlapping windows.
             t[:, ch] = np.maximum(t[:, ch], overlap.astype(np.float32))
