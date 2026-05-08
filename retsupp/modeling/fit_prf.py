@@ -203,7 +203,10 @@ def main(subject: int, model_label: int,
     if chunked_mode and n_chunks is None:
         raise ValueError("chunk_index requires n_chunks")
 
-    bold_mask = sub.get_bold_mask()
+    # Some subjects (e.g. sub-01) lack a run-1 brain_mask; use whatever
+    # the first available run is for that session.
+    first_run = sub.get_runs(1)[0]
+    bold_mask = sub.get_bold_mask(session=1, run=first_run)
     if debug:
         bold_mask = image.math_img(
             'np.where(m.astype(bool) & (np.random.rand(*m.shape) < 0.01), 1, 0)',

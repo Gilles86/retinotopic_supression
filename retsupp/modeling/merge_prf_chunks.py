@@ -59,7 +59,9 @@ def main(subject: int, model: int, bids_folder: str = '/data/ds-retsupp',
         pars['theta'] = np.arctan2(pars['y'], pars['x'])
         pars['ecc'] = np.sqrt(pars['x'] ** 2 + pars['y'] ** 2)
 
-    masker = maskers.NiftiMasker(mask_img=sub.get_bold_mask())
+    first_run = sub.get_runs(1)[0]
+    masker = maskers.NiftiMasker(
+        mask_img=sub.get_bold_mask(session=1, run=first_run))
     masker.fit()
     out_dir.mkdir(parents=True, exist_ok=True)
     for col in pars.columns:
