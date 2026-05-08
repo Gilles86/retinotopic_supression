@@ -28,6 +28,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from nilearn import image, maskers
+from tqdm import tqdm
 
 from braincoder.hrf import SPMHRFModel
 from braincoder.models import (
@@ -114,16 +115,17 @@ def load_concatenated(sub: Subject, masker, resolution: int, kind: str):
 
 
 def chunked(work_fn, n_vox: int, chunk_size: int, label: str):
-    """Apply ``work_fn(idx)`` per voxel-chunk, concat by index, sort."""
+    """Apply ``work_fn(idx)`` per voxel-chunk, concat by index, sort.
+    Outer tqdm across chunks shows total/elapsed/ETA."""
     chunks = np.array_split(np.arange(n_vox), max(1, n_vox // chunk_size))
     out = []
-    for i, idx in enumerate(chunks):
-        t0 = time.time()
+    bar = tqdm(chunks, total=len(chunks), desc=label,
+               unit='chunk', mininterval=2.0)
+    for idx in bar:
         df = work_fn(idx)
         df.index = idx
         out.append(df)
-        print(f"    {label} chunk {i+1}/{len(chunks)}: "
-              f"{len(idx)} vox, {time.time() - t0:.1f}s")
+        bar.set_postfix(vox=len(idx))
     return pd.concat(out, axis=0).sort_index()
 
 
