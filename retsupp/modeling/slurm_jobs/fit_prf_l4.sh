@@ -3,7 +3,7 @@
 #SBATCH --account=hare.econ.uzh
 #SBATCH --output=/dev/null
 #SBATCH --gres=gpu:1
-#SBATCH --constraint=L4
+# No GPU type constraint: take whatever is free first (L4/A100/H100/...).
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=48G
 #SBATCH --time=04:00:00
