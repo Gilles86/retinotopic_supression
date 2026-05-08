@@ -131,6 +131,33 @@ There is no `--account=zne.uzh` in these scripts — add it when creating new on
 - `cleaned` BOLD is sometimes 259 volumes; `fit_run.py` and `fit_condition.py` crop to 258. New scripts that load cleaned BOLD should do the same.
 - Stimulus FOV/bar geometry varies subtly per run because `eccentricity_stimulus` and `size_stimuli` are read from per-run `expsettings.yml`. Do not assume a fixed 4° eccentricity — call `Subject.get_experimental_settings`.
 
+## Experimental constants (typical values)
+
+Values from `expsettings.yml` — small per-run variation; check via `Subject.get_experimental_settings` when accuracy matters.
+
+| Quantity | Value | Notes |
+|---|---|---|
+| `eccentricity_stimulus` | **4.0°** | distance fovea → search-array item; the AF ring eccentricity (`ecc_distractor` in `data.py`) |
+| `size_stimuli` | **1.5°** | search-item "footprint" diameter; used in aperture formula `r = ecc − size/1.8` |
+| `radius_bar_aperture` | **3.17°** | bar PRF mapping aperture (= 4 − 1.5/1.8) |
+| `distractor_radius` (in `Subject.get_stimulus_with_distractors`) | **0.4°** | radius of disk in the FIT paradigm. Function default; ⚠️ verify it matches the actual rendered disk size — may need to be 0.75° (= size_stimuli/2) |
+| Search-array layout | 4 corner positions on a circle at 4° eccentricity, on the diagonals | Targets and distractors only ever at these 4 positions |
+| Distractor location codes | 1=upper_right, 3=upper_left, 5=lower_left, 7=lower_right, 10=no distractor | `Subject.location_mapping` translates to strings |
+| Target location codes | same 4 codes 1/3/5/7 | empirically target NEVER co-occurs with the trial's distractor at the same location |
+| Target/distractor on-window | ~1.5s (`max_distractor_duration`) | from target onset to feedback (capped) |
+| TR | 1.6 s | |
+| Volumes per run | 258 | (cleaned BOLD is sometimes 259; crop to 258) |
+
+The 4 ring positions in degrees (use these — don't redefine):
+
+```python
+from retsupp.utils.data import distractor_locations  # noqa
+# distractor_locations['upper_right'] == ( ecc/√2, +ecc/√2)  with ecc=4
+# Always use the underscore form 'upper_right' — the legacy space form
+# 'upper right' exists in some old code; underscore is canonical for
+# condition_pars and the AF model channel order.
+```
+
 ## Conventions
 
 - All fitting scripts take a positional `subject` (int) and `--bids_folder`; SLURM array index `$SLURM_ARRAY_TASK_ID` provides the subject ID, zero-padded for the directory pattern `sub-{N:02d}`.

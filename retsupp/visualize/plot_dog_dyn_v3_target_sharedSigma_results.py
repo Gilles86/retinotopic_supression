@@ -26,7 +26,7 @@ from scipy import stats
 
 REPO = Path(__file__).resolve().parents[2]
 TSV = REPO / 'notes' / 'data' / 'af_dog_v3_target_sharedSigma_parameters.tsv'
-OUT = REPO / 'notes' / 'figures' / 'af_dyn_v3_dog_target_sharedSigma_results.pdf'
+OUT = REPO / 'notes' / 'figures' / 'af_dyn_v3_dog_target_sharedSigma_sigma2_results.pdf'
 
 ROI_ORDER = ['V1', 'V2', 'V3', 'V3AB', 'hV4', 'LO', 'TO', 'VO']
 
