@@ -131,7 +131,27 @@ HP-specific in mid-tier ROIs.
 
 Net phasic SUPPRESSION in V1/V2/TO when ANY distractor appears.
 
-## Take-home (DoG, reframed)
+## ⚠️ Superseded interpretation — see "Re-reading after target term"
+
+The take-home below was based on the v3 + DoG fit WITHOUT a target-onset
+term. Adding a target-capture term (see
+[af_dynamic_v3_dog_with_target.md](af_dynamic_v3_dog_with_target.md))
+**changes the readout substantially**:
+
+- Sustained HP-vs-LP differential GROWS — V2/V3/hV4/TO all significant
+  for HP < LP (vs only V2/V3 here).
+- Dynamic HP-LP differential DISAPPEARS — V3AB/LO/TO no longer
+  significant once target is in the model.
+- V3AB and VO sustained gains flip from near-zero to clearly negative
+  (sustained suppression). V1/V2 stay positive (sustained capture).
+- Phasic suppression in V1/V2 attenuates a lot.
+
+The cleaner story is in the with-target notes. The take-home below is
+preserved for historical reference.
+
+---
+
+## Take-home (DoG, original — pre-target-term)
 
 1. **Sustained AF = anticipatory CAPTURE, not suppression.** Both g_HP
    and g_LP are positive almost everywhere — the brain prioritizes the
