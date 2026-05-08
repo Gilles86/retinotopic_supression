@@ -64,6 +64,7 @@ from braincoder.optimize import ParameterFitter
 from retsupp.modeling.local_models import (
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target,
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_oversampled,
+    DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma,
 )
 from retsupp.utils.data import (
     Subject,
@@ -282,7 +283,8 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
          with_target: bool = False,
          g_t_dyn_init: float = 0.0,
          sigma_t_dyn_init: float = 2.0,
-         temporal_oversampling: int | None = None):
+         temporal_oversampling: int | None = None,
+         shared_target_sigma: bool = False):
     """Top-level fit driver.
 
     Parameters
@@ -304,6 +306,10 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
         raise ValueError(
             "--with-target is only supported with --model-version v3 "
             f"(got {model_version!r}).")
+    if shared_target_sigma and not (with_target and model_version == 'v3'):
+        raise ValueError(
+            "--shared-target-sigma is only supported with "
+            "--model-version v3 + --with-target.")
     use_oversampled_codepath = temporal_oversampling is not None
     if use_oversampled_codepath:
         if int(temporal_oversampling) < 1:
@@ -316,6 +322,11 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
                 "--temporal-oversampling is only supported with "
                 "--model-version v3 + --with-target (which routes "
                 "through the oversampled local-models subclass).")
+        if shared_target_sigma:
+            raise ValueError(
+                "--shared-target-sigma is not yet supported in the "
+                "oversampled code path. Add a SharedSigmaOversampled "
+                "subclass in local_models.py if you need both.")
     else:
         # Legacy path -> always use N=1 internally for the few code
         # paths (build_data_and_paradigm) that take the kwarg.
@@ -330,6 +341,8 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
                 'v2': 'af_prf_joint_dynamic_v2_dog',
                 'v3': 'af_prf_joint_dynamic_v3_dog',
             }[model_version]
+        if shared_target_sigma:
+            base = f'{base}_sharedSigma'
         if use_oversampled_codepath:
             output_subdir = f'{base}_tos{temporal_oversampling}'
         else:
@@ -339,9 +352,11 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
 
     tos_str = (f' | tos={temporal_oversampling}'
                if use_oversampled_codepath else '')
+    shared_str = ' | sharedSigma' if shared_target_sigma else ''
     print(f'== sub-{subject:02d} | roi={roi} | mode={mode} | '
           f'model-version={model_version}'
-          f'{" + target" if with_target else ""}{tos_str} | paradigm=full '
+          f'{" + target" if with_target else ""}'
+          f'{shared_str}{tos_str} | paradigm=full '
           f'(DoG voxel kernel, dynamic AF) ==')
 
     # 1) Load BOLD + paradigm + condition_indicator + dynamic_indicator
@@ -407,7 +422,14 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
         if with_target:
             # v3 + target: 2 additional shared parameters.
             init_pars['g_T_dyn'] = g_t_dyn_init
-            init_pars['sigma_T_dyn'] = sigma_t_dyn_init
+            if shared_target_sigma:
+                # Tie sigma_T_dyn to sigma_dyn at init so the (effectively
+                # unused) σ_T_dyn raw variable starts in the right place.
+                # The model's forward transform will overwrite slot 14
+                # with slot 10 on every iteration anyway.
+                init_pars['sigma_T_dyn'] = init_pars['sigma_dyn']
+            else:
+                init_pars['sigma_T_dyn'] = sigma_t_dyn_init
             shared_pars = shared_pars + ['g_T_dyn', 'sigma_T_dyn']
 
     # 4) Build the dynamic DoG-AF + PRF model and the fitter.
@@ -426,6 +448,8 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     elif with_target:
         if use_oversampled_codepath:
             ModelCls = DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_oversampled
+        elif shared_target_sigma:
+            ModelCls = DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma
         else:
             ModelCls = DoGDynamicAttentionFieldPRF2DWithHRF_v3_target
     else:
@@ -472,6 +496,8 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
         dyn_tag = 'dog-dyn-v3-target'
     else:
         dyn_tag = {'v2': 'dog-dyn-v2', 'v3': 'dog-dyn-v3'}[model_version]
+    if shared_target_sigma:
+        dyn_tag = f'{dyn_tag}-sharedSigma'
     if use_oversampled_codepath:
         dyn_tag = f'{dyn_tag}-tos{temporal_oversampling}'
     out_tsv = out_dir / (
@@ -499,6 +525,7 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
             'model_label_init': model_label,
             'temporal_oversampling': (temporal_oversampling
                                       if use_oversampled_codepath else None),
+            'shared_target_sigma': shared_target_sigma,
         }, f)
     print(f'Saved: {out_tsv}')
     print(f'Saved: {out_pkl}')
@@ -558,6 +585,13 @@ if __name__ == '__main__':
                         help='Initial value for sigma_T_dyn (default 2.0; '
                              'matches the neutral sigma_AF / sigma_dyn '
                              'inits).')
+    parser.add_argument('--shared-target-sigma', action='store_true',
+                        help='Force sigma_T_dyn := sigma_dyn so the two '
+                             'phasic Gaussians (distractor-onset and '
+                             'target-onset) share a single spatial '
+                             'extent. Only valid with --model-version v3 '
+                             '+ --with-target. Routes through '
+                             'DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma.')
     parser.add_argument('--temporal-oversampling', type=int, default=None,
                         help='Temporal oversampling factor N for the HRF '
                              'convolution (only valid with v3 + '
@@ -591,4 +625,5 @@ if __name__ == '__main__':
         g_t_dyn_init=args.g_t_dyn_init,
         sigma_t_dyn_init=args.sigma_t_dyn_init,
         temporal_oversampling=args.temporal_oversampling,
+        shared_target_sigma=args.shared_target_sigma,
     )

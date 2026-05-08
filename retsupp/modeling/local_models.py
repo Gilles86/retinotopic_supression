@@ -25,6 +25,17 @@ Currently provides
     BOLD predictions are downsampled by ``[::N]`` along the time axis
     before being returned, so they line up with the BOLD data at TR
     resolution. Use ``N=1`` for current-behaviour parity.
+
+``DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma``
+    Same model as ``..._v3_target`` but ``sigma_T_dyn`` is forced to
+    equal ``sigma_dyn`` in every forward pass. Used to test whether the
+    target-onset Gaussian's spatial extent really differs from the
+    distractor-onset one, or whether the larger σ_T_dyn estimates seen
+    in V3AB / VO are identifiability slack. The parameter vector still
+    contains a ``sigma_T_dyn`` slot (so the rest of the fit machinery
+    is unchanged), but its raw value is overridden in
+    ``_transform_parameters_forward`` and therefore has no effect on
+    the loss.
 """
 from __future__ import annotations
 
@@ -479,3 +490,76 @@ class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_oversampled(
         else:
             return pd.DataFrame(
                 predictions.numpy(), index=idx, columns=weights.columns)
+
+
+# ---------------------------------------------------------------------------
+# Shared-σ variant: σ_T_dyn forced to equal σ_dyn.
+# ---------------------------------------------------------------------------
+class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma(
+    DoGDynamicAttentionFieldPRF2DWithHRF_v3_target,
+):
+    """v3 + target with ``sigma_T_dyn`` tied to ``sigma_dyn``.
+
+    Same parameter vector and forward model as
+    :class:`DoGDynamicAttentionFieldPRF2DWithHRF_v3_target`, but
+    ``sigma_T_dyn`` is overwritten with ``sigma_dyn`` at the very end
+    of the forward parameter transform. The two phasic Gaussians
+    (distractor-onset and target-onset) therefore share a single
+    spatial extent, which we call the "phasic σ".
+
+    The parameter vector still contains a ``sigma_T_dyn`` slot — we do
+    NOT renumber slot indices or rewrite ``parameter_labels`` so the
+    rest of the braincoder fit machinery (ParameterFitter, shared_pars
+    plumbing, output DataFrame columns) is unchanged. The σ_T_dyn raw
+    variable still exists in the optimiser's free-parameter set, but
+    every forward pass overwrites the post-softplus σ_T_dyn with the
+    post-softplus σ_dyn before the loss is computed, so σ_T_dyn's raw
+    variable has zero gradient flowing back to it through the model.
+
+    Initialisation
+    --------------
+    Callers should set ``init_pars['sigma_T_dyn'] = init_pars['sigma_dyn']``
+    before passing inits to the fitter, so the (effectively unused)
+    σ_T_dyn raw variable starts at the right place. The fit script
+    handles this when ``--shared-target-sigma`` is set.
+
+    Composing with temporal oversampling
+    ------------------------------------
+    For shared-σ + temporal oversampling, write a small subclass that
+    inherits from BOTH this class and
+    :class:`DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_oversampled`,
+    or replicate this override on a sibling oversampled class.
+    """
+
+    @tf.function
+    def _transform_parameters_forward(self, parameters):
+        # Run the parent forward transform (handles HRF + encoding pars,
+        # applies softplus to both sigma_dyn (slot 10) and sigma_T_dyn
+        # (slot 14)).
+        out = super()._transform_parameters_forward(parameters)
+
+        # Force sigma_T_dyn := sigma_dyn after the parent transform.
+        # `out` shape: (n_voxels, n_parameters[+ n_hrf_pars]).
+        sigma_dyn_col = out[:, 10:11]                         # (V, 1)
+        # Build the new tensor by concatenation around slot 14.
+        # Slots: [0..14, hrf...] -> replace slot 14 with sigma_dyn_col.
+        before = out[:, :14]                                  # (V, 14)
+        after = out[:, 15:]                                   # (V, rest)
+        out_tied = tf.concat([before, sigma_dyn_col, after], axis=1)
+        return out_tied
+
+    @tf.function
+    def _transform_parameters_backward(self, parameters):
+        # Run the parent backward transform (inverts softplus on both
+        # sigma_dyn slot 10 and sigma_T_dyn slot 14 in raw space).
+        out = super()._transform_parameters_backward(parameters)
+
+        # Tie the raw σ_T_dyn slot to the raw σ_dyn slot so that, if
+        # callers ever recover the "raw" parameter vector, both raw
+        # variables agree. Both sigmas use softplus so equal raw values
+        # give equal post-softplus values.
+        raw_sigma_dyn_col = out[:, 10:11]                     # (V, 1)
+        before = out[:, :14]                                  # (V, 14)
+        after = out[:, 15:]                                   # (V, rest)
+        out_tied = tf.concat([before, raw_sigma_dyn_col, after], axis=1)
+        return out_tied
