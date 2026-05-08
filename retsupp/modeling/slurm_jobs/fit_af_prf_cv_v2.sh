@@ -5,7 +5,7 @@
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=24G
-#SBATCH --time=04:00:00
+#SBATCH --time=06:00:00
 
 # Cross-validated DoG-dyn-v3 + target sharedSigma fit (CV-v2 18-class
 # factorial, leave-one-condition-out CV, all 4 folds inside one job).
