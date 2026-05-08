@@ -107,7 +107,11 @@ def per_subject_per_roi(subject: int, bids_folder: Path,
         'VO':   ['VO1', 'VO2'],
     }
     label_to_idx = {v: k for k, v in sub.get_retinotopic_labels().items()}
-    pe_dataobj = pe_img.dataobj   # nibabel proxy, no eager load
+    # Load full 4D pe_arr once as float32 (~5 GB). Single decompress.
+    # Streaming gzipped Nifti volume-by-volume re-decompresses the whole
+    # file each time → unusable. Caller should request enough SLURM
+    # memory (32+ GB).
+    pe_arr = pe_img.get_fdata(dtype=np.float32)
     for roi in rois:
         components = aliases.get(roi, [roi])
         ids = [label_to_idx.get(r) for r in components if r in label_to_idx]
@@ -119,13 +123,8 @@ def per_subject_per_roi(subject: int, bids_folder: Path,
         n_vox = int(mask.sum())
         if n_vox < 5:
             continue
-        # Stream one trial-volume at a time: each 3D vol is small enough
-        # to fit in memory; only the masked voxels are kept. Final shape:
-        # (n_trials, n_vox) — at most a few MB per ROI.
-        per_trial_mean = np.empty(n_trials_img, dtype=np.float32)
-        for t in range(n_trials_img):
-            vol = np.asarray(pe_dataobj[:, :, :, t], dtype=np.float32)
-            per_trial_mean[t] = vol[mask].mean()
+        # Mean across this ROI's voxels per trial.
+        per_trial_mean = pe_arr[mask].mean(axis=0)   # (n_trials,)
         for cond, mask_t in trials.groupby('distractor_label'):
             idx = mask_t.index.values
             idx = idx[(idx >= 0) & (idx < n_trials_img)]
