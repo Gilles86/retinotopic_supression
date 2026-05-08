@@ -107,7 +107,7 @@ def per_subject_per_roi(subject: int, bids_folder: Path,
         'VO':   ['VO1', 'VO2'],
     }
     label_to_idx = {v: k for k, v in sub.get_retinotopic_labels().items()}
-    from nilearn.masking import apply_mask
+    pe_dataobj = pe_img.dataobj   # nibabel proxy, no eager load
     for roi in rois:
         components = aliases.get(roi, [roi])
         ids = [label_to_idx.get(r) for r in components if r in label_to_idx]
@@ -119,11 +119,13 @@ def per_subject_per_roi(subject: int, bids_folder: Path,
         n_vox = int(mask.sum())
         if n_vox < 5:
             continue
-        # Memory-efficient: build a Nifti mask, apply it (reads only
-        # masked voxels via memory-mapped access). Returns (n_trials, n_vox).
-        mask_img = nib.Nifti1Image(mask.astype(np.int8), pe_img.affine)
-        flat_betas = apply_mask(pe_img, mask_img)   # (n_trials, n_vox)
-        per_trial_mean = flat_betas.mean(axis=1)
+        # Stream one trial-volume at a time: each 3D vol is small enough
+        # to fit in memory; only the masked voxels are kept. Final shape:
+        # (n_trials, n_vox) — at most a few MB per ROI.
+        per_trial_mean = np.empty(n_trials_img, dtype=np.float32)
+        for t in range(n_trials_img):
+            vol = np.asarray(pe_dataobj[:, :, :, t], dtype=np.float32)
+            per_trial_mean[t] = vol[mask].mean()
         for cond, mask_t in trials.groupby('distractor_label'):
             idx = mask_t.index.values
             idx = idx[(idx >= 0) & (idx < n_trials_img)]
