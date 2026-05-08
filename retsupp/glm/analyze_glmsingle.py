@@ -76,17 +76,23 @@ def per_subject_per_roi(subject: int, bids_folder: Path,
     import nibabel as nib
     pe_img = nib.load(str(pe_nii))   # don't load data yet
     n_trials_img = pe_img.shape[3]
+    # Build a 3D shape-only reference image so resample_to_img doesn't
+    # eagerly load the 4D pe_img into memory.
+    target_3d = nib.Nifti1Image(
+        np.zeros(pe_img.shape[:3], dtype=np.int8),
+        pe_img.affine,
+    )
     # We need ROI masks in the SAME space as pe_img. The GLMsingle is in
     # T1w (anatomical) space; our retinotopic atlas is in T1w via
-    # neuropythy (mri/inferred_varea.mgz). Resample atlas to pe space.
+    # neuropythy (mri/inferred_varea.mgz).
     atlas = sub.get_retinotopic_atlas(bold_space=False)
-    atlas = image.resample_to_img(atlas, target_img=pe_img,
+    atlas = image.resample_to_img(atlas, target_img=target_3d,
                                      interpolation='nearest',
                                      force_resample=True, copy_header=True)
     atlas_arr = atlas.get_fdata().astype(int)
     if r2_nii.exists() and r2_thr is not None:
         r2_img = image.resample_to_img(image.load_img(str(r2_nii)),
-                                          target_img=pe_img,
+                                          target_img=target_3d,
                                           interpolation='linear',
                                           force_resample=True, copy_header=True)
         r2_arr = r2_img.get_fdata()
