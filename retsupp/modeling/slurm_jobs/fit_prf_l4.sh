@@ -40,12 +40,16 @@ export PYTHONUNBUFFERED=1
 PYTHON="$HOME/data/conda/envs/retsupp_cuda/bin/python"
 $PYTHON -c "import tensorflow as tf; print('GPUs:', tf.config.list_physical_devices('GPU'))"
 
+DEBUG_FLAG=""
+if [[ "${SMOKE:-0}" == "1" ]]; then DEBUG_FLAG="--debug"; fi
+
 $PYTHON -u "$HOME/git/retsupp/retsupp/modeling/fit_prf.py" \
     "$subject" --model "$MODEL" \
     --bids-folder /shares/zne.uzh/gdehol/ds-retsupp \
     --resolution 50 \
     --voxel-chunk-size 10000 \
     --max-n-iterations 2000 \
-    --paradigm-kind full
+    --paradigm-kind full \
+    $DEBUG_FLAG
 
 echo "Finished: $(date)"
