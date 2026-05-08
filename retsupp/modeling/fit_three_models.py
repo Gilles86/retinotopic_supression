@@ -222,6 +222,7 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
          learning_rate: float = 0.01,
          grid_radius: float = 5.0,
          output_subdir: str | None = None,
+         init_model_label: int = 4,
          sigma_af_init: float = 2.0,
          sigma_dyn_init: float = 2.0,
          with_target: bool = True,
@@ -252,8 +253,13 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     )
 
     # 2) Restrict to ROI voxels with decent mean-model PRF R².
-    # Use model 1 (Gaussian PRF) as the canonical Gaussian baseline.
-    prf_pars = sub.get_prf_parameters_volume(model=1, return_images=False)
+    # Use init_model_label (default 4 = DoG + flexible HRF) as the
+    # source of the Gaussian PRF init; we read only the 5 Gaussian
+    # columns (x, y, sd, baseline, amplitude) and ignore the DoG /
+    # HRF tail. Model 1 (pure Gaussian) is preferred when available
+    # but is not always fit on the cluster.
+    prf_pars = sub.get_prf_parameters_volume(
+        model=init_model_label, return_images=False)
     if not isinstance(prf_pars, pd.DataFrame):
         prf_pars = pd.DataFrame(prf_pars)
     voxel_mask = select_roi_voxels(sub, roi, prf_pars, r2_thr=r2_thr)
@@ -271,12 +277,15 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
 
     bold_sub = bold_df.loc[:, voxel_mask].copy()
 
-    # 3) Initialise from model 1 (Gaussian PRF). 5 voxel params.
+    # 3) Initialise the 5 Gaussian voxel params from the mean model.
+    # We deliberately DROP DoG (srf_*) and HRF (hrf_*) columns even if
+    # the source model has them — our backbone is a single Gaussian.
     init_cols = ['x', 'y', 'sd', 'baseline', 'amplitude']
     missing = [c for c in init_cols if c not in prf_pars.columns]
     if missing:
         raise RuntimeError(
-            f'Mean model 1 is missing Gaussian params {missing}.')
+            f'Init model {init_model_label} is missing Gaussian '
+            f'params {missing}.')
     init_pars = prf_pars.loc[voxel_mask, init_cols].copy()
 
     # AF inits.
@@ -389,6 +398,13 @@ if __name__ == '__main__':
     parser.add_argument('--learning-rate', type=float, default=0.01)
     parser.add_argument('--grid-radius', type=float, default=5.0)
     parser.add_argument('--output-subdir', default=None)
+    parser.add_argument('--init-model-label', type=int, default=4,
+                        help='Mean-model PRF used to initialise the 5 '
+                             'Gaussian voxel parameters (x, y, sd, '
+                             'baseline, amplitude). Default 4 (DoG + '
+                             'flexible HRF) since model 1 is not '
+                             'always fit. Only the Gaussian columns '
+                             'are read; DoG/HRF columns are ignored.')
     parser.add_argument('--sigma-af-init', type=float, default=2.0)
     parser.add_argument('--sigma-dyn-init', type=float, default=2.0)
     parser.add_argument('--with-target', action='store_true',
@@ -413,6 +429,7 @@ if __name__ == '__main__':
         learning_rate=args.learning_rate,
         grid_radius=args.grid_radius,
         output_subdir=args.output_subdir,
+        init_model_label=args.init_model_label,
         sigma_af_init=args.sigma_af_init,
         sigma_dyn_init=args.sigma_dyn_init,
         with_target=args.with_target,
