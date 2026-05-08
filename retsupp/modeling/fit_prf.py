@@ -215,11 +215,33 @@ def main(subject: int, model_label: int,
         resolution = 25
 
     masker = maskers.NiftiMasker(mask_img=bold_mask)
-    masker.fit()  # Needed before .transform calls in load_concatenated.
-    print("Loading + concatenating cleaned BOLD across all (ses, run)...")
-    data, paradigm, grid_coords = load_concatenated(
-        sub, masker, resolution, paradigm_kind)
-    print(f"  BOLD: T={data.shape[0]} (= n_runs × 258), V={data.shape[1]}")
+    masker.fit()
+    if paradigm_kind == 'bar':
+        # Legacy comparison mode: mean BOLD across all runs + single
+        # bar-only paradigm (T=258). Apples-to-apples with the original
+        # PRF fits (which never modelled the search-array transients).
+        mean_ts = (derivs / 'mean_signal' / f'sub-{subject:02d}'
+                   / f'sub-{subject:02d}_desc-mean_bold.nii.gz')
+        if not mean_ts.exists():
+            raise FileNotFoundError(
+                f"--paradigm-kind=bar needs precomputed mean BOLD at "
+                f"{mean_ts}; run preprocess/mean_ts.py first.")
+        print(f"Loading mean BOLD: {mean_ts}")
+        data = masker.transform(mean_ts).astype(np.float32)
+        # Single-run bar paradigm.
+        par_one = sub.get_stimulus(session=1, run=1, resolution=resolution
+                                    ).astype(np.float32)
+        gx, gy = sub.get_grid_coordinates(session=1, run=1,
+                                           resolution=resolution)
+        paradigm = par_one.reshape(par_one.shape[0], -1)
+        grid_coords = np.stack(
+            (gx.ravel(), gy.ravel()), axis=1).astype(np.float32)
+        print(f"  BOLD: T={data.shape[0]} (= mean across runs), V={data.shape[1]}")
+    else:
+        print("Loading + concatenating cleaned BOLD across all (ses, run)...")
+        data, paradigm, grid_coords = load_concatenated(
+            sub, masker, resolution, paradigm_kind)
+        print(f"  BOLD: T={data.shape[0]} (= n_runs × 258), V={data.shape[1]}")
     print(f"  paradigm: {paradigm.shape}, grid: {grid_coords.shape}, "
           f"kind={paradigm_kind!r}")
 
@@ -273,10 +295,16 @@ def main(subject: int, model_label: int,
                       voxel_chunk_size, max_n_iterations)
     print(f"  median R²: {pars['r2'].median():.3f}")
 
+    # Output goes to prf/ for full paradigm (canonical) or prf_bar/ for
+    # legacy bar-only paradigm (kept separate so they coexist).
+    base_dir = 'prf_bar' if paradigm_kind == 'bar' else 'prf'
+    if debug:
+        base_dir += '.debug'
+
     if chunked_mode:
         # Save partial chunk: an NPZ with the voxel indices and a column
         # array per parameter. Cheap; merger reassembles.
-        chunks_dir = (derivs / ('prf.debug' if debug else 'prf')
+        chunks_dir = (derivs / base_dir
                       / f'model{model_label}' / f'sub-{subject:02d}'
                       / 'chunks')
         chunks_dir.mkdir(parents=True, exist_ok=True)
@@ -287,7 +315,7 @@ def main(subject: int, model_label: int,
         print(f"Saved chunk: {npz_path}")
         return
 
-    target_dir = derivs / ('prf.debug' if debug else 'prf') \
+    target_dir = derivs / base_dir \
         / f'model{model_label}' / f'sub-{subject:02d}'
     save_pars(pars, masker, target_dir, subject)
     print(f"Saved: {target_dir}")
