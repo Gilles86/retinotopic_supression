@@ -775,11 +775,19 @@ def _make_smoother(win: int, opts):
         t_axis_sec = t_axis * TR
         t_plot = np.arange(t_axis_sec[0], t_axis_sec[-1] + 1e-9, upsample_dt)
 
+        from scipy.ndimage import gaussian_filter1d
+
         def _smooth(y):
-            # Linear interp: no wiggles, just connects samples cleanly.
+            # Linear interp + tiny Gaussian smooth (σ ≈ 0.25 s = 2.5
+            # post-upsampling samples at dt=0.1s). Removes the
+            # "stairstep" between TRs without introducing the wiggles
+            # of cubic interp.
             f = interp1d(t_axis_sec, y, kind='linear',
                          bounds_error=False, fill_value='extrapolate')
-            return f(t_plot)
+            y_up = f(t_plot)
+            sigma_samples = 0.25 / max(upsample_dt, 1e-6)
+            return gaussian_filter1d(y_up, sigma=sigma_samples,
+                                       mode='nearest')
         return t_plot / TR, _smooth
     return t_axis, (lambda y: y)
 
