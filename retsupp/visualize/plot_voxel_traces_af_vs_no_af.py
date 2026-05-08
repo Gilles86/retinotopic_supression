@@ -406,9 +406,17 @@ def per_voxel_r2(obs, pred):
 def compute_voxel_traces(sub: Subject, roi: str,
                           af_pkl_path: Path,
                           mean_prf_full: pd.DataFrame,
-                          opts):
+                          opts,
+                          paradigm_cache: dict = None):
     """Heavy compute: load BOLD, fit forward AF + no-AF predictions,
     pick top-N voxels, build per-condition averaged traces.
+
+    If ``paradigm_cache`` is provided (dict), used as a per-subject cache
+    keyed by ``(resolution, grid_radius, with_target)``. The first ROI for
+    a given subject populates it; subsequent ROIs reuse the loaded
+    paradigm/BOLD/indicators (each ROI may need a different
+    ``with_target``, but in practice all AF pkls in one subject share
+    the same flag).
 
     Returns a dict with:
       'voxel_traces': list of per-voxel dicts (keys 'vi', 'x', 'y', 'sd',
@@ -439,16 +447,32 @@ def compute_voxel_traces(sub: Subject, roi: str,
           f'mode={mode}, n_voxels_in_pkl={len(voxel_idx)})')
 
     # ---- Load BOLD + paradigm + indicators (once per subject/ROI). ----
-    try:
+    cache_key = (resolution, grid_radius, with_target)
+    cached = (paradigm_cache.get(cache_key) if paradigm_cache is not None
+              else None)
+    if cached is not None:
+        print(f'  [cache] reusing paradigm+BOLD for sub-{sub.subject_id:02d}')
         (run_meta, bold_chunks, par_chunks,
          cond_chunks, dyn_chunks, tgt_chunks,
-         grid_coords, n_T_run, masker, hp_per_run) = load_paradigm_and_bold(
-            sub, resolution=resolution, grid_radius=grid_radius,
-            with_target=with_target,
-        )
-    except Exception as e:
-        print(f'  [SKIP] load_paradigm_and_bold failed: {e}')
-        return None
+         grid_coords, n_T_run, masker, hp_per_run) = cached
+    else:
+        try:
+            (run_meta, bold_chunks, par_chunks,
+             cond_chunks, dyn_chunks, tgt_chunks,
+             grid_coords, n_T_run, masker, hp_per_run) = \
+                load_paradigm_and_bold(
+                    sub, resolution=resolution, grid_radius=grid_radius,
+                    with_target=with_target,
+                )
+        except Exception as e:
+            print(f'  [SKIP] load_paradigm_and_bold failed: {e}')
+            return None
+        if paradigm_cache is not None:
+            paradigm_cache[cache_key] = (
+                run_meta, bold_chunks, par_chunks,
+                cond_chunks, dyn_chunks, tgt_chunks,
+                grid_coords, n_T_run, masker, hp_per_run,
+            )
     if not run_meta:
         print('  [SKIP] No runs loaded.')
         return None
@@ -865,6 +889,50 @@ def render_voxel_panel(ax, voxel_trace, opts, *, radius: float,
         print(f'  [WARN] inset failed: {e}')
 
 
+def _draw_direction_icon(fig, subset: str, aperture_radius: float):
+    """Top-right inset: 2 example bars + arrows showing 'towards' / 'away'.
+    Drawn relative to an example HP location (upper-right ring)."""
+    if subset not in ('toward', 'away'):
+        return
+    # Add a small axes in the upper-right of the figure.
+    icon_ax = fig.add_axes([0.78, 0.91, 0.20, 0.07])
+    icon_ax.set_xlim(-5, 5); icon_ax.set_ylim(-5, 5)
+    icon_ax.set_aspect('equal')
+    # Aperture (dashed).
+    theta = np.linspace(0, 2 * np.pi, 100)
+    icon_ax.plot(aperture_radius * np.cos(theta),
+                 aperture_radius * np.sin(theta),
+                 color='0.7', lw=0.5, ls='--')
+    # Example HP location: UR ring.
+    hp_xy = np.array([4 / np.sqrt(2), 4 / np.sqrt(2)])
+    icon_ax.plot(hp_xy[0], hp_xy[1], 'o', color='#d62728',
+                 markersize=8, markeredgecolor='k', markeredgewidth=0.5)
+    icon_ax.annotate('HP', xy=hp_xy, xytext=(hp_xy[0] + 0.4, hp_xy[1] + 0.2),
+                     fontsize=6, color='#d62728')
+    # Two example bars + arrows.
+    # Bar 1: horizontal bar at y=0, position x=-1.5. Direction → +x.
+    # Bar 2: vertical bar at x=0, position y=-1.5. Direction → +y.
+    # For 'toward' both arrows head TOWARDS the HP (UR quadrant).
+    # For 'away' both arrows head AWAY from HP.
+    sign = 1 if subset == 'toward' else -1
+    for bar_pos, bar_orient in [((-1.5, 0.5), 'h'), ((0.5, -1.5), 'v')]:
+        x, y = bar_pos
+        if bar_orient == 'h':
+            icon_ax.plot([x, x], [y - 0.5, y + 0.5], 'k-', lw=2.5)
+            tip = (x + sign * 1.5, y)
+        else:
+            icon_ax.plot([x - 0.5, x + 0.5], [y, y], 'k-', lw=2.5)
+            tip = (x, y + sign * 1.5)
+        icon_ax.annotate('', xy=tip, xytext=bar_pos,
+                          arrowprops=dict(arrowstyle='->', lw=1.3,
+                                          color='k'))
+    icon_ax.set_xticks([]); icon_ax.set_yticks([])
+    for spine in icon_ax.spines.values():
+        spine.set_linewidth(0.4); spine.set_color('0.6')
+    icon_ax.set_title(
+        f'sweeps {subset.upper()} HP', fontsize=7, pad=2)
+
+
 def make_subject_roi_page(pdf, sub: Subject, roi: str,
                             af_pkl_path: Path,
                             mean_prf_full: pd.DataFrame,
@@ -903,6 +971,9 @@ def make_subject_roi_page(pdf, sub: Subject, roi: str,
                                   figsize=(6.0 * ncols, 4.0 * nrows),
                                   sharex=True, sharey=False, squeeze=False)
         axes = axes.flatten()
+        # Direction icon for towards/away pages.
+        if subset in ('toward', 'away'):
+            _draw_direction_icon(fig, subset, radius)
 
         for ax_i, v in enumerate(voxel_traces):
             ax = axes[ax_i]
