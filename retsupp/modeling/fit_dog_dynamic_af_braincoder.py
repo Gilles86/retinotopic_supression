@@ -65,6 +65,7 @@ from retsupp.modeling.local_models import (
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target,
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_oversampled,
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma,
+    DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_runPosition,
 )
 from retsupp.utils.data import (
     Subject,
@@ -84,7 +85,8 @@ def get_ring_positions():
 def build_data_and_paradigm(sub: Subject, resolution: int = 50,
                             grid_radius: float = 5.0,
                             with_target: bool = False,
-                            temporal_oversampling: int = 1):
+                            temporal_oversampling: int = 1,
+                            with_run_position: bool = False):
     """Load cleaned BOLD + paradigm + condition_indicator + dynamic_indicator.
 
     Always uses the FULL paradigm (bar + distractor disks). Identical to
@@ -137,6 +139,7 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
     cond_indicator_chunks = []
     dyn_indicator_chunks = []
     tgt_indicator_chunks = [] if with_target else None
+    runpos_chunks = [] if with_run_position else None
     masker.fit(bold_mask)
 
     session_runs = [(s, r) for s in [1, 2] for r in sub.get_runs(s)]
@@ -199,6 +202,16 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
                 tgt_indicator = tgt_indicator[:n_T_run_fine]
             tgt_indicator_chunks.append(tgt_indicator)
 
+        if with_run_position:
+            # Compute scalar run-position for this (session, run) and
+            # broadcast to a (n_T_run, 3) one-hot per-TR indicator.
+            pos_int = sub.get_run_position_per_tr(session, run, hp_per_run)
+            runpos_run = np.zeros((n_T_run, 3), dtype=np.float32)
+            runpos_run[:, pos_int] = 1.0
+            print(f'  ses-{session}_run-{run}: HP={hp!r}, '
+                  f'run-position={pos_int}')
+            runpos_chunks.append(runpos_run)
+
         # Repeat-expand paradigm and condition_indicator along the time
         # axis when oversampling. Paradigm and HP-condition state are
         # constant within a TR. np.repeat with axis=0 turns row i of
@@ -206,6 +219,9 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
         if N > 1:
             par_run_flat = np.repeat(par_run_flat, N, axis=0)
             cond_indicator = np.repeat(cond_indicator, N, axis=0)
+            if with_run_position:
+                # Run-position is also constant within a TR.
+                runpos_chunks[-1] = np.repeat(runpos_chunks[-1], N, axis=0)
 
         bold_chunks.append(data)
         paradigm_chunks.append(par_run_flat)
@@ -218,6 +234,8 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
     dynamic_indicator = np.vstack(dyn_indicator_chunks)
     target_indicator = (np.vstack(tgt_indicator_chunks)
                         if with_target else None)
+    run_position_indicator = (np.vstack(runpos_chunks)
+                              if with_run_position else None)
 
     print(f'Loaded BOLD: shape {bold.shape}, paradigm {paradigm_full.shape}, '
           f'condition_indicator {condition_indicator.shape}, '
@@ -230,6 +248,10 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
               f'(min={target_indicator.min():.3f}, '
               f'max={target_indicator.max():.3f}, '
               f'mean={target_indicator.mean():.4f})')
+    if with_run_position:
+        print(f'run_position_indicator {run_position_indicator.shape} '
+              f'(per-position counts: '
+              f'{run_position_indicator.sum(axis=0).astype(int).tolist()})')
     if N > 1:
         print(f'temporal_oversampling: N={N} '
               f'(BOLD at TR={bold.shape[0]} rows; '
@@ -242,6 +264,7 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
         grid_coordinates,
         masker,
         target_indicator,
+        run_position_indicator,
     )
 
 
@@ -284,7 +307,8 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
          g_t_dyn_init: float = 0.0,
          sigma_t_dyn_init: float = 2.0,
          temporal_oversampling: int | None = None,
-         shared_target_sigma: bool = False):
+         shared_target_sigma: bool = False,
+         per_run_position_gains: bool = False):
     """Top-level fit driver.
 
     Parameters
@@ -310,6 +334,11 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
         raise ValueError(
             "--shared-target-sigma is only supported with "
             "--model-version v3 + --with-target.")
+    if per_run_position_gains and not (with_target and shared_target_sigma
+                                       and model_version == 'v3'):
+        raise ValueError(
+            "--per-run-position-gains requires --model-version v3 + "
+            "--with-target + --shared-target-sigma.")
     use_oversampled_codepath = temporal_oversampling is not None
     if use_oversampled_codepath:
         if int(temporal_oversampling) < 1:
@@ -327,6 +356,10 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
                 "--shared-target-sigma is not yet supported in the "
                 "oversampled code path. Add a SharedSigmaOversampled "
                 "subclass in local_models.py if you need both.")
+        if per_run_position_gains:
+            raise ValueError(
+                "--per-run-position-gains is not yet supported in the "
+                "oversampled code path.")
     else:
         # Legacy path -> always use N=1 internally for the few code
         # paths (build_data_and_paradigm) that take the kwarg.
@@ -343,6 +376,8 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
             }[model_version]
         if shared_target_sigma:
             base = f'{base}_sharedSigma'
+        if per_run_position_gains:
+            base = f'{base}_runPosition'
         if use_oversampled_codepath:
             output_subdir = f'{base}_tos{temporal_oversampling}'
         else:
@@ -353,21 +388,24 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     tos_str = (f' | tos={temporal_oversampling}'
                if use_oversampled_codepath else '')
     shared_str = ' | sharedSigma' if shared_target_sigma else ''
+    runpos_str = ' | runPosition' if per_run_position_gains else ''
     print(f'== sub-{subject:02d} | roi={roi} | mode={mode} | '
           f'model-version={model_version}'
           f'{" + target" if with_target else ""}'
-          f'{shared_str}{tos_str} | paradigm=full '
+          f'{shared_str}{runpos_str}{tos_str} | paradigm=full '
           f'(DoG voxel kernel, dynamic AF) ==')
 
     # 1) Load BOLD + paradigm + condition_indicator + dynamic_indicator
     #    (+ target_indicator if requested).
     (bold_df, paradigm, condition_indicator, dynamic_indicator,
-     grid_coords, masker, target_indicator) = build_data_and_paradigm(
+     grid_coords, masker, target_indicator,
+     run_position_indicator) = build_data_and_paradigm(
         sub,
         resolution=resolution,
         grid_radius=grid_radius,
         with_target=with_target,
         temporal_oversampling=temporal_oversampling,
+        with_run_position=per_run_position_gains,
     )
 
     # 2) Restrict to ROI voxels with decent mean-model PRF R².
@@ -432,6 +470,20 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
                 init_pars['sigma_T_dyn'] = sigma_t_dyn_init
             shared_pars = shared_pars + ['g_T_dyn', 'sigma_T_dyn']
 
+        if per_run_position_gains:
+            # 6 new sustained gains, one pair per within-block run-position.
+            # Originals (g_HP, g_LP) at slots 8/9 are kept (for slot
+            # consistency with the parent) but unused in the forward.
+            init_pars['g_HP'] = 0.0
+            init_pars['g_LP'] = 0.0
+            for r in (0, 1, 2):
+                init_pars[f'g_HP_pos{r}'] = 0.0
+                init_pars[f'g_LP_pos{r}'] = 0.0
+            shared_pars = shared_pars + [
+                'g_HP_pos0', 'g_HP_pos1', 'g_HP_pos2',
+                'g_LP_pos0', 'g_LP_pos1', 'g_LP_pos2',
+            ]
+
     # 4) Build the dynamic DoG-AF + PRF model and the fitter.
     ring_positions = get_ring_positions()  # (4, 2)
     print('Ring positions:\n', ring_positions)
@@ -448,6 +500,9 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     elif with_target:
         if use_oversampled_codepath:
             ModelCls = DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_oversampled
+        elif per_run_position_gains:
+            ModelCls = (
+                DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_runPosition)
         elif shared_target_sigma:
             ModelCls = DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma
         else:
@@ -468,6 +523,8 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
         model_kwargs['target_indicator'] = target_indicator
     if use_oversampled_codepath:
         model_kwargs['oversampling'] = temporal_oversampling
+    if per_run_position_gains:
+        model_kwargs['run_position_indicator'] = run_position_indicator
 
     model = ModelCls(**model_kwargs)
 
@@ -498,6 +555,8 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
         dyn_tag = {'v2': 'dog-dyn-v2', 'v3': 'dog-dyn-v3'}[model_version]
     if shared_target_sigma:
         dyn_tag = f'{dyn_tag}-sharedSigma'
+    if per_run_position_gains:
+        dyn_tag = f'{dyn_tag}-runPosition'
     if use_oversampled_codepath:
         dyn_tag = f'{dyn_tag}-tos{temporal_oversampling}'
     out_tsv = out_dir / (
@@ -526,6 +585,7 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
             'temporal_oversampling': (temporal_oversampling
                                       if use_oversampled_codepath else None),
             'shared_target_sigma': shared_target_sigma,
+            'per_run_position_gains': per_run_position_gains,
         }, f)
     print(f'Saved: {out_tsv}')
     print(f'Saved: {out_pkl}')
@@ -592,6 +652,15 @@ if __name__ == '__main__':
                              'extent. Only valid with --model-version v3 '
                              '+ --with-target. Routes through '
                              'DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma.')
+    parser.add_argument('--per-run-position-gains', action='store_true',
+                        help='Replace the single sustained (g_HP, g_LP) '
+                             'pair with 6 sustained gains, one pair per '
+                             'within-block run-position (0/1/2). Lets '
+                             'us inspect arbitrary learning curves over '
+                             'the 3-run HP blocks. Requires '
+                             '--with-target --shared-target-sigma '
+                             '--model-version v3. Routes through '
+                             'DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_runPosition.')
     parser.add_argument('--temporal-oversampling', type=int, default=None,
                         help='Temporal oversampling factor N for the HRF '
                              'convolution (only valid with v3 + '
@@ -626,4 +695,5 @@ if __name__ == '__main__':
         sigma_t_dyn_init=args.sigma_t_dyn_init,
         temporal_oversampling=args.temporal_oversampling,
         shared_target_sigma=args.shared_target_sigma,
+        per_run_position_gains=args.per_run_position_gains,
     )

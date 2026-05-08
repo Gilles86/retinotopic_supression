@@ -73,17 +73,17 @@ def per_subject_per_roi(subject: int, bids_folder: Path,
     # to T1w space). To keep things simple use a brain mask from the
     # GLMsingle space (the file's own non-zero voxels).
     from nilearn import image
-    pe_img = image.load_img(str(pe_nii))
+    import nibabel as nib
+    pe_img = nib.load(str(pe_nii))   # don't load data yet
     n_trials_img = pe_img.shape[3]
     # We need ROI masks in the SAME space as pe_img. The GLMsingle is in
     # T1w (anatomical) space; our retinotopic atlas is in T1w via
-    # neuropythy (mri/inferred_varea.mgz). Load and resample to pe_img.
-    atlas = sub.get_retinotopic_atlas(bold_space=False)   # T1w anatomical
+    # neuropythy (mri/inferred_varea.mgz). Resample atlas to pe space.
+    atlas = sub.get_retinotopic_atlas(bold_space=False)
     atlas = image.resample_to_img(atlas, target_img=pe_img,
                                      interpolation='nearest',
                                      force_resample=True, copy_header=True)
     atlas_arr = atlas.get_fdata().astype(int)
-    pe_arr = pe_img.get_fdata()    # (X, Y, Z, T)
     if r2_nii.exists() and r2_thr is not None:
         r2_img = image.resample_to_img(image.load_img(str(r2_nii)),
                                           target_img=pe_img,
@@ -101,6 +101,7 @@ def per_subject_per_roi(subject: int, bids_folder: Path,
         'VO':   ['VO1', 'VO2'],
     }
     label_to_idx = {v: k for k, v in sub.get_retinotopic_labels().items()}
+    from nilearn.masking import apply_mask
     for roi in rois:
         components = aliases.get(roi, [roi])
         ids = [label_to_idx.get(r) for r in components if r in label_to_idx]
@@ -112,8 +113,10 @@ def per_subject_per_roi(subject: int, bids_folder: Path,
         n_vox = int(mask.sum())
         if n_vox < 5:
             continue
-        # Mean beta per trial across this ROI's voxels: shape (n_trials,).
-        flat_betas = pe_arr[mask].T   # (n_trials, n_voxels_roi)
+        # Memory-efficient: build a Nifti mask, apply it (reads only
+        # masked voxels via memory-mapped access). Returns (n_trials, n_vox).
+        mask_img = nib.Nifti1Image(mask.astype(np.int8), pe_img.affine)
+        flat_betas = apply_mask(pe_img, mask_img)   # (n_trials, n_vox)
         per_trial_mean = flat_betas.mean(axis=1)
         for cond, mask_t in trials.groupby('distractor_label'):
             idx = mask_t.index.values

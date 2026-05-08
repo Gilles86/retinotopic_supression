@@ -53,6 +53,72 @@ class Subject(object):
 
         return hpd_locations
 
+    def get_run_position_per_tr(self, session, run, hp_for_runs=None):
+        """Position of (session, run) within its HP-condition block.
+
+        Each subject's 12 (or fewer) runs are grouped chronologically by
+        the run-level high-probability distractor (HP) condition. Within
+        each group of runs sharing the same HP, this method returns the
+        chronological index (0, 1, 2, ...) of the given (session, run).
+
+        Examples
+        --------
+        - For a typical subject with order ``AAA BBB CCC DDD`` (3 runs
+          per HP), the runs at ``(ses=1, run=1..3)`` map to positions
+          ``0, 1, 2`` for HP=A; ``(ses=1, run=4..6)`` map to ``0, 1, 2``
+          for HP=B; etc.
+        - For sub-1/sub-2 with the bugged order ``AA-BBB-CCC-DDD-A``,
+          the A-condition runs at ``(1,1), (1,2), (2,6)`` map to
+          positions ``0, 1, 2`` (chronologically).
+        - For sub-20 ses-1 (5 runs) and sub-24 ses-2 (5 runs) the last
+          HP block is truncated to 2 runs -> positions ``0, 1``.
+
+        Parameters
+        ----------
+        session : int
+            Session index (1 or 2).
+        run : int
+            Run index within the session.
+        hp_for_runs : dict[(int, int), str] or None
+            Mapping ``(session, run) -> hp_string``. If None, the
+            mapping is recomputed via :meth:`get_hpd_locations` (slow
+            because it re-reads the events.tsv files; pass it in if
+            you call this many times).
+
+        Returns
+        -------
+        int
+            Position-within-HP-block in ``{0, 1, 2, ...}``. Clipped to
+            ``2`` defensively in case any subject ever has more than 3
+            runs of the same HP condition.
+        """
+        if hp_for_runs is None:
+            hp_for_runs = self.get_hpd_locations()
+
+        # Iterate over all (session, run) pairs in chronological order
+        # (sessions are scanned in temporal order; runs within a session
+        # are also chronological).
+        all_pairs = sorted(hp_for_runs.keys())
+
+        # Per-HP running counter.
+        per_hp_counter = {}
+        positions = {}
+        for s, r in all_pairs:
+            hp = hp_for_runs[(s, r)]
+            pos = per_hp_counter.get(hp, 0)
+            positions[(s, r)] = pos
+            per_hp_counter[hp] = pos + 1
+
+        if (session, run) not in positions:
+            raise KeyError(
+                f"(session={session}, run={run}) not found in "
+                f"hp_for_runs (subject {self.subject_id}). Available: "
+                f"{sorted(positions.keys())}")
+
+        pos = positions[(session, run)]
+        # Defensive clip — shouldn't trigger in practice (max 3 per HP).
+        return int(min(pos, 2))
+
     def get_distractor_mapping_old(self):
         subject = int(self.subject_id)
 

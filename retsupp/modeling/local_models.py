@@ -43,6 +43,16 @@ Currently provides
     the five gains (``g_HP``, ``g_LP``, ``g_HP_dyn``, ``g_LP_dyn``,
     ``g_T_dyn``) is mapped through one of {``plus``, ``minus``,
     ``zero``, ``free``}.  σ_T_dyn := σ_dyn is preserved.
+
+``DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_runPosition``
+    sharedSigma v3+target with per-run-position sustained gains. The
+    single sustained pair ``(g_HP, g_LP)`` is replaced by 6 parameters
+    ``g_{HP,LP}_pos{0,1,2}`` — one pair per chronological position of
+    the run within its HP block. Lets us inspect arbitrary learning
+    curves over the 3-run HP blocks without forcing a linear-slope
+    parameterization. Subclasses the factorial machinery for the
+    dynamic + target gains; the 6 new sustained gains are always
+    signed-free (no factorial sign pattern is applied to them).
 """
 from __future__ import annotations
 
@@ -771,3 +781,322 @@ class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_factorial(
             hrf_pars = self.hrf_model._transform_parameters_backward(hrf_tail)
             return tf.concat([out_enc, hrf_pars], axis=1)
         return out_enc
+
+
+# ---------------------------------------------------------------------------
+# Per-run-position sustained-gain variant of the shared-σ + target model.
+# Used to test for learning over the 3-run HP blocks (VSS2026).
+# ---------------------------------------------------------------------------
+class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_runPosition(
+    DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_factorial,
+):
+    """sharedSigma v3+target with per-run-position sustained gains.
+
+    Same forward model as
+    :class:`DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_factorial`,
+    except the SUSTAINED gain pair ``(g_HP, g_LP)`` is *replaced* by
+    SIX new shared parameters, one per chronological position
+    (``0/1/2``) of the run within its HP block::
+
+        g_HP_pos0, g_HP_pos1, g_HP_pos2
+        g_LP_pos0, g_LP_pos1, g_LP_pos2
+
+    For TR ``t`` the effective sustained gains are::
+
+        g_HP_eff[t] = Σ_r runpos[t, r] · g_HP_pos[r]
+        g_LP_eff[t] = Σ_r runpos[t, r] · g_LP_pos[r]
+
+    where ``runpos`` is a one-hot ``(T, 3)`` indicator passed in via the
+    ``run_position_indicator`` constructor kwarg. The original ``g_HP``
+    / ``g_LP`` slots in the parameter vector (slots 8 and 9) still
+    exist (so the parent's slot indexing for σ_AF, σ_dyn, dynamic gains,
+    σ_T_dyn etc. is unchanged), but their values are *unused* in this
+    subclass's forward pass. Callers should pass ``g_HP=g_LP=0.0`` at
+    init.
+
+    Dynamic-distractor and target-onset gains (``g_HP_dyn``,
+    ``g_LP_dyn``, ``g_T_dyn``) are unchanged from the factorial parent —
+    no run-position structure on those — and the parent's per-gain
+    sign-pattern factorial machinery is preserved for them. The 6 new
+    sustained gains are always signed-free (no factorial sign mapping):
+    we don't apply ``_gain_forward_factorial`` to them.
+
+    Parameter vector (encoding side, 21 slots)
+    ------------------------------------------
+    Same first 15 slots as the parent (so HRF tail and parent slot
+    indices are unchanged), then the 6 new gains appended at the end::
+
+        ['x', 'y', 'sd', 'baseline', 'amplitude',
+         'srf_amplitude', 'srf_size',
+         'sigma_AF', 'g_HP', 'g_LP',
+         'sigma_dyn', 'g_HP_dyn', 'g_LP_dyn',
+         'g_T_dyn', 'sigma_T_dyn',
+         'g_HP_pos0', 'g_HP_pos1', 'g_HP_pos2',
+         'g_LP_pos0', 'g_LP_pos1', 'g_LP_pos2']
+        (+ HRF parameters if flexible)
+
+    Notes
+    -----
+    The 6 new gains are appended AFTER the parent's 15 encoding slots.
+    This means:
+
+    - The HRF tail (if flexible) sits AFTER all 21 encoding slots, so
+      the HRF transform sees a 21-wide encoding tensor (vs 15 for the
+      parent). We override the forward/backward transforms accordingly.
+    - The parent's slot indices for ``g_HP_dyn`` (11), ``g_LP_dyn``
+      (12), ``g_T_dyn`` (13), ``sigma_T_dyn`` (14), σ_AF (7), σ_dyn
+      (10) are preserved — both ``_basis_predictions`` (which reads
+      σ_dyn / dynamic gains) and the parent's σ_T_dyn := σ_dyn tying
+      keep working unchanged.
+    - The original (slot 8/9) ``g_HP`` / ``g_LP`` are not read in this
+      subclass's ``_basis_predictions``; we set them to 0 in the
+      forward transform regardless of the raw variable, both for
+      cleanliness and so that any leftover dependency in inherited code
+      paths sees zero gain.
+    """
+
+    # Parent's 15 encoding labels (inherited from ..._v3_target) plus
+    # the 6 new run-position gains.
+    parameter_labels = [
+        'x', 'y', 'sd', 'baseline', 'amplitude',
+        'srf_amplitude', 'srf_size',
+        'sigma_AF', 'g_HP', 'g_LP',
+        'sigma_dyn', 'g_HP_dyn', 'g_LP_dyn',
+        'g_T_dyn', 'sigma_T_dyn',
+        'g_HP_pos0', 'g_HP_pos1', 'g_HP_pos2',
+        'g_LP_pos0', 'g_LP_pos1', 'g_LP_pos2',
+    ]
+
+    # Number of "parent encoding" slots (matches the factorial parent's
+    # encoding-side slot count). We append 6 new gain slots after this.
+    _N_PARENT_ENC_PARS = 15
+    _N_RUNPOS_PARS = 6  # 3 HP + 3 LP
+
+    def __init__(self, *, run_position_indicator, sign_pattern=None,
+                 **kwargs):
+        # Default: all gains signed-free. The 'unused' slots g_HP / g_LP
+        # are left 'free' too — they don't enter our forward pass, but
+        # the factorial parent still sees a value for them.
+        if sign_pattern is None:
+            sign_pattern = {
+                'g_HP': 'free', 'g_LP': 'free',
+                'g_HP_dyn': 'free', 'g_LP_dyn': 'free',
+                'g_T_dyn': 'free',
+            }
+        super().__init__(sign_pattern=sign_pattern, **kwargs)
+
+        rp = np.asarray(run_position_indicator, dtype=np.float32)
+        if rp.ndim != 2:
+            raise ValueError(
+                f"run_position_indicator must be 2-D (T, 3); got shape "
+                f"{rp.shape}.")
+        if rp.shape[1] != 3:
+            raise ValueError(
+                f"run_position_indicator must have 3 columns (one-hot "
+                f"over run-positions 0/1/2); got shape {rp.shape}.")
+        # Sanity: same length as the dynamic_indicator the parent stored.
+        T_expected = int(self.dynamic_indicator.shape[0])
+        if rp.shape[0] != T_expected:
+            raise ValueError(
+                f"run_position_indicator has {rp.shape[0]} timepoints "
+                f"but expected {T_expected} (matches dynamic_indicator).")
+        self.run_position_indicator = rp
+        self._tf_run_position_indicator = tf.constant(rp, dtype=tf.float32)
+
+    # ----- Forward / backward parameter transforms -----------------------
+
+    @tf.function
+    def _transform_parameters_forward(self, parameters):
+        """Forward transform.
+
+        Layout::
+
+            [parent-encoding (15)] [runpos gains (6)] [hrf tail (optional)]
+
+        We replicate the factorial parent's encoding-side transform
+        inline here (so we don't have to fight the parent's HRF-split
+        logic). The 6 new gains pass through unchanged (signed-free);
+        the HRF tail is passed through the HRF model's own transform.
+        """
+        if self.flexible_hrf_parameters:
+            n_hrf = len(self.hrf_model.parameter_labels)
+            enc = parameters[:, :self._N_PARENT_ENC_PARS]
+            runpos = parameters[
+                :, self._N_PARENT_ENC_PARS:
+                self._N_PARENT_ENC_PARS + self._N_RUNPOS_PARS]
+            hrf_tail = parameters[:, -n_hrf:]
+        else:
+            enc = parameters[:, :self._N_PARENT_ENC_PARS]
+            runpos = parameters[
+                :, self._N_PARENT_ENC_PARS:
+                self._N_PARENT_ENC_PARS + self._N_RUNPOS_PARS]
+            hrf_tail = None
+
+        # Replicates factorial-parent _transform_parameters_forward.
+        x = enc[:, 0:1]
+        y = enc[:, 1:2]
+        sd = tf.math.softplus(enc[:, 2:3])
+        baseline = enc[:, 3:4]
+        amplitude = enc[:, 4:5]
+        srf_amp = tf.math.softplus(enc[:, 5:6])
+        srf_size = tf.math.softplus(enc[:, 6:7])
+        sigma_AF = tf.math.softplus(enc[:, 7:8])
+        g_HP = _gain_forward_factorial(enc[:, 8:9],
+                                       self._sign_pattern['g_HP'])
+        g_LP = _gain_forward_factorial(enc[:, 9:10],
+                                       self._sign_pattern['g_LP'])
+        sigma_dyn = tf.math.softplus(enc[:, 10:11])
+        g_HP_dyn = _gain_forward_factorial(enc[:, 11:12],
+                                           self._sign_pattern['g_HP_dyn'])
+        g_LP_dyn = _gain_forward_factorial(enc[:, 12:13],
+                                           self._sign_pattern['g_LP_dyn'])
+        g_T_dyn = _gain_forward_factorial(enc[:, 13:14],
+                                          self._sign_pattern['g_T_dyn'])
+        # σ_T_dyn := σ_dyn (the sharedSigma constraint).
+        sigma_T_dyn = sigma_dyn
+
+        out_enc = tf.concat([
+            x, y, sd, baseline, amplitude, srf_amp, srf_size,
+            sigma_AF, g_HP, g_LP,
+            sigma_dyn, g_HP_dyn, g_LP_dyn,
+            g_T_dyn, sigma_T_dyn,
+            # 6 new gains: signed-free pass-through.
+            runpos,
+        ], axis=1)
+
+        if hrf_tail is not None:
+            hrf_pars = self.hrf_model._transform_parameters_forward(hrf_tail)
+            return tf.concat([out_enc, hrf_pars], axis=1)
+        return out_enc
+
+    @tf.function
+    def _transform_parameters_backward(self, parameters):
+        if self.flexible_hrf_parameters:
+            n_hrf = len(self.hrf_model.parameter_labels)
+            enc = parameters[:, :self._N_PARENT_ENC_PARS]
+            runpos = parameters[
+                :, self._N_PARENT_ENC_PARS:
+                self._N_PARENT_ENC_PARS + self._N_RUNPOS_PARS]
+            hrf_tail = parameters[:, -n_hrf:]
+        else:
+            enc = parameters[:, :self._N_PARENT_ENC_PARS]
+            runpos = parameters[
+                :, self._N_PARENT_ENC_PARS:
+                self._N_PARENT_ENC_PARS + self._N_RUNPOS_PARS]
+            hrf_tail = None
+
+        x = enc[:, 0:1]
+        y = enc[:, 1:2]
+        sd = tfp.math.softplus_inverse(enc[:, 2:3])
+        baseline = enc[:, 3:4]
+        amplitude = enc[:, 4:5]
+        srf_amp = tfp.math.softplus_inverse(enc[:, 5:6])
+        srf_size = tfp.math.softplus_inverse(enc[:, 6:7])
+        sigma_AF = tfp.math.softplus_inverse(enc[:, 7:8])
+        g_HP = _gain_backward_factorial(enc[:, 8:9],
+                                        self._sign_pattern['g_HP'])
+        g_LP = _gain_backward_factorial(enc[:, 9:10],
+                                        self._sign_pattern['g_LP'])
+        sigma_dyn = tfp.math.softplus_inverse(enc[:, 10:11])
+        g_HP_dyn = _gain_backward_factorial(enc[:, 11:12],
+                                            self._sign_pattern['g_HP_dyn'])
+        g_LP_dyn = _gain_backward_factorial(enc[:, 12:13],
+                                            self._sign_pattern['g_LP_dyn'])
+        g_T_dyn = _gain_backward_factorial(enc[:, 13:14],
+                                           self._sign_pattern['g_T_dyn'])
+        sigma_T_dyn = sigma_dyn  # Tie raw -> raw (both softplus).
+
+        out_enc = tf.concat([
+            x, y, sd, baseline, amplitude, srf_amp, srf_size,
+            sigma_AF, g_HP, g_LP,
+            sigma_dyn, g_HP_dyn, g_LP_dyn,
+            g_T_dyn, sigma_T_dyn,
+            runpos,  # 6 new signed-free gains pass-through.
+        ], axis=1)
+
+        if hrf_tail is not None:
+            hrf_pars = self.hrf_model._transform_parameters_backward(hrf_tail)
+            return tf.concat([out_enc, hrf_pars], axis=1)
+        return out_enc
+
+    # ----- Forward model --------------------------------------------------
+
+    @tf.function
+    def _basis_predictions(self, paradigm, parameters):
+        """v3+target+sharedSigma forward pass with per-run-position
+        SUSTAINED gain.
+
+        Mirrors the parent's
+        :meth:`DoGDynamicAttentionFieldPRF2D_v3_target._basis_predictions`
+        but builds the sustained modulation directly on a (T, G) field
+        with per-TR effective gains computed from the 6 new run-position
+        gain parameters.
+
+        Parameters
+        ----------
+        paradigm : tf.Tensor, shape ``(B, T, G)``
+        parameters : tf.Tensor, shape ``(B, V, n_parameters)`` where
+            ``n_parameters = 21`` (encoding) ``[+ n_hrf]``.
+        """
+        # --- Per-voxel DoG receptive field: (B, V, G). ---
+        rf = self._get_rf(self.grid_coordinates, parameters)
+
+        # --- Per-TR effective sustained gains (from the 6 new pars). ---
+        # parameters[..., 15:18] = g_HP_pos0/1/2; [18:21] = g_LP_pos0/1/2.
+        # Shared across batches/voxels: read from [0, 0, ...].
+        g_HP_pos = parameters[0, 0, 15:18]                   # (3,)
+        g_LP_pos = parameters[0, 0, 18:21]                   # (3,)
+
+        runpos = self._tf_run_position_indicator             # (T, 3)
+        # Effective gains per TR: (T,).
+        g_HP_eff = tf.linalg.matvec(runpos, g_HP_pos)        # (T,)
+        g_LP_eff = tf.linalg.matvec(runpos, g_LP_pos)        # (T,)
+
+        # --- Sustained AF Gaussians per ring position: (n_C, G). ---
+        sigma_AF = parameters[0, 0, 7]                       # scalar
+        gx = self._grid_coordinates[:, 0][tf.newaxis, :]     # (1, G)
+        gy = self._grid_coordinates[:, 1][tf.newaxis, :]
+        rx = self._tf_ring_positions[:, 0][:, tf.newaxis]    # (n_C, 1)
+        ry = self._tf_ring_positions[:, 1][:, tf.newaxis]
+        diff_sq = (gx - rx) ** 2 + (gy - ry) ** 2
+        A_sus = tf.exp(-diff_sq / (2.0 * sigma_AF ** 2))     # (n_C, G)
+
+        # condition_indicator[t, ℓ] is 1 iff ring ℓ is the HP for TR t's
+        # run; (1 - ci[t, ℓ]) marks the LP rings.
+        ci = self._tf_condition_indicator                    # (T, n_C)
+        # HP field per TR: ci[t, ℓ] · A_ℓ(g) summed over ℓ -> (T, G).
+        field_hp = tf.einsum('tl,lg->tg', ci, A_sus)
+        # LP field per TR: (1 - ci[t, ℓ]) · A_ℓ(g) summed over ℓ.
+        field_lp = tf.einsum('tl,lg->tg', 1.0 - ci, A_sus)
+
+        # Sustained modulation field on (T, G):
+        # m_sus[t, g] = 1 + sign · ( g_HP_eff[t] · field_hp[t, g]
+        #                          + g_LP_eff[t] · field_lp[t, g] )
+        sign = self._tf_sign
+        mod_sustained_tg = 1.0 + sign * (
+            g_HP_eff[:, tf.newaxis] * field_hp
+            + g_LP_eff[:, tf.newaxis] * field_lp
+        )
+        mod_sustained_tg = tf.maximum(mod_sustained_tg, 0.0)
+
+        # Sustained partial: (B, T, V) using paradigm * mod_sus then RF.
+        eff_paradigm_sus = paradigm * mod_sustained_tg[tf.newaxis, :, :]
+        sustained = tf.einsum('btg,bvg->btv', eff_paradigm_sus, rf)
+
+        # --- Phasic distractor (v3, σ_dyn, slot 10/11/12). ---
+        mod_dyn = self._attention_modulation_dynamic_v3(parameters)
+
+        # --- Phasic target (slot 13 g_T_dyn, slot 14 σ_T_dyn := σ_dyn). ---
+        mod_tgt = self._attention_modulation_target(parameters)
+
+        mod_phasic = mod_dyn + mod_tgt                       # (T, G)
+        eff_paradigm_phasic = paradigm * mod_phasic[tf.newaxis, :, :]
+        # Note: phasic terms multiply by ``sign`` in the parent forward.
+        # We replicate that here.
+        phasic = sign * tf.einsum('btg,bvg->btv',
+                                  eff_paradigm_phasic, rf)
+
+        result = sustained + phasic
+        baseline = parameters[:, tf.newaxis, :, 3]
+        result = result + baseline
+        return result
