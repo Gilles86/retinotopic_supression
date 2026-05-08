@@ -8,3 +8,4 @@ experiment/logs/*
 
 create_env/logs/*
 retsupp.egg-info
+notes/archive/predict_shifts*

@@ -16,8 +16,8 @@ from matplotlib.backends.backend_pdf import PdfPages
 from scipy import stats
 
 REPO = Path(__file__).resolve().parents[2]
-TSV_ORIG = REPO / 'notes' / 'af_dog_v3_parameters.tsv'
-TSV_NEUTRAL = REPO / 'notes' / 'af_dog_v3_neutralsigma_parameters.tsv'
+TSV_ORIG = REPO / 'notes' / 'data' / 'af_dog_v3_parameters.tsv'
+TSV_NEUTRAL = REPO / 'notes' / 'data' / 'af_dog_v3_neutralsigma_parameters.tsv'
 OUT = REPO / 'notes' / 'figures' / 'sigma_init_robustness.pdf'
 
 ROI_ORDER = ['V1', 'V2', 'V3', 'V3AB', 'hV4', 'LO', 'TO', 'VO']

@@ -4,10 +4,30 @@ Top-level entry point. Each file below is a focused document on one
 analysis / model / issue. Update them in place; don't pile everything
 into one log.
 
+## Headline
+
+- [GAIN_FINDINGS.md](GAIN_FINDINGS.md) — concise per-ROI gain pattern
+  in the DoG dyn-v3 + target model (the most complex model with results).
+
 ## Status snapshots
 
 - [STATUS.md](STATUS.md) — current state of the cluster jobs and
   pipeline, top-level overview.
+
+## Subdirectories
+
+- [analyses/](analyses/) — focused statistical analyses (HP-vs-LP
+  test, σ comparison, hierarchy effect, etc).
+- [models/](models/) — per-model parameter fit summaries.
+- [issues/](issues/) — known caveats / identifiability problems.
+- [meetings/](meetings/) — meeting notes.
+- [figures/](figures/) — current generated PDFs.
+- [data/](data/) — current parameter TSVs (regenerable from cluster
+  pickles).
+- [papers/](papers/) — external reference papers (Richter, Tuncok,
+  Sumiya thesis, VSS2026 talk).
+- [archive/](archive/) — superseded figures and TSVs from earlier
+  analysis iterations.
 
 ## Analyses
 
@@ -34,13 +54,15 @@ into one log.
 - [models/af_static_dog.md](models/af_static_dog.md)
 - [models/af_dynamic_v2_dog.md](models/af_dynamic_v2_dog.md)
 - [models/af_dynamic_v3_dog.md](models/af_dynamic_v3_dog.md)
+- [models/af_dynamic_v3_dog_with_target.md](models/af_dynamic_v3_dog_with_target.md)
 
 ## Issues / caveats
 
 - [issues/jensen_artifact.md](issues/jensen_artifact.md) — distance-binning
   noise bias.
 - [issues/identifiability.md](issues/identifiability.md) — σ × |gain|
-  trade-off in the AF fits.
+  trade-off in the AF fits + σ_dyn is poorly identifiable, lands near
+  init regardless of data.
 - [issues/kernel_mismatch.md](issues/kernel_mismatch.md) — Gaussian-AF
   vs DoG-conditionwise PRF apples-to-oranges.
 
