@@ -699,6 +699,25 @@ def make_subject_roi_page(pdf, sub: Subject, roi: str,
     rel_obs_lw = {'toward': 2.2, 'away': 1.6}
     t_axis = np.arange(win) - half  # TRs relative to bar-pass.
 
+    # Optional cubic upsampling for SMOOTHER PLOTTING ONLY (does NOT
+    # affect averaging, fitting, or selection). Default: dt = 0.1s.
+    TR = 1.6
+    upsample_dt = getattr(opts, 'plot_upsample_dt', 0.1)
+    if upsample_dt and upsample_dt < TR:
+        from scipy.interpolate import interp1d
+        t_axis_sec = t_axis * TR
+        t_plot = np.arange(t_axis_sec[0], t_axis_sec[-1] + 1e-9, upsample_dt)
+
+        def _smooth(y):
+            f = interp1d(t_axis_sec, y, kind='cubic',
+                         bounds_error=False, fill_value='extrapolate')
+            return f(t_plot)
+        t_axis_for_plot = t_plot / TR  # plot still labels "TR (relative to bar-pass)"
+    else:
+        t_plot = t_axis * TR
+        t_axis_for_plot = t_axis
+        _smooth = lambda y: y  # noqa: E731
+
     for ax_i, v in enumerate(voxel_traces):
         ax = axes[ax_i]
         # Plot order: far → orth → close so the close lines are on top.
@@ -719,20 +738,24 @@ def make_subject_roi_page(pdf, sub: Subject, roi: str,
             color = cat_colors[cat]
             obs_alpha = rel_alpha[rel] if rel else 1.0
             obs_lw = rel_obs_lw[rel] if rel else 2.0
+            obs_mean_p = _smooth(data['obs_mean'])
+            obs_sem_p = _smooth(data['obs_sem'])
+            af_mean_p = _smooth(data['af_mean'])
+            no_af_mean_p = _smooth(data['no_af_mean'])
             ax.fill_between(
-                t_axis, data['obs_mean'] - data['obs_sem'],
-                data['obs_mean'] + data['obs_sem'],
+                t_axis_for_plot, obs_mean_p - obs_sem_p,
+                obs_mean_p + obs_sem_p,
                 color=color, alpha=0.15 * obs_alpha, linewidth=0,
             )
             label = f"{cat_labels[cat]}"
             if rel is not None:
                 label += f" ({rel})"
             label += f" n={data['n']}"
-            ax.plot(t_axis, data['obs_mean'], color=color, lw=obs_lw,
+            ax.plot(t_axis_for_plot, obs_mean_p, color=color, lw=obs_lw,
                      alpha=obs_alpha, label=label, zorder=3)
-            ax.plot(t_axis, data['no_af_mean'], color=color, lw=0.9,
+            ax.plot(t_axis_for_plot, no_af_mean_p, color=color, lw=0.9,
                      ls='--', alpha=0.7 * obs_alpha, zorder=2)
-            ax.plot(t_axis, data['af_mean'], color=color, lw=1.1,
+            ax.plot(t_axis_for_plot, af_mean_p, color=color, lw=1.1,
                      ls='-', alpha=0.85 * obs_alpha, zorder=2.5)
         ax.axvline(0, color='k', lw=0.5, alpha=0.3)
         ax.grid(alpha=0.15)
