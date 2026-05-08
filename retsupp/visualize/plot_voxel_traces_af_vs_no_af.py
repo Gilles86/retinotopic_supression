@@ -486,7 +486,14 @@ def make_subject_roi_page(pdf, sub: Subject, roi: str,
     print(f'  voxels with PRF center inside bar FOV: {int(inside_fov.sum())}'
           f'/{len(voxel_idx)}')
 
-    valid = in_roi & r2_pass & min_dist_pass & inside_fov
+    # Eccentricity floor — foveal voxels (ecc < ~1.5°) have tiny PRFs
+    # and the bar sweeps past them too fast to read off AF effects.
+    ecc = np.hypot(mean_pars['x'].values, mean_pars['y'].values)
+    ecc_pass = ecc > opts.min_eccentricity
+    print(f'  voxels with PRF ecc > {opts.min_eccentricity}°: '
+          f'{int(ecc_pass.sum())}/{len(voxel_idx)}')
+
+    valid = in_roi & r2_pass & min_dist_pass & inside_fov & ecc_pass
     n_valid = int(valid.sum())
     print(f'  voxels passing ALL filters: {n_valid}')
     if n_valid < 2:
@@ -932,6 +939,12 @@ def main():
                           help='Split sweeps by their direction-of-motion '
                                'relative to the HP location (TOWARDS vs '
                                'AWAY from HP after passing the voxel).')
+    parser.add_argument('--min-eccentricity', type=float, default=1.5,
+                          help='Drop voxels with PRF eccentricity < this (°). '
+                               'Foveal voxels have tiny PRFs and the bar '
+                               'sweeps past them too fast to read off the '
+                               'amplitude/delay modulation cleanly. '
+                               'Default 1.5°.')
     parser.add_argument('--out', type=Path,
                           default=Path('notes/figures/voxel_traces_af_vs_no_af.pdf'))
     args = parser.parse_args()
