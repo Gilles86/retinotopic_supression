@@ -752,7 +752,8 @@ def _make_smoother(win: int, opts):
         t_plot = np.arange(t_axis_sec[0], t_axis_sec[-1] + 1e-9, upsample_dt)
 
         def _smooth(y):
-            f = interp1d(t_axis_sec, y, kind='cubic',
+            # Linear interp: no wiggles, just connects samples cleanly.
+            f = interp1d(t_axis_sec, y, kind='linear',
                          bounds_error=False, fill_value='extrapolate')
             return f(t_plot)
         return t_plot / TR, _smooth
@@ -761,23 +762,25 @@ def _make_smoother(win: int, opts):
 
 def render_voxel_panel(ax, voxel_trace, opts, *, radius: float,
                         is_first: bool = False, win: int = 21,
-                        title_extra: str = ''):
-    """Plot one voxel's per-cat (and optionally directional) traces.
-
-    Layered overlay if opts.by_direction:
-      - aggregate (combined toward+away) as the THICK main line
-      - toward as a thinner solid line (alpha lower)
-      - away as a thinner dashed line (alpha lower)
-    """
+                        title_extra: str = '',
+                        subset: str = 'all'):
+    """Plot one voxel's per-cat traces. ``subset`` selects which sweeps:
+    'all' (aggregate), 'toward', or 'away'. For 'toward'/'away' we look
+    up cat+'_'+subset keys in per_cat (must exist when by-direction was
+    on during compute_voxel_traces)."""
+    if subset not in ('all', 'toward', 'away'):
+        raise ValueError(f'bad subset: {subset!r}')
     v = voxel_trace
     t_axis_for_plot, _smooth = _make_smoother(win, opts)
 
-    # ---------------- Aggregate layer (always plotted). ----------------
+    suffix = '' if subset == 'all' else f'_{subset}'
+
     # Order so HP-close is on top.
     for cat in ('far', 'orth', 'close'):
-        if cat not in v['per_cat']:
+        key = cat if subset == 'all' else f'{cat}{suffix}'
+        if key not in v['per_cat']:
             continue
-        data = v['per_cat'][cat]
+        data = v['per_cat'][key]
         color = CAT_COLORS[cat]
         obs_mean_p = _smooth(data['obs_mean'])
         obs_sem_p = _smooth(data['obs_sem'])
@@ -797,23 +800,6 @@ def render_voxel_panel(ax, voxel_trace, opts, *, radius: float,
         # transparent so it sits behind the AF & observed traces.
         ax.plot(t_axis_for_plot, no_af_mean_p, color='k', lw=2.0,
                  ls='--', alpha=0.35, zorder=1.8)
-
-    # ---------------- Directional overlay (thinner, lower alpha). -----
-    if opts.by_direction:
-        rel_dash = {'toward': '-', 'away': '--'}
-        rel_alpha = 0.55
-        rel_lw = 1.2
-        for cat in ('far', 'orth', 'close'):
-            for rel in ('toward', 'away'):
-                key = f'{cat}_{rel}'
-                if key not in v['per_cat']:
-                    continue
-                data = v['per_cat'][key]
-                color = CAT_COLORS[cat]
-                obs_mean_p = _smooth(data['obs_mean'])
-                ax.plot(t_axis_for_plot, obs_mean_p, color=color,
-                         lw=rel_lw, ls=rel_dash[rel], alpha=rel_alpha,
-                         zorder=2.0)
 
     ax.axvline(0, color='k', lw=0.5, alpha=0.3)
     ax.grid(alpha=0.15)
@@ -843,13 +829,6 @@ def render_voxel_panel(ax, voxel_trace, opts, *, radius: float,
             Line2D([0], [0], color='k', lw=1.0, ls='--',
                     label='no-AF model'),
         ]
-        if opts.by_direction:
-            handles += [
-                Line2D([0], [0], color='k', lw=1.2, ls='-', alpha=0.55,
-                        label='toward HP (thin solid)'),
-                Line2D([0], [0], color='k', lw=1.2, ls='--', alpha=0.55,
-                        label='away from HP (thin dashed)'),
-            ]
         ax.legend(handles=handles, loc='upper right', fontsize=6,
                    frameon=True, framealpha=0.85)
 
@@ -909,37 +888,46 @@ def make_subject_roi_page(pdf, sub: Subject, roi: str,
     n = len(voxel_traces)
     ncols = 3 if n >= 3 else max(1, n)
     nrows = int(np.ceil(n / ncols))
-    fig, axes = plt.subplots(nrows, ncols,
-                              figsize=(6.0 * ncols, 4.0 * nrows),
-                              sharex=True, sharey=False, squeeze=False)
-    axes = axes.flatten()
 
-    for ax_i, v in enumerate(voxel_traces):
-        ax = axes[ax_i]
-        render_voxel_panel(
-            ax, v, opts,
-            radius=radius, is_first=(ax_i == 0), win=win,
+    # If by_direction is on, emit 3 pages: aggregate, toward, away.
+    # Otherwise just one aggregate page.
+    if opts.by_direction:
+        subsets = [('all', 'all 4 sweep directions pooled (aggregate)'),
+                   ('toward', 'sweeps moving TOWARDS the HP location'),
+                   ('away',   'sweeps moving AWAY from the HP location')]
+    else:
+        subsets = [('all', 'all 4 sweep directions pooled')]
+
+    for subset, descr in subsets:
+        fig, axes = plt.subplots(nrows, ncols,
+                                  figsize=(6.0 * ncols, 4.0 * nrows),
+                                  sharex=True, sharey=False, squeeze=False)
+        axes = axes.flatten()
+
+        for ax_i, v in enumerate(voxel_traces):
+            ax = axes[ax_i]
+            render_voxel_panel(
+                ax, v, opts,
+                radius=radius, is_first=(ax_i == 0), win=win,
+                subset=subset,
+            )
+            if ax_i % ncols == 0:
+                ax.set_ylabel('BOLD (z)', fontsize=8)
+            if ax_i // ncols == nrows - 1:
+                ax.set_xlabel('TR (relative to bar-pass)', fontsize=8)
+
+        for ax_i in range(len(voxel_traces), len(axes)):
+            axes[ax_i].axis('off')
+
+        fig.suptitle(
+            f'sub-{sub.subject_id:02d}  ROI={roi}  '
+            f'AF model: {AFCls.__name__}  '
+            f'(bar-pass-locked, {descr})',
+            fontsize=12, weight='bold',
         )
-        if ax_i % ncols == 0:
-            ax.set_ylabel('BOLD (z)', fontsize=8)
-        if ax_i // ncols == nrows - 1:
-            ax.set_xlabel('TR (relative to bar-pass)', fontsize=8)
-
-    for ax_i in range(len(voxel_traces), len(axes)):
-        axes[ax_i].axis('off')
-
-    sweep_descr = ('all 4 sweeps + by-direction overlay'
-                    if opts.by_direction
-                    else 'all 4 sweep directions pooled')
-    fig.suptitle(
-        f'sub-{sub.subject_id:02d}  ROI={roi}  '
-        f'AF model: {AFCls.__name__}  '
-        f'(bar-pass-locked, {sweep_descr})',
-        fontsize=12, weight='bold',
-    )
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
-    pdf.savefig(fig)
-    plt.close(fig)
+        fig.tight_layout(rect=[0, 0, 1, 0.96])
+        pdf.savefig(fig)
+        plt.close(fig)
     return True
 
 
@@ -1044,10 +1032,11 @@ def main():
     with PdfPages(out) as pdf:
         # Cover page.
         fig, ax = plt.subplots(figsize=(11, 8.5)); ax.axis('off')
-        bydir_line = ('  --by-direction ON: also splitting sweeps into '
-                      'TOWARDS vs AWAY-from-HP\n'
+        bydir_line = ('  --by-direction ON: emits 3 pages per (subject, ROI) — '
+                      'aggregate, towards-HP, away-from-HP\n'
                       if args.by_direction else
-                      '  --by-direction OFF: all 4 sweep directions pooled\n')
+                      '  --by-direction OFF: 1 page per (subject, ROI), '
+                      'all 4 sweeps pooled\n')
         body = (
             'Per-voxel BOLD time courses, time-locked to bar-pass-near-RF.\n\n'
             f'Subjects: {args.subjects}\n'
