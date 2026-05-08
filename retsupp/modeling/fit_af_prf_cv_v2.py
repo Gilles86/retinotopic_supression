@@ -468,8 +468,8 @@ def main(subject: int,
          max_voxels: int | None = None,
          learning_rate: float = 0.01,
          grid_radius: float = 5.0,
-         sigma_af_init: float = 5.0,
-         sigma_dyn_init: float = 5.0,
+         sigma_af_init: float = 2.0,
+         sigma_dyn_init: float = 2.0,
          output_subdir: str | None = None):
 
     for s in (sus_hp_sign, sus_lp_sign, dyn_hp_sign, dyn_lp_sign):
@@ -711,9 +711,9 @@ if __name__ == '__main__':
                         help='Cap on voxels (0 = no cap, default).')
     parser.add_argument('--learning-rate', type=float, default=0.01)
     parser.add_argument('--grid-radius', type=float, default=5.0)
-    parser.add_argument('--sigma-af-init', type=float, default=5.0,
+    parser.add_argument("--sigma-af-init", type=float, default=2.0,
                         help='Initial σ_AF (default 5.0; CV-v2 default).')
-    parser.add_argument('--sigma-dyn-init', type=float, default=5.0,
+    parser.add_argument("--sigma-dyn-init", type=float, default=2.0,
                         help='Initial σ_dyn (default 5.0; CV-v2 default).')
     parser.add_argument('--output-subdir', default=None)
     args = parser.parse_args()
