@@ -1,27 +1,29 @@
 #!/bin/bash
-#SBATCH --job-name=dog_dyn_target_shS
+#SBATCH --job-name=dog_dyn_target
 #SBATCH --account=zne.uzh
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=24G
 #SBATCH --time=03:00:00
 
-# v3 + target ('phasic capture') joint AF + DoG-PRF braincoder fit,
-# with sigma_T_dyn TIED to sigma_dyn (shared phasic σ).
+# v3 + target ('phasic capture') joint AF + DoG-PRF braincoder fit.
 #
-# Tests whether the target-onset Gaussian's spatial extent really
-# differs from the distractor-onset one, or whether the larger
-# σ_T_dyn estimates seen in V3AB / VO are identifiability slack.
+# Extends the v3 model with a 5th spatial-modulation term: a phasic
+# TARGET-onset gain. The contrast g_HP_dyn < 0 (suppression at the
+# distractor) vs g_T_dyn > 0 (capture at the target) is a positive
+# control validating the AF framework.
 #
-# Same 8 shared parameters as the un-tied v3+target fit, but the
-# σ_T_dyn raw variable is functionally inert: every forward pass
-# overrides post-softplus σ_T_dyn := σ_dyn before the loss.
+# Adds 2 new shared parameters: g_T_dyn, sigma_T_dyn (8 shared total
+# instead of 6).
 #
 # Output:
-#   derivatives/af_prf_joint_dynamic_v3_dog_with_target_sharedSigma/sub-XX/...
+#   derivatives/af_prf_joint_dynamic_v3_dog_with_target_largeSigma/sub-XX/...
 #
-# Submission: 30 subjects x 8 ROIs = 240 array tasks.
-#   sbatch --array=1-240 retsupp/modeling/slurm_jobs/fit_dog_dyn_v3_target_sharedSigma.sh
+# Initial test set: 5 subjects x 8 ROIs = 40 array tasks.
+#   sbatch --array=1-40 retsupp/modeling/slurm_jobs/fit_dog_dyn_v3_target_largeSigma.sh
+#
+# Subject set is hard-coded below: SUB_IDS=(2 5 11 18 25). Edit if
+# you want a different sample.
 #
 # The array task id maps to (subject_idx, roi):
 #   idx0 = SLURM_ARRAY_TASK_ID - 1
@@ -31,23 +33,23 @@
 set -euo pipefail
 
 # --- Logging. ---
-LOGFILE="$HOME/logs/dog_dyn_v3_target_sharedSigma_${SLURM_JOB_NAME:-target_shS}_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID:-0}.txt"
+LOGFILE="$HOME/logs/dog_dyn_v3_target_largeSigma_${SLURM_JOB_NAME:-target}_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID:-0}.txt"
 mkdir -p "$(dirname "$LOGFILE")"
 exec >"$LOGFILE" 2>&1
 
 echo "Host:        $(hostname)"
 echo "Job:         ${SLURM_JOB_ID} (array task ${SLURM_ARRAY_TASK_ID:-0})"
 echo "Started:     $(date)"
-echo "Test:        v3 + target + sharedSigma (sigma_T_dyn := sigma_dyn)"
+echo "Test:        v3 + target (phasic capture) — g_T_dyn, sigma_T_dyn"
 
 # --- Subject + ROI decoding from SLURM_ARRAY_TASK_ID. ---
-SUB_IDS=(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30)
+SUB_IDS=(2 5 11 18 25)
 ROIS=(V1 V2 V3 V3AB hV4 LO TO VO)
 N_ROIS=${#ROIS[@]}
 N_SUBS=${#SUB_IDS[@]}
 
 if [[ -z "${SLURM_ARRAY_TASK_ID:-}" ]]; then
-    echo "ERROR: SLURM_ARRAY_TASK_ID is not set. Submit with --array=1-240." >&2
+    echo "ERROR: SLURM_ARRAY_TASK_ID is not set. Submit with --array=1-40." >&2
     exit 2
 fi
 
@@ -78,7 +80,7 @@ bids_folder="/shares/zne.uzh/gdehol/ds-retsupp"
 PYTHON="$HOME/data/conda/envs/retsupp_cuda/bin/python"
 SCRIPT="$HOME/git/retsupp/retsupp/modeling/fit_dog_dynamic_af_braincoder.py"
 
-echo "Running v3 + target + sharedSigma fit for sub-${subject}, roi=${roi}"
+echo "Running v3 + target fit for sub-${subject}, roi=${roi}"
 
 "$PYTHON" -u "$SCRIPT" \
     "$subject" \
@@ -88,10 +90,10 @@ echo "Running v3 + target + sharedSigma fit for sub-${subject}, roi=${roi}"
     --max-voxels 500 \
     --model-version v3 \
     --with-target \
-    --shared-target-sigma \
     --sigma-af-init 5.0 \
     --sigma-dyn-init 5.0 \
     --sigma-t-dyn-init 5.0 \
-    --g-t-dyn-init 0.0
+    --g-t-dyn-init 0.0 \
+    --output-subdir af_prf_joint_dynamic_v3_dog_with_target_largeSigma
 
 echo "Finished:    $(date)"
