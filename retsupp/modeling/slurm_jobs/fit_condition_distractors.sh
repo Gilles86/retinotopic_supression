@@ -66,6 +66,6 @@ nvidia-smi || true
     --grid_radius 5.0 \
     --distractor_radius 0.4 \
     --max_n_iterations 4000 \
-    --voxel_chunk_size 25000
+    --voxel_chunk_size 1000
 
 echo "Finished: $(date)"

@@ -40,6 +40,24 @@ from braincoder.optimize import ParameterFitter
 from retsupp.utils.data import Subject
 
 
+def _log_gpu_mem(tag: str = '') -> None:
+    """Log peak GPU memory (TF). Best-effort; no-op if TF/GPU unavailable."""
+    try:
+        import tensorflow as tf  # local import to keep CPU runs cheap
+        gpus = tf.config.list_physical_devices('GPU')
+        if not gpus:
+            return
+        info = tf.config.experimental.get_memory_info('GPU:0')
+        peak_gb = info.get('peak', 0) / (1024 ** 3)
+        cur_gb = info.get('current', 0) / (1024 ** 3)
+        print(f'    [GPU mem{(" " + tag) if tag else ""}: '
+              f'current={cur_gb:.2f} GB, peak={peak_gb:.2f} GB]')
+        # Reset peak so each chunk reports its own peak.
+        tf.config.experimental.reset_memory_stats('GPU:0')
+    except Exception as e:
+        print(f'    [GPU mem log failed: {e}]')
+
+
 def build_data_and_paradigm(sub: Subject, brain_masker, resolution: int,
                             grid_radius: float, distractor_radius: float,
                             max_distractor_duration: float):
@@ -150,6 +168,7 @@ def fit_in_chunks(model_cls, model_kwargs, data, paradigm, init_pars,
         r2_arr = r2_chunk.values if hasattr(r2_chunk, 'values') \
             else np.asarray(r2_chunk)
         r2_chunks.append(r2_arr)
+        _log_gpu_mem(tag=f'after chunk {ci + 1}/{n_chunks}')
     fit_pars = pd.concat(pars_chunks, ignore_index=True)
     pred = np.concatenate(pred_chunks, axis=1)
     r2 = np.concatenate(r2_chunks, axis=0)
@@ -159,7 +178,7 @@ def fit_in_chunks(model_cls, model_kwargs, data, paradigm, init_pars,
 def main(subject, model_label, bids_folder='/data/ds-retsupp',
          grid_r2_thr=0.05, max_n_iterations=2000, debug=False,
          resolution=50, grid_radius=5.0, distractor_radius=0.4,
-         max_distractor_duration=1.5, voxel_chunk_size=5000):
+         max_distractor_duration=1.5, voxel_chunk_size=1000):
 
     print(f"Fitting DISTRACTOR PRF model: {model_label}  (sub-{subject:02d})")
 
@@ -364,8 +383,10 @@ if __name__ == '__main__':
     p.add_argument('--max_distractor_duration', default=1.5, type=float,
                    help='Max on-window length per trial in seconds')
     p.add_argument('--max_n_iterations', default=4000, type=int)
-    p.add_argument('--voxel_chunk_size', default=5000, type=int,
-                   help='Voxels per GD chunk (set 0 to disable chunking)')
+    p.add_argument('--voxel_chunk_size', default=1000, type=int,
+                   help='Voxels per GD chunk (set 0 to disable chunking). '
+                        '1000 fits in L4 (24 GB) at resolution=50; lower '
+                        'further for resolution=80 or higher.')
     p.add_argument('--bids_folder', default='/data/ds-retsupp')
     p.add_argument('--debug', action='store_true')
     args = p.parse_args()
