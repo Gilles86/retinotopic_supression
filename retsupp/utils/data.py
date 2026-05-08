@@ -770,37 +770,37 @@ class Subject(object):
 
         return t
 
-        def filter_confounds_(confounds, n_acompcorr=10):
-            confound_cols = ['dvars', 'framewise_displacement']
+    def get_confounds(self, session=1, run=1, filter_confounds=True,
+                       n_acompcorr=10):
+        """fmriprep confounds for one (session, run).
 
-            # Only include available a_comp_cor columns, up to n_acompcorr
-            a_compcorr_cols = [f'a_comp_cor_{i:02d}' for i in range(n_acompcorr)]
-            a_compcorr_cols = [c for c in a_compcorr_cols if c in confounds.columns]
-            confound_cols += a_compcorr_cols
+        With ``filter_confounds=True`` (default) returns a curated
+        subset (~30 cols) used by the cleaning pipeline: dvars, FD,
+        top-N a_comp_cor, 6 motion + 6 derivative1 motion, non-steady-
+        state, motion_outlier_XX, cosine_XX. With
+        ``filter_confounds=False`` returns the full ~159-col tsv.
 
-            motion_cols = ['trans_x', 'trans_y', 'trans_z', 'rot_x', 'rot_y', 'rot_z']
-            motion_cols += [f'{e}_derivative1' for e in motion_cols]
-            confound_cols += [c for c in motion_cols if c in confounds.columns]
+        NaNs in the kept columns are filled with 0 so they don't
+        propagate through ``nilearn.image.clean_img``.
+        """
+        tsv = (self.bids_folder / 'derivatives' / 'fmriprep'
+               / f'sub-{self.subject_id:02d}' / f'ses-{session}' / 'func'
+               / f'sub-{self.subject_id:02d}_ses-{session}_task-search_'
+                 f'rec-NORDIC_run-{run}_desc-confounds_timeseries.tsv')
+        confounds = pd.read_csv(tsv, sep='\t')
+        if not filter_confounds:
+            return confounds
 
-            steady_state_cols = [c for c in confounds.columns if 'non_steady_state' in c]
-            confound_cols += steady_state_cols
-
-            outlier_cols = [c for c in confounds.columns if 'motion_outlier' in c]
-            confound_cols += outlier_cols
-
-            cosine_cols = [c for c in confounds.columns if 'cosine' in c]
-            confound_cols += cosine_cols
-
-            # Only keep columns that exist in confounds
-            confound_cols = [c for c in confound_cols if c in confounds.columns]
-            return confounds[confound_cols].fillna(0)
-
-        confounds = pd.read_csv(self.bids_folder / 'derivatives' / 'fmriprep' / f'sub-{self.subject_id:02d}' / f'ses-{session}' / 'func' / f'sub-{self.subject_id:02d}_ses-{session}_task-search_rec-NORDIC_run-{run}_desc-confounds_timeseries.tsv', sep='\t')
-
-        if filter_confounds:
-            confounds = filter_confounds_(confounds)
-
-        return confounds
+        keep = ['dvars', 'framewise_displacement']
+        keep += [f'a_comp_cor_{i:02d}' for i in range(n_acompcorr)]
+        motion = ['trans_x', 'trans_y', 'trans_z',
+                  'rot_x', 'rot_y', 'rot_z']
+        keep += motion + [f'{c}_derivative1' for c in motion]
+        keep += [c for c in confounds.columns if 'non_steady_state' in c]
+        keep += [c for c in confounds.columns if 'motion_outlier' in c]
+        keep += [c for c in confounds.columns if 'cosine' in c]
+        keep = [c for c in keep if c in confounds.columns]
+        return confounds[keep].fillna(0)
 
     def get_bold(self, session=1, run=1, type='cleaned', return_image=True):
 
