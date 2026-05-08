@@ -94,7 +94,7 @@ from retsupp.utils.data import Subject, distractor_locations
 
 
 SIGN_CHOICES = ('plus', 'zero', 'minus', 'free')
-TARGET_GAIN_CHOICES = ('free', 'zero')
+TARGET_GAIN_CHOICES = ('plus', 'zero', 'minus', 'free')
 
 
 # All 5 gain names used by the factorial sharedSigma model.

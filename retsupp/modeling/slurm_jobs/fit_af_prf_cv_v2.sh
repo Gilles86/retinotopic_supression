@@ -54,8 +54,8 @@ for s in "$SUS_HP" "$SUS_LP" "$DYN_HP" "$DYN_LP"; do
     esac
 done
 case "$TGT" in
-    free|zero) ;;
-    *) echo "ERROR: bad target_gain '$TGT' — must be free or zero" >&2
+    plus|zero|minus|free) ;;
+    *) echo "ERROR: bad target_gain '$TGT' — must be plus|zero|minus|free" >&2
        exit 2 ;;
 esac
 
