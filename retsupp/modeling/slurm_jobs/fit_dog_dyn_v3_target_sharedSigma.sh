@@ -89,9 +89,9 @@ echo "Running v3 + target + sharedSigma fit for sub-${subject}, roi=${roi}"
     --model-version v3 \
     --with-target \
     --shared-target-sigma \
-    --sigma-af-init 5.0 \
-    --sigma-dyn-init 5.0 \
-    --sigma-t-dyn-init 5.0 \
+    --sigma-af-init 2.0 \
+    --sigma-dyn-init 2.0 \
+    --sigma-t-dyn-init 2.0 \
     --g-t-dyn-init 0.0
 
 echo "Finished:    $(date)"
