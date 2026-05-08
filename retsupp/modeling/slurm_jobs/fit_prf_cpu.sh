@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=prf_cpu
-#SBATCH --account=zne.uzh
+#SBATCH --account=hare.econ.uzh
 #SBATCH --output=/dev/null
 #SBATCH --mem=48G
 #SBATCH --time=04:00:00

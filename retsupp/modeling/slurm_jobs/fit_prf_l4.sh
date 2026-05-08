@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=prf_l4
-#SBATCH --account=zne.uzh
+#SBATCH --account=hare.econ.uzh
 #SBATCH --output=/dev/null
 #SBATCH --gres=gpu:1
 #SBATCH --constraint=L4
