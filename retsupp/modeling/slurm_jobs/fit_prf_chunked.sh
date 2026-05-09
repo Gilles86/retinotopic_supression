@@ -35,9 +35,17 @@ set -euo pipefail
 # compared to the time saved on manually releasing held tasks.
 sleep $(( (RANDOM % 60) + 1 ))
 
-LOGFILE="$HOME/logs/prf_chk_m${MODEL:-?}_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID:-0}.txt"
-mkdir -p "$(dirname "$LOGFILE")"
-exec >"$LOGFILE" 2>&1
+# Logging policy:
+#  KEEP_LOG=1  -> per-task log written to ~/logs/prf_chk_m{M}_{JOB}_{TASK}.txt
+#  KEEP_LOG=0 (default)  -> stdout goes to /dev/null (per SBATCH directive)
+#                            avoiding ~1500 log files per array on shared NFS.
+# Failures are still visible via `sacct -j JOBID`. To debug a specific
+# task, resubmit it with KEEP_LOG=1.
+if [[ "${KEEP_LOG:-0}" == "1" ]]; then
+    LOGFILE="$HOME/logs/prf_chk_m${MODEL:-?}_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID:-0}.txt"
+    mkdir -p "$(dirname "$LOGFILE")"
+    exec >"$LOGFILE" 2>&1
+fi
 
 if [[ -z "${SLURM_ARRAY_TASK_ID:-}" ]]; then
     echo "ERROR: SLURM_ARRAY_TASK_ID not set." >&2; exit 2
