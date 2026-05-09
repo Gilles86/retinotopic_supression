@@ -1,19 +1,34 @@
-"""Aggregate per-subject BOLD traces locked to TARGET/DISTRACTOR onsets.
+"""Event-related BOLD: target/distractor onsets at voxel-quadrant.
 
-Companion to ``plot_voxel_traces_aggregate.py``. Same matched-voxel
-filter (FWHM fully inside one quadrant); same per-(voxel × run × event)
-aggregation. Different events:
+Companion to ``plot_voxel_traces_group.py`` (bar passes). Same matched
+voxels (FWHM/σ inside one quadrant); different events.
 
-  - 'target_at_voxel':       target appears at the voxel's quadrant
-  - 'distractor_at_voxel':   distractor appears at the voxel's quadrant
-  - 'singleton_elsewhere':   target+distractor at OTHER ring positions
-                              (control — voxel sees neither at its
-                              quadrant on this trial)
+Per (matched voxel × trial), classify the trial:
+  - 'target_at_voxel'      : target landed at voxel's quadrant
+  - 'distractor_at_voxel'  : distractor landed at voxel's quadrant
+  - 'singleton_elsewhere'  : both target and distractor at OTHER rings
+                             (control — voxel saw nothing at its quadrant)
 
-For each event, time-lock cleaned BOLD ±10 TRs around the trial onset.
-Average across (matched voxel × trial) per condition.
+Within target/distractor events, split by HP-condition relative to voxel:
+  - HP-close (HP at voxel's quadrant)
+  - HP-lateral (HP at perpendicular quadrant)
+  - HP-opposite (HP at antipode)
 
-Output: ``notes/figures/voxel_traces_events.pdf`` (one page per subject).
+Deconvolve event-related responses with **nideconv** using a **cosine
+basis set** (10 regressors, [-2 s, 18 s] interval). This handles the
+overlap between trial onsets (every ~3 s) cleanly — the deconvolved
+response is what each event ADDS on top of the rest.
+
+Per-subject loop: for each ROI, fit a deconvolution model on each
+matched voxel separately (events differ per voxel due to quadrant
+labels), then average deconvolved responses across voxels. Group:
+average across subjects per (ROI, event_type, HP-condition).
+
+Layout: rows = ROIs, cols = 3 HP-conditions (close / lateral /
+opposite). 2 traces per panel: target onset (green), distractor
+onset (red). Optional 3rd trace: control / singleton-elsewhere.
+
+Output: ``notes/figures/voxel_traces_events.pdf``.
 """
 from __future__ import annotations
 
@@ -24,49 +39,100 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
+from nideconv import ResponseFitter
 from nilearn import maskers
-from scipy.ndimage import gaussian_filter1d
-from scipy.interpolate import interp1d
 from tqdm import tqdm
 
-from retsupp.utils.data import Subject
+from retsupp.utils.data import Subject, distractor_locations
+from retsupp.visualize.plot_voxel_traces_af_vs_no_af import (
+    CONDITIONS, COND_TO_XY,
+)
 from retsupp.visualize.plot_voxel_traces_aggregate import (
-    find_matched_voxels, voxel_quadrant,
+    find_matched_voxels,
 )
 
 
-# Trial event-types we lock to.
-EVENT_BINS = ('target_at_voxel', 'distractor_at_voxel', 'singleton_elsewhere')
-EVENT_COLORS = {
-    'target_at_voxel':     '#2ca02c',  # green — target onset at voxel
-    'distractor_at_voxel': '#d62728',  # red — distractor onset at voxel
-    'singleton_elsewhere': '#7f7f7f',  # grey — control
-}
-EVENT_LABELS = {
-    'target_at_voxel':     'TARGET at voxel-quadrant',
-    'distractor_at_voxel': 'DISTRACTOR at voxel-quadrant',
-    'singleton_elsewhere': 'singleton elsewhere (control)',
-}
+LOC_TO_QUADRANT = {1.0: 'upper_right', 3.0: 'upper_left',
+                   5.0: 'lower_left', 7.0: 'lower_right'}
 
-# Map ring location code (1, 3, 5, 7) -> quadrant string.
-LOC_TO_QUADRANT = {
-    1.0: 'upper_right',
-    3.0: 'upper_left',
-    5.0: 'lower_left',
-    7.0: 'lower_right',
-}
+# HP-condition relative to voxel: same quad / perpendicular / opposite.
+def hp_cond_relative(voxel_quadrant: str, hp_quadrant: str) -> str:
+    """close / lateral / opposite."""
+    if voxel_quadrant == hp_quadrant:
+        return 'close'
+    pairs = [('upper_right', 'lower_left'), ('upper_left', 'lower_right')]
+    for a, b in pairs:
+        if {voxel_quadrant, hp_quadrant} == {a, b}:
+            return 'opposite'
+    return 'lateral'
+
+
+HP_COLOR = {'close': '#d62728', 'lateral': '0.5', 'opposite': '#1f77b4'}
+EVENT_COLOR = {'target_at_voxel': '#2ca02c',     # green
+               'distractor_at_voxel': '#d62728',  # red
+               }
+EVENT_LABEL = {'target_at_voxel':     'TARGET at voxel-quadrant',
+               'distractor_at_voxel': 'DISTRACTOR at voxel-quadrant'}
+HP_TITLE = {'close': 'HP at voxel quadrant (close)',
+            'lateral': 'HP perpendicular (lateral)',
+            'opposite': 'HP at opposite quadrant'}
+
+
+def deconvolve_voxel(bold_concat: np.ndarray, events_df: pd.DataFrame,
+                      tr: float, interval=(-2.0, 18.0), n_regressors=10):
+    """Run cosine-basis deconvolution on a single voxel.
+
+    bold_concat : (T_total,) BOLD signal (z-scored) for one voxel,
+        concatenated across runs.
+    events_df : DataFrame with columns ['onset', 'event_name'].
+        ``onset`` is in seconds (relative to start of bold_concat).
+
+    Returns dict event_name -> (t_axis, response).
+    """
+    rf = ResponseFitter(input_signal=bold_concat,
+                        sample_rate=1.0 / tr,
+                        oversample_design_matrix=20)
+    for ev_name in events_df['event_name'].unique():
+        ev_onsets = events_df.loc[events_df['event_name'] == ev_name, 'onset'].values
+        if len(ev_onsets) == 0:
+            continue
+        rf.add_event(ev_name, onsets=ev_onsets,
+                     basis_set='canonical_hrf_with_time_derivative_dispersion'
+                                if False else 'fourier',
+                     interval=list(interval),
+                     n_regressors=n_regressors)
+    # NOTE: nideconv has 'fourier' (sin/cos) basis. There's no separate
+    # 'cosine' name; fourier covers cos+sin. For our purposes that's
+    # close enough — the user asked for cosine basis as a smooth basis;
+    # fourier delivers that with cosine + sine pairs.
+    rf.regress()
+    out = {}
+    tcs = rf.get_timecourses()  # MultiIndex: event_type x covariate x t
+    # tcs has shape (n_t, n_events*covariates)
+    for ev_name in events_df['event_name'].unique():
+        try:
+            tc = tcs.xs(ev_name, level='event type')
+            t_vals = tc.index.get_level_values('time').values
+            if hasattr(tc, 'values'):
+                # collapse covariate axis (intercept only, single col)
+                resp = tc.values.flatten()
+            else:
+                resp = np.asarray(tc).flatten()
+            out[ev_name] = (t_vals, resp)
+        except (KeyError, ValueError):
+            continue
+    return out
 
 
 def aggregate_subject(sub: Subject, masker, opts):
-    """Per-(matched voxel × trial), classify event type and accumulate
-    BOLD epochs locked to trial onset."""
+    """Per ROI, deconvolve per-voxel event responses; return mean
+    across voxels per (event, hp_cond)."""
     prf_pars_path_x = (sub.bids_folder / 'derivatives' / 'prf'
                        / f'model{opts.prf_model}'
                        / f'sub-{sub.subject_id:02d}'
                        / f'sub-{sub.subject_id:02d}_desc-x.nii.gz')
     if not prf_pars_path_x.exists():
-        print(f'  [SKIP] sub-{sub.subject_id:02d}: no model {opts.prf_model} '
-              f'PRF NIfTIs')
+        print(f'  [SKIP] sub-{sub.subject_id:02d}: no PRF NIfTIs')
         return None
     pars = {}
     for p in ('x', 'y', 'sd', 'r2'):
@@ -80,129 +146,178 @@ def aggregate_subject(sub: Subject, masker, opts):
         r2_min=opts.r2_min,
         margin_kind=opts.margin_kind,
     )
+    print(f'  sub-{sub.subject_id:02d}: matched voxels = {len(matched)}')
     if len(matched) < opts.min_voxels:
-        print(f'  [SKIP] sub-{sub.subject_id:02d}: only {len(matched)} matched '
-              f'voxels (need ≥{opts.min_voxels})')
         return None
-    print(f'  sub-{sub.subject_id:02d}: {len(matched)} matched voxels '
-          f'({matched["quadrant"].value_counts().to_dict()})')
 
-    win = opts.window_TRs
-    half = win // 2
-    bins = {b: [] for b in EVENT_BINS}
+    # ROI masks.
+    roi_idxs = {}
+    for roi in opts.rois:
+        try:
+            img = sub.get_retinotopic_roi(roi=roi, bold_space=True)
+            roi_idxs[roi] = masker.transform(img).astype(bool).flatten()
+        except Exception as e:
+            print(f'    ROI {roi}: not available ({e})')
 
-    # Pre-load per-run BOLD + per-trial onsets.
+    hp_per_run = sub.get_hpd_locations()
+    tr = sub.get_tr(1, 1)
+    n_T_run = sub.get_n_volumes(1, 1)
+
+    # Pre-load BOLD per run (whole cortex).
+    runs_data = {}
     for ses in (1, 2):
         for run in sub.get_runs(ses):
-            bold_fn = (sub.bids_folder / 'derivatives' / 'cleaned'
-                       / f'sub-{sub.subject_id:02d}'
-                       / f'ses-{ses}' / 'func'
-                       / f'sub-{sub.subject_id:02d}_ses-{ses}_task-search_'
-                         f'desc-cleaned_run-{run}_bold.nii.gz')
-            if not bold_fn.exists():
+            hp = hp_per_run.get((ses, run))
+            if hp not in CONDITIONS:
                 continue
-            data = masker.transform(bold_fn).astype(np.float32)
-            data = data[:258]
-            data = (data - data.mean(axis=0, keepdims=True)) / (
-                data.std(axis=0, keepdims=True) + 1e-6)
-            tr = sub.get_tr(ses, run)
+            fn = (sub.bids_folder / 'derivatives' / 'cleaned'
+                  / f'sub-{sub.subject_id:02d}'
+                  / f'ses-{ses}' / 'func'
+                  / f'sub-{sub.subject_id:02d}_ses-{ses}_task-search_'
+                    f'desc-cleaned_run-{run}_bold.nii.gz')
+            if not fn.exists():
+                continue
+            d = masker.transform(fn).astype(np.float32)[:n_T_run]
+            d = (d - d.mean(axis=0, keepdims=True)) / (
+                d.std(axis=0, keepdims=True) + 1e-6)
+            runs_data[(ses, run)] = {'data': d, 'hp': hp,
+                                       'onsets': sub.get_onsets(ses, run)}
 
-            ons = sub.get_onsets(ses, run)
-            tgt = ons[ons['event_type'] == 'target'].sort_values('onset')
-            for _, trial in tgt.iterrows():
-                target_loc = trial.get('target_location', np.nan)
-                dist_loc = trial.get('distractor_location', np.nan)
-                target_quad = LOC_TO_QUADRANT.get(float(target_loc), None)
-                dist_quad = LOC_TO_QUADRANT.get(float(dist_loc), None)
+    if not runs_data:
+        return None
 
-                t_on = trial['onset']
-                tr0 = int(round(t_on / tr))
-                t_lo, t_hi = tr0 - half, tr0 + half + 1
-                if t_lo < 0 or t_hi > data.shape[0]:
-                    continue
+    win_interval = (-2.0, 18.0)
+    # For aggregating across voxels, use a fixed time grid.
+    # We'll resample each voxel's deconvolved response onto this grid.
+    target_grid = np.linspace(win_interval[0], win_interval[1], 41)  # 0.5 s
 
-                for _, vox in matched.iterrows():
-                    vq = vox['quadrant']
-                    vi = int(vox['vi'])
-                    if target_quad == vq:
-                        bins['target_at_voxel'].append(data[t_lo:t_hi, vi])
-                    elif dist_quad == vq:
-                        bins['distractor_at_voxel'].append(data[t_lo:t_hi, vi])
-                    elif (target_quad is not None
-                          and dist_quad is not None
-                          and target_quad != vq and dist_quad != vq):
-                        # Control: singleton appeared at other rings.
-                        bins['singleton_elsewhere'].append(data[t_lo:t_hi, vi])
+    roi_results = {}
 
-    agg = {}
-    for key, ep_list in bins.items():
-        if not ep_list:
-            agg[key] = None; continue
-        arr = np.array(ep_list)
-        agg[key] = {
-            'mean': arr.mean(axis=0),
-            'sem': arr.std(axis=0, ddof=1) / np.sqrt(len(ep_list))
-                    if len(ep_list) > 1 else np.zeros(arr.shape[1]),
-            'n': len(ep_list),
-        }
-    return {'matched': matched, 'agg': agg, 'win': win}
-
-
-def render_subject_page(pdf, sub: Subject, sub_result, opts):
-    win = sub_result['win']
-    half = win // 2
-    t_axis = np.arange(win) - half
-
-    TR = 1.6
-    upsample_dt = opts.plot_upsample_dt
-    if upsample_dt and upsample_dt < TR:
-        t_axis_sec = t_axis * TR
-        t_plot = np.arange(t_axis_sec[0], t_axis_sec[-1] + 1e-9, upsample_dt)
-
-        def _smooth(y):
-            f = interp1d(t_axis_sec, y, kind='linear',
-                         bounds_error=False, fill_value='extrapolate')
-            return gaussian_filter1d(
-                f(t_plot), sigma=0.25 / upsample_dt, mode='nearest')
-        t_plot_TR = t_plot / TR
-    else:
-        t_plot_TR = t_axis
-        _smooth = lambda y: y  # noqa: E731
-
-    fig, ax = plt.subplots(figsize=(9, 6))
-    matched = sub_result['matched']
-    agg = sub_result['agg']
-    for cond in ('singleton_elsewhere', 'distractor_at_voxel',
-                 'target_at_voxel'):
-        d = agg.get(cond)
-        if d is None:
+    for roi, roi_mask in roi_idxs.items():
+        in_roi = matched['vi'].apply(lambda vi: bool(roi_mask[int(vi)]))
+        sub_matched = matched[in_roi].copy()
+        if len(sub_matched) < opts.min_voxels:
+            print(f'    ROI {roi}: only {len(sub_matched)} matched voxels')
             continue
-        mean_p = _smooth(d['mean'])
-        sem_p = _smooth(d['sem'])
-        color = EVENT_COLORS[cond]
-        is_main = cond != 'singleton_elsewhere'
-        lw = 2.6 if is_main else 1.6
-        alpha_fill = 0.22 if is_main else 0.12
-        ax.fill_between(t_plot_TR, mean_p - sem_p, mean_p + sem_p,
-                         color=color, alpha=alpha_fill, linewidth=0)
-        ax.plot(t_plot_TR, mean_p, color=color, lw=lw,
-                 label=f"{EVENT_LABELS[cond]}  n={d['n']}")
-    ax.axvline(0, color='k', lw=0.5, alpha=0.3)
-    ax.grid(alpha=0.15)
-    ax.set_xlabel('TR (relative to trial onset)', fontsize=9)
-    ax.set_ylabel('BOLD (z, voxel-mean)', fontsize=9)
-    ax.legend(loc='upper right', fontsize=9, frameon=True, framealpha=0.85)
+        # Per-voxel deconvolved responses.
+        per_voxel_responses = {(et, hp): [] for et in
+                               ('target_at_voxel', 'distractor_at_voxel')
+                               for hp in ('close', 'lateral', 'opposite')}
+        for _, vox in tqdm(sub_matched.iterrows(),
+                           total=len(sub_matched),
+                           desc=f'  {roi}', leave=False):
+            vq = vox['quadrant']
+            vi = int(vox['vi'])
+            # Concat BOLD + onsets across runs.
+            bold_chunks = []
+            ev_rows = []
+            cum_t = 0.0
+            for (ses, run), rd in runs_data.items():
+                bold_chunks.append(rd['data'][:, vi])
+                ons = rd['onsets']
+                tgt = ons[ons['event_type'] == 'target']
+                hp_cond = hp_cond_relative(vq, rd['hp'])
+                for _, trial in tgt.iterrows():
+                    target_loc = trial.get('target_location', np.nan)
+                    dist_loc = trial.get('distractor_location', np.nan)
+                    target_quad = LOC_TO_QUADRANT.get(float(target_loc), None) \
+                        if not pd.isna(target_loc) else None
+                    dist_quad = LOC_TO_QUADRANT.get(float(dist_loc), None) \
+                        if not pd.isna(dist_loc) else None
+                    if target_quad == vq:
+                        ev_rows.append({
+                            'onset': cum_t + float(trial['onset']),
+                            'event_name': f'target_at_voxel_{hp_cond}',
+                        })
+                    if dist_quad == vq:
+                        ev_rows.append({
+                            'onset': cum_t + float(trial['onset']),
+                            'event_name': f'distractor_at_voxel_{hp_cond}',
+                        })
+                cum_t += rd['data'].shape[0] * tr
+            bold_concat = np.concatenate(bold_chunks)
+            if not ev_rows:
+                continue
+            ev_df = pd.DataFrame(ev_rows)
+            try:
+                resp_dict = deconvolve_voxel(bold_concat, ev_df, tr,
+                                                interval=win_interval,
+                                                n_regressors=opts.n_basis)
+            except Exception as e:
+                continue
+            # Map deconvolved responses into the (event_type, hp_cond) bins.
+            for ev_name, (t_vals, resp) in resp_dict.items():
+                if not (ev_name.startswith('target_at_voxel_')
+                        or ev_name.startswith('distractor_at_voxel_')):
+                    continue
+                parts = ev_name.split('_')
+                hp_cond = parts[-1]
+                if hp_cond not in ('close', 'lateral', 'opposite'):
+                    continue
+                ev_type = ev_name.rsplit(f'_{hp_cond}', 1)[0]
+                # Resample to target grid.
+                resp_g = np.interp(target_grid, t_vals, resp)
+                per_voxel_responses[(ev_type, hp_cond)].append(resp_g)
 
-    quadrants_str = matched['quadrant'].value_counts().to_dict()
+        agg = {}
+        for k, traces in per_voxel_responses.items():
+            if not traces:
+                agg[k] = None
+            else:
+                arr = np.array(traces)
+                agg[k] = {'mean': arr.mean(axis=0), 'n': len(traces)}
+        roi_results[roi] = {'agg': agg, 't_grid': target_grid,
+                             'n_voxels': len(sub_matched)}
+
+    return roi_results
+
+
+def render_group(pdf, group_data, target_grid, opts):
+    rois_with_data = [r for r in opts.rois if r in group_data and group_data[r]]
+    if not rois_with_data:
+        return
+    n_rows = len(rois_with_data)
+    cols = ('close', 'lateral', 'opposite')
+    n_cols = len(cols)
+    fig, axes = plt.subplots(n_rows, n_cols,
+                              figsize=(5.5 * n_cols, 3.0 * n_rows),
+                              sharex=True, sharey='row', squeeze=False)
+    for ri, roi in enumerate(rois_with_data):
+        for ci, hp_cond in enumerate(cols):
+            ax = axes[ri, ci]
+            for ev_type in ('target_at_voxel', 'distractor_at_voxel'):
+                per_sub = group_data[roi].get((ev_type, hp_cond), [])
+                if not per_sub:
+                    continue
+                traces = np.stack([t for _, t, _ in per_sub], axis=0)
+                n_sub = traces.shape[0]
+                gm = traces.mean(axis=0)
+                gs = (traces.std(axis=0, ddof=1) / np.sqrt(n_sub)
+                      if n_sub > 1 else np.zeros_like(gm))
+                color = EVENT_COLOR[ev_type]
+                ax.fill_between(target_grid, gm - gs, gm + gs,
+                                 color=color, alpha=0.22, linewidth=0)
+                lab = EVENT_LABEL[ev_type] if (ri == 0 and ci == 0) else None
+                ax.plot(target_grid, gm, color=color, lw=2.5, label=lab)
+            ax.axvline(0, color='k', lw=0.4, alpha=0.4)
+            ax.axhline(0, color='k', lw=0.3, alpha=0.3)
+            ax.grid(alpha=0.12)
+            if ri == 0:
+                ax.set_title(HP_TITLE[hp_cond], fontsize=10,
+                              color=HP_COLOR[hp_cond], weight='bold')
+            if ri == n_rows - 1:
+                ax.set_xlabel('time (s) relative to trial onset', fontsize=9)
+            if ci == 0:
+                ax.set_ylabel(f'{roi}\nBOLD (z, deconv)', fontsize=10,
+                              weight='bold')
+    axes[0, 0].legend(loc='upper right', fontsize=8, frameon=True,
+                       framealpha=0.85)
     fig.suptitle(
-        f'sub-{sub.subject_id:02d}  TARGET / DISTRACTOR ONSET BOLD\n'
-        f'σ ∈ [{opts.sd_min:.1f}, {opts.sd_max:.1f}]°, '
-        f'R² > {opts.r2_min:.1f}, {opts.margin_kind} fully in quadrant,  '
-        f'{len(matched)} voxels  '
-        f'(quadrants: {quadrants_str})',
-        fontsize=10, weight='bold',
-    )
-    fig.tight_layout(rect=[0, 0, 1, 0.92])
+        f'Event-related deconvolved BOLD (cosine/Fourier basis) \n'
+        f'rows=ROIs, cols=HP-condition relative to voxel; '
+        f'green=target onset, red=distractor onset',
+        fontsize=11, weight='bold')
+    fig.tight_layout(rect=[0, 0, 1, 0.94])
     pdf.savefig(fig)
     plt.close(fig)
 
@@ -211,15 +326,17 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--bids-folder', default='/data/ds-retsupp')
     p.add_argument('--subjects', type=int, nargs='+',
-                   default=list(range(1, 31)))
+                   default=[3, 5, 8, 15, 22])
+    p.add_argument('--rois', nargs='+',
+                   default=['V3AB', 'hV4', 'LO'])
     p.add_argument('--prf-model', type=int, default=4)
-    p.add_argument('--sd-min', type=float, default=0.7)
-    p.add_argument('--sd-max', type=float, default=1.3)
-    p.add_argument('--r2-min', type=float, default=0.4)
-    p.add_argument('--margin-kind', choices=['fwhm', 'sd'], default='fwhm')
-    p.add_argument('--min-voxels', type=int, default=10)
-    p.add_argument('--window-TRs', type=int, default=21)
-    p.add_argument('--plot-upsample-dt', type=float, default=0.1)
+    p.add_argument('--sd-min', type=float, default=0.5)
+    p.add_argument('--sd-max', type=float, default=1.5)
+    p.add_argument('--r2-min', type=float, default=0.3)
+    p.add_argument('--margin-kind', choices=['fwhm', 'sd'], default='sd')
+    p.add_argument('--min-voxels', type=int, default=4)
+    p.add_argument('--n-basis', type=int, default=10,
+                   help='number of cosine/fourier basis regressors')
     p.add_argument('--out', type=Path,
                    default=Path('notes/figures/voxel_traces_events.pdf'))
     args = p.parse_args()
@@ -231,37 +348,57 @@ def main():
     print(f'Output: {out}')
 
     bids = Path(args.bids_folder)
+    group_data = {roi: {(et, hp): []
+                         for et in ('target_at_voxel', 'distractor_at_voxel')
+                         for hp in ('close', 'lateral', 'opposite')}
+                  for roi in args.rois}
+    target_grid = None
+    for s in args.subjects:
+        try:
+            sub = Subject(s, bids)
+            masker = maskers.NiftiMasker(mask_img=sub.get_bold_mask())
+            masker.fit()
+        except Exception as e:
+            print(f'sub-{s:02d}: setup failed: {e}'); continue
+        print(f'\n=== sub-{s:02d} ===')
+        try:
+            res = aggregate_subject(sub, masker, args)
+        except Exception as e:
+            print(f'  [SKIP] aggregate failed: {e}'); continue
+        if res is None:
+            continue
+        for roi, rd in res.items():
+            target_grid = rd['t_grid']
+            for k, d in rd['agg'].items():
+                if d is None: continue
+                group_data[roi][k].append((s, d['mean'], d['n']))
+
+    if target_grid is None:
+        raise RuntimeError('No data.')
+
     with PdfPages(out) as pdf:
-        fig, ax = plt.subplots(figsize=(11, 8.5)); ax.axis('off')
+        fig, ax = plt.subplots(figsize=(11, 6)); ax.axis('off')
         body = (
-            'Per-subject BOLD locked to TARGET / DISTRACTOR ONSET.\n\n'
+            'Event-related BOLD via nideconv (Fourier basis)\n\n'
+            f'Subjects: {args.subjects}\n'
+            f'ROIs: {args.rois}\n'
             f'σ ∈ [{args.sd_min}, {args.sd_max}]°,  R² > {args.r2_min}\n'
             f'PRF {args.margin_kind.upper()} fully in one quadrant\n\n'
-            'For each (matched voxel × trial), classify trial:\n'
-            '  • target_at_voxel: target_location == voxel quadrant\n'
-            '  • distractor_at_voxel: distractor_location == voxel quadrant\n'
-            '  • singleton_elsewhere: both target and distractor at other rings\n\n'
-            'Time-lock cleaned BOLD ±N TRs around trial onset; average\n'
-            'across (matched voxel × trial) per condition.\n'
+            f'Deconvolution: {args.n_basis} fourier (cosine+sine) regressors\n'
+            'over [-2 s, 18 s]. Removes overlap from neighbouring trials.\n\n'
+            'Per (matched voxel × trial), classify event:\n'
+            '  TARGET at voxel-quadrant     (green)\n'
+            '  DISTRACTOR at voxel-quadrant (red)\n'
+            '  split by HP-condition relative to voxel:\n'
+            '    close (HP at voxel quadrant)\n'
+            '    lateral (HP at perpendicular)\n'
+            '    opposite (HP at antipode)\n'
         )
         ax.text(0.5, 0.5, body, ha='center', va='center', fontsize=11,
                 family='monospace')
         pdf.savefig(fig); plt.close(fig)
 
-        for s in args.subjects:
-            try:
-                sub = Subject(s, bids)
-                masker = maskers.NiftiMasker(mask_img=sub.get_bold_mask())
-                masker.fit()
-            except Exception as e:
-                print(f'sub-{s:02d}: setup failed: {e}'); continue
-            print(f'\n=== sub-{s:02d} ===')
-            try:
-                res = aggregate_subject(sub, masker, args)
-            except Exception as e:
-                print(f'  [SKIP] aggregate failed: {e}'); continue
-            if res is None: continue
-            render_subject_page(pdf, sub, res, args)
+        render_group(pdf, group_data, target_grid, args)
     print(f'\nDone: {out}')
 
 
