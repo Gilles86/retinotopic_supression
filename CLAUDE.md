@@ -110,6 +110,30 @@ All SLURM scripts:
 - Log to `~/logs/` (create if needed).
 - GPU jobs request `--gres=gpu:1` (some also `--constraint=A100`) and `module load gpu`.
 
+### SLURM job-name convention
+
+Always set an informative `--job-name`. It is what shows up in
+`squeue`, `sacct`, and task-notifications; a generic value (`prf_l4`,
+`myjob`) is useless when the queue scrolls. Encode *what* + key
+parameters — analysis name, model index when relevant, subject id when
+one task = one subject. Examples:
+
+- `prf_m1_sub-02`     — model-1 PRF fit, subject 2
+- `prf_merge_m1`      — merge chunked model-1 outputs
+- `glmsingle_sub-08`  — GLMsingle for sub-08
+- `bench_V100_30000`  — benchmark, V100, chunk size 30k
+
+For array jobs whose name can't be set at submit time, rename
+in-script once `MODEL` / `SLURM_ARRAY_TASK_ID` are known:
+
+```bash
+scontrol update jobid="${SLURM_JOB_ID}" \
+    name="prf_m${MODEL}_sub-$(printf %02d $SLURM_ARRAY_TASK_ID)"
+```
+
+`fit_prf_l4.sh` does this — squeue shows `prf_m3_sub-05` once the
+array task starts, instead of the SBATCH-default `prf_gpu`.
+
 ### Avoid the "user env retrieval failed" dogpile
 
 When you submit a large array (~500+ tasks) on this cluster, hundreds

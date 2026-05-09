@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=prf_l4
+#SBATCH --job-name=prf_gpu
 #SBATCH --account=hare.econ.uzh
 #SBATCH --output=/dev/null
 #SBATCH --gres=gpu:1
@@ -8,7 +8,10 @@
 #SBATCH --mem=48G
 #SBATCH --time=04:00:00
 
-# Whole-cortex PRF fit, ONE model per job. Subject + model from args.
+# Whole-cortex PRF fit on any GPU. ONE model per job.
+#
+# After MODEL is parsed, the script renames itself via scontrol so
+# squeue shows e.g.  prf_m3_sub-05  instead of the generic prf_gpu.
 #
 # Usage:
 #   sbatch --array=1-30 --export=ALL,MODEL=1 .../fit_prf_l4.sh
@@ -30,8 +33,13 @@ if [[ -z "${MODEL:-}" ]]; then
 fi
 
 subject="${SLURM_ARRAY_TASK_ID}"
+sub_pad=$(printf "%02d" "$subject")
 echo "Host: $(hostname) | Job ${SLURM_JOB_ID}.${SLURM_ARRAY_TASK_ID} | sub-${subject} | model ${MODEL}"
 echo "Started: $(date)"
+
+# Rename the job in squeue so it tells you what it is doing.
+scontrol update jobid="${SLURM_JOB_ID}" \
+    name="prf_m${MODEL}_sub-${sub_pad}" 2>/dev/null || true
 
 # cuDNN 8 in the conda env requires libnvrtc.so at runtime, but the env
 # does not bundle nvidia-cuda-nvrtc. On V100/A100/H100 nodes, lmod has
