@@ -43,7 +43,12 @@ $PYTHON -c "import tensorflow as tf; print('GPUs:', tf.config.list_physical_devi
 DEBUG_FLAG=""
 if [[ "${SMOKE:-0}" == "1" ]]; then DEBUG_FLAG="--debug"; fi
 CHUNK="${CHUNK:-10000}"
+SUFFIX_FLAG=""
+if [[ -n "${OUTPUT_SUFFIX:-}" ]]; then
+    SUFFIX_FLAG="--output-suffix $OUTPUT_SUFFIX"
+fi
 echo "Using chunk size: $CHUNK"
+echo "Output suffix: ${OUTPUT_SUFFIX:-(none)}"
 
 $PYTHON -u "$HOME/git/retsupp/retsupp/modeling/fit_prf.py" \
     "$subject" --model "$MODEL" \
@@ -52,6 +57,6 @@ $PYTHON -u "$HOME/git/retsupp/retsupp/modeling/fit_prf.py" \
     --voxel-chunk-size "$CHUNK" \
     --max-n-iterations 2000 \
     --paradigm-kind full \
-    $DEBUG_FLAG
+    $DEBUG_FLAG $SUFFIX_FLAG
 
 echo "Finished: $(date)"
