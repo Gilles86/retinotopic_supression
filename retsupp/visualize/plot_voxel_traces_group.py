@@ -49,11 +49,9 @@ from retsupp.visualize.plot_voxel_traces_aggregate import (
 
 
 BAR_DIRS = ('bar_right', 'bar_left', 'bar_up', 'bar_down')
-BAR_TITLE = {
-    'bar_right': 'bar →  (left → right)',
-    'bar_left':  'bar ←  (right → left)',
-    'bar_up':    'bar ↑  (bottom → top)',
-    'bar_down':  'bar ↓  (top → bottom)',
+BAR_VECTORS = {
+    'bar_right': (1, 0), 'bar_left': (-1, 0),
+    'bar_up': (0, 1), 'bar_down': (0, -1),
 }
 HP_CONDS = ('close', 'lateral', 'opposite')
 HP_REMAP = {'close': 'close', 'orth': 'lateral', 'far': 'opposite'}
@@ -61,6 +59,9 @@ HP_COLOR = {'close': '#d62728', 'lateral': '0.5', 'opposite': '#1f77b4'}
 HP_LABEL = {'close': 'HP at voxel quadrant',
             'lateral': 'HP perpendicular',
             'opposite': 'HP opposite quadrant'}
+DIR_KIND = ('toward', 'away')
+DIR_TITLE = {'toward': 'bar continues TOWARD HP',
+             'away':   'bar continues AWAY from HP'}
 
 
 def _roi_voxel_indices(sub, masker, roi):
