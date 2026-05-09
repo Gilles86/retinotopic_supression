@@ -109,6 +109,37 @@ All SLURM scripts:
 - Hardcode `--bids_folder=/shares/zne.uzh/gdehol/ds-retsupp`.
 - Log to `~/logs/` (create if needed).
 - GPU jobs request `--gres=gpu:1` (some also `--constraint=A100`) and `module load gpu`.
+
+### Avoid the "user env retrieval failed" dogpile
+
+When you submit a large array (~500+ tasks) on this cluster, hundreds
+of jobs will start within seconds of each other. They all then attempt
+to read `$HOME/.bashrc` and the rest of the user-profile chain at the
+same instant. The NFS server hosting `$HOME` can't keep up, so a
+fraction of tasks fail with `user env retrieval failed requeued held`
+and end up stuck pending. They don't auto-retry; you have to
+`scontrol release <jobid>` them by hand.
+
+**Mitigation in every large-array SLURM script**: add a random
+startup jitter at the very top, BEFORE the `source conda.sh` /
+`exec >$LOGFILE` lines:
+
+```bash
+# Spread out NFS profile reads across a 60-second window.
+sleep $(( (RANDOM % 60) + 1 ))
+```
+
+For arrays of ~1500+ tasks, 60 s is a sensible jitter (~25 task starts
+per second on average). For ≤300 tasks, 30 s is enough.
+
+The cost is trivial (~30 s of wall time per task) compared to the
+wasted re-runs of held-then-released tasks. If you still see held
+tasks despite the jitter, periodically run:
+
+```bash
+held=$(squeue --me -t PD -r --format="%i %r" | grep -i "user env" | awk '{print $1}')
+echo "$held" | xargs -I {} scontrol release {}
+```
 - Source `$HOME/init_conda.sh` then `source activate neural_priors2`.
 
 There is no `--account=zne.uzh` in these scripts — add it when creating new ones (cluster requirement per global instructions).

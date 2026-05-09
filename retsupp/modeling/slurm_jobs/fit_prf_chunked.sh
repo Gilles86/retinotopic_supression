@@ -28,6 +28,13 @@
 
 set -euo pipefail
 
+# Stagger the "user env retrieval" / conda init by a random 0-60s jitter.
+# This avoids the dogpile of 1000+ array tasks hitting the NFS-mounted
+# $HOME profile at the same instant, which causes "user env retrieval
+# failed requeued held" SLURM errors. The wall-time cost is trivial
+# compared to the time saved on manually releasing held tasks.
+sleep $(( (RANDOM % 60) + 1 ))
+
 LOGFILE="$HOME/logs/prf_chk_m${MODEL:-?}_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID:-0}.txt"
 mkdir -p "$(dirname "$LOGFILE")"
 exec >"$LOGFILE" 2>&1
