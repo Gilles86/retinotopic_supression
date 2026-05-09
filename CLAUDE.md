@@ -124,10 +124,16 @@ and end up stuck pending. They don't auto-retry; you have to
 tasks run simultaneously, e.g. `--array=1-1620%150` runs at most 150
 concurrently. SLURM's task-launch phase (which reads `$HOME` from
 autofs) is what fails when too many tasks start at once; the throttle
-bounds that. Default `%150` is a sweet spot — high throughput while
-keeping under the NFS practical limit (~50+ simultaneous reads tend
-to overload). Note this also caps RUNNING tasks, so throughput trades
-off against safety.
+bounds that. Default `%150` is a *guess* — empirically:
+
+- `%no-throttle` with 1620 tasks: ~40% FAIL at startup
+- `%no-throttle` with 639 tasks (and our 60s jitter): still many held
+- `%50, %150, %300` not yet measured — adjust based on observed
+  failure rate
+
+Note this also caps RUNNING tasks, so throughput trades off against
+NFS safety. If `%150` produces clean runs with no held tasks, you can
+push higher next time.
 
 **Secondary: random startup jitter** inside the bash script. This
 runs AFTER SLURM's prolog (so it does NOT help with "user env
