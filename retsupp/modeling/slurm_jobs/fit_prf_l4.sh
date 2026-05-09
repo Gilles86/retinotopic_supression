@@ -33,11 +33,21 @@ subject="${SLURM_ARRAY_TASK_ID}"
 echo "Host: $(hostname) | Job ${SLURM_JOB_ID}.${SLURM_ARRAY_TASK_ID} | sub-${subject} | model ${MODEL}"
 echo "Started: $(date)"
 
-# Enable lmod and load CUDA before conda. Required on V100/A100/H100
-# nodes — those don't have libnvrtc.so / libcudnn in the env's bundled
-# CUDA. L4 nodes work without it but loading is harmless.
-source /etc/profile.d/lmod.sh 2>/dev/null
-module load cuda/12.6.3 2>&1 || echo "WARN: module load cuda failed"
+# cuDNN 8 in the conda env requires libnvrtc.so at runtime, but the env
+# does not bundle nvidia-cuda-nvrtc. On V100/A100/H100 nodes, lmod has
+# no `cuda/*` module (MODULEPATH is just /etc/lmod/...), so the previous
+# `module load cuda/12.6.3` silently failed and LD_LIBRARY_PATH stayed
+# empty -> TF crashed with "libnvrtc.so: cannot open shared object file".
+# Point LD_LIBRARY_PATH at the spack-installed CUDA 11.8 (matches TF 2.14
+# / cuDNN 8.7 ABI). Glob handles spack-hashed dirname.
+source /etc/profile.d/lmod.sh 2>/dev/null || true
+SYS_CUDA_GLOB=( /apps/u24/opt/x86_64_v3/cuda-11.8.0-* )
+if [[ -d "${SYS_CUDA_GLOB[0]}/targets/x86_64-linux/lib" ]]; then
+    export LD_LIBRARY_PATH="${SYS_CUDA_GLOB[0]}/targets/x86_64-linux/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    echo "Using system CUDA: ${SYS_CUDA_GLOB[0]}"
+else
+    echo "WARN: system cuda-11.8.0 not found under /apps/u24/opt/x86_64_v3/"
+fi
 
 source "$HOME/data/miniforge3/etc/profile.d/conda.sh"
 conda activate retsupp_cuda
