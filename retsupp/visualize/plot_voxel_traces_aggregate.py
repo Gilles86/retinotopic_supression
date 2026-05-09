@@ -85,31 +85,41 @@ def voxel_quadrant(x: float, y: float):
 
 
 def find_matched_voxels(prf_pars: pd.DataFrame, *,
-                         sd_min: float, sd_max: float,
-                         r2_min: float,
-                         margin_kind: str = 'fwhm'):
-    """Voxels with PRF FWHM (or 1σ) fully inside one quadrant.
+                         sd_min: float = 0.2, sd_max: float = 3.5,
+                         r2_min: float = 0.10,
+                         margin_kind: str = 'mass',
+                         quadrant_mass: float = 0.5):
+    """Voxels whose PRF Gaussian is concentrated in a single quadrant.
 
     margin_kind:
-       'fwhm' — strict: |x| > half_FWHM AND |y| > half_FWHM (where
-                half_FWHM = sd × √(2 ln 2) ≈ 1.177 × sd).
-       'sd'   — looser: |x| > sd AND |y| > sd.
-
-    Eccentricity is implicit through the requirement that the PRF lie
-    inside the bar aperture (|x| < 3.17 - half_FWHM) so the bar
-    actually sweeps through it.
+       'mass' (default) — Gaussian-mass criterion. The fraction of the
+                PRF Gaussian mass that falls in the focal quadrant
+                (the one containing the PRF centre) must exceed
+                ``quadrant_mass``. For a 2-D Gaussian centred at
+                (x, y) with std σ, that fraction is
+                Φ(|x|/σ) · Φ(|y|/σ). At threshold 0.5 the majority of
+                the PRF mass is in the focal quadrant; 0.7 corresponds
+                roughly to the old "|x|>σ AND |y|>σ" rule.
+       'fwhm' — strict legacy: |x| > half_FWHM AND |y| > half_FWHM.
+       'sd'   — legacy looser: |x| > sd AND |y| > sd.
     """
+    from scipy.stats import norm
     x = prf_pars['x'].values
     y = prf_pars['y'].values
     sd = prf_pars['sd'].values
     r2 = prf_pars['r2'].values
     half_fwhm = sd * np.sqrt(2.0 * np.log(2.0))
-    margin = half_fwhm if margin_kind == 'fwhm' else sd
     sd_pass = (sd >= sd_min) & (sd <= sd_max)
-    in_quadrant = (np.abs(x) > margin) & (np.abs(y) > margin)
-    # Aperture ceiling: PRF (centre + margin) must fit inside ~3.17°.
-    inside_aperture = (np.abs(x) + margin < 3.17 - 0.1) & \
-                      (np.abs(y) + margin < 3.17 - 0.1)
+    if margin_kind == 'mass':
+        sd_safe = np.where(sd > 0, sd, 1e3)
+        Px = norm.cdf(np.abs(x) / sd_safe)
+        Py = norm.cdf(np.abs(y) / sd_safe)
+        in_quadrant = (Px * Py) > quadrant_mass
+    else:
+        margin = half_fwhm if margin_kind == 'fwhm' else sd
+        in_quadrant = (np.abs(x) > margin) & (np.abs(y) > margin)
+    # PRF centre inside the bar aperture (3.17°).
+    inside_aperture = (np.abs(x) < 3.17) & (np.abs(y) < 3.17)
     r2_pass = r2 >= r2_min
     valid_idx = np.where(sd_pass & in_quadrant & inside_aperture & r2_pass)[0]
     rows = []

@@ -89,6 +89,7 @@ def aggregate_subject(sub, masker, opts):
         sd_min=opts.sd_min, sd_max=opts.sd_max,
         r2_min=opts.r2_min,
         margin_kind=opts.margin_kind,
+        quadrant_mass=getattr(opts, 'quadrant_mass', 0.5),
     )
     print(f'  sub-{sub.subject_id:02d}: matched voxels = {len(matched)}')
     if len(matched) < opts.min_voxels:
@@ -654,12 +655,18 @@ def main():
     p.add_argument('--subjects', type=int, nargs='+',
                    default=list(range(1, 31)))
     p.add_argument('--rois', nargs='+',
-                   default=['V1', 'V2', 'V3', 'V3AB', 'hV4', 'LO'])
+                   default=['V1', 'V2', 'V3', 'V3AB', 'hV4', 'VO', 'LO',
+                            'TO'])
     p.add_argument('--prf-model', type=int, default=4)
     p.add_argument('--sd-min', type=float, default=0.5)
     p.add_argument('--sd-max', type=float, default=1.5)
     p.add_argument('--r2-min', type=float, default=0.10)
-    p.add_argument('--margin-kind', choices=['fwhm', 'sd'], default='sd')
+    p.add_argument('--margin-kind', choices=['fwhm', 'sd', 'mass'],
+                   default='mass')
+    p.add_argument('--quadrant-mass', type=float, default=0.5,
+                   help='Mass-criterion threshold (margin-kind=mass): '
+                        'voxel kept if Gaussian mass in its own quadrant '
+                        '> this. 0.5 = majority mass; 0.7 ≈ old |x|>σ rule.')
     p.add_argument('--min-voxels', type=int, default=4)
     p.add_argument('--max-bar-dist', type=float, default=0.5)
     p.add_argument('--window-TRs', type=int, default=21)
