@@ -1,21 +1,26 @@
-"""Group-averaged BOLD: ROIs × ROTATED bar directions (HP-at-top frame).
+"""Group BOLD: ROIs × bar directions (physical), traces by HP-condition.
 
-Each (matched voxel × bar pass × run) is rotated into a frame where the
-voxel→HP vector points to +y. The bar's direction-of-motion in that
-rotated frame falls in one of 4 quadrants:
+Design: average **physically-identical events** (same bar direction
+passing through voxel's RF) across (matched voxel × subject), and
+show how the BOLD response is modulated by **cognitive state** (HP
+location relative to voxel).
 
-  - 'toward'   = bar moves +y after passing voxel  (heads TOWARD HP)
-  - 'away'     = bar moves -y                       (heads AWAY from HP)
-  - 'orth_ccw' = bar moves -x in rotated frame      (perpendicular, CCW)
-  - 'orth_cw'  = bar moves +x in rotated frame      (perpendicular, CW)
+  Rows: ROIs (V1/V2/V3/V3AB/hV4/LO).
+  Cols: 4 BAR DIRECTIONS in original frame — bar_right, bar_left,
+        bar_up, bar_down. Each col is one physically distinct sweep.
+  Traces (colors): 3 HP-conditions relative to voxel:
+      red  = HP at voxel's OWN quadrant (close)
+      grey = HP at perpendicular quadrant (lateral)
+      blue = HP at OPPOSITE quadrant (antipode)
 
-This makes UR/UL/LL/LR voxels with their respective HPs all comparable —
-"bar TOWARD HP" means the same physical relationship for every voxel.
+The bar pass is time-locked per voxel to the TR where the bar centre
+crosses the voxel's PRF along the sweep axis. Voxels in any of the 4
+quadrants contribute to the same cell, with HP-condition labelled
+relative to each voxel.
 
-Layout: rows = ROIs, cols = 4 rotated directions, 1 trace per panel
-(group mean across subjects ± SEM). Insets show the rotated frame:
-HP red at top, opposite blue at bottom, lateral grey on sides; bar
-+ arrow.
+The 4 bar directions DON'T align with HP locations (HPs are on the
+diagonals, bars sweep on cardinals) — keeping them in the original
+frame avoids fake "toward/away" projections.
 
 Output: ``notes/figures/voxel_traces_group.pdf``.
 """
@@ -35,26 +40,27 @@ from tqdm import tqdm
 
 from retsupp.utils.data import Subject, distractor_locations
 from retsupp.visualize.plot_voxel_traces_af_vs_no_af import (
-    find_bar_pass_TRs, CONDITIONS, COND_TO_XY,
+    find_bar_pass_TRs, categorize_runs_by_hp_distance,
+    CONDITIONS, COND_TO_XY,
 )
 from retsupp.visualize.plot_voxel_traces_aggregate import (
-    find_matched_voxels, rotated_sweep_bin,
+    find_matched_voxels,
 )
 
 
-BAR_VECTORS = {
-    'bar_right': (1, 0),
-    'bar_left': (-1, 0),
-    'bar_up': (0, 1),
-    'bar_down': (0, -1),
+BAR_DIRS = ('bar_right', 'bar_left', 'bar_up', 'bar_down')
+BAR_TITLE = {
+    'bar_right': 'bar →  (left → right)',
+    'bar_left':  'bar ←  (right → left)',
+    'bar_up':    'bar ↑  (bottom → top)',
+    'bar_down':  'bar ↓  (top → bottom)',
 }
-ROTATED_BINS = ('toward', 'orth_ccw', 'orth_cw', 'away')
-ROTATED_TITLES = {
-    'toward':   'bar TOWARD HP',
-    'away':     'bar AWAY from HP',
-    'orth_ccw': 'bar orth (CCW)',
-    'orth_cw':  'bar orth (CW)',
-}
+HP_CONDS = ('close', 'lateral', 'opposite')
+HP_REMAP = {'close': 'close', 'orth': 'lateral', 'far': 'opposite'}
+HP_COLOR = {'close': '#d62728', 'lateral': '0.5', 'opposite': '#1f77b4'}
+HP_LABEL = {'close': 'HP at voxel quadrant',
+            'lateral': 'HP perpendicular',
+            'opposite': 'HP opposite quadrant'}
 
 
 def _roi_voxel_indices(sub, masker, roi):
@@ -63,14 +69,13 @@ def _roi_voxel_indices(sub, masker, roi):
 
 
 def aggregate_subject(sub, masker, opts):
-    """For each ROI in opts.rois, compute per-rotated-direction traces."""
+    """For each ROI: per-(bar_dir, hp_cond) mean BOLD over matched voxels."""
     prf_pars_path_x = (sub.bids_folder / 'derivatives' / 'prf'
                        / f'model{opts.prf_model}'
                        / f'sub-{sub.subject_id:02d}'
                        / f'sub-{sub.subject_id:02d}_desc-x.nii.gz')
     if not prf_pars_path_x.exists():
-        print(f'  [SKIP] sub-{sub.subject_id:02d}: no model {opts.prf_model} '
-              f'PRF NIfTIs')
+        print(f'  [SKIP] sub-{sub.subject_id:02d}: no PRF NIfTIs')
         return None
     pars = {}
     for p in ('x', 'y', 'sd', 'r2'):
@@ -127,33 +132,35 @@ def aggregate_subject(sub, masker, opts):
         in_roi = matched['vi'].apply(lambda vi: bool(roi_mask[int(vi)]))
         sub_matched = matched[in_roi].copy()
         if len(sub_matched) < opts.min_voxels:
-            print(f'    ROI {roi}: only {len(sub_matched)} matched '
-                  f'voxels (need ≥{opts.min_voxels})')
+            print(f'    ROI {roi}: only {len(sub_matched)} matched voxels')
             continue
-        bins = {b: [] for b in ROTATED_BINS}
+        # Bin only by HP-condition: collapse all 4 bar directions
+        # (physically-equivalent events for FWHM-in-quadrant voxels).
+        bins = {c: [] for c in HP_CONDS}
         for _, vox in sub_matched.iterrows():
             x_v, y_v, vi = vox['x'], vox['y'], int(vox['vi'])
-            for rm in run_meta:
+            cats, _, _ = categorize_runs_by_hp_distance(run_meta, x_v, y_v)
+            for rm, cat in zip(run_meta, cats):
+                if cat is None:
+                    continue
+                hp_cond = HP_REMAP.get(cat)
+                if hp_cond is None:
+                    continue
                 key = (rm['session'], rm['run'])
                 if key not in bold_chunks:
                     continue
-                hp_xy = COND_TO_XY[rm['hp']]
                 data = bold_chunks[key]
                 events = find_bar_pass_TRs(sub, rm['session'], rm['run'],
                                              x_v, y_v,
                                              max_dist=opts.max_bar_dist)
                 for ev in events:
-                    bar_vec = BAR_VECTORS.get(ev['event_type'])
-                    if bar_vec is None:
-                        continue
-                    rb = rotated_sweep_bin(bar_vec, (x_v, y_v), hp_xy)
-                    if rb is None:
+                    if ev['event_type'] not in BAR_DIRS:
                         continue
                     tr0 = ev['tr_local']
                     t_lo, t_hi = tr0 - half, tr0 + half + 1
                     if t_lo < 0 or t_hi > data.shape[0]:
                         continue
-                    bins[rb].append(data[t_lo:t_hi, vi])
+                    bins[hp_cond].append(data[t_lo:t_hi, vi])
         agg = {}
         for k, ep in bins.items():
             if not ep:
@@ -166,9 +173,9 @@ def aggregate_subject(sub, masker, opts):
     return {'win': win, 'rois': roi_results, 'matched_total': len(matched)}
 
 
-def _draw_rotated_inset(ax, cond):
-    """Top-right inset: rotated frame (HP at top), bar+arrow indicating
-    the rotated direction."""
+def _draw_bar_inset(ax, bar_dir):
+    """Top-right inset: visual field with bar direction arrow + ring
+    positions colored by HP-condition relative to an example UR voxel."""
     iax = ax.inset_axes([0.66, 0.66, 0.32, 0.32])
     iax.set_xlim(-5.2, 5.2); iax.set_ylim(-5.2, 5.2)
     iax.set_aspect('equal')
@@ -178,30 +185,31 @@ def _draw_rotated_inset(ax, cond):
     theta = np.linspace(0, 2 * np.pi, 100)
     iax.plot(3.17 * np.cos(theta), 3.17 * np.sin(theta),
              color='0.7', lw=0.4, ls='--')
-    R = 4.0
-    iax.plot(0,  R, 'o', color='#d62728', ms=10, mec='k', mew=0.4)  # HP
-    iax.plot(0, -R, 'o', color='#1f77b4', ms=9, mec='k', mew=0.4)   # opposite
-    iax.plot(-R, 0, 'o', color='0.5', ms=9, mec='k', mew=0.4)
-    iax.plot( R, 0, 'o', color='0.5', ms=9, mec='k', mew=0.4)
-    iax.text(0.4, R + 0.5, 'HP', fontsize=7, color='#d62728', weight='bold')
-    iax.plot(0, 0, '*', color='k', ms=11, mec='k', mew=0.5)  # voxel @ origin
+    # Example voxel = UR quadrant.
+    iax.plot(2.0, 2.0, '*', color='k', ms=11, mec='k', mew=0.5, zorder=4)
+    HP_REL = {'upper_right': 'close', 'upper_left': 'lateral',
+              'lower_right': 'lateral', 'lower_left': 'opposite'}
+    for cond_key in CONDITIONS:
+        x, y = COND_TO_XY[cond_key]
+        c = HP_COLOR[HP_REL[cond_key]]
+        iax.plot(x, y, 'o', color=c, ms=8, mec='k', mew=0.4, zorder=3)
     bar_kw = dict(color='k', lw=2.5, solid_capstyle='round')
     arr_kw = dict(arrowstyle='->', lw=1.5, color='k', mutation_scale=14)
-    if cond == 'toward':
-        iax.plot([-1.6, 1.6], [-2.0, -2.0], **bar_kw)
-        iax.annotate('', xy=(0, 1.5), xytext=(0, -2.0), arrowprops=arr_kw)
-    elif cond == 'away':
-        iax.plot([-1.6, 1.6], [2.0, 2.0], **bar_kw)
-        iax.annotate('', xy=(0, -1.5), xytext=(0, 2.0), arrowprops=arr_kw)
-    elif cond == 'orth_ccw':
-        iax.plot([2.0, 2.0], [-1.6, 1.6], **bar_kw)
-        iax.annotate('', xy=(-1.5, 0), xytext=(2.0, 0), arrowprops=arr_kw)
-    elif cond == 'orth_cw':
-        iax.plot([-2.0, -2.0], [-1.6, 1.6], **bar_kw)
-        iax.annotate('', xy=(1.5, 0), xytext=(-2.0, 0), arrowprops=arr_kw)
+    if bar_dir == 'bar_right':
+        iax.plot([-2.5, -2.5], [-1.5, 1.5], **bar_kw)
+        iax.annotate('', xy=(2.5, 0), xytext=(-2.5, 0), arrowprops=arr_kw)
+    elif bar_dir == 'bar_left':
+        iax.plot([2.5, 2.5], [-1.5, 1.5], **bar_kw)
+        iax.annotate('', xy=(-2.5, 0), xytext=(2.5, 0), arrowprops=arr_kw)
+    elif bar_dir == 'bar_up':
+        iax.plot([-1.5, 1.5], [-2.5, -2.5], **bar_kw)
+        iax.annotate('', xy=(0, 2.5), xytext=(0, -2.5), arrowprops=arr_kw)
+    else:  # bar_down
+        iax.plot([-1.5, 1.5], [2.5, 2.5], **bar_kw)
+        iax.annotate('', xy=(0, -2.5), xytext=(0, 2.5), arrowprops=arr_kw)
 
 
-def render_group_figure(pdf, group_data, win, opts):
+def render_group(pdf, group_data, win, opts):
     half = win // 2
     t_axis = np.arange(win) - half
     TR = 1.6
@@ -223,62 +231,80 @@ def render_group_figure(pdf, group_data, win, opts):
     rois_with_data = [r for r in opts.rois if r in group_data and group_data[r]]
     if not rois_with_data:
         return
-    n_rows = len(rois_with_data)
-    n_cols = len(ROTATED_BINS)
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(4.6 * n_cols, 3.0 * n_rows),
-                              sharex=True, sharey='row', squeeze=False)
-
-    # Color: emphasize toward (red) and away (blue); orths greyish.
-    cond_color = {'toward': '#d62728', 'away': '#1f77b4',
-                  'orth_ccw': '0.45', 'orth_cw': '0.65'}
-
-    for ri, roi in enumerate(rois_with_data):
-        for ci, cond in enumerate(ROTATED_BINS):
-            ax = axes[ri, ci]
-            per_sub = group_data[roi].get(cond, [])
+    n = len(rois_with_data)
+    n_cols = 3 if n > 3 else n
+    n_rows = int(np.ceil(n / n_cols))
+    fig, axes = plt.subplots(n_rows, n_cols,
+                              figsize=(5.5 * n_cols, 3.5 * n_rows),
+                              sharex=True, sharey=False, squeeze=False)
+    axes = axes.flatten()
+    for i, roi in enumerate(rois_with_data):
+        ax = axes[i]
+        for hp_cond in ('opposite', 'lateral', 'close'):
+            per_sub = group_data[roi].get(hp_cond, [])
             if not per_sub:
-                ax.text(0.5, 0.5, 'no data', ha='center', va='center',
-                         transform=ax.transAxes, fontsize=10, color='0.5')
-            else:
-                traces = np.stack([t for _, t, _ in per_sub], axis=0)
-                n_sub = traces.shape[0]
-                gm = traces.mean(axis=0)
-                gs = (traces.std(axis=0, ddof=1) / np.sqrt(n_sub)
-                      if n_sub > 1 else np.zeros_like(gm))
-                gm_p = _smooth(gm)
-                gs_p = _smooth(gs)
-                color = cond_color[cond]
-                ax.fill_between(t_for_plot, gm_p - gs_p, gm_p + gs_p,
-                                 color=color, alpha=0.22, linewidth=0)
-                ax.plot(t_for_plot, gm_p, color=color, lw=2.6,
-                         label=f"n_sub={n_sub}")
-                n_events_total = sum(n for _, _, n in per_sub)
-                ax.text(0.97, 0.96, f'n_sub={n_sub}\nn_events={n_events_total}',
-                         transform=ax.transAxes, fontsize=7,
-                         ha='right', va='top',
-                         bbox=dict(boxstyle='round,pad=0.2',
-                                   facecolor='white', alpha=0.7,
-                                   edgecolor='none'))
-            ax.axvline(0, color='k', lw=0.4, alpha=0.3)
-            ax.grid(alpha=0.12)
-            if ri == 0:
-                ax.set_title(ROTATED_TITLES[cond], fontsize=10)
-                _draw_rotated_inset(ax, cond)
-            if ri == n_rows - 1:
-                ax.set_xlabel('TR (relative to bar passes RF)', fontsize=8)
-            if ci == 0:
-                ax.set_ylabel(f'{roi}\nBOLD (z, group)', fontsize=10,
-                              weight='bold')
-
+                continue
+            traces = np.stack([t for _, t, _ in per_sub], axis=0)
+            n_sub = traces.shape[0]
+            gm = traces.mean(axis=0)
+            gs = (traces.std(axis=0, ddof=1) / np.sqrt(n_sub)
+                  if n_sub > 1 else np.zeros_like(gm))
+            gm_p = _smooth(gm)
+            gs_p = _smooth(gs)
+            color = HP_COLOR[hp_cond]
+            ax.fill_between(t_for_plot, gm_p - gs_p, gm_p + gs_p,
+                             color=color, alpha=0.20, linewidth=0)
+            lw = 2.4 if hp_cond == 'close' else 1.8
+            label = (f"{HP_LABEL[hp_cond]} (n_sub={n_sub})"
+                     if i == 0 else None)
+            ax.plot(t_for_plot, gm_p, color=color, lw=lw, label=label)
+        ax.axvline(0, color='k', lw=0.4, alpha=0.3)
+        ax.grid(alpha=0.12)
+        ax.set_title(roi, fontsize=12, weight='bold')
+        ax.set_xlabel('TR (relative to bar passes RF)', fontsize=9)
+        ax.set_ylabel('BOLD (z, group-mean)', fontsize=9)
+        # Inset showing the experimental-frame schematic with HP-color
+        # rings, plus cardinal arrows to indicate bar directions all
+        # collapsed.
+        _draw_collapsed_inset(ax)
+    for j in range(len(rois_with_data), len(axes)):
+        axes[j].axis('off')
+    axes[0].legend(loc='lower right', fontsize=8, frameon=True,
+                   framealpha=0.85)
     fig.suptitle(
-        f'Group-averaged BOLD: ROI × ROTATED bar direction (HP at +y)\n'
+        f'Group BOLD: bar passes RF (all 4 directions collapsed) × HP-condition\n'
         f'matched voxels (σ ∈ [{opts.sd_min:.1f}, {opts.sd_max:.1f}]°, '
         f'R²>{opts.r2_min:.2f}, {opts.margin_kind} fully in quadrant)',
         fontsize=12, weight='bold',
     )
-    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    fig.tight_layout(rect=[0, 0, 1, 0.94])
     pdf.savefig(fig)
     plt.close(fig)
+
+
+def _draw_collapsed_inset(ax):
+    """Inset with 4 ring positions colored by HP-condition (UR voxel
+    example) + 4 small arrows showing the 4 bar directions are collapsed."""
+    iax = ax.inset_axes([0.66, 0.66, 0.32, 0.32])
+    iax.set_xlim(-5.2, 5.2); iax.set_ylim(-5.2, 5.2)
+    iax.set_aspect('equal')
+    iax.set_xticks([]); iax.set_yticks([])
+    for spine in iax.spines.values():
+        spine.set_linewidth(0.4); spine.set_color('0.5')
+    theta = np.linspace(0, 2 * np.pi, 100)
+    iax.plot(3.17 * np.cos(theta), 3.17 * np.sin(theta),
+             color='0.7', lw=0.4, ls='--')
+    iax.plot(2.0, 2.0, '*', color='k', ms=11, mec='k', mew=0.5, zorder=4)
+    HP_REL = {'upper_right': 'close', 'upper_left': 'lateral',
+              'lower_right': 'lateral', 'lower_left': 'opposite'}
+    for cond_key in CONDITIONS:
+        x, y = COND_TO_XY[cond_key]
+        c = HP_COLOR[HP_REL[cond_key]]
+        iax.plot(x, y, 'o', color=c, ms=7, mec='k', mew=0.4, zorder=3)
+    # 4 collapsed bar arrows (faint, all 4 cardinals).
+    arr_kw = dict(arrowstyle='->', lw=1.0, color='0.4', mutation_scale=10)
+    for d in [(2.5, 0), (-2.5, 0), (0, 2.5), (0, -2.5)]:
+        iax.annotate('', xy=d, xytext=(-d[0]/2, -d[1]/2), arrowprops=arr_kw)
 
 
 def main():
@@ -308,9 +334,8 @@ def main():
     print(f'Output: {out}')
 
     bids = Path(args.bids_folder)
-    group_data = {roi: {b: [] for b in ROTATED_BINS} for roi in args.rois}
+    group_data = {roi: {c: [] for c in HP_CONDS} for roi in args.rois}
     win_global = None
-
     for s in args.subjects:
         try:
             sub = Subject(s, bids)
@@ -332,29 +357,30 @@ def main():
                 group_data[roi][k].append((s, d['mean'], d['n']))
 
     if win_global is None:
-        raise RuntimeError('No subject yielded any data.')
+        raise RuntimeError('No data.')
 
     with PdfPages(out) as pdf:
-        fig, ax = plt.subplots(figsize=(11, 7)); ax.axis('off')
+        fig, ax = plt.subplots(figsize=(11, 6)); ax.axis('off')
         body = (
-            'Group-averaged BOLD: ROIs × ROTATED bar directions\n\n'
+            'Group-averaged BOLD: ROI × bar direction × HP-condition\n\n'
             f'Subjects: {args.subjects}\n'
             f'ROIs: {args.rois}\n'
             f'σ ∈ [{args.sd_min}, {args.sd_max}]°,  R² > {args.r2_min}\n'
             f'PRF {args.margin_kind.upper()} fully inside one quadrant\n\n'
-            'Rotation: per (voxel × run), rotate so voxel→HP at +y.\n'
-            'Bar direction-of-motion in rotated frame -> 4 conditions:\n'
-            '  TOWARD HP  (bar moves +y)\n'
-            '  AWAY HP    (bar moves -y)\n'
-            '  orth CCW / orth CW (perpendicular)\n\n'
-            'All voxel quadrants × HP positions are normalized to one\n'
-            'frame -> apples-to-apples comparison.\n'
+            'Each col: one BAR DIRECTION (physically distinct sweep).\n'
+            'Voxels in any quadrant contribute, time-locked to the TR\n'
+            'where the bar passes their PRF center along the sweep axis.\n\n'
+            'Within each col: 3 traces by HP-condition relative to voxel.\n'
+            'The PHYSICAL event is the same; the COGNITIVE state differs.\n'
+            '  red  — HP at voxel\'s OWN quadrant      (close)\n'
+            '  grey — HP at perpendicular quadrant     (lateral)\n'
+            '  blue — HP at OPPOSITE quadrant          (antipode)\n'
         )
         ax.text(0.5, 0.5, body, ha='center', va='center', fontsize=11,
                 family='monospace')
         pdf.savefig(fig); plt.close(fig)
 
-        render_group_figure(pdf, group_data, win_global, args)
+        render_group(pdf, group_data, win_global, args)
     print(f'\nDone: {out}')
 
 
