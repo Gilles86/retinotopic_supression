@@ -37,10 +37,12 @@ case "$MODEL" in
 esac
 
 ARRAY_SIZE=$(( N_SUBS * N_CHUNKS ))
-# Throttle: max concurrent running tasks. Caps simultaneous NFS profile
-# reads at job start ("user env retrieval failed" mitigation). 50 is a
-# safe default for our cluster.
-THROTTLE="${THROTTLE:-50}"
+# Throttle: max concurrent running tasks. Caps simultaneous SLURM
+# task launches (each launch reads $HOME, and ~50+ simultaneous reads
+# overwhelm autofs → "user env retrieval failed requeued held").
+# 150 gives good throughput while staying below the practical NFS
+# limit on this cluster. Override via THROTTLE env var.
+THROTTLE="${THROTTLE:-150}"
 
 echo "Submitting: MODEL=$MODEL, N_CHUNKS=$N_CHUNKS, N_SUBS=$N_SUBS"
 echo "  per-task: ~$VOX_PER_CHUNK voxels, --mem=${MEM_GB}G, --cpus=16"

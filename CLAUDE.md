@@ -121,14 +121,18 @@ and end up stuck pending. They don't auto-retry; you have to
 `scontrol release <jobid>` them by hand.
 
 **Primary mitigation: SLURM array throttle.** Cap how many array
-tasks run simultaneously, e.g. `--array=1-1620%50` runs at most 50
-concurrently. NFS profile reads are then bounded regardless of array
-size. Default to `%50` for arrays >100 tasks. The cost is wall time
-(throughput halves vs unthrottled), but it's the only mitigation that
-actually works for arrays of 500+ tasks.
+tasks run simultaneously, e.g. `--array=1-1620%150` runs at most 150
+concurrently. SLURM's task-launch phase (which reads `$HOME` from
+autofs) is what fails when too many tasks start at once; the throttle
+bounds that. Default `%150` is a sweet spot — high throughput while
+keeping under the NFS practical limit (~50+ simultaneous reads tend
+to overload). Note this also caps RUNNING tasks, so throughput trades
+off against safety.
 
-**Secondary: random startup jitter** in the SLURM script. Pre-existing
-mitigation, kept as defense-in-depth even when throttled:
+**Secondary: random startup jitter** inside the bash script. This
+runs AFTER SLURM's prolog (so it does NOT help with "user env
+retrieval failed"), but it does spread out the in-script NFS reads
+(`source conda.sh`, etc.). Kept as defense-in-depth:
 
 ```bash
 # Spread out NFS profile reads across a 60-second window.
