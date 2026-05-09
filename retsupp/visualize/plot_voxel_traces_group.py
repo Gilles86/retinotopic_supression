@@ -135,9 +135,10 @@ def aggregate_subject(sub, masker, opts):
         if len(sub_matched) < opts.min_voxels:
             print(f'    ROI {roi}: only {len(sub_matched)} matched voxels')
             continue
-        # Bin only by HP-condition: collapse all 4 bar directions
-        # (physically-equivalent events for FWHM-in-quadrant voxels).
-        bins = {c: [] for c in HP_CONDS}
+        # Bin by (HP-condition × toward/away), collapsing the 2 bar
+        # directions on each side of the HP-direction projection. This
+        # keeps "toward/away from HP" timing info while aggregating.
+        bins = {(d, c): [] for d in DIR_KIND for c in HP_CONDS}
         for _, vox in sub_matched.iterrows():
             x_v, y_v, vi = vox['x'], vox['y'], int(vox['vi'])
             cats, _, _ = categorize_runs_by_hp_distance(run_meta, x_v, y_v)
@@ -151,17 +152,24 @@ def aggregate_subject(sub, masker, opts):
                 if key not in bold_chunks:
                     continue
                 data = bold_chunks[key]
+                hp_xy = COND_TO_XY[rm['hp']]
+                vec_to_hp = (hp_xy[0] - x_v, hp_xy[1] - y_v)
                 events = find_bar_pass_TRs(sub, rm['session'], rm['run'],
                                              x_v, y_v,
                                              max_dist=opts.max_bar_dist)
                 for ev in events:
                     if ev['event_type'] not in BAR_DIRS:
                         continue
+                    bv = BAR_VECTORS[ev['event_type']]
+                    dot = bv[0] * vec_to_hp[0] + bv[1] * vec_to_hp[1]
+                    if dot == 0:
+                        continue
+                    direction = 'toward' if dot > 0 else 'away'
                     tr0 = ev['tr_local']
                     t_lo, t_hi = tr0 - half, tr0 + half + 1
                     if t_lo < 0 or t_hi > data.shape[0]:
                         continue
-                    bins[hp_cond].append(data[t_lo:t_hi, vi])
+                    bins[(direction, hp_cond)].append(data[t_lo:t_hi, vi])
         agg = {}
         for k, ep in bins.items():
             if not ep:
@@ -232,61 +240,57 @@ def render_group(pdf, group_data, win, opts):
     rois_with_data = [r for r in opts.rois if r in group_data and group_data[r]]
     if not rois_with_data:
         return
-    n = len(rois_with_data)
-    n_cols = 3 if n > 3 else n
-    n_rows = int(np.ceil(n / n_cols))
-    fig, axes = plt.subplots(n_rows, n_cols,
-                              figsize=(5.5 * n_cols, 3.5 * n_rows),
-                              sharex=True, sharey=False, squeeze=False)
-    axes = axes.flatten()
-    for i, roi in enumerate(rois_with_data):
-        ax = axes[i]
-        for hp_cond in ('opposite', 'lateral', 'close'):
-            per_sub = group_data[roi].get(hp_cond, [])
-            if not per_sub:
-                continue
-            traces = np.stack([t for _, t, _ in per_sub], axis=0)
-            n_sub = traces.shape[0]
-            gm = traces.mean(axis=0)
-            gs = (traces.std(axis=0, ddof=1) / np.sqrt(n_sub)
-                  if n_sub > 1 else np.zeros_like(gm))
-            gm_p = _smooth(gm)
-            gs_p = _smooth(gs)
-            color = HP_COLOR[hp_cond]
-            ax.fill_between(t_for_plot, gm_p - gs_p, gm_p + gs_p,
-                             color=color, alpha=0.20, linewidth=0)
-            lw = 2.4 if hp_cond == 'close' else 1.8
-            label = (f"{HP_LABEL[hp_cond]} (n_sub={n_sub})"
-                     if i == 0 else None)
-            ax.plot(t_for_plot, gm_p, color=color, lw=lw, label=label)
-        ax.axvline(0, color='k', lw=0.4, alpha=0.3)
-        ax.grid(alpha=0.12)
-        ax.set_title(roi, fontsize=12, weight='bold')
-        ax.set_xlabel('TR (relative to bar passes RF)', fontsize=9)
-        ax.set_ylabel('BOLD (z, group-mean)', fontsize=9)
-        # Inset showing the experimental-frame schematic with HP-color
-        # rings, plus cardinal arrows to indicate bar directions all
-        # collapsed.
-        _draw_collapsed_inset(ax)
-    for j in range(len(rois_with_data), len(axes)):
-        axes[j].axis('off')
-    axes[0].legend(loc='lower right', fontsize=8, frameon=True,
-                   framealpha=0.85)
+    n_rois = len(rois_with_data)
+    fig, axes = plt.subplots(n_rois, 2, figsize=(11, 3.0 * n_rois),
+                              sharex=True, sharey='row', squeeze=False)
+    for ri, roi in enumerate(rois_with_data):
+        for ci, direction in enumerate(DIR_KIND):
+            ax = axes[ri, ci]
+            for hp_cond in ('opposite', 'lateral', 'close'):
+                per_sub = group_data[roi].get((direction, hp_cond), [])
+                if not per_sub:
+                    continue
+                traces = np.stack([t for _, t, _ in per_sub], axis=0)
+                n_sub = traces.shape[0]
+                gm = traces.mean(axis=0)
+                gs = (traces.std(axis=0, ddof=1) / np.sqrt(n_sub)
+                      if n_sub > 1 else np.zeros_like(gm))
+                gm_p = _smooth(gm)
+                gs_p = _smooth(gs)
+                color = HP_COLOR[hp_cond]
+                ax.fill_between(t_for_plot, gm_p - gs_p, gm_p + gs_p,
+                                 color=color, alpha=0.20, linewidth=0)
+                lw = 2.4 if hp_cond == 'close' else 1.8
+                lab = (f"{HP_LABEL[hp_cond]} (n_sub={n_sub})"
+                       if ri == 0 and ci == 0 else None)
+                ax.plot(t_for_plot, gm_p, color=color, lw=lw, label=lab)
+            ax.axvline(0, color='k', lw=0.4, alpha=0.3)
+            ax.grid(alpha=0.12)
+            if ri == 0:
+                ax.set_title(DIR_TITLE[direction], fontsize=11, weight='bold')
+                _draw_toward_away_inset(ax, direction)
+            if ri == n_rois - 1:
+                ax.set_xlabel('TR (relative to bar passes RF)', fontsize=9)
+            if ci == 0:
+                ax.set_ylabel(f'{roi}\nBOLD (z, group)', fontsize=10,
+                              weight='bold')
+    axes[0, 0].legend(loc='lower right', fontsize=8, frameon=True,
+                       framealpha=0.85)
     fig.suptitle(
-        f'Group BOLD: bar passes RF (all 4 directions collapsed) × HP-condition\n'
+        f'Group BOLD: bar pass × {{toward, away}} × HP-condition\n'
         f'matched voxels (σ ∈ [{opts.sd_min:.1f}, {opts.sd_max:.1f}]°, '
         f'R²>{opts.r2_min:.2f}, {opts.margin_kind} fully in quadrant)',
         fontsize=12, weight='bold',
     )
-    fig.tight_layout(rect=[0, 0, 1, 0.94])
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
     pdf.savefig(fig)
     plt.close(fig)
 
 
-def _draw_collapsed_inset(ax):
-    """Inset with 4 ring positions colored by HP-condition (UR voxel
-    example) + 4 small arrows showing the 4 bar directions are collapsed."""
-    iax = ax.inset_axes([0.66, 0.66, 0.32, 0.32])
+def _draw_toward_away_inset(ax, direction):
+    """Inset showing 4 ring positions (HP-coloured for an UR-voxel example)
+    + 2 highlighted bar arrows (toward HP or away from HP)."""
+    iax = ax.inset_axes([0.66, 0.62, 0.34, 0.36])
     iax.set_xlim(-5.2, 5.2); iax.set_ylim(-5.2, 5.2)
     iax.set_aspect('equal')
     iax.set_xticks([]); iax.set_yticks([])
@@ -295,17 +299,34 @@ def _draw_collapsed_inset(ax):
     theta = np.linspace(0, 2 * np.pi, 100)
     iax.plot(3.17 * np.cos(theta), 3.17 * np.sin(theta),
              color='0.7', lw=0.4, ls='--')
-    iax.plot(2.0, 2.0, '*', color='k', ms=11, mec='k', mew=0.5, zorder=4)
+    # Example voxel = UR; HP is at UR for this illustration.
+    voxel = (2.0, 2.0)
+    iax.plot(*voxel, '*', color='k', ms=11, mec='k', mew=0.5, zorder=4)
     HP_REL = {'upper_right': 'close', 'upper_left': 'lateral',
               'lower_right': 'lateral', 'lower_left': 'opposite'}
     for cond_key in CONDITIONS:
         x, y = COND_TO_XY[cond_key]
         c = HP_COLOR[HP_REL[cond_key]]
         iax.plot(x, y, 'o', color=c, ms=7, mec='k', mew=0.4, zorder=3)
-    # 4 collapsed bar arrows (faint, all 4 cardinals).
-    arr_kw = dict(arrowstyle='->', lw=1.0, color='0.4', mutation_scale=10)
-    for d in [(2.5, 0), (-2.5, 0), (0, 2.5), (0, -2.5)]:
-        iax.annotate('', xy=d, xytext=(-d[0]/2, -d[1]/2), arrowprops=arr_kw)
+    # The HP for this example is at upper_right (red / close).
+    hp = COND_TO_XY['upper_right']
+    vec_to_hp = (hp[0] - voxel[0], hp[1] - voxel[1])
+    # Cardinal bars whose dot product matches the requested direction.
+    arr_kw_hi = dict(arrowstyle='->', lw=2.0, color='k', mutation_scale=14)
+    arr_kw_lo = dict(arrowstyle='->', lw=0.7, color='0.7', mutation_scale=10)
+    sign = 1 if direction == 'toward' else -1
+    for ev_name, bv in BAR_VECTORS.items():
+        dot = bv[0] * vec_to_hp[0] + bv[1] * vec_to_hp[1]
+        is_match = (np.sign(dot) == sign)
+        # Tail and tip relative to voxel — show bar centre passing voxel
+        # then continuing in motion direction.
+        tail = (voxel[0] - 1.4 * bv[0], voxel[1] - 1.4 * bv[1])
+        tip = (voxel[0] + 2.4 * bv[0], voxel[1] + 2.4 * bv[1])
+        iax.annotate('', xy=tip, xytext=tail,
+                      arrowprops=arr_kw_hi if is_match else arr_kw_lo)
+    # Caption.
+    iax.text(0, -4.7, 'voxel ★ at UR; HP = UR (red)',
+              ha='center', va='top', fontsize=6, color='0.4')
 
 
 def main():
