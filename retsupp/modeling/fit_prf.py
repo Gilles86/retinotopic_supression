@@ -191,7 +191,8 @@ def main(subject: int, model_label: int,
          max_n_iterations: int = 2000, paradigm_kind: str = 'full',
          debug: bool = False,
          chunk_index: int | None = None,
-         n_chunks: int | None = None):
+         n_chunks: int | None = None,
+         output_suffix: str = ''):
     """Fit one PRF model. If chunk_index/n_chunks given, fit ONLY voxels
     in that chunk and save partial results to a chunks/ subdir; a
     separate merge step concatenates all chunks into final NIfTIs."""
@@ -296,10 +297,15 @@ def main(subject: int, model_label: int,
     print(f"  median R²: {pars['r2'].median():.3f}")
 
     # Output goes to prf/ for full paradigm (canonical) or prf_bar/ for
-    # legacy bar-only paradigm (kept separate so they coexist).
+    # legacy bar-only paradigm (kept separate so they coexist). The
+    # output_suffix lets benchmark / experimental runs write to a
+    # separate folder (e.g. prf.bench, prf_bar.bench) without
+    # clobbering the canonical results.
     base_dir = 'prf_bar' if paradigm_kind == 'bar' else 'prf'
     if debug:
         base_dir += '.debug'
+    if output_suffix:
+        base_dir += f'.{output_suffix}'
 
     if chunked_mode:
         # Save partial chunk: an NPZ with the voxel indices and a column
@@ -338,9 +344,16 @@ if __name__ == "__main__":
                         'merge_prf_chunks.py to assemble.')
     p.add_argument('--n-chunks', type=int, default=None,
                    help='Total number of voxel chunks across SLURM tasks.')
+    p.add_argument('--output-suffix', default='',
+                   help='Append to the output base dir name (e.g. '
+                        '--output-suffix=bench writes to prf.bench/ '
+                        'instead of prf/). Use for benchmarks or '
+                        'experimental runs that should not clobber '
+                        'canonical results.')
     a = p.parse_args()
     main(a.subject, a.model, bids_folder=a.bids_folder,
          resolution=a.resolution, voxel_chunk_size=a.voxel_chunk_size,
          max_n_iterations=a.max_n_iterations,
          paradigm_kind=a.paradigm_kind, debug=a.debug,
-         chunk_index=a.chunk_index, n_chunks=a.n_chunks)
+         chunk_index=a.chunk_index, n_chunks=a.n_chunks,
+         output_suffix=a.output_suffix)
