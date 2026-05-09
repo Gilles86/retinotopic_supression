@@ -184,7 +184,13 @@ def aggregate_subject(sub: Subject, masker, opts):
 
 
 def _draw_bar_inset(ax, bar_dir):
-    """Tiny inset (top-right) showing the bar direction in original frame."""
+    """Tiny inset (top-right) showing the bar direction + an example
+    voxel-quadrant scenario (UR voxel) with HP-condition coloring on
+    the 4 ring positions:
+      red  = close (HP at voxel's quadrant — UR here)
+      grey = lateral (HP at UL or LR — perpendicular)
+      blue = opposite (HP at LL — antipode)
+    """
     iax = ax.inset_axes([0.66, 0.66, 0.32, 0.32])
     iax.set_xlim(-5, 5); iax.set_ylim(-5, 5)
     iax.set_aspect('equal')
@@ -195,11 +201,20 @@ def _draw_bar_inset(ax, bar_dir):
     theta = np.linspace(0, 2 * np.pi, 100)
     iax.plot(3.17 * np.cos(theta), 3.17 * np.sin(theta),
              color='0.7', lw=0.4, ls='--')
-    # 4 ring positions (small dots, neutral).
-    for cond in CONDITIONS:
-        x, y = COND_TO_XY[cond]
-        iax.plot(x, y, 'o', color='0.7', ms=4, mec='0.4', mew=0.3)
-    # Bar + arrow.
+    # Example voxel: middle of UR quadrant (small black star/dot).
+    iax.plot(2.0, 2.0, '*', color='k', ms=11, mec='k', mew=0.5, zorder=4)
+    # 4 ring positions, colored by HP-condition relative to UR voxel.
+    HP_COND_FOR_RING = {  # ring quadrant -> condition (from UR voxel)
+        'upper_right': 'close',
+        'upper_left':  'lateral',
+        'lower_right': 'lateral',
+        'lower_left':  'opposite',
+    }
+    for cond_key in CONDITIONS:
+        x, y = COND_TO_XY[cond_key]
+        c = HP_COLOR[HP_COND_FOR_RING[cond_key]]
+        iax.plot(x, y, 'o', color=c, ms=8, mec='k', mew=0.4, zorder=3)
+    # Bar + arrow (bar oriented perpendicular to motion).
     bar_kw = dict(color='k', lw=2.5, solid_capstyle='round')
     arr_kw = dict(arrowstyle='->', lw=1.5, color='k', mutation_scale=14)
     if bar_dir == 'bar_right':
