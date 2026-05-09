@@ -227,6 +227,16 @@ from retsupp.utils.data import distractor_locations  # noqa
 # condition_pars and the AF model channel order.
 ```
 
+## Plotting conventions
+
+When illustrating the spatial extent of a Gaussian (PRF, AF, dynamic
+attention pulse, etc.) on a visual-field plot, draw the circle at
+**FWHM = 2·√(2·ln 2)·σ ≈ 2.355·σ**, not at one σ. FWHM is what
+readers (and Klein et al. 2014, Itthipuripat et al., the standard
+PRF papers) draw — using σ undersells the spatial extent by ~2.4×
+and routinely confuses people. Same goes for `sigma_AF`,
+`sigma_dyn`, voxel σ markers in inset diagrams, etc.
+
 ## Conventions
 
 - All fitting scripts take a positional `subject` (int) and `--bids_folder`; SLURM array index `$SLURM_ARRAY_TASK_ID` provides the subject ID, zero-padded for the directory pattern `sub-{N:02d}`.

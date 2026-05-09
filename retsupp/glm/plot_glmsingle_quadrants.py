@@ -47,12 +47,24 @@ QUADRANT_HEMI = {
     'lower_right': 'L',
     'lower_left':  'R',
 }
-ROI_ORDER = ['V1', 'V2', 'V3', 'V3AB', 'hV4', 'LO1', 'LO2', 'TO1', 'TO2']
+ROI_ORDER = ['V1', 'V2', 'V3', 'V3AB', 'hV4', 'VO', 'LO', 'TO']
 ROI_ALIASES = {
     'V3AB': ['V3A', 'V3B'],
+    'VO': ['VO1', 'VO2'],
     'LO': ['LO1', 'LO2'],
     'TO': ['TO1', 'TO2'],
 }
+
+
+def hp_relation(quadrant: str, hp_quadrant: str) -> str:
+    """Where is HP relative to this quadrant Q? HP/orth/opposite."""
+    if quadrant == hp_quadrant:
+        return 'HP'
+    pairs = [('upper_right', 'lower_left'), ('upper_left', 'lower_right')]
+    for a, b in pairs:
+        if {quadrant, hp_quadrant} == {a, b}:
+            return 'opposite'
+    return 'orth'
 
 
 def load_quadrant_mask(stimulus_rois_dir: Path, subject: int,
@@ -136,24 +148,66 @@ def per_subject_per_quadrant(subject: int, bids_folder: Path,
             # Per-trial mean within this ROI×Q mask.
             per_trial = pe_arr[mask].mean(axis=0)[:n_trials]
 
-            # Classify each trial: target_at_Q / distractor_at_Q / neutral.
             tgt = trials['target_label'].values == quad
             dist = trials['distractor_label'].values == quad
-            target_idx = np.where(tgt & ~dist)[0]
-            dist_idx = np.where(dist & ~tgt)[0]
-            neutral_idx = np.where(~tgt & ~dist)[0]
-            for cond, idx in [('target', target_idx),
-                              ('distractor', dist_idx),
-                              ('neutral', neutral_idx)]:
-                if len(idx) == 0:
+            hp_per_trial = trials['hp_location'].values
+            # Per-trial classification:
+            #   target            : target landed at Q
+            #   distractor_HP     : distractor at Q AND run's HP == Q
+            #   distractor_orth   : distractor at Q AND HP perpendicular
+            #   distractor_opposite : distractor at Q AND HP at antipode
+            #   neutral           : nothing at Q
+            for trial_idx in range(min(len(trials), len(per_trial))):
+                if tgt[trial_idx] and not dist[trial_idx]:
+                    cond = 'target'
+                elif dist[trial_idx] and not tgt[trial_idx]:
+                    hp = hp_per_trial[trial_idx]
+                    if pd.isna(hp) or not isinstance(hp, str):
+                        cond = 'distractor_unknown'
+                    else:
+                        rel = hp_relation(quad, hp)
+                        cond = f'distractor_{rel}'   # HP/orth/opposite
+                elif not tgt[trial_idx] and not dist[trial_idx]:
+                    cond = 'neutral'
+                else:
                     continue
-                beta = float(np.nanmean(per_trial[idx]))
                 rows.append(dict(
                     subject=subject, roi=roi, quadrant=quad,
-                    condition=cond, n_trials=len(idx), n_voxels=n_vox,
-                    mean_beta=beta,
+                    condition=cond, n_voxels=n_vox,
+                    beta=float(per_trial[trial_idx]),
                 ))
     return pd.DataFrame(rows)
+
+
+def _draw_bracket(ax, x1, x2, y, h, sig_text, fontsize=12):
+    """Bracket + significance stars above two x positions."""
+    ax.plot([x1, x1, x2, x2], [y, y + h, y + h, y],
+            lw=1.2, color='k', clip_on=False)
+    ax.text((x1 + x2) / 2, y + h, sig_text,
+            ha='center', va='bottom', fontsize=fontsize, color='k',
+            clip_on=False)
+
+
+def _draw_group_bracket(ax, x_single, x_group, y, h, sig_text,
+                         fontsize=12):
+    """Bracket with one foot on x_single and one foot per x in x_group
+    (so it visually 'covers' the whole group). Stars centered above."""
+    x_max_g = max(x_group)
+    x_min_g = min(x_group)
+    # Left single foot.
+    ax.plot([x_single, x_single], [y, y + h], lw=1.2, color='k',
+            clip_on=False)
+    # Top horizontal connecting single side to far edge of group.
+    far = x_max_g if x_single < x_min_g else x_min_g
+    near_g = x_min_g if x_single < x_min_g else x_max_g
+    ax.plot([x_single, far], [y + h, y + h], lw=1.2, color='k',
+            clip_on=False)
+    # Feet at each group x (and a continuous line across the group).
+    for xg in x_group:
+        ax.plot([xg, xg], [y + h, y], lw=1.2, color='k', clip_on=False)
+    cx = (x_single + (x_min_g + x_max_g) / 2) / 2
+    ax.text(cx, y + h, sig_text, ha='center', va='bottom',
+             fontsize=fontsize, color='k', clip_on=False)
 
 
 def main():
@@ -164,6 +218,9 @@ def main():
     p.add_argument('--rois', nargs='+', default=ROI_ORDER)
     p.add_argument('--out', type=Path,
                    default=Path('notes/figures/glmsingle_quadrants.pdf'))
+    p.add_argument('--from-tsv', type=Path, default=None,
+                   help='Skip extraction; read long-format TSV directly. '
+                        'Defaults to <out>.tsv if it exists.')
     args = p.parse_args()
 
     out = args.out
@@ -175,104 +232,294 @@ def main():
     print(f'Subjects: {args.subjects}')
     print(f'ROIs: {args.rois}')
 
-    all_rows = []
-    for s in tqdm(args.subjects, desc='subjects'):
-        try:
-            df = per_subject_per_quadrant(s, bids, rois=args.rois)
-        except Exception as e:
-            print(f'sub-{s:02d}: failed ({e})'); continue
-        if len(df):
-            all_rows.append(df)
-    if not all_rows:
-        raise RuntimeError('No subject yielded data.')
-    df = pd.concat(all_rows, ignore_index=True)
+    tsv_path = args.from_tsv if args.from_tsv else out.with_suffix('.tsv')
+    if tsv_path.exists() and not args.from_tsv:
+        print(f'Reading cached TSV: {tsv_path}  '
+              f'(delete to force re-extract)')
+    if tsv_path.exists():
+        df = pd.read_csv(tsv_path, sep='\t')
+        print(f'Loaded {len(df)} rows from {tsv_path}')
+    else:
+        all_rows = []
+        for s in tqdm(args.subjects, desc='subjects'):
+            try:
+                d = per_subject_per_quadrant(s, bids, rois=args.rois)
+            except Exception as e:
+                print(f'sub-{s:02d}: failed ({e})'); continue
+            if len(d):
+                all_rows.append(d)
+        if not all_rows:
+            raise RuntimeError('No subject yielded data.')
+        df = pd.concat(all_rows, ignore_index=True)
+        df.to_csv(tsv_path, sep='\t', index=False)
+        print(f'\nWrote: {tsv_path}  ({len(df)} rows)')
 
-    # Save the long-format TSV alongside the figure.
-    tsv_out = out.with_suffix('.tsv')
-    df.to_csv(tsv_out, sep='\t', index=False)
-    print(f'\nLong-format data: {tsv_out}  ({len(df)} rows)')
-    print(df.groupby(['roi', 'condition']).size().unstack(fill_value=0))
-
-    # Collapse across quadrants per (subject, ROI, condition) by averaging.
+    # Collapse: mean beta per (subject, ROI, condition) — averages over
+    # quadrants AND trials within each (subject, ROI, condition) cell.
     df_coll = (df.groupby(['subject', 'roi', 'condition'], as_index=False)
-                  ['mean_beta'].mean())
+                  ['beta'].mean()
+                  .rename(columns={'beta': 'mean_beta'}))
 
-    cond_order = ['target', 'distractor', 'neutral']
-    cond_color = {'target': '#2ca02c', 'distractor': '#d62728',
-                  'neutral': '0.6'}
+    cond_order = ['neutral', 'target',
+                  'distractor_opposite', 'distractor_orth', 'distractor_HP']
+    # Cluster the 3 distractor conditions tightly; gap between groups.
+    cond_x = {
+        'neutral':              0.0,
+        'target':               1.6,
+        'distractor_opposite':  3.2,
+        'distractor_orth':      3.7,
+        'distractor_HP':        4.2,
+    }
+    cond_color = {
+        'neutral': '0.55',
+        'target': '#2ca02c',
+        'distractor_opposite': '#1f77b4',
+        'distractor_orth': '#9467bd',
+        'distractor_HP': '#d62728',
+    }
+    cond_short = {
+        'neutral': 'Neutral',
+        'target': 'Target',
+        'distractor_opposite': 'D-opp',
+        'distractor_orth': 'D-orth',
+        'distractor_HP': 'D-HP',
+    }
 
     with PdfPages(out) as pdf:
-        # ---- Page 1: per-ROI bars (group mean ± SEM across subjects).
+        # Page 1: per-ROI swarm plots with group mean ± SEM + brackets.
+        from scipy import stats as scistats
         rois_pres = [r for r in args.rois if r in df_coll['roi'].unique()]
         n = len(rois_pres)
-        ncol = 4 if n >= 4 else n
-        nrow = int(np.ceil(n / ncol))
-        fig, axes = plt.subplots(nrow, ncol, figsize=(3.6 * ncol, 3.0 * nrow),
-                                  sharey=True, squeeze=False)
+        ncol = 3
+        nrow = int(np.ceil((n + 1) / ncol))   # +1 for the legend cell
+        fig, axes = plt.subplots(nrow, ncol, figsize=(5.6 * ncol, 5.0 * nrow),
+                                  sharey=False, squeeze=False)
         axes = axes.flatten()
+        rng = np.random.default_rng(0)
         for i, roi in enumerate(rois_pres):
             ax = axes[i]
             roi_df = df_coll[df_coll['roi'] == roi]
-            xs, means, sems, colors = [], [], [], []
+
+            means_sems = []
             for ci, cond in enumerate(cond_order):
                 vals = roi_df.loc[roi_df['condition'] == cond,
                                     'mean_beta'].values
                 if len(vals) == 0:
                     continue
-                xs.append(ci)
-                means.append(np.mean(vals))
-                sems.append(np.std(vals, ddof=1) / np.sqrt(len(vals))
+                xc = cond_x[cond]
+                jitter = rng.normal(0, 0.07, len(vals))
+                ax.scatter([xc] * len(vals) + jitter, vals,
+                           color=cond_color[cond], alpha=0.45, s=30,
+                           edgecolors='white', linewidths=0.4, zorder=2)
+                m = float(np.mean(vals))
+                sem = float(np.std(vals, ddof=1) / np.sqrt(len(vals))
                             if len(vals) > 1 else 0.0)
-                colors.append(cond_color[cond])
-            ax.bar(xs, means, yerr=sems, color=colors, edgecolor='k',
-                   capsize=3, alpha=0.85)
-            # individual subjects as scatter
-            for ci, cond in enumerate(cond_order):
-                vals = roi_df.loc[roi_df['condition'] == cond,
-                                    'mean_beta'].values
-                ax.scatter([ci] * len(vals) + np.random.normal(0, 0.05, len(vals)),
-                            vals, color=cond_color[cond], alpha=0.4,
-                            s=12, edgecolors='none')
-            ax.set_xticks(range(len(cond_order)))
-            ax.set_xticklabels(cond_order, rotation=20, fontsize=8)
-            ax.axhline(0, color='k', lw=0.5, alpha=0.3)
-            ax.set_title(roi, fontsize=11, weight='bold')
+                means_sems.append((m, sem))
+                ax.errorbar([xc], [m], yerr=[sem], fmt='o',
+                            color='k', mfc='k', mec='k',
+                            markersize=10, capsize=6, capthick=2.2,
+                            elinewidth=2.2, zorder=3)
+
+            # Y-lim: zoom on means ± SEM bars so the small differences
+            # are readable. Headroom only for the bracket stack at top.
+            ms = [x[0] for x in means_sems]
+            sems = [x[1] for x in means_sems]
+            m_lo = min(m - 2.5 * s for m, s in zip(ms, sems))
+            m_hi = max(m + 2.5 * s for m, s in zip(ms, sems))
+            span = max(m_hi - m_lo, 1e-3)
+            lo = m_lo - 0.05 * span
+            hi = m_hi
+            ax.set_ylim(lo, hi + 0.85 * span)
+            xs = [cond_x[c] for c in cond_order]
+            ax.set_xlim(min(xs) - 0.6, max(xs) + 0.6)
+            ax.set_xticks(xs)
+            ax.set_xticklabels([cond_short[c] for c in cond_order],
+                                rotation=30, fontsize=12, ha='right')
+            ax.tick_params(axis='y', labelsize=11)
+            ax.axhline(0, color='k', lw=0.6, alpha=0.4)
+            ax.set_title(roi, fontsize=16, weight='bold')
             if i % ncol == 0:
-                ax.set_ylabel('mean β at quadrant\n(collapsed over UR/UL/LL/LR)',
-                              fontsize=8)
+                ax.set_ylabel('mean β  (per-quadrant, collapsed)',
+                              fontsize=13)
             ax.grid(alpha=0.12, axis='y')
-        for j in range(len(rois_pres), len(axes)):
+
+            # Brackets + stars for the contrasts of interest.
+            pivot = roi_df.pivot_table(index='subject', columns='condition',
+                                         values='mean_beta')
+            d_cols = [c for c in
+                      ('distractor_opposite', 'distractor_orth',
+                       'distractor_HP') if c in pivot.columns]
+            if len(d_cols) >= 2:
+                pivot['all_distractors'] = pivot[d_cols].mean(axis=1)
+            d_centroid = float(np.mean([cond_x[c] for c in d_cols]))
+            xpos = dict(cond_x)
+            xpos['all_distractors'] = d_centroid
+            contrasts = [
+                ('distractor_HP', 'distractor_opposite'),
+                ('distractor_HP', 'distractor_orth'),
+                ('target', 'neutral'),
+                ('target', 'all_distractors'),
+                ('neutral', 'all_distractors'),
+                ('target', 'distractor_HP'),
+                ('neutral', 'distractor_HP'),
+            ]
+            ymax = ax.get_ylim()[1]
+            ymin = ax.get_ylim()[0]
+            level_step = 0.065 * (ymax - ymin)
+            level_y = m_hi + 0.10 * span
+            for a, b in contrasts:
+                if a not in pivot.columns or b not in pivot.columns:
+                    continue
+                paired = pivot[[a, b]].dropna()
+                if len(paired) < 5:
+                    continue
+                t, p = scistats.ttest_rel(paired[a], paired[b])
+                if p < 0.001:
+                    sig = '***'
+                elif p < 0.01:
+                    sig = '**'
+                elif p < 0.05:
+                    sig = '*'
+                else:
+                    sig = 'n.s.'
+                if sig == 'n.s.':
+                    continue   # skip n.s. brackets to keep plot clean
+                xa = xpos[a]
+                xb = xpos[b]
+                bh = 0.018 * (ymax - ymin)
+                if 'all_distractors' in (a, b):
+                    x_single = xa if a != 'all_distractors' else xb
+                    x_group = [cond_x[c] for c in d_cols]
+                    _draw_group_bracket(ax, x_single, x_group,
+                                          level_y, bh, sig, fontsize=14)
+                else:
+                    _draw_bracket(ax, min(xa, xb), max(xa, xb),
+                                  level_y, bh, sig, fontsize=14)
+                level_y += level_step
+
+        # Graphical inset in last cell (#8): per-condition mini-diamonds.
+        # Each row shows the 4-position search array (HPD always on top)
+        # with the focal Q highlighted in the condition color, and a
+        # T/D/- letter denoting what landed there.
+        legend_ax = axes[len(rois_pres)]
+        legend_ax.set_xlim(0, 1); legend_ax.set_ylim(0, 1)
+        legend_ax.set_xticks([]); legend_ax.set_yticks([])
+        for spine in legend_ax.spines.values():
+            spine.set_visible(False)
+
+        legend_ax.text(0.50, 0.96, 'What landed at quadrant Q',
+                        transform=legend_ax.transAxes,
+                        fontsize=15, weight='bold', va='top', ha='center')
+        legend_ax.text(0.50, 0.90,
+                        '(HPD = high-prob distractor location, fixed per run)',
+                        transform=legend_ax.transAxes,
+                        fontsize=10, color='0.40', va='top', ha='center',
+                        style='italic')
+
+        # Position scheme inside each mini-diamond (axes-fraction offsets
+        # from the icon's centre, with the icon centred at icon_cx).
+        offsets = {
+            'top':    ( 0.000,  0.045),   # HPD always here
+            'right':  ( 0.045,  0.000),
+            'bottom': ( 0.000, -0.045),
+            'left':   (-0.045,  0.000),
+        }
+        # For each condition: (focal positions, letter-on-focal).
+        # Distractor-orth pools BOTH perpendicular slots, so both are
+        # highlighted (left + right). Other conditions: one focal slot.
+        cond_focal = {
+            'neutral':              (['right'],         '–'),
+            'target':               (['right'],         'T'),
+            'distractor_opposite':  (['bottom'],        'D'),
+            'distractor_orth':      (['right', 'left'], 'D'),
+            'distractor_HP':        (['top'],           'D'),
+        }
+
+        from matplotlib.patches import Circle
+        row_top = 0.80
+        row_h = 0.15
+        icon_cx = 0.16
+        for k, cond in enumerate(cond_order):
+            cy = row_top - k * row_h
+            focal_list, letter = cond_focal[cond]
+
+            # Outer dotted ring suggests the search array.
+            ring = Circle((icon_cx, cy), 0.052, ec='0.75', fc='none',
+                          ls=':', lw=0.8, transform=legend_ax.transAxes,
+                          clip_on=False)
+            legend_ax.add_patch(ring)
+
+            for pos_name, (dx, dy) in offsets.items():
+                px, py = icon_cx + dx, cy + dy
+                is_focal = (pos_name in focal_list)
+                is_hpd = (pos_name == 'top')
+                if is_hpd:
+                    hpd_marker = Circle((px, py), 0.020,
+                                         ec='#d62728', fc='none',
+                                         ls='--', lw=1.0,
+                                         transform=legend_ax.transAxes,
+                                         clip_on=False, zorder=2)
+                    legend_ax.add_patch(hpd_marker)
+                if is_focal:
+                    legend_ax.scatter([px], [py], s=240,
+                                       color=cond_color[cond], alpha=0.85,
+                                       edgecolors='black', linewidths=1.0,
+                                       transform=legend_ax.transAxes,
+                                       zorder=4, clip_on=False)
+                    legend_ax.text(px, py, letter, ha='center',
+                                    va='center', fontsize=11,
+                                    fontweight='bold', color='white',
+                                    transform=legend_ax.transAxes,
+                                    zorder=5)
+                else:
+                    legend_ax.scatter([px], [py], s=70,
+                                       color='0.85',
+                                       edgecolors='0.55', linewidths=0.6,
+                                       transform=legend_ax.transAxes,
+                                       zorder=3, clip_on=False)
+
+            # Bold short label + description right of the icon.
+            legend_ax.text(0.32, cy + 0.022, cond_short[cond],
+                            transform=legend_ax.transAxes,
+                            fontsize=14, va='center', weight='bold',
+                            color=cond_color[cond])
+            descs = {
+                'neutral': 'nothing at Q',
+                'target': 'target at Q',
+                'distractor_opposite': 'distractor at Q  (Q opposite HPD)',
+                'distractor_orth':     'distractor at Q  (Q perpendicular)',
+                'distractor_HP':       'distractor at Q  (Q = HPD)',
+            }
+            legend_ax.text(0.32, cy - 0.025, descs[cond],
+                            transform=legend_ax.transAxes,
+                            fontsize=10, va='center', color='0.30')
+
+        # HPD legend: tiny dashed-ring sample.
+        from matplotlib.patches import Circle as _C
+        legend_ax.add_patch(_C((0.05, 0.04), 0.015, ec='#d62728',
+                                fc='none', ls='--', lw=1.2,
+                                transform=legend_ax.transAxes,
+                                clip_on=False))
+        legend_ax.text(0.09, 0.04, '= HPD (top of each icon)',
+                        transform=legend_ax.transAxes, fontsize=9,
+                        va='center', color='#d62728')
+        legend_ax.text(0.55, 0.04,
+                        '*** p<0.001   ** p<0.01   * p<0.05',
+                        transform=legend_ax.transAxes, fontsize=9,
+                        color='0.30', va='center')
+
+        # Hide any remaining unused axes.
+        for j in range(len(rois_pres) + 1, len(axes)):
             axes[j].axis('off')
+
         n_subs = df_coll['subject'].nunique()
         fig.suptitle(
-            f'GLMSingle: response at quadrant where target/distractor landed\n'
-            f'collapsed over UR/UL/LL/LR; n={n_subs} subjects',
-            fontsize=12, weight='bold')
-        fig.tight_layout(rect=[0, 0, 1, 0.94])
+            f'GLMSingle β at retinotopic quadrant: '
+            f'distractor split by HP-relation '
+            f'(n={n_subs}, collapsed UR/UL/LL/LR)',
+            fontsize=18, weight='bold')
+        fig.tight_layout(rect=[0, 0, 1, 0.95])
         pdf.savefig(fig); plt.close(fig)
-
-        # ---- Page 2: paired (target − distractor) per ROI, per subject.
-        diff = (df_coll.pivot_table(index=['subject', 'roi'],
-                                      columns='condition',
-                                      values='mean_beta')
-                    .reset_index())
-        if 'target' in diff.columns and 'distractor' in diff.columns:
-            diff['t_minus_d'] = diff['target'] - diff['distractor']
-            fig, ax = plt.subplots(figsize=(8, 5))
-            order = [r for r in args.rois if r in diff['roi'].unique()]
-            sns.boxplot(data=diff, x='roi', y='t_minus_d', order=order,
-                         color='lightgray', ax=ax, showfliers=False)
-            sns.stripplot(data=diff, x='roi', y='t_minus_d', order=order,
-                           color='k', size=3, alpha=0.5, ax=ax, jitter=0.2)
-            ax.axhline(0, color='r', ls='--', lw=0.8)
-            ax.set_ylabel('mean β: target − distractor   (at quadrant)',
-                          fontsize=10)
-            ax.set_xlabel('ROI', fontsize=10)
-            ax.set_title('Target vs Distractor response at the quadrant\n'
-                         '(positive = bigger response to target than '
-                         'distractor at the same RF)', fontsize=11)
-            fig.tight_layout()
-            pdf.savefig(fig); plt.close(fig)
 
     print(f'\nDone: {out}')
 
