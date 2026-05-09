@@ -33,6 +33,12 @@ subject="${SLURM_ARRAY_TASK_ID}"
 echo "Host: $(hostname) | Job ${SLURM_JOB_ID}.${SLURM_ARRAY_TASK_ID} | sub-${subject} | model ${MODEL}"
 echo "Started: $(date)"
 
+# Enable lmod and load CUDA before conda. Required on V100/A100/H100
+# nodes — those don't have libnvrtc.so / libcudnn in the env's bundled
+# CUDA. L4 nodes work without it but loading is harmless.
+source /etc/profile.d/lmod.sh 2>/dev/null
+module load cuda/12.6.3 2>&1 || echo "WARN: module load cuda failed"
+
 source "$HOME/data/miniforge3/etc/profile.d/conda.sh"
 conda activate retsupp_cuda
 export PYTHONUNBUFFERED=1
