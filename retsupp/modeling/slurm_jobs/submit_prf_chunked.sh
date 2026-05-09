@@ -37,11 +37,16 @@ case "$MODEL" in
 esac
 
 ARRAY_SIZE=$(( N_SUBS * N_CHUNKS ))
+# Throttle: max concurrent running tasks. Caps simultaneous NFS profile
+# reads at job start ("user env retrieval failed" mitigation). 50 is a
+# safe default for our cluster.
+THROTTLE="${THROTTLE:-50}"
+
 echo "Submitting: MODEL=$MODEL, N_CHUNKS=$N_CHUNKS, N_SUBS=$N_SUBS"
 echo "  per-task: ~$VOX_PER_CHUNK voxels, --mem=${MEM_GB}G, --cpus=16"
-echo "  array: 1-$ARRAY_SIZE"
+echo "  array: 1-$ARRAY_SIZE%$THROTTLE"
 
-sbatch --array="1-$ARRAY_SIZE" \
+sbatch --array="1-$ARRAY_SIZE%$THROTTLE" \
        --mem="${MEM_GB}G" \
        --export="ALL,MODEL=$MODEL,N_CHUNKS=$N_CHUNKS,N_SUBS=$N_SUBS" \
        "$(dirname "$0")/fit_prf_chunked.sh"

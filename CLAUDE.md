@@ -120,26 +120,30 @@ fraction of tasks fail with `user env retrieval failed requeued held`
 and end up stuck pending. They don't auto-retry; you have to
 `scontrol release <jobid>` them by hand.
 
-**Mitigation in every large-array SLURM script**: add a random
-startup jitter at the very top, BEFORE the `source conda.sh` /
-`exec >$LOGFILE` lines:
+**Primary mitigation: SLURM array throttle.** Cap how many array
+tasks run simultaneously, e.g. `--array=1-1620%50` runs at most 50
+concurrently. NFS profile reads are then bounded regardless of array
+size. Default to `%50` for arrays >100 tasks. The cost is wall time
+(throughput halves vs unthrottled), but it's the only mitigation that
+actually works for arrays of 500+ tasks.
+
+**Secondary: random startup jitter** in the SLURM script. Pre-existing
+mitigation, kept as defense-in-depth even when throttled:
 
 ```bash
 # Spread out NFS profile reads across a 60-second window.
 sleep $(( (RANDOM % 60) + 1 ))
 ```
 
-For arrays of ~1500+ tasks, 60 s is a sensible jitter (~25 task starts
-per second on average). For ≤300 tasks, 30 s is enough.
-
-The cost is trivial (~30 s of wall time per task) compared to the
-wasted re-runs of held-then-released tasks. If you still see held
-tasks despite the jitter, periodically run:
+If you still see held tasks despite both mitigations, release them:
 
 ```bash
 held=$(squeue --me -t PD -r --format="%i %r" | grep -i "user env" | awk '{print $1}')
 echo "$held" | xargs -I {} scontrol release {}
 ```
+
+The provided `submit_prf_chunked.sh` already applies `%50` throttle
+by default; override via `THROTTLE=N bash submit_prf_chunked.sh ...`.
 - Source `$HOME/init_conda.sh` then `source activate neural_priors2`.
 
 There is no `--account=zne.uzh` in these scripts — add it when creating new ones (cluster requirement per global instructions).
