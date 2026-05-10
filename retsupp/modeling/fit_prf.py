@@ -203,6 +203,7 @@ def main(subject: int, model_label: int,
     chunked_mode = chunk_index is not None
     if chunked_mode and n_chunks is None:
         raise ValueError("chunk_index requires n_chunks")
+    fit_t0 = time.time()
 
     # Some subjects (e.g. sub-01) lack a run-1 brain_mask; use whatever
     # the first available run is for that session.
@@ -307,6 +308,29 @@ def main(subject: int, model_label: int,
     if output_suffix:
         base_dir += f'.{output_suffix}'
 
+    elapsed_s = float(time.time() - fit_t0)
+    # Per-fit metadata sidecar — tells you what produced these NIfTIs.
+    import json, os, socket, platform
+    fit_meta = {
+        'model': int(model_label),
+        'subject': int(subject),
+        'paradigm_kind': paradigm_kind,
+        'resolution': int(resolution),
+        'voxel_chunk_size': int(voxel_chunk_size),
+        'max_n_iterations': int(max_n_iterations),
+        'n_voxels': int(data.shape[1]),
+        'n_timepoints': int(data.shape[0]),
+        'chunked_mode': bool(chunked_mode),
+        'chunk_index': (None if chunk_index is None else int(chunk_index)),
+        'n_chunks': (None if n_chunks is None else int(n_chunks)),
+        'elapsed_seconds': round(elapsed_s, 2),
+        'host': socket.gethostname(),
+        'gpu': os.environ.get('CUDA_VISIBLE_DEVICES'),
+        'slurm_job_id': os.environ.get('SLURM_JOB_ID'),
+        'slurm_array_task_id': os.environ.get('SLURM_ARRAY_TASK_ID'),
+        'python': platform.python_version(),
+    }
+
     if chunked_mode:
         # Save partial chunk: an NPZ with the voxel indices and a column
         # array per parameter. Cheap; merger reassembles.
@@ -318,13 +342,20 @@ def main(subject: int, model_label: int,
         cols = {f'col_{c}': pars[c].values for c in pars.columns}
         np.savez(npz_path, voxel_indices=chunk_idx, columns=list(pars.columns),
                  **cols)
+        # Per-chunk metadata sidecar (merge will summarise across chunks).
+        with open(npz_path.with_suffix('.json'), 'w') as fh:
+            json.dump(fit_meta, fh, indent=2)
         print(f"Saved chunk: {npz_path}")
         return
 
     target_dir = derivs / base_dir \
         / f'model{model_label}' / f'sub-{subject:02d}'
     save_pars(pars, masker, target_dir, subject)
+    meta_path = target_dir / f'sub-{subject:02d}_fit_metadata.json'
+    with open(meta_path, 'w') as fh:
+        json.dump(fit_meta, fh, indent=2)
     print(f"Saved: {target_dir}")
+    print(f"Saved metadata: {meta_path}")
 
 
 if __name__ == "__main__":

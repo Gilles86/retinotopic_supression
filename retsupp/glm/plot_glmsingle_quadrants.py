@@ -360,8 +360,6 @@ def main():
                 ('target', 'neutral'),
                 ('target', 'all_distractors'),
                 ('neutral', 'all_distractors'),
-                ('target', 'distractor_HP'),
-                ('neutral', 'distractor_HP'),
             ]
             ymax = ax.get_ylim()[1]
             ymin = ax.get_ylim()[0]
