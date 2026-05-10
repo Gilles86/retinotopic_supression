@@ -4,7 +4,7 @@ Run::
 
     ~/mambaforge/envs/retsupp/bin/python -m retsupp.decode.smoke_test \\
         --bids-folder /data/ds-retsupp \\
-        --resolution 30 --max-voxels 200 \\
+        --resolution 30 --max-voxels 250 \\
         --max-n-iterations 1000
 
 Outputs
@@ -33,18 +33,23 @@ from retsupp.decode.decoder import (
 def main(bids_folder: str = '/data/ds-retsupp',
          subject: int = 2, roi: str = 'V1',
          session: int = 1, run: int = 1,
-         resolution: int = 30, max_voxels: int = 200,
-         l2_norm: float = 0.01, learning_rate: float = 0.01,
-         max_n_iterations: int = 1000,
-         resid_max_iter: int = 500,
+         resolution: int = 30, max_voxels: int = 250,
+         r2_min: float = 0.0, sd_min: float = 0.5, ecc_max: float = 6.0,
+         l2_norm: float = 0.01, learning_rate: float = 0.5,
+         max_n_iterations: int = 600,
+         resid_max_iter: int = 300,
          out_fig: str = 'notes/figures/decoded_smoke_sub-02_V1.pdf',
          out_tsv: str = 'notes/data/decoded_smoke_sub-02_V1_ring.tsv',
+         out_npz: str | None = 'notes/data/decoded_smoke_sub-02_V1.npz',
          repo_root: str | None = None):
     repo = Path(repo_root) if repo_root else Path(__file__).resolve().parents[2]
     out_fig_p = repo / out_fig
     out_tsv_p = repo / out_tsv
+    out_npz_p = (repo / out_npz) if out_npz else None
     out_fig_p.parent.mkdir(parents=True, exist_ok=True)
     out_tsv_p.parent.mkdir(parents=True, exist_ok=True)
+    if out_npz_p is not None:
+        out_npz_p.parent.mkdir(parents=True, exist_ok=True)
 
     sub = Subject(subject, bids_folder=bids_folder)
 
@@ -53,6 +58,7 @@ def main(bids_folder: str = '/data/ds-retsupp',
     decoded, grid, voxel_idx, omega, pars_df, bold = decode_run(
         sub, session=session, run=run, roi=roi,
         resolution=resolution, max_voxels=max_voxels,
+        r2_min=r2_min, sd_min=sd_min, ecc_max=ecc_max,
         l2_norm=l2_norm, learning_rate=learning_rate,
         max_n_iterations=max_n_iterations,
         resid_max_iter=resid_max_iter,
@@ -106,6 +112,19 @@ def main(bids_folder: str = '/data/ds-retsupp',
     plt.close(fig)
     print(f'Wrote: {out_fig_p}')
 
+    if out_npz_p is not None:
+        np.savez_compressed(
+            out_npz_p,
+            decoded=decoded_arr.astype(np.float32),
+            paradigm=par.astype(np.float32),
+            grid=grid.astype(np.float32),
+            extent=np.array(extent, dtype=np.float32),
+            subject=np.array(subject), roi=np.array(roi),
+            session=np.array(session), run=np.array(run),
+        )
+        print(f'Wrote: {out_npz_p}  (shape decoded={decoded_arr.shape}, '
+              f'paradigm={par.shape})')
+
     # Per-frame ring-position drives.
     per_ring = sample_at_ring_positions(decoded, grid, ring_disk_radius=0.4)
     hp_for_runs = sub.get_hpd_locations()
@@ -134,15 +153,24 @@ if __name__ == '__main__':
     p.add_argument('--session', type=int, default=1)
     p.add_argument('--run', type=int, default=1)
     p.add_argument('--resolution', type=int, default=30)
-    p.add_argument('--max-voxels', type=int, default=200)
+    p.add_argument('--max-voxels', type=int, default=250)
+    p.add_argument('--r2-min', type=float, default=0.0)
+    p.add_argument('--sd-min', type=float, default=0.5)
+    p.add_argument('--ecc-max', type=float, default=6.0)
     p.add_argument('--l2-norm', type=float, default=0.01)
-    p.add_argument('--learning-rate', type=float, default=0.01)
-    p.add_argument('--max-n-iterations', type=int, default=1000)
-    p.add_argument('--resid-max-iter', type=int, default=500)
+    p.add_argument('--learning-rate', type=float, default=0.5)
+    p.add_argument('--max-n-iterations', type=int, default=600)
+    p.add_argument('--resid-max-iter', type=int, default=300)
+    p.add_argument('--out-npz', default='notes/data/decoded_smoke_sub-02_V1.npz',
+                   help='Save full decoded tensor + paradigm + grid '
+                        'for the movie renderer. Pass empty string to skip.')
     a = p.parse_args()
     main(bids_folder=a.bids_folder, subject=a.subject, roi=a.roi,
          session=a.session, run=a.run, resolution=a.resolution,
-         max_voxels=a.max_voxels, l2_norm=a.l2_norm,
+         max_voxels=a.max_voxels,
+         r2_min=a.r2_min, sd_min=a.sd_min, ecc_max=a.ecc_max,
+         l2_norm=a.l2_norm,
          learning_rate=a.learning_rate,
          max_n_iterations=a.max_n_iterations,
-         resid_max_iter=a.resid_max_iter)
+         resid_max_iter=a.resid_max_iter,
+         out_npz=a.out_npz if a.out_npz else None)

@@ -57,19 +57,29 @@ def load_prf_pars(sub, model: int = 4) -> dict[str, np.ndarray]:
 
 def select_roi_voxels(sub, roi: str, prf: dict, masker, *,
                       sd_min: float = 0.5, r2_min: float = 0.05,
+                      ecc_max: float = 6.0,
                       max_voxels: int | None = 250) -> np.ndarray:
     """Indices into the BOLD-mask flattened array for ROI voxels passing QC.
 
-    QC matches the lesson-7 recipe: drop phantom-perfect voxels (sd < 0.5),
-    require r2 > r2_min, drop any with non-finite PRF parameter. Optionally
-    cap to the top-``max_voxels`` by r2.
+    QC:
+    - Voxel inside ``roi`` (Benson retinotopic atlas via Subject).
+    - All PRF parameters finite.
+    - Phantom-perfect filter: sd >= sd_min (drops sd~=0 voxels with R^2=1).
+    - R^2 > r2_min.
+    - PRF eccentricity sqrt(x^2 + y^2) <= ecc_max. Drops voxels whose
+      PRF centres ran away far outside the bar aperture (3.17 deg);
+      such voxels' RFs evaluated on the in-FOV grid are ~0 and
+      contribute nothing to decoding while inflating omega.
+    - Cap to top-``max_voxels`` by R^2 to bound compute.
     """
     roi_mask = sub.get_retinotopic_roi(roi=roi, bold_space=True)
     roi_flat = masker.transform(roi_mask).flatten().astype(bool)
     sd = prf['sd']
     r2 = prf['r2']
+    ecc = np.sqrt(prf['x'] ** 2 + prf['y'] ** 2)
     finite = np.all(np.stack([np.isfinite(prf[p]) for p in PRF_PARS]), axis=0)
-    keep = roi_flat & finite & (sd >= sd_min) & (r2 > r2_min)
+    keep = (roi_flat & finite & (sd >= sd_min) & (r2 > r2_min)
+            & (ecc <= ecc_max))
     idx = np.where(keep)[0]
     if max_voxels is not None and len(idx) > max_voxels:
         order = np.argsort(-r2[idx])  # best r2 first
@@ -116,16 +126,25 @@ def make_dog_model(grid_coords: np.ndarray, paradigm: np.ndarray,
 def decode_run(sub, session: int, run: int, *,
                roi: str = 'V1',
                resolution: int = 30,
-               max_voxels: int = 200,
+               max_voxels: int = 250,
                sd_min: float = 0.5,
-               r2_min: float = 0.05,
+               r2_min: float = 0.0,
+               ecc_max: float = 6.0,
                l2_norm: float = 0.01,
-               learning_rate: float = 0.01,
-               max_n_iterations: int = 1000,
-               resid_max_iter: int = 500,
+               learning_rate: float = 0.5,
+               max_n_iterations: int = 600,
+               min_n_iterations: int = 200,
+               resid_max_iter: int = 300,
                progressbar: bool = True,
                verbose: bool = True):
-    """Decode one run's BOLD to a per-TR stimulus map.
+    """Decode one run of cleaned BOLD into a per-TR stimulus map.
+
+    The default ``learning_rate`` is intentionally large (0.5).  With
+    L2-on-the-bijector-transformed-pars and the cleaned-BOLD scale, the
+    gradient at the empty-stimulus init (~1e-6) is small relative to
+    Adam's denominator, so a small lr (e.g. 0.01 from the tutorial)
+    leaves the decoded stimulus stuck at zero.  lr=0.5 reliably escapes
+    that flat region in <50 iterations.
 
     Returns
     -------
@@ -149,6 +168,7 @@ def decode_run(sub, session: int, run: int, *,
     prf, masker = load_prf_pars(sub, model=4)
     voxel_idx = select_roi_voxels(sub, roi=roi, prf=prf, masker=masker,
                                   sd_min=sd_min, r2_min=r2_min,
+                                  ecc_max=ecc_max,
                                   max_voxels=max_voxels)
     if verbose:
         print(f'  ROI {roi}: {len(voxel_idx)} voxels kept '
@@ -189,6 +209,7 @@ def decode_run(sub, session: int, run: int, *,
                         parameters=pars_df.astype(np.float32))
     decoded = sf.fit(l2_norm=l2_norm, learning_rate=learning_rate,
                      max_n_iterations=max_n_iterations,
+                     min_n_iterations=min_n_iterations,
                      progressbar=progressbar)
 
     return decoded, grid, voxel_idx, omega, pars_df, bold

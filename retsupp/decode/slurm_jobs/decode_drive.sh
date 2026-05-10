@@ -54,7 +54,10 @@ python -u $HOME/git/retsupp/retsupp/decode/run_decode.py "$SUB" \
     --bids-folder "$bids_folder" \
     --resolution 30 \
     --max-voxels 200 \
-    --max-n-iterations 800 \
-    --resid-max-iter 400
+    --r2-min 0.0 \
+    --ecc-max 6.0 \
+    --learning-rate 0.5 \
+    --max-n-iterations 600 \
+    --resid-max-iter 300
 
 echo "[$(date)] done"

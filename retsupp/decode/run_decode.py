@@ -26,12 +26,19 @@ from retsupp.decode.decoder import (
 
 def run_one(subject: int, roi: str, *, bids_folder: str,
             resolution: int = 30, max_voxels: int = 200,
-            l2_norm: float = 0.01, learning_rate: float = 0.01,
-            max_n_iterations: int = 1000, resid_max_iter: int = 500,
+            l2_norm: float = 0.01, learning_rate: float = 0.5,
+            max_n_iterations: int = 600, resid_max_iter: int = 300,
             disk_radius: float = 0.4,
-            sd_min: float = 0.5, r2_min: float = 0.05,
+            sd_min: float = 0.5, r2_min: float = 0.0, ecc_max: float = 6.0,
             out_dir: Path | None = None,
             progressbar: bool = False) -> Path:
+    """The default ``learning_rate`` is intentionally large (0.5).
+
+    With cleaned-BOLD-scale residuals the gradient at the empty-stimulus
+    init (~1e-6) is small for Adam; the smaller lr=0.01 from the
+    tutorial leaves the decoder stuck at zero. lr=0.5 reliably escapes
+    that flat region.
+    """
     sub = Subject(subject, bids_folder=bids_folder)
     hp_for_runs = sub.get_hpd_locations()
 
@@ -50,7 +57,7 @@ def run_one(subject: int, roi: str, *, bids_folder: str,
                 decoded, grid, _, _, _, _ = decode_run(
                     sub, session=ses, run=run, roi=roi,
                     resolution=resolution, max_voxels=max_voxels,
-                    sd_min=sd_min, r2_min=r2_min,
+                    sd_min=sd_min, r2_min=r2_min, ecc_max=ecc_max,
                     l2_norm=l2_norm, learning_rate=learning_rate,
                     max_n_iterations=max_n_iterations,
                     resid_max_iter=resid_max_iter,
@@ -91,12 +98,13 @@ def main():
     p.add_argument('--resolution', type=int, default=30)
     p.add_argument('--max-voxels', type=int, default=200)
     p.add_argument('--l2-norm', type=float, default=0.01)
-    p.add_argument('--learning-rate', type=float, default=0.01)
-    p.add_argument('--max-n-iterations', type=int, default=1000)
-    p.add_argument('--resid-max-iter', type=int, default=500)
+    p.add_argument('--learning-rate', type=float, default=0.5)
+    p.add_argument('--max-n-iterations', type=int, default=600)
+    p.add_argument('--resid-max-iter', type=int, default=300)
     p.add_argument('--disk-radius', type=float, default=0.4)
     p.add_argument('--sd-min', type=float, default=0.5)
-    p.add_argument('--r2-min', type=float, default=0.05)
+    p.add_argument('--r2-min', type=float, default=0.0)
+    p.add_argument('--ecc-max', type=float, default=6.0)
     p.add_argument('--out-dir', type=Path, default=None)
     p.add_argument('--progressbar', action='store_true')
     args = p.parse_args()
@@ -107,7 +115,7 @@ def main():
             max_n_iterations=args.max_n_iterations,
             resid_max_iter=args.resid_max_iter,
             disk_radius=args.disk_radius,
-            sd_min=args.sd_min, r2_min=args.r2_min,
+            sd_min=args.sd_min, r2_min=args.r2_min, ecc_max=args.ecc_max,
             out_dir=args.out_dir,
             progressbar=args.progressbar)
 
