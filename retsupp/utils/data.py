@@ -964,6 +964,39 @@ class Subject(object):
             masker = input_data.NiftiMasker(mask_img=roi_mask)
         return masker.fit_transform(fn).squeeze()
 
+    def get_aperture_mass_fraction(self, model=4, aperture_radius=3.17,
+                                   return_images=False):
+        """Per-voxel fraction of PRF mass inside the bar PRF aperture.
+
+        Uses the 1D normal CDF along the radial direction:
+            f_inside ≈ 1 − Φ((d − R) / σ)
+        where d = ‖(x, y)‖ is the PRF eccentricity, σ is the PRF size,
+        and R is the aperture radius (default 3.17° — the same value
+        used by `retsupp.visualize.utils.filter_prf_inside_aperture`).
+
+        A standard 'well-mapped voxel' criterion thresholds this at ≥ 0.5
+        (≥ 50% mass inside aperture).
+
+        Args:
+            model: PRF model label (default 4 = canonical mean fit).
+            aperture_radius: aperture radius in degrees.
+            return_images: if True, returns a NiftiImage in BOLD space;
+                otherwise returns a 1D array in masker order.
+        """
+        from scipy.stats import norm
+        pars = self.get_prf_parameters_volume(model=model,
+                                              return_images=False)
+        x = pars['x'].to_numpy()
+        y = pars['y'].to_numpy()
+        sd = pars['sd'].to_numpy()
+        d = np.hypot(x, y)
+        sd_safe = np.clip(sd, 0.05, None)
+        f_inside = 1.0 - norm.cdf((d - aperture_radius) / sd_safe)
+        if return_images:
+            masker = self.get_bold_mask(return_masker=True)
+            return masker.inverse_transform(f_inside)
+        return f_inside
+
     def get_prf_parameters_surface(self, model=1, space='fsnative'):
 
         parameters = self.get_prf_parameter_labels(model=model)
