@@ -41,7 +41,9 @@ export PATH="$FREESURFER_HOME/bin:$PATH"
 export FS_LICENSE=/shares/zne.uzh/containers/freesurfer/license.txt
 [[ -f "$FREESURFER_HOME/SetUpFreeSurfer.sh" ]] && \
     source "$FREESURFER_HOME/SetUpFreeSurfer.sh" >/dev/null 2>&1
+export SUBJECTS_DIR=/shares/zne.uzh/gdehol/ds-retsupp/derivatives/fmriprep/sourcedata/freesurfer
 echo "FREESURFER_HOME=${FREESURFER_HOME}"
+echo "SUBJECTS_DIR=${SUBJECTS_DIR}"
 echo "FS version: $(mri_surf2surf --version 2>&1 | head -1)"
 
 PYTHON="$HOME/data/conda/envs/retsupp_cuda/bin/python"
