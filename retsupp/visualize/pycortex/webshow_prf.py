@@ -52,20 +52,39 @@ def _layers(subject: int, model: int, bids: Path,
 
 
 def build(subject: int = 2, model: int = 4, r2_thr: float = 0.05,
-          old_bids: str = '/data/ds-retsupp',
-          also_new: str | None = None) -> cortex.Dataset:
-    """Build a pycortex Dataset with OLD layers (and optional NEW)."""
+          new_bids: str = '/data/ds-retsupp',
+          old_bids: str | None = '/data/ds-retsupp.OLD_BAR'
+          ) -> cortex.Dataset:
+    """Build a pycortex Dataset.
+
+    Defaults assume the local convention set up earlier:
+      - NEW (full paradigm) m4 lives at /data/ds-retsupp/...
+      - OLD (bar paradigm)  m4 lives at /data/ds-retsupp.OLD_BAR/...
+    Pass ``old_bids=None`` to suppress OLD layers.
+    """
     ds = {}
-    ds.update(_layers(subject, model, Path(old_bids), r2_thr, 'OLD'))
-    if also_new is not None:
-        new = Path(also_new)
-        gii = (new / 'derivatives' / 'prf' / f'model{model}'
+    new = Path(new_bids)
+    new_gii = (new / 'derivatives' / 'prf' / f'model{model}'
                / f'sub-{subject:02d}'
-               / f'sub-{subject:02d}_desc-x.optim.nilearn_space-fsnative_hemi-L.func.gii')
-        if not gii.exists():
-            print(f'[WARN] NEW giis not found at {gii} — skipping')
+               / f'sub-{subject:02d}_desc-x.optim.nilearn_space-'
+                 'fsnative_hemi-L.func.gii')
+    if new_gii.exists():
+        ds.update(_layers(subject, model, new, r2_thr, 'NEW'))
+    else:
+        print(f'[WARN] NEW giis not found at {new_gii}')
+    if old_bids is not None:
+        old = Path(old_bids)
+        old_gii = (old / 'derivatives' / 'prf' / f'model{model}'
+                   / f'sub-{subject:02d}'
+                   / f'sub-{subject:02d}_desc-x.optim.nilearn_space-'
+                     'fsnative_hemi-L.func.gii')
+        if old_gii.exists():
+            ds.update(_layers(subject, model, old, r2_thr, 'OLD'))
         else:
-            ds.update(_layers(subject, model, new, r2_thr, 'NEW'))
+            print(f'[WARN] OLD giis not found at {old_gii}')
+    if not ds:
+        raise RuntimeError(
+            f'No fsnative giis found at NEW={new_bids} or OLD={old_bids}')
     return cortex.Dataset(**ds)
 
 
