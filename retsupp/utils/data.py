@@ -1120,6 +1120,45 @@ class Subject(object):
         'VO': ['VO1', 'VO2'],
     }
 
+    def get_r2_threshold(self, model: int, roi: str,
+                          posterior: float = 0.5,
+                          prf_base_dir: str = 'prf') -> float:
+        """R² threshold for (subject, ROI) at which the 2-component
+        Beta-mixture posterior P(signal | R²) first exceeds
+        ``posterior`` (moving right from the noise mode).
+
+        Reads the per-(subject, ROI) mixture parameters from the JSON
+        sidecar produced by ``compute_r2_mixture.py``. Returns ``np.nan``
+        if no sidecar exists for this (subject, ROI) cell.
+
+        ``posterior=0.5`` ≈ majority-signal (lenient); 0.95 conservative.
+        """
+        import json
+        from scipy.stats import beta as beta_dist
+        sidecar = (self.bids_folder / 'derivatives' / prf_base_dir
+                   / f'model{model}' / f'sub-{self.subject_id:02d}'
+                   / f'sub-{self.subject_id:02d}_desc-p_signal.json')
+        if not sidecar.exists():
+            return np.nan
+        with open(sidecar) as fh:
+            summary = json.load(fh)
+        info = summary.get(roi)
+        if not info or 'signal_alpha' not in info:
+            return np.nan
+        grid = np.linspace(1e-4, 0.999, 4000)
+        p_n = (beta_dist.pdf(grid, info['noise_alpha'], info['noise_beta'])
+               * info['noise_weight'])
+        p_s = (beta_dist.pdf(grid, info['signal_alpha'], info['signal_beta'])
+               * info['signal_weight'])
+        p_sig = p_s / (p_n + p_s + 1e-12)
+        # Walk right from the noise mode; pick the first crossing.
+        start = int(np.searchsorted(grid, info['noise_mean']))
+        seg = p_sig[start:]
+        cr = np.where(seg >= posterior)[0]
+        if len(cr) == 0:
+            return float('inf')
+        return float(grid[start + cr[0]])
+
     def get_retinotopic_roi(self, roi=None, bold_space=False,):
         """
         Returns a mask image for the specified retinotopic ROI (e.g., 'V1', 'V2', etc.).
