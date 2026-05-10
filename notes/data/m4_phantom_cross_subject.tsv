@@ -1,0 +1,4 @@
+subject	n_phantom	n_signal_m1	phantom_overlap_signal	phantom_cleaned_var_median	phantom_cleaned_n_zerovar	phantom_fmriprep_var_mean	phantom_fmriprep_n_zerovar	signal_cleaned_var_median
+2	22127	6363	0	0.7846770882606506	20.0	449.3315734863281	20.0	1.8833661079406738
+1	1111	7570	0	8.957334518432617	6.0	3223.873046875	5.0	2.241529941558838
+5	508	5890	1					

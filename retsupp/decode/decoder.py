@@ -56,7 +56,8 @@ def load_prf_pars(sub, model: int = 4) -> dict[str, np.ndarray]:
 
 
 def select_roi_voxels(sub, roi: str, prf: dict, masker, *,
-                      sd_min: float = 0.5, r2_min: float = 0.05,
+                      sd_min: float = 0.05, r2_min: float = 0.05,
+                      r2_max: float = 0.999,
                       ecc_max: float = 6.0,
                       max_voxels: int | None = 250) -> np.ndarray:
     """Indices into the BOLD-mask flattened array for ROI voxels passing QC.
@@ -64,8 +65,19 @@ def select_roi_voxels(sub, roi: str, prf: dict, masker, *,
     QC:
     - Voxel inside ``roi`` (Benson retinotopic atlas via Subject).
     - All PRF parameters finite.
-    - Phantom-perfect filter: sd >= sd_min (drops sd~=0 voxels with R^2=1).
-    - R^2 > r2_min.
+    - sd > ``sd_min`` (default 0.05): drops "phantom-perfect" voxels.
+      Phantoms have sd collapsed to 0 by the GD optimizer, which makes
+      the DoG forward pass NaN; due to pandas' default ``skipna=True``
+      in ``DataFrame.sum`` inside ``braincoder.utils.stats.get_rsq``,
+      NaN predictions yield ``ssq_resid = 0`` and therefore R^2 = 1.0.
+      Across sub-01/02/05 this catches 100% of phantoms and < 0.02%
+      of M1-signal voxels. See ``notes/m4_phantom_diagnosis.md``.
+      Note this is **much smaller** than the old default 0.5 — DoG
+      fits legitimately have small centre sigma (the surround σ
+      provides the spatial extent), so sd >= 0.5 killed 96% of real
+      signal voxels for m4.
+    - ``r2_min < r2 < r2_max`` (default 0.05 < r2 < 0.999): drops bad
+      fits at the bottom and belt-and-braces phantom guard at the top.
     - PRF eccentricity sqrt(x^2 + y^2) <= ecc_max. Drops voxels whose
       PRF centres ran away far outside the bar aperture (3.17 deg);
       such voxels' RFs evaluated on the in-FOV grid are ~0 and
@@ -78,7 +90,9 @@ def select_roi_voxels(sub, roi: str, prf: dict, masker, *,
     r2 = prf['r2']
     ecc = np.sqrt(prf['x'] ** 2 + prf['y'] ** 2)
     finite = np.all(np.stack([np.isfinite(prf[p]) for p in PRF_PARS]), axis=0)
-    keep = (roi_flat & finite & (sd >= sd_min) & (r2 > r2_min)
+    keep = (roi_flat & finite
+            & (sd > sd_min)
+            & (r2 > r2_min) & (r2 < r2_max)
             & (ecc <= ecc_max))
     idx = np.where(keep)[0]
     if max_voxels is not None and len(idx) > max_voxels:
@@ -127,8 +141,9 @@ def decode_run(sub, session: int, run: int, *,
                roi: str = 'V1',
                resolution: int = 30,
                max_voxels: int = 250,
-               sd_min: float = 0.5,
-               r2_min: float = 0.0,
+               sd_min: float = 0.05,
+               r2_min: float = 0.05,
+               r2_max: float = 0.999,
                ecc_max: float = 6.0,
                l2_norm: float = 0.01,
                learning_rate: float = 0.5,
@@ -168,11 +183,13 @@ def decode_run(sub, session: int, run: int, *,
     prf, masker = load_prf_pars(sub, model=4)
     voxel_idx = select_roi_voxels(sub, roi=roi, prf=prf, masker=masker,
                                   sd_min=sd_min, r2_min=r2_min,
+                                  r2_max=r2_max,
                                   ecc_max=ecc_max,
                                   max_voxels=max_voxels)
     if verbose:
         print(f'  ROI {roi}: {len(voxel_idx)} voxels kept '
-              f'(after sd>={sd_min}, r2>{r2_min}, max_voxels={max_voxels})')
+              f'(after sd>{sd_min}, {r2_min}<r2<{r2_max}, '
+              f'max_voxels={max_voxels})')
     if len(voxel_idx) < 10:
         raise RuntimeError(f'Too few voxels in {roi}: {len(voxel_idx)}')
 
