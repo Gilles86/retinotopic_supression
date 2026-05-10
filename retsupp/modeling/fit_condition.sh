@@ -47,7 +47,7 @@ export PYTHONUNBUFFERED=1
 PYTHON="$HOME/data/conda/envs/retsupp_cuda/bin/python"
 $PYTHON -u "$HOME/git/retsupp/retsupp/modeling/fit_condition.py" \
     "$subject" --model "$model" \
-    --bids_folder /shares/zne.uzh/gdehol/ds-retsupp \
-    --max_n_iterations 4000 --r2_thr 0.06
+    --bids-folder /shares/zne.uzh/gdehol/ds-retsupp \
+    --max-n-iterations 4000
 
 echo "Finished: $(date)"
