@@ -9,18 +9,29 @@ import numpy as np
 from pathlib import Path
 
 def transform_fsaverage(in_file, fs_hemi, source_subject, bids_folder):
+    """Resample a fsnative .gii to fsaverage via mri_surf2surf.
 
-        subjects_dir = op.join(bids_folder, 'derivatives', 'fmriprep', 'sourcedata', 'freesurfer')
+    Returns the runtime result on success, ``None`` if the transform
+    fails for any reason — neuropythy and the AF fits only need the
+    fsnative .gii, so we don't bring the whole pipeline down on a bad
+    fsaverage step (e.g. missing sphere.reg in a re-run freesurfer dir).
+    """
+    subjects_dir = op.join(bids_folder, 'derivatives', 'fmriprep',
+                            'sourcedata', 'freesurfer')
 
-        sxfm = SurfaceTransform(subjects_dir=subjects_dir)
-        sxfm.inputs.source_file = in_file
-        sxfm.inputs.out_file = in_file.replace('fsnative', 'fsaverage')
-        sxfm.inputs.source_subject = source_subject
-        sxfm.inputs.target_subject = 'fsaverage'
-        sxfm.inputs.hemi = fs_hemi
+    sxfm = SurfaceTransform(subjects_dir=subjects_dir)
+    sxfm.inputs.source_file = in_file
+    sxfm.inputs.out_file = in_file.replace('fsnative', 'fsaverage')
+    sxfm.inputs.source_subject = source_subject
+    sxfm.inputs.target_subject = 'fsaverage'
+    sxfm.inputs.hemi = fs_hemi
 
-        r = sxfm.run()
-        return r
+    try:
+        return sxfm.run()
+    except Exception as e:
+        print(f"  WARN: fsaverage transform failed for {in_file}: {e}")
+        print(f"        (fsnative .gii is still saved; neuropythy needs only fsnative)")
+        return None
 
 def main(subject, model, bids_folder):
 
