@@ -35,15 +35,14 @@ source "$HOME/data/miniforge3/etc/profile.d/conda.sh"
 conda activate retsupp_cuda
 export PYTHONUNBUFFERED=1
 
-# FreeSurfer is needed by nipype.SurfaceTransform (mri_surf2surf).
-if [[ -z "${FREESURFER_HOME:-}" ]]; then
-    if [[ -d /apps/u24/opt/x86_64_v3/freesurfer-* ]] 2>/dev/null; then
-        export FREESURFER_HOME=$(ls -d /apps/u24/opt/x86_64_v3/freesurfer-* | head -1)
-    fi
-fi
+# FreeSurfer (binaries from the fmriprep apptainer sandbox).
+export FREESURFER_HOME=/shares/zne.uzh/containers/fmriprep-25.2.5/opt/freesurfer
+export PATH="$FREESURFER_HOME/bin:$PATH"
+export FS_LICENSE=/shares/zne.uzh/containers/freesurfer/license.txt
 [[ -f "$FREESURFER_HOME/SetUpFreeSurfer.sh" ]] && \
-    source "$FREESURFER_HOME/SetUpFreeSurfer.sh"
-echo "FREESURFER_HOME=${FREESURFER_HOME:-unset}"
+    source "$FREESURFER_HOME/SetUpFreeSurfer.sh" >/dev/null 2>&1
+echo "FREESURFER_HOME=${FREESURFER_HOME}"
+echo "FS version: $(mri_surf2surf --version 2>&1 | head -1)"
 
 PYTHON="$HOME/data/conda/envs/retsupp_cuda/bin/python"
 $PYTHON -u "$HOME/git/retsupp/retsupp/surface/sample_prf_to_surface_nilearn.py" \
