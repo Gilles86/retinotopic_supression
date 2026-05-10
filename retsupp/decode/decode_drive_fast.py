@@ -129,9 +129,28 @@ def filter_voxels(pars: dict, sd_min: float = 0.5, r2_min: float = 0.0,
 
 def run_subject(subject: int, bids_folder: Path, *,
                 rois=ROI_ORDER, model: int = 4, sd_min: float = 0.5,
-                r2_min: float = 0.0):
+                r2_min: float = 0.0,
+                per_subject_dir: Path | None = None):
     """Compute decoded drive for one subject. Returns a long-format
-    summary DataFrame at the (subject, roi, run, ring) level."""
+    summary DataFrame at the (subject, roi, run, ring) level. If
+    ``per_subject_dir`` is given, writes a per-subject TSV as soon as
+    the subject is done so partial progress survives a wall-time clip,
+    and skips re-processing if the per-subject TSV already exists."""
+    sub_tsv = None
+    if per_subject_dir is not None:
+        per_subject_dir = Path(per_subject_dir)
+        per_subject_dir.mkdir(parents=True, exist_ok=True)
+        sub_tsv = per_subject_dir / f'sub-{subject:02d}_decoded_drive.tsv'
+        if sub_tsv.exists():
+            try:
+                cached = pd.read_csv(sub_tsv, sep='\t')
+                if len(cached) > 0:
+                    print(f'sub-{subject:02d}: cached at {sub_tsv} '
+                          f'({len(cached)} rows) — skip', flush=True)
+                    return cached
+            except Exception:
+                pass
+
     sub = Subject(subject, bids_folder)
 
     # --- Load mean-fit DoG parameters volume-wise (once per subject).
@@ -270,7 +289,12 @@ def run_subject(subject: int, bids_folder: Path, *,
                         ind_sum=float(ind_hrf_sum[k]),
                     ))
 
-    return pd.DataFrame(summary_rows)
+    df = pd.DataFrame(summary_rows)
+    if sub_tsv is not None and len(df):
+        df.to_csv(sub_tsv, sep='\t', index=False)
+        print(f'sub-{subject:02d}: wrote {len(df)} rows -> {sub_tsv}',
+              flush=True)
+    return df
 
 
 def main():
@@ -290,10 +314,13 @@ def main():
     bids = Path(args.bids_folder)
     out = args.out or (bids / 'derivatives' / 'decode' / 'decoded_drive.tsv')
     out.parent.mkdir(parents=True, exist_ok=True)
+    per_sub_dir = out.parent / 'per_subject'
+    per_sub_dir.mkdir(parents=True, exist_ok=True)
 
     print(f'Subjects: {args.subjects}')
     print(f'ROIs: {args.rois}')
     print(f'Out: {out}')
+    print(f'Per-subject TSVs: {per_sub_dir}')
     print(f'sd_min={args.sd_min}  r2_min={args.r2_min}', flush=True)
 
     t0 = time.time()
@@ -301,7 +328,8 @@ def main():
         from joblib import Parallel, delayed
         results = Parallel(n_jobs=args.n_jobs, verbose=10)(
             delayed(run_subject)(s, bids, rois=args.rois, model=args.model,
-                                  sd_min=args.sd_min, r2_min=args.r2_min)
+                                  sd_min=args.sd_min, r2_min=args.r2_min,
+                                  per_subject_dir=per_sub_dir)
             for s in args.subjects
         )
     else:
@@ -311,6 +339,7 @@ def main():
                 results.append(run_subject(
                     s, bids, rois=args.rois, model=args.model,
                     sd_min=args.sd_min, r2_min=args.r2_min,
+                    per_subject_dir=per_sub_dir,
                 ))
             except Exception as e:
                 print(f'sub-{s:02d}: failed ({e})', flush=True)
