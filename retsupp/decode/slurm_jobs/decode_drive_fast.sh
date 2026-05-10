@@ -3,10 +3,10 @@
 #   sbatch retsupp/decode/slurm_jobs/decode_drive_fast.sh
 #SBATCH --job-name=decode_drive_fast
 #SBATCH --output=/dev/null
-#SBATCH --time=60:00
+#SBATCH --time=120:00
 #SBATCH --account=zne.uzh
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=64G
 
 LOGFILE="$HOME/logs/${SLURM_JOB_NAME:-decode_drive_fast}_${SLURM_JOB_ID}.txt"
 mkdir -p "$(dirname "$LOGFILE")"
@@ -26,7 +26,7 @@ cd "$HOME/git/retsupp"
 python -u -m retsupp.decode.decode_drive_fast \
     --bids-folder "$bids_folder" \
     --out "$out" \
-    --n-jobs 8
+    --n-jobs 4
 
 echo "[$(date)] decoding done; making figure"
 

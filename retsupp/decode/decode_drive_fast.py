@@ -205,6 +205,9 @@ def run_subject(subject: int, bids_folder: Path, *,
     if not roi_results:
         return pd.DataFrame()
 
+    # Free the full per-voxel PRF parameter dict; we only need roi_results.
+    del pars_full
+
     # --- Iterate over runs, load BOLD for ALL ROI voxels at once.
     all_idx = np.unique(np.concatenate([d['idx'] for d in roi_results.values()]))
     idx_to_pos = {gi: i for i, gi in enumerate(all_idx)}
@@ -225,12 +228,14 @@ def run_subject(subject: int, bids_folder: Path, *,
                 continue
             bold = bold[:258]
             T = bold.shape[0]
-            bold_sub = bold[:, all_idx]
+            bold_sub = np.ascontiguousarray(bold[:, all_idx])
+            del bold   # free the full-volume copy to keep peak RSS down
 
             # z-score per voxel so high-variance voxels don't dominate.
             mu = bold_sub.mean(axis=0, keepdims=True)
             sd_v = bold_sub.std(axis=0, keepdims=True) + 1e-6
             bold_z = (bold_sub - mu) / sd_v
+            del bold_sub
 
             ind = sub.get_dynamic_indicator(session=ses, run=run)
             ind_hrf = np.zeros_like(ind, dtype=np.float32)
