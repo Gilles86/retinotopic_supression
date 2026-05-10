@@ -55,6 +55,21 @@ Defaults in `fit_prf.py`:
 These have been validated empirically and produce sensible R² across
 models. Don't tweak without a strong reason.
 
+## Chunk size (`--voxel-chunk-size`)
+
+GPU benchmarks (sub-02, model 1, full paradigm, 1h walltime):
+
+| chunk | L4 | V100 | A100 | H100 |
+|---|---|---|---|---|
+| 10k | TIMEOUT | TIMEOUT | – | – |
+| 30k | TIMEOUT | 58:48 | 39:51 | 29:46 |
+| 80k | – | 59:47 | 38:21 | 28:35 |
+
+10k is too small (overhead dominated). 30k is the safe minimum.
+**50k is a good default** for the production chain — fewer XLA
+recompiles per subject (~6 chunks instead of ~29), no real cost. 80k
+gives marginal additional speedup (1–2 min/subject).
+
 ## Common gotchas
 
 - **DoG transform bug** (fixed 2026-05-10 in `braincoder@7c50f2c`):
