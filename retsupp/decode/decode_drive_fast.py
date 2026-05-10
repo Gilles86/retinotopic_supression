@@ -109,13 +109,21 @@ def spm_double_gamma_hrf(tr: float, delay: float = 6.0,
     return hrf / hrf.max()
 
 
-def filter_voxels(pars: dict, sd_min: float = 0.5, r2_min: float = 0.0):
+def filter_voxels(pars: dict, sd_min: float = 0.5, r2_min: float = 0.0,
+                   srf_size_min: float = 0.1):
     """Boolean mask: keep PRFs with finite parameters and sd >= sd_min and
     r2 >= r2_min. We use a permissive r2_min by default because the
-    concatenated-paradigm fits have median R^2 ~0.002."""
+    concatenated-paradigm fits have median R^2 ~0.002. Also require
+    srf_size >= srf_size_min to avoid divide-by-zero in the surround
+    Gaussian (sd*srf_size = 0 -> nan/inf weights) — these come from
+    a small minority of voxels where the optimiser collapsed the
+    surround."""
     finite = np.all(np.stack([np.isfinite(v) for v in pars.values()]),
                     axis=0)
-    keep = finite & (pars['sd'] >= sd_min) & (pars['r2'] >= r2_min)
+    keep = (finite
+            & (pars['sd'] >= sd_min)
+            & (pars['r2'] >= r2_min)
+            & (pars['srf_size'] >= srf_size_min))
     return keep
 
 
@@ -178,6 +186,17 @@ def run_subject(subject: int, bids_folder: Path, *,
                 x, y, sd, amp, srf_a, srf_s,
                 px=np.float32(px), py=np.float32(py), pixel_area=1.0,
             )
+        # Drop any voxel whose W came out non-finite (defensive: filter_voxels
+        # should already exclude these via srf_size_min).
+        good = np.all(np.isfinite(W), axis=1)
+        if not good.all():
+            n_drop = int((~good).sum())
+            print(f'  sub-{subject:02d} {roi}: dropped {n_drop} non-finite-W voxels',
+                  flush=True)
+            idx_global = idx_global[good]
+            W = W[good]
+        if len(idx_global) < 5:
+            continue
         roi_results[roi] = dict(idx=idx_global, W=W)
         print(f'  sub-{subject:02d} {roi}: {len(idx_global)} good voxels '
               f'(median W norm={np.linalg.norm(W, axis=1).mean():.3g})',
