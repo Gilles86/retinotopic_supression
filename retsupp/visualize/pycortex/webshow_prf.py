@@ -89,18 +89,27 @@ def build(subject: int = 2, model: int = 4, r2_thr: float = 0.05,
 
 
 # When run as a script, build and open webshow on the default subject.
+# When loaded via IPython %run, just defines build() — call it yourself.
 if __name__ == '__main__':
-    import argparse
-    p = argparse.ArgumentParser()
-    p.add_argument('subject', nargs='?', type=int, default=2)
-    p.add_argument('--model', type=int, default=4)
-    p.add_argument('--r2-thr', type=float, default=0.05)
-    p.add_argument('--also-new', default=None,
-                   help='Path to a SECOND BIDS root containing NEW '
-                        'm4 fsnative giis (added as NEW_* layers).')
-    args = p.parse_args()
-    ds = build(subject=args.subject, model=args.model,
-               r2_thr=args.r2_thr, also_new=args.also_new)
-    print('  Layers:', list(ds.views.keys()))
-    print('  Opening webshow — Ctrl-C to stop the server.')
-    cortex.webshow(ds)
+    import sys, argparse
+    if any(a.startswith('--') or a.lstrip('-').isdigit()
+            for a in sys.argv[1:]) or len(sys.argv) > 1:
+        p = argparse.ArgumentParser()
+        p.add_argument('subject', nargs='?', type=int, default=2)
+        p.add_argument('--model', type=int, default=4)
+        p.add_argument('--r2-thr', type=float, default=0.05)
+        p.add_argument('--new-bids', default='/data/ds-retsupp')
+        p.add_argument('--old-bids', default='/data/ds-retsupp.OLD_BAR',
+                       help='Pass empty string to skip OLD layers.')
+        args = p.parse_args()
+        ds = build(subject=args.subject, model=args.model,
+                   r2_thr=args.r2_thr, new_bids=args.new_bids,
+                   old_bids=args.old_bids if args.old_bids else None)
+        print('  Layers:', list(ds.views.keys()))
+        print('  Opening webshow — Ctrl-C to stop the server.')
+        cortex.webshow(ds)
+    else:
+        # %run with no args — print usage and stop.
+        print('Imported.  In IPython:')
+        print('    ds = build(subject=2)')
+        print('    import cortex; cortex.webshow(ds)')
