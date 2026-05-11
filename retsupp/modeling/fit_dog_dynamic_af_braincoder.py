@@ -301,8 +301,21 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
 
 
 def select_roi_voxels(sub: Subject, roi: str, prf_pars: pd.DataFrame,
-                       r2_thr: float = 0.05):
-    """Boolean voxel mask: ROI ∧ (mean-model R² > thr)."""
+                       r2_thr: float = 0.05,
+                       r2_max: float = 0.999,
+                       sd_min: float = 0.05):
+    """Boolean voxel mask: ROI ∧ (r2_thr < R² < r2_max) ∧ (sd > sd_min).
+
+    The ``r2_max`` upper bound drops phantom voxels — m4 (DoG flex-HRF)
+    sometimes collapses σ → 0, producing NaN model predictions, which
+    ``(resid**2).sum(skipna=True)`` reduces to 0, giving R²=1.0. These
+    phantom voxels store identical degenerate parameters across
+    thousands of voxels; without this filter they monopolise the top-N
+    selection by R² and corrupt the AF fit.
+
+    The ``sd_min`` filter also drops collapsed-σ voxels (some have R²<1
+    but σ ≈ 0).
+    """
     roi_aliases = {
         'V3AB': ['V3A', 'V3B'],
         'LO': ['LO1', 'LO2'],
@@ -317,8 +330,9 @@ def select_roi_voxels(sub: Subject, roi: str, prf_pars: pd.DataFrame,
     for r in component_rois:
         roi_img = sub.get_retinotopic_roi(roi=r, bold_space=True)
         roi_arr |= masker_full.transform(roi_img).astype(bool).flatten()
-    r2_mask = (prf_pars['r2'].values > r2_thr) & roi_arr
-    return r2_mask
+    r2 = prf_pars['r2'].values
+    sd = prf_pars.get('sd', pd.Series(np.full(prf_pars.shape[0], np.inf))).values
+    return (r2 > r2_thr) & (r2 < r2_max) & (sd > sd_min) & roi_arr
 
 
 def main(subject: int, bids_folder: str = '/data/ds-retsupp',
@@ -326,6 +340,8 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
          resolution: int = 50,
          max_n_iterations: int = 1500,
          r2_thr: float = 0.05,
+         r2_max: float = 0.999,
+         sd_min: float = 0.05,
          model_label: int = 4,
          max_voxels: int | None = 500,
          mode: str = 'signed',
@@ -484,8 +500,11 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     prf_pars = sub.get_prf_parameters_volume(model=model_label, return_images=False)
     if not isinstance(prf_pars, pd.DataFrame):
         prf_pars = pd.DataFrame(prf_pars)
-    voxel_mask = select_roi_voxels(sub, roi, prf_pars, r2_thr=r2_thr)
-    print(f'ROI {roi} | r2>{r2_thr}: {voxel_mask.sum()} voxels')
+    voxel_mask = select_roi_voxels(sub, roi, prf_pars,
+                                     r2_thr=r2_thr, r2_max=r2_max,
+                                     sd_min=sd_min)
+    print(f'ROI {roi} | {r2_thr} < r² < {r2_max}, sd > {sd_min}: '
+          f'{voxel_mask.sum()} voxels')
     if voxel_mask.sum() == 0:
         raise RuntimeError(f'No voxels survive: ROI={roi}, r2>{r2_thr}.')
 
@@ -714,6 +733,13 @@ if __name__ == '__main__':
                         help='Stimulus grid resolution (default 50).')
     parser.add_argument('--max-n-iterations', type=int, default=1500)
     parser.add_argument('--r2-thr', type=float, default=0.05)
+    parser.add_argument('--r2-max', type=float, default=0.999,
+                        help='Phantom filter: drop voxels with r² ≥ this. '
+                             'DoG m4 has voxels with σ→0 → NaN preds → r²=1. '
+                             '(default 0.999).')
+    parser.add_argument('--sd-min', type=float, default=0.05,
+                        help='Phantom filter: drop voxels with center σ ≤ '
+                             'this (default 0.05°).')
     parser.add_argument('--model-label', type=int, default=4,
                         help='Mean-model PRF used for DoG-init (x, y, sd, '
                              'amplitude, baseline, srf_amplitude, srf_size). '
@@ -827,6 +853,8 @@ if __name__ == '__main__':
         resolution=args.resolution,
         max_n_iterations=args.max_n_iterations,
         r2_thr=args.r2_thr,
+        r2_max=args.r2_max,
+        sd_min=args.sd_min,
         model_label=args.model_label,
         max_voxels=None if args.max_voxels == 0 else args.max_voxels,
         mode=args.mode,
