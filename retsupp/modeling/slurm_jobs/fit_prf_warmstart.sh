@@ -33,12 +33,15 @@ exec >"$LOGFILE" 2>&1
 echo "=== prf_warmstart  model ${MODEL}  sub-${SUB}  $(date) ==="
 echo "  host: $(hostname)"
 
-# Activate conda env. conda's package-specific activate.d hooks
-# reference unbound variables (ADDR2LINE, AR, ...) so relax `set -u`
-# during activation, then re-enable it.
+# Activate conda env. We use `retsupp_cuda` rather than `retsupp`
+# because the cluster's `retsupp` install never finished — braincoder
+# isn't pip-installed there. `retsupp_cuda` has braincoder; TF will
+# automatically fall back to CPU since this job doesn't request a GPU.
+# conda's package-specific activate.d hooks reference unbound variables
+# (ADDR2LINE, AR, ...) so relax `set -u` during activation.
 set +u
 source "$HOME/data/miniforge3/etc/profile.d/conda.sh"
-conda activate retsupp
+conda activate retsupp_cuda
 set -u
 
 cd "$HOME/git/retsupp"
