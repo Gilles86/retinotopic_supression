@@ -268,6 +268,13 @@ def run_schedule(model_label, factory, data, paradigm, init_pars,
     return pars
 
 
+# σ floor enforced by braincoder's shifted-softplus parameterisation.
+# Below this value every sigma-like parameter (sd, srf_size, etc.) is
+# clamped — prevents sigma-collapse pathology where σ → 0 produces
+# spuriously good R² on noise. See notes/m6_dn_diagnosis.md.
+SD_MIN = 0.3
+
+
 def build_model_factory(model_label, grid_coords):
     """Returns a closure (data, paradigm) -> instantiated model.
     Mirrors the factory used in fit_prf.main()."""
@@ -278,7 +285,8 @@ def build_model_factory(model_label, grid_coords):
     def factory(data, paradigm):
         return cls(grid_coordinates=grid_coords, paradigm=paradigm,
                    hrf_model=hrf, data=data,
-                   flexible_hrf_parameters=cfg["flex_hrf"])
+                   flexible_hrf_parameters=cfg["flex_hrf"],
+                   sd_min=SD_MIN)
     return factory
 
 
