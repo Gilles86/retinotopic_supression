@@ -33,10 +33,13 @@ exec >"$LOGFILE" 2>&1
 echo "=== prf_warmstart  model ${MODEL}  sub-${SUB}  $(date) ==="
 echo "  host: $(hostname)"
 
-# Activate conda env. Prefer direct conda.sh source (more reliable on
-# compute nodes than the init_conda.sh helper).
+# Activate conda env. conda's package-specific activate.d hooks
+# reference unbound variables (ADDR2LINE, AR, ...) so relax `set -u`
+# during activation, then re-enable it.
+set +u
 source "$HOME/data/miniforge3/etc/profile.d/conda.sh"
-conda activate neural_priors2
+conda activate retsupp
+set -u
 
 cd "$HOME/git/retsupp"
 git rev-parse --short HEAD || true

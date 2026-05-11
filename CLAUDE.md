@@ -13,22 +13,19 @@ Data: BIDS dataset `ds-retsupp`. 30 subjects in `retsupp/data/subjects.yml`, 2 s
 
 ## Environment
 
-Two conda envs are defined under `create_env/`:
+Two project conda envs are used. Definitions live under `create_env/` (sometimes named `retsupp_cpu` / `retsupp_cuda` there) but the **installed envs on disk** are simply `retsupp` and `retsupp_cuda`:
 
-- `retsupp_cpu` — TF 2.14 CPU; for local use and most cluster jobs.
+- `retsupp` — TF 2.14 CPU; for local use and most cluster jobs.
+  - Local: `~/mambaforge/envs/retsupp/bin/python`
+  - Cluster: `$HOME/data/conda/envs/retsupp/bin/python`
 - `retsupp_cuda` — TF 2.14 with CUDA; for GPU PRF fits.
+  - Cluster: `$HOME/data/conda/envs/retsupp_cuda/bin/python`
 
 Both pip-install `libs/braincoder` (git submodule, Gilles's fork) and the local package as `-e .`.
 
-```bash
-# Local
-~/mambaforge/envs/retsupp_cpu/bin/python <script>
+**Default env for any NEW SLURM script in this repo:** `retsupp` (CPU) or `retsupp_cuda` (GPU). Do NOT use `neural_priors2`. Several legacy SLURM scripts still source `neural_priors2` (an env borrowed from the sibling `neural_priors` project, because at one point it was the only env that bundled `braincoder` + CUDA TF) — preserve that name **only** when editing those legacy scripts. New scripts should always reference the project envs.
 
-# Cluster (in SLURM scripts, see "Cluster jobs" below)
-$HOME/data/conda/envs/retsupp_cpu/bin/python <script>
-```
-
-Note: existing SLURM scripts in this repo source `$HOME/init_conda.sh` and `source activate neural_priors2` (an env from the `neural_priors` project, used here because it bundles `braincoder` + CUDA TF). The `retsupp_cuda` env in `create_env/` is the project-specific replacement, but several scripts still reference `neural_priors2` — preserve the existing env name when editing those scripts unless explicitly migrating.
+When sourcing conda inside a SLURM script, wrap the activation in `set +u` / `set -u` if the script uses `set -euo pipefail`, because conda's `activate-*.d/` hooks for some packages reference unbound variables (`ADDR2LINE`, `AR`, ...) and would abort under `set -u`.
 
 ## Architecture
 
