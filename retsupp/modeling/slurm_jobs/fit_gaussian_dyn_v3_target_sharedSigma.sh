@@ -53,7 +53,7 @@ echo "Test:        Gaussian (m1) + v3 + target + sharedSigma"
 
 # --- Subject + ROI decoding from SLURM_ARRAY_TASK_ID. ---
 # Excludes broken subjects: 19, 22, 24, 27, 30 (neuropythy).
-SUB_IDS=(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 20 21 23 25 26 28 29)
+SUB_IDS=(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30)
 ROIS=(V1 V2 V3 V3AB hV4 LO TO VO)
 N_ROIS=${#ROIS[@]}
 N_SUBS=${#SUB_IDS[@]}

@@ -33,7 +33,7 @@ scontrol update jobid="${SLURM_JOB_ID}" \
     name="neuropythy_sub-${sub_pad}" 2>/dev/null || true
 
 source "$HOME/data/miniforge3/etc/profile.d/conda.sh"
-conda activate retsupp_cuda
+conda activate retsupp_neuropythy
 export PYTHONUNBUFFERED=1
 
 export FREESURFER_HOME=/shares/zne.uzh/containers/fmriprep-25.2.5/opt/freesurfer
@@ -46,7 +46,7 @@ echo "FREESURFER_HOME=${FREESURFER_HOME}"
 echo "SUBJECTS_DIR=${SUBJECTS_DIR}"
 echo "FS version: $(mri_surf2surf --version 2>&1 | head -1)"
 
-PYTHON="$HOME/data/conda/envs/retsupp_cuda/bin/python"
+PYTHON="$HOME/data/conda/envs/retsupp_neuropythy/bin/python"
 $PYTHON -u "$HOME/git/retsupp/retsupp/neuropythy/register_retinotopy.py" \
     "$subject" \
     --bids_dir /shares/zne.uzh/gdehol/ds-retsupp
