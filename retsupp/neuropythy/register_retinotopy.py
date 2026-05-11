@@ -82,5 +82,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Register retinotopy for a subject.")
     parser.add_argument("subject_id", type=int, help="Subject ID (integer, e.g., 3)")
     parser.add_argument("--bids_dir", type=str, default="/data/ds-retsupp", help="BIDS root directory")
+    parser.add_argument("--model", type=int, default=4,
+                        help="PRF model number to source surface files from (default 4). "
+                             "Use 1 when only Gaussian m1 fits exist (e.g. recovery subjects).")
     args = parser.parse_args()
-    main(args.subject_id, args.bids_dir)
+    main(args.subject_id, args.bids_dir, model=args.model)
