@@ -50,8 +50,12 @@ from retsupp.decode.decoder import decode_run
 
 VOXEL_SD_MIN = 0.05
 VOXEL_R2_MIN = 0.1
-VOXEL_ECC_MAX = 3.0
-VOXEL_MAX = 100
+# 4.5 deg lets V1 voxels with peripheral PRFs (those that can actually
+# decode signal at the 4-deg search-array corner positions) into the
+# selection. 3.0 was too tight: it gave clean centre decoding but zero
+# information at the corners, making HP/LP comparisons meaningless.
+VOXEL_ECC_MAX = 4.5
+VOXEL_MAX = 200
 
 METRIC_COLS = ['l2', 'lr', 'n_voxels', 'seconds',
                'max', 'min', 'p99', 'p1', 'std',
@@ -109,6 +113,8 @@ def pick_max_bar_frame(par: np.ndarray) -> int:
 def run_one_cell(sub: Subject, *, roi: str, session: int, run: int,
                  model: int, resolution: int, l2: float, lr: float,
                  max_n_iterations: int, resid_max_iter: int,
+                 voxel_sd_min: float, voxel_r2_min: float,
+                 voxel_ecc_max: float, voxel_max: int,
                  par: np.ndarray, data_dir: Path) -> dict:
     """Decode one (l2, lr) cell and persist npz + 1-row TSV. Returns the row."""
     tag = cell_tag(l2, lr)
@@ -116,9 +122,9 @@ def run_one_cell(sub: Subject, *, roi: str, session: int, run: int,
     t0 = time.time()
     decoded, grid, voxel_idx, omega, pars_df, bold = decode_run(
         sub, session=session, run=run, roi=roi, model=model,
-        resolution=resolution, max_voxels=VOXEL_MAX,
-        sd_min=VOXEL_SD_MIN, r2_min=VOXEL_R2_MIN,
-        ecc_max=VOXEL_ECC_MAX,
+        resolution=resolution, max_voxels=voxel_max,
+        sd_min=voxel_sd_min, r2_min=voxel_r2_min,
+        ecc_max=voxel_ecc_max,
         l2_norm=l2, learning_rate=lr,
         max_n_iterations=max_n_iterations,
         resid_max_iter=resid_max_iter,
@@ -252,6 +258,14 @@ def main():
                    default=[0.01, 0.05, 0.1])
     p.add_argument('--max-n-iterations', type=int, default=1000)
     p.add_argument('--resid-max-iter', type=int, default=300)
+    p.add_argument('--voxel-sd-min', type=float, default=VOXEL_SD_MIN)
+    p.add_argument('--voxel-r2-min', type=float, default=VOXEL_R2_MIN)
+    p.add_argument('--voxel-ecc-max', type=float, default=VOXEL_ECC_MAX,
+                   help='Max PRF eccentricity (deg) for voxel inclusion. '
+                        '4.5 gives V1 voxels with peripheral PRFs that can '
+                        'decode signal at the 4-deg corners.')
+    p.add_argument('--voxel-max', type=int, default=VOXEL_MAX,
+                   help='Cap on # of voxels used (top-N by r2).')
     p.add_argument('--repo-root', type=Path,
                    default=Path(__file__).resolve().parents[2])
     p.add_argument('--aggregate-only', action='store_true',
@@ -290,8 +304,9 @@ def main():
                   agg_l2, agg_lr)
         return
 
-    print(f'Voxel selection: ecc<={VOXEL_ECC_MAX}, r2>={VOXEL_R2_MIN}, '
-          f'top-{VOXEL_MAX}', flush=True)
+    print(f'Voxel selection: ecc<={args.voxel_ecc_max}, '
+          f'r2>={args.voxel_r2_min}, sd>={args.voxel_sd_min}, '
+          f'top-{args.voxel_max}', flush=True)
     cells = list(itertools.product(args.l2_norms, args.learning_rates))
     print(f'Sweep cells: {len(cells)} '
           f'(l2={args.l2_norms} x lr={args.learning_rates})\n', flush=True)
@@ -303,6 +318,10 @@ def main():
                      resolution=args.resolution, l2=l2, lr=lr,
                      max_n_iterations=args.max_n_iterations,
                      resid_max_iter=args.resid_max_iter,
+                     voxel_sd_min=args.voxel_sd_min,
+                     voxel_r2_min=args.voxel_r2_min,
+                     voxel_ecc_max=args.voxel_ecc_max,
+                     voxel_max=args.voxel_max,
                      par=par, data_dir=data_dir)
 
     # Only aggregate at the end if we actually ran the full grid. In
