@@ -26,7 +26,12 @@ import numpy as np
 import pandas as pd
 
 ROIS = [(1, 'V1'), (2, 'V2'), (3, 'V3'), (4, 'hV4')]
-MODELS = [(1, 'Gaussian PRF (m1)'), (6, 'Divisive Normalization (m6)')]
+MODELS = [
+    (1, 'Gaussian PRF (m1)'),
+    (3, 'Gaussian + flex HRF (m3)'),
+    (6, 'Divisive Normalization (m6)'),
+]
+YLIM_PER_MODEL = {1: (0, 1.5), 3: (0, 1.5), 6: (0, 2.0)}
 
 plt.rcParams.update({
     "font.size": 13,
@@ -49,7 +54,7 @@ def load_surf_label(p):
     return nb.freesurfer.io.read_morph_data(str(p)).astype(int)
 
 
-def collect(bids, subjects, models, r2_min=0.05, sd_min=0.05, sd_max=8.0,
+def collect(bids, subjects, models, r2_min=0.15, sd_min=0.05, sd_max=8.0,
             ecc_min=0.2, ecc_max=8.0):
     prf = Path(bids) / 'derivatives' / 'prf'
     fs = Path(bids) / 'derivatives' / 'fmriprep' / 'sourcedata' / 'freesurfer'
@@ -94,8 +99,8 @@ def collect(bids, subjects, models, r2_min=0.05, sd_min=0.05, sd_max=8.0,
 
 def plot(df, out_path):
     fig, axes = plt.subplots(len(MODELS), len(ROIS),
-                              figsize=(4.0 * len(ROIS), 3.4 * len(MODELS)),
-                              sharex=True, sharey='row')
+                              figsize=(4.0 * len(ROIS), 3.0 * len(MODELS)),
+                              sharex=True, sharey=False)
     if len(MODELS) == 1:
         axes = axes[None, :]
     for i, (model, mname) in enumerate(MODELS):
@@ -117,17 +122,17 @@ def plot(df, out_path):
                     label=f"r = {r:+.2f}\nslope = {slope:+.2f}")
             ax.legend(loc='upper left', frameon=False, fontsize=10)
             ax.set_xlim(0, 8)
-            ax.set_ylim(0)
+            ylo, yhi = YLIM_PER_MODEL.get(model, (0, 2.0))
+            ax.set_ylim(ylo, yhi)
             if i == 0:
                 ax.set_title(rname)
             if i == len(MODELS) - 1:
                 ax.set_xlabel("Eccentricity (deg)")
             if j == 0:
                 ax.set_ylabel(f"{mname}\nσ (deg)")
-    fig.suptitle("Eccentricity-σ scaling preserved in m1 (Gaussian) "
-                 "and m6 (Divisive Normalization)\n"
+    fig.suptitle("Eccentricity-σ scaling across PRF model variants\n"
                  f"Pooled across {df['subject'].nunique()} subjects, "
-                 f"both hemispheres, r²>0.05")
+                 f"both hemispheres, r²>0.15")
     fig.tight_layout()
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
