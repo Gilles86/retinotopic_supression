@@ -107,15 +107,15 @@ def pick_max_bar_frame(par: np.ndarray) -> int:
 
 
 def run_one_cell(sub: Subject, *, roi: str, session: int, run: int,
-                 resolution: int, l2: float, lr: float,
+                 model: int, resolution: int, l2: float, lr: float,
                  max_n_iterations: int, resid_max_iter: int,
                  par: np.ndarray, data_dir: Path) -> dict:
     """Decode one (l2, lr) cell and persist npz + 1-row TSV. Returns the row."""
     tag = cell_tag(l2, lr)
-    print(f'\n=== {tag} ===', flush=True)
+    print(f'\n=== {tag} (model {model}) ===', flush=True)
     t0 = time.time()
     decoded, grid, voxel_idx, omega, pars_df, bold = decode_run(
-        sub, session=session, run=run, roi=roi,
+        sub, session=session, run=run, roi=roi, model=model,
         resolution=resolution, max_voxels=VOXEL_MAX,
         sd_min=VOXEL_SD_MIN, r2_min=VOXEL_R2_MIN,
         ecc_max=VOXEL_ECC_MAX,
@@ -240,6 +240,11 @@ def main():
     p.add_argument('--roi', default='V1')
     p.add_argument('--session', type=int, default=1)
     p.add_argument('--run', type=int, default=1)
+    p.add_argument('--model', type=int, default=4,
+                   choices=sorted([1, 4]),
+                   help='PRF model label to decode with (1 = Gaussian, '
+                        '4 = DoG + flexible HRF). Outputs go to a '
+                        'model-scoped subdirectory.')
     p.add_argument('--resolution', type=int, default=30)
     p.add_argument('--l2-norms', type=float, nargs='+',
                    default=[0.01, 0.05, 0.1, 0.5])
@@ -261,10 +266,11 @@ def main():
     sub = Subject(args.subject, bids_folder=args.bids_folder)
     tag = (f'sub-{args.subject:02d}_{args.roi}_'
            f'ses-{args.session}_run-{args.run}')
-    data_dir = args.repo_root / 'notes' / 'data' / 'decode_sweep' / tag
+    data_dir = (args.repo_root / 'notes' / 'data' / 'decode_sweep'
+                / f'm{args.model}' / tag)
     data_dir.mkdir(parents=True, exist_ok=True)
     fig_path = (args.repo_root / 'notes' / 'figures' / 'decode_sweep'
-                / f'{tag}.pdf')
+                / f'm{args.model}' / f'{tag}.pdf')
 
     par = build_paradigm_for_metrics(sub, args.session, args.run,
                                      args.resolution)
@@ -278,8 +284,10 @@ def main():
         agg_lr = list(args.learning_rates)
 
     if args.aggregate_only:
-        print(f'Aggregating over l2={agg_l2}, lr={agg_lr}', flush=True)
-        aggregate(data_dir, fig_path, par, tag, agg_l2, agg_lr)
+        print(f'Aggregating model {args.model} over l2={agg_l2}, lr={agg_lr}',
+              flush=True)
+        aggregate(data_dir, fig_path, par, f'{tag} (model {args.model})',
+                  agg_l2, agg_lr)
         return
 
     print(f'Voxel selection: ecc<={VOXEL_ECC_MAX}, r2>={VOXEL_R2_MIN}, '
@@ -291,14 +299,24 @@ def main():
     for i, (l2, lr) in enumerate(cells):
         print(f'\n--- [{i + 1}/{len(cells)}] ---', flush=True)
         run_one_cell(sub, roi=args.roi, session=args.session, run=args.run,
+                     model=args.model,
                      resolution=args.resolution, l2=l2, lr=lr,
                      max_n_iterations=args.max_n_iterations,
                      resid_max_iter=args.resid_max_iter,
                      par=par, data_dir=data_dir)
 
-    # If the local run covered the requested grid, also produce aggregation.
-    print('\nAggregating completed cells...', flush=True)
-    aggregate(data_dir, fig_path, par, tag, agg_l2, agg_lr)
+    # Only aggregate at the end if we actually ran the full grid. In
+    # single-cell (SLURM array) mode the aggregator step belongs to a
+    # separate pass to avoid 12 concurrent writes racing on metrics.tsv
+    # and the grid PDF.
+    if len(cells) >= 2:
+        print('\nAggregating completed cells...', flush=True)
+        aggregate(data_dir, fig_path, par,
+                  f'{tag} (model {args.model})', agg_l2, agg_lr)
+    else:
+        print('\nSingle-cell run; skipping aggregation (call with '
+              '--aggregate-only --full-grid once all cells are done).',
+              flush=True)
 
 
 if __name__ == '__main__':

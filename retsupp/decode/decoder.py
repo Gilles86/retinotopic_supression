@@ -29,25 +29,49 @@ from nilearn import image, maskers
 
 
 # Lazy braincoder import so importing this module is cheap.
-def _bc():
+def _bc(model: int = 4):
+    """Return (SPMHRFModel, PRFModelClass, ResidualFitter, StimulusFitter)."""
     from braincoder.hrf import SPMHRFModel
-    from braincoder.models import DifferenceOfGaussiansPRF2DWithHRF
     from braincoder.optimize import ResidualFitter, StimulusFitter
-    return SPMHRFModel, DifferenceOfGaussiansPRF2DWithHRF, ResidualFitter, StimulusFitter
+    if model == 1:
+        from braincoder.models import GaussianPRF2DWithHRF as PRFModelClass
+    elif model == 4:
+        from braincoder.models import (
+            DifferenceOfGaussiansPRF2DWithHRF as PRFModelClass,
+        )
+    else:
+        raise ValueError(f'Unsupported decoding model: {model}. '
+                         f'Implement dispatch in _bc() and PRF_PARS_BY_MODEL.')
+    return SPMHRFModel, PRFModelClass, ResidualFitter, StimulusFitter
 
 
-PRF_PARS = ['x', 'y', 'sd', 'amplitude', 'baseline',
-            'srf_amplitude', 'srf_size', 'hrf_delay', 'hrf_dispersion']
+# Per-model parameter lists. Must match the desc-{par}.nii.gz files
+# produced by retsupp.modeling.fit_prf for each model_label.
+PRF_PARS_BY_MODEL = {
+    1: ['x', 'y', 'sd', 'amplitude', 'baseline'],
+    4: ['x', 'y', 'sd', 'amplitude', 'baseline',
+        'srf_amplitude', 'srf_size', 'hrf_delay', 'hrf_dispersion'],
+}
+FLEX_HRF_BY_MODEL = {1: False, 4: True}
 
 
-def load_prf_pars(sub, model: int = 4) -> dict[str, np.ndarray]:
-    """Load model-N PRF NIfTIs as a dict of (V,) arrays in BOLD-mask order."""
+# Back-compat alias; new code should use PRF_PARS_BY_MODEL[model].
+PRF_PARS = PRF_PARS_BY_MODEL[4]
+
+
+def load_prf_pars(sub, model: int = 4):
+    """Load model-N PRF NIfTIs as a dict of (V,) arrays in BOLD-mask order.
+
+    Returns ``(prf, masker)``. Use ``PRF_PARS_BY_MODEL[model]`` to look up
+    which parameter names are present in ``prf``.
+    """
+    pars = PRF_PARS_BY_MODEL[model]
     base = (sub.bids_folder / 'derivatives' / 'prf'
             / f'model{model}' / f'sub-{sub.subject_id:02d}')
     masker = sub.get_bold_mask(return_masker=True)
     masker.fit()
     out = {}
-    for par in PRF_PARS:
+    for par in pars:
         fn = base / f'sub-{sub.subject_id:02d}_desc-{par}.nii.gz'
         out[par] = masker.transform(str(fn)).flatten().astype(np.float32)
     out['r2'] = masker.transform(
@@ -56,6 +80,7 @@ def load_prf_pars(sub, model: int = 4) -> dict[str, np.ndarray]:
 
 
 def select_roi_voxels(sub, roi: str, prf: dict, masker, *,
+                      pars: list[str],
                       sd_min: float = 0.05, r2_min: float = 0.05,
                       r2_max: float = 0.999,
                       ecc_max: float = 6.0,
@@ -89,7 +114,7 @@ def select_roi_voxels(sub, roi: str, prf: dict, masker, *,
     sd = prf['sd']
     r2 = prf['r2']
     ecc = np.sqrt(prf['x'] ** 2 + prf['y'] ** 2)
-    finite = np.all(np.stack([np.isfinite(prf[p]) for p in PRF_PARS]), axis=0)
+    finite = np.all(np.stack([np.isfinite(prf[p]) for p in pars]), axis=0)
     keep = (roi_flat & finite
             & (sd > sd_min)
             & (r2 > r2_min) & (r2 < r2_max)
@@ -112,33 +137,47 @@ def load_run_bold(sub, session: int, run: int, masker) -> np.ndarray:
 
 
 def build_paradigm_and_grid(sub, session: int, run: int, resolution: int):
-    """Bar-only paradigm + matching grid coordinates for one run."""
-    par = sub.get_stimulus(session=session, run=run,
-                           resolution=resolution).astype(np.float32)
+    """Full (bar + 8-item search array) paradigm + extended grid to match
+    fit_prf.py with paradigm_kind='full' (grid_radius=5.0).
+    """
+    par = sub.get_stimulus_with_distractors(
+        session=session, run=run, resolution=resolution,
+        grid_radius=5.0, distractor_shape='rectangle',
+        distractor_long_side=1.5, distractor_short_side=0.375,
+    ).astype(np.float32)
     par = par.reshape(par.shape[0], -1)
-    gx, gy = sub.get_grid_coordinates(resolution=resolution,
-                                      session=session, run=run)
+    gx, gy = sub.get_extended_grid_coordinates(
+        resolution=resolution, session=session, run=run, grid_radius=5.0)
     grid = np.stack([gx.ravel(), gy.ravel()], axis=1).astype(np.float32)
     return par, grid
 
 
-def make_dog_model(grid_coords: np.ndarray, paradigm: np.ndarray,
-                   pars_df: pd.DataFrame, data: np.ndarray | None = None,
-                   tr: float = 1.6):
-    """DoG + flexible HRF model populated with fitted parameters."""
-    SPMHRFModel, DoG, _, _ = _bc()
+def make_prf_model(model_label: int, grid_coords: np.ndarray,
+                   paradigm: np.ndarray, pars_df: pd.DataFrame,
+                   data: np.ndarray | None = None, tr: float = 1.6):
+    """PRF model populated with fitted parameters; dispatch on model_label.
+
+    model_label=1 -> GaussianPRF2DWithHRF, fixed HRF
+    model_label=4 -> DifferenceOfGaussiansPRF2DWithHRF, flexible HRF
+    """
+    SPMHRFModel, PRFCls, _, _ = _bc(model_label)
     hrf = SPMHRFModel(tr=tr, delay=4.5, dispersion=0.75)
-    model = DoG(grid_coordinates=grid_coords,
-                paradigm=paradigm,
-                hrf_model=hrf,
-                data=data,
-                parameters=pars_df.astype(np.float32),
-                flexible_hrf_parameters=True)
-    return model
+    return PRFCls(grid_coordinates=grid_coords,
+                   paradigm=paradigm,
+                   hrf_model=hrf,
+                   data=data,
+                   parameters=pars_df.astype(np.float32),
+                   flexible_hrf_parameters=FLEX_HRF_BY_MODEL[model_label])
+
+
+# Back-compat alias for any callers still using the old name.
+def make_dog_model(grid_coords, paradigm, pars_df, data=None, tr=1.6):
+    return make_prf_model(4, grid_coords, paradigm, pars_df, data=data, tr=tr)
 
 
 def decode_run(sub, session: int, run: int, *,
                roi: str = 'V1',
+               model: int = 4,
                resolution: int = 30,
                max_voxels: int = 250,
                sd_min: float = 0.05,
@@ -178,22 +217,24 @@ def decode_run(sub, session: int, run: int, *,
     bold : (T, V_used) float32
         Cleaned BOLD passed to the decoder.
     """
-    SPMHRFModel, DoG, ResidualFitter, StimulusFitter = _bc()
+    SPMHRFModel, PRFCls, ResidualFitter, StimulusFitter = _bc(model)
 
-    prf, masker = load_prf_pars(sub, model=4)
+    prf, masker = load_prf_pars(sub, model=model)
+    pars = PRF_PARS_BY_MODEL[model]
     voxel_idx = select_roi_voxels(sub, roi=roi, prf=prf, masker=masker,
+                                  pars=pars,
                                   sd_min=sd_min, r2_min=r2_min,
                                   r2_max=r2_max,
                                   ecc_max=ecc_max,
                                   max_voxels=max_voxels)
     if verbose:
-        print(f'  ROI {roi}: {len(voxel_idx)} voxels kept '
+        print(f'  ROI {roi} (model {model}): {len(voxel_idx)} voxels kept '
               f'(after sd>{sd_min}, {r2_min}<r2<{r2_max}, '
               f'max_voxels={max_voxels})')
     if len(voxel_idx) < 10:
         raise RuntimeError(f'Too few voxels in {roi}: {len(voxel_idx)}')
 
-    pars_df = pd.DataFrame({p: prf[p][voxel_idx] for p in PRF_PARS})
+    pars_df = pd.DataFrame({p: prf[p][voxel_idx] for p in pars})
     bold = load_run_bold(sub, session, run, masker)[:, voxel_idx]
     paradigm, grid = build_paradigm_and_grid(sub, session, run, resolution)
 
@@ -208,21 +249,21 @@ def decode_run(sub, session: int, run: int, *,
                                index=pd.Index(np.arange(paradigm.shape[0]),
                                               name='frame'))
 
-    model = make_dog_model(grid, paradigm, pars_df, data=bold_df)
+    prf_model = make_prf_model(model, grid, paradigm, pars_df, data=bold_df)
 
     if verbose:
         print('  Fitting residual covariance...')
-    rf = ResidualFitter(model=model, data=bold_df, paradigm=paradigm_df,
+    rf = ResidualFitter(model=prf_model, data=bold_df, paradigm=paradigm_df,
                         parameters=pars_df.astype(np.float32))
     omega, _ = rf.fit(max_n_iterations=resid_max_iter,
                       progressbar=progressbar)
 
     # Rebuild model on filtered data (StimulusFitter writes to model.parameters)
-    model = make_dog_model(grid, paradigm, pars_df, data=bold_df)
+    prf_model = make_prf_model(model, grid, paradigm, pars_df, data=bold_df)
 
     if verbose:
         print('  Fitting stimulus...')
-    sf = StimulusFitter(model=model, data=bold_df, omega=omega,
+    sf = StimulusFitter(model=prf_model, data=bold_df, omega=omega,
                         parameters=pars_df.astype(np.float32))
     decoded = sf.fit(l2_norm=l2_norm, learning_rate=learning_rate,
                      max_n_iterations=max_n_iterations,

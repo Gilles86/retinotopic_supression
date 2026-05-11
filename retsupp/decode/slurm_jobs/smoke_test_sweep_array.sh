@@ -5,13 +5,15 @@
 # Index map: idx = l2_idx * 3 + lr_idx + 1  (1..12).
 #
 # Submit:
-#   sbatch --array=1-12 retsupp/decode/slurm_jobs/smoke_test_sweep_array.sh           # defaults: sub-02 V1 ses-1 run-1
-#   sbatch --array=1-12 retsupp/decode/slurm_jobs/smoke_test_sweep_array.sh 5 V1 1 1  # sub-05 V1 ses-1 run-1
+#   sbatch --array=1-12 retsupp/decode/slurm_jobs/smoke_test_sweep_array.sh
+#   sbatch --array=1-12 retsupp/decode/slurm_jobs/smoke_test_sweep_array.sh 2 V1 1 1 1   # sub-02 V1 ses-1 run-1 model 1
+#   sbatch --array=1-12 retsupp/decode/slurm_jobs/smoke_test_sweep_array.sh 5 V1 1 1 4   # sub-05 V1 ses-1 run-1 model 4
 #
-# After all tasks finish, run the aggregator (separate job, see
-# smoke_test_sweep_aggregate.sh) OR locally via:
+# Outputs land in `~/git/retsupp/notes/{data,figures}/decode_sweep/m<model>/`.
+# After all tasks finish, aggregate locally:
 #   ~/mambaforge/envs/retsupp/bin/python -m retsupp.decode.smoke_test_sweep \
-#       --subject 2 --roi V1 --session 1 --run 1 --aggregate-only
+#       --subject 2 --roi V1 --session 1 --run 1 --model 1 \
+#       --aggregate-only --full-grid
 #SBATCH --job-name=decode_sweep_cell
 #SBATCH --output=/dev/null
 #SBATCH --time=30:00
@@ -23,8 +25,9 @@ SUBJECT="${1:-2}"
 ROI="${2:-V1}"
 SESSION="${3:-1}"
 RUN="${4:-1}"
+MODEL="${5:-4}"
 
-LOGFILE="$HOME/logs/decode_sweep_cell_sub-${SUBJECT}_${ROI}_ses-${SESSION}_run-${RUN}_${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID:-0}.txt"
+LOGFILE="$HOME/logs/decode_sweep_cell_sub-${SUBJECT}_${ROI}_ses-${SESSION}_run-${RUN}_m${MODEL}_${SLURM_ARRAY_JOB_ID:-$SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID:-0}.txt"
 mkdir -p "$(dirname "$LOGFILE")"
 exec >"$LOGFILE" 2>&1
 
@@ -54,10 +57,10 @@ L2=${L2S[$l2_idx]}
 LR=${LRS[$lr_idx]}
 
 scontrol update jobid="${SLURM_JOB_ID}" \
-    name="decode_sweep_sub-$(printf %02d "$SUBJECT")_${ROI}_l2-${L2}_lr-${LR}" \
+    name="decode_sweep_sub-$(printf %02d "$SUBJECT")_${ROI}_m${MODEL}_l2-${L2}_lr-${LR}" \
     2>/dev/null || true
 
-echo "[$(date)] sub-${SUBJECT} ${ROI} ses-${SESSION} run-${RUN}  L2=${L2}  lr=${LR}  on $(hostname)"
+echo "[$(date)] sub-${SUBJECT} ${ROI} ses-${SESSION} run-${RUN}  model=${MODEL}  L2=${L2}  lr=${LR}  on $(hostname)"
 
 python -u -m retsupp.decode.smoke_test_sweep \
     --bids-folder "$bids_folder" \
@@ -65,6 +68,7 @@ python -u -m retsupp.decode.smoke_test_sweep \
     --roi "$ROI" \
     --session "$SESSION" \
     --run "$RUN" \
+    --model "$MODEL" \
     --l2-norms "$L2" \
     --learning-rates "$LR"
 
