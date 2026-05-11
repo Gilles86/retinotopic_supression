@@ -1,12 +1,12 @@
-"""Eccentricity-σ scaling per model (m1 Gaussian, m6 Div Norm), per ROI.
+"""Eccentricity-σ scaling across PRF model variants, per ROI.
 
 Pools across subjects, loads per-hemisphere fsnative ``ecc``/``sd``/``r2``
 giis plus the neuropythy ``lh./rh.inferred_varea`` surface labels to mask
 ROIs. Plots ecc-vs-σ hexbins per (model, ROI) with r and slope annotated.
 
-The point this figure makes: m4 (DoG) center σ collapses, so its
-surface visualization looks flat — but **m1 (Gaussian) and m6 (Div
-Norm) preserve the canonical ecc-σ scaling**.
+Layout: 4 rows (m1, m3, m4, m6) × 8 columns (V1, V2, V3, V3AB, hV4, LO,
+TO, VO). VO/LO/TO/V3AB merge their two component areas (V3a+V3b,
+LO1+LO2, etc.).
 
 Usage
 -----
@@ -25,21 +25,34 @@ import nibabel as nb
 import numpy as np
 import pandas as pd
 
-ROIS = [(1, 'V1'), (2, 'V2'), (3, 'V3'), (4, 'hV4')]
-MODELS = [
-    (1, 'Gaussian PRF (m1)'),
-    (3, 'Gaussian + flex HRF (m3)'),
-    (6, 'Divisive Normalization (m6)'),
+# (group name, list of inferred_varea labels in that group)
+ROI_GROUPS = [
+    ('V1',   [1]),
+    ('V2',   [2]),
+    ('V3',   [3]),
+    ('V3AB', [11, 12]),
+    ('hV4',  [4]),
+    ('LO',   [7, 8]),
+    ('TO',   [9, 10]),
+    ('VO',   [5, 6]),
 ]
-YLIM_PER_MODEL = {1: (0, 1.5), 3: (0, 1.5), 6: (0, 2.0)}
+MODELS = [
+    (1, 'Gaussian (m1)'),
+    (3, 'Gauss + flexHRF (m3)'),
+    (4, 'DoG + flexHRF (m4)'),
+    (6, 'DivNorm + flexHRF (m6)'),
+]
+# Per-model y-axis range for σ — tightened to focus on the bulk.
+YLIM_PER_MODEL = {1: (0, 1.5), 3: (0, 1.5), 4: (0, 0.8), 6: (0, 2.0)}
 
 plt.rcParams.update({
-    "font.size": 13,
-    "axes.titlesize": 14,
-    "axes.labelsize": 13,
-    "xtick.labelsize": 11,
-    "ytick.labelsize": 11,
-    "figure.titlesize": 16,
+    "font.size": 11,
+    "axes.titlesize": 12,
+    "axes.labelsize": 11,
+    "xtick.labelsize": 10,
+    "ytick.labelsize": 10,
+    "legend.fontsize": 9,
+    "figure.titlesize": 15,
 })
 
 
@@ -58,6 +71,11 @@ def collect(bids, subjects, models, r2_min=0.15, sd_min=0.05, sd_max=8.0,
             ecc_min=0.2, ecc_max=8.0):
     prf = Path(bids) / 'derivatives' / 'prf'
     fs = Path(bids) / 'derivatives' / 'fmriprep' / 'sourcedata' / 'freesurfer'
+    # Map raw label -> group name.
+    label_to_group = {}
+    for gname, labels in ROI_GROUPS:
+        for l in labels:
+            label_to_group[l] = gname
     rows = []
     for sub in subjects:
         spad = f'sub-{sub:02d}'
@@ -86,53 +104,72 @@ def collect(bids, subjects, models, r2_min=0.15, sd_min=0.05, sd_max=8.0,
                         (ecc > ecc_min) & (ecc < ecc_max))
                 if not good.any():
                     continue
+                lbl_h = varea_h[good]
+                grp = np.array([label_to_group.get(int(l), '')
+                                 for l in lbl_h])
                 df = pd.DataFrame({
                     'subject': sub, 'hemi': hemi_full, 'model': model,
-                    'roi_lbl': varea_h[good],
+                    'roi': grp,
                     'ecc': ecc[good], 'sd': sd[good], 'r2': r2[good],
                 })
-                rows.append(df)
+                df = df[df['roi'] != '']
+                if len(df) > 0:
+                    rows.append(df)
     if not rows:
         return pd.DataFrame()
     return pd.concat(rows, ignore_index=True)
 
 
 def plot(df, out_path):
-    fig, axes = plt.subplots(len(MODELS), len(ROIS),
-                              figsize=(4.0 * len(ROIS), 3.0 * len(MODELS)),
+    fig, axes = plt.subplots(len(MODELS), len(ROI_GROUPS),
+                              figsize=(2.5 * len(ROI_GROUPS),
+                                       2.4 * len(MODELS)),
                               sharex=True, sharey=False)
     if len(MODELS) == 1:
         axes = axes[None, :]
     for i, (model, mname) in enumerate(MODELS):
-        for j, (lbl, rname) in enumerate(ROIS):
+        ylo, yhi = YLIM_PER_MODEL.get(model, (0, 2.0))
+        for j, (gname, _) in enumerate(ROI_GROUPS):
             ax = axes[i, j]
-            sub = df[(df['model'] == model) & (df['roi_lbl'] == lbl)]
-            if sub.empty:
-                ax.set_title(f"{rname}\n(no data)")
+            sub = df[(df['model'] == model) & (df['roi'] == gname)]
+            if sub.empty or len(sub) < 30:
+                ax.text(0.5, 0.5,
+                        f"n={len(sub)}\n(too few)",
+                        ha='center', va='center',
+                        transform=ax.transAxes, fontsize=9,
+                        color="0.5")
+                ax.set_xlim(0, 8); ax.set_ylim(ylo, yhi)
+                if i == 0: ax.set_title(gname)
+                if j == 0: ax.set_ylabel(f"{mname}\nσ (deg)")
+                if i == len(MODELS) - 1: ax.set_xlabel("Eccentricity (deg)")
                 continue
             x = sub['ecc'].to_numpy()
             y = sub['sd'].to_numpy()
-            hb = ax.hexbin(x, y, gridsize=35, cmap='magma_r',
-                            mincnt=1, linewidths=0)
-            # Linear fit + Pearson r.
+            # Clip y for hexbin so the bulk dominates the density.
+            y_clip = np.clip(y, ylo, yhi)
+            ax.hexbin(x, y_clip, gridsize=22, cmap='magma_r',
+                       mincnt=1, linewidths=0,
+                       extent=(0, 8, ylo, yhi))
+            # Linear fit on UNCLIPPED y so the slope reflects all data.
             r = float(np.corrcoef(x, y)[0, 1])
             slope, intercept = np.polyfit(x, y, 1)
             xx = np.linspace(0.2, 8, 50)
-            ax.plot(xx, slope * xx + intercept, color='#1abc9c', lw=2.0,
-                    label=f"r = {r:+.2f}\nslope = {slope:+.2f}")
-            ax.legend(loc='upper left', frameon=False, fontsize=10)
+            ax.plot(xx, slope * xx + intercept, color='#1abc9c', lw=1.8)
+            ax.text(0.05, 0.95,
+                    f"r={r:+.2f}\nslope={slope:+.2f}\nn={len(sub):,}",
+                    transform=ax.transAxes, va='top', ha='left',
+                    fontsize=8, color='#0e7d6c')
             ax.set_xlim(0, 8)
-            ylo, yhi = YLIM_PER_MODEL.get(model, (0, 2.0))
             ax.set_ylim(ylo, yhi)
             if i == 0:
-                ax.set_title(rname)
+                ax.set_title(gname)
             if i == len(MODELS) - 1:
                 ax.set_xlabel("Eccentricity (deg)")
             if j == 0:
                 ax.set_ylabel(f"{mname}\nσ (deg)")
-    fig.suptitle("Eccentricity-σ scaling across PRF model variants\n"
+    fig.suptitle("Eccentricity-σ scaling across PRF models × visual ROIs\n"
                  f"Pooled across {df['subject'].nunique()} subjects, "
-                 f"both hemispheres, r²>0.15")
+                 f"both hemispheres, r²>0.15  (slope from unclipped fit)")
     fig.tight_layout()
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -152,7 +189,7 @@ def main():
     print(f"Collecting from {len(subs)} subjects...")
     df = collect(a.bids_folder, subs, MODELS)
     print(f"  n voxels total: {len(df):,}")
-    print(df.groupby(['model', 'roi_lbl']).size())
+    print(df.groupby(['model', 'roi']).size())
     if df.empty:
         raise SystemExit("No data found")
     plot(df, a.out)
