@@ -18,8 +18,6 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=24G
 
-set -euo pipefail
-
 SUBJECT="${1:-2}"
 ROI="${2:-V1}"
 SESSION="${3:-1}"
