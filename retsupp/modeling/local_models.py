@@ -3008,3 +3008,62 @@ class GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma(
         after = out[:, 13:]                                   # (V, rest)
         out_tied = tf.concat([before, raw_sigma_dyn_col, after], axis=1)
         return out_tied
+
+
+class GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_allSharedSigma(
+    GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma,
+):
+    """Gaussian v3 + target with ALL Gaussian widths tied to ``sigma_dyn``.
+
+    Stricter constraint than
+    :class:`GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma`,
+    which only ties ``sigma_T_dyn := sigma_dyn``. This subclass
+    additionally ties ``sigma_AF := sigma_dyn``, so a single shared
+    width parameter (``sigma_dyn``, slot 8) controls all three Gaussian
+    attention fields:
+
+        sigma_AF    (slot 5)  := sigma_dyn  (slot 8)
+        sigma_T_dyn (slot 12) := sigma_dyn  (slot 8)
+
+    The σ_AF override is applied on top of the parent's σ_T_dyn override
+    by composing the forward / backward transforms. Slot indices reflect
+    the Gaussian v3 backbone (per-voxel x, y, sd, baseline, amplitude).
+
+    Initialisation
+    --------------
+    Callers should set
+    ``init_pars['sigma_AF'] = init_pars['sigma_T_dyn'] = init_pars['sigma_dyn']``
+    before passing inits to the fitter, so the (effectively unused)
+    σ_AF and σ_T_dyn raw variables start at the right place. The fit
+    script handles this.
+    """
+
+    @tf.function
+    def _transform_parameters_forward(self, parameters):
+        # Run the parent (sharedSigma) forward transform first. After
+        # this, slot 12 (σ_T_dyn) already equals slot 8 (σ_dyn); slot 5
+        # (σ_AF) still has its own softplus-positive value.
+        out = super()._transform_parameters_forward(parameters)
+
+        # Force σ_AF := σ_dyn after the parent transform.
+        # `out` shape: (n_voxels, n_parameters[+ n_hrf_pars]).
+        sigma_dyn_col = out[:, 8:9]                           # (V, 1)
+        before = out[:, :5]                                   # (V, 5)
+        after = out[:, 6:]                                    # (V, rest)
+        out_tied = tf.concat([before, sigma_dyn_col, after], axis=1)
+        return out_tied
+
+    @tf.function
+    def _transform_parameters_backward(self, parameters):
+        # Parent backward already ties raw σ_T_dyn := raw σ_dyn.
+        out = super()._transform_parameters_backward(parameters)
+
+        # Tie the raw σ_AF slot to the raw σ_dyn slot so that, if callers
+        # ever recover the "raw" parameter vector, all three sigmas
+        # agree. All three use softplus, so equal raw values give equal
+        # post-softplus values.
+        raw_sigma_dyn_col = out[:, 8:9]                       # (V, 1)
+        before = out[:, :5]                                   # (V, 5)
+        after = out[:, 6:]                                    # (V, rest)
+        out_tied = tf.concat([before, raw_sigma_dyn_col, after], axis=1)
+        return out_tied

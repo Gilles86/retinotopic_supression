@@ -55,6 +55,7 @@ from tqdm import tqdm
 from braincoder.hrf import SPMHRFModel
 from braincoder.optimize import ParameterFitter
 from retsupp.modeling.local_models import (
+    GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_allSharedSigma,
     GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma,
 )
 from retsupp.utils.data import (
@@ -230,21 +231,28 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
          output_subdir: str | None = None,
          sigma_af_init: float = 2.0,
          sigma_dyn_init: float = 2.0,
-         g_t_dyn_init: float = 0.0):
+         g_t_dyn_init: float = 0.0,
+         all_shared_sigma: bool = False):
     """Top-level fit driver."""
     bids_folder = Path(bids_folder)
     sub = Subject(subject, bids_folder)
     if output_subdir is None:
-        output_subdir = (
-            'af_prf_joint_dynamic_v3_gaussian_with_target_sharedSigma'
-        )
+        if all_shared_sigma:
+            output_subdir = (
+                'af_prf_joint_dynamic_v3_gaussian_with_target_allSharedSigma'
+            )
+        else:
+            output_subdir = (
+                'af_prf_joint_dynamic_v3_gaussian_with_target_sharedSigma'
+            )
     out_dir = (bids_folder / 'derivatives' / output_subdir
                / f'sub-{subject:02d}')
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    variant_tag = 'allSharedSigma' if all_shared_sigma else 'sharedSigma'
     print(f'== sub-{subject:02d} | roi={roi} | mode={mode} | '
           f'Gaussian (m{model_label}) voxel kernel, '
-          f'v3 + target + sharedSigma ==')
+          f'v3 + target + {variant_tag} ==')
 
     # 1) Load BOLD + paradigm + indicators.
     (bold_df, paradigm, condition_indicator, dynamic_indicator,
@@ -301,6 +309,10 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     # slot 12 with slot 8 every iteration anyway, so this just keeps the
     # raw variable in the right place).
     init_pars['sigma_T_dyn'] = init_pars['sigma_dyn']
+    if all_shared_sigma:
+        # sigma_AF := sigma_dyn at init too; forward transform overwrites
+        # slot 5 with slot 8 every iteration.
+        init_pars['sigma_AF'] = init_pars['sigma_dyn']
 
     shared_pars = ['sigma_AF', 'g_HP', 'g_LP',
                    'sigma_dyn', 'g_HP_dyn', 'g_LP_dyn',
@@ -313,7 +325,15 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     tr = sub.get_tr(session=1, run=1)
     hrf_model = SPMHRFModel(tr=tr, delay=4.5, dispersion=0.75)
 
-    model = GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma(
+    if all_shared_sigma:
+        model_cls = (
+            GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_allSharedSigma
+        )
+    else:
+        model_cls = (
+            GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma
+        )
+    model = model_cls(
         grid_coordinates=grid_coords,
         paradigm=paradigm,
         hrf_model=hrf_model,
@@ -346,7 +366,10 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     fit_pars['r2'] = r2.values if hasattr(r2, 'values') else r2
 
     # 7) Save outputs.
-    dyn_tag = 'gauss-dyn-v3-target-sharedSigma'
+    if all_shared_sigma:
+        dyn_tag = 'gauss-dyn-v3-target-allSharedSigma'
+    else:
+        dyn_tag = 'gauss-dyn-v3-target-sharedSigma'
     out_tsv = out_dir / (
         f'sub-{subject:02d}_roi-{roi}_mode-{mode}_{dyn_tag}-af-prf-pars.tsv')
     fit_pars.to_csv(out_tsv, sep='\t')
@@ -368,6 +391,7 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
             'dynamic': True,
             'with_target': True,
             'shared_target_sigma': True,
+            'shared_all_sigma': bool(all_shared_sigma),
             'voxel_kernel': 'Gaussian',
             'model_version': 'v3',
             'model_label_init': model_label,
@@ -415,6 +439,14 @@ if __name__ == '__main__':
     parser.add_argument('--sigma-af-init', type=float, default=2.0)
     parser.add_argument('--sigma-dyn-init', type=float, default=2.0)
     parser.add_argument('--g-t-dyn-init', type=float, default=0.0)
+    parser.add_argument('--all-shared-sigma', action='store_true',
+                        help='Tie all three Gaussian widths (sigma_AF, '
+                             'sigma_dyn, sigma_T_dyn) to a single shared '
+                             'parameter (= sigma_dyn). Stricter than the '
+                             'default sharedSigma (sigma_T_dyn := '
+                             'sigma_dyn only). Outputs go to '
+                             '..._allSharedSigma/ unless --output-subdir '
+                             'is set.')
     args = parser.parse_args()
     main(
         args.subject,
@@ -433,4 +465,5 @@ if __name__ == '__main__':
         sigma_af_init=args.sigma_af_init,
         sigma_dyn_init=args.sigma_dyn_init,
         g_t_dyn_init=args.g_t_dyn_init,
+        all_shared_sigma=args.all_shared_sigma,
     )
