@@ -183,22 +183,43 @@ for _m in SCHEDULES:
 
 
 def get_v1_voxel_idx(sub, masker):
-    """Return (idx_full_mask, hemi_label) — indices into the masker's flat
-    voxel vector that correspond to V1, and an L/R label per voxel.
+    """Return (idx_in_masker_flat, hemi_label) for V1 voxels.
+
+    Optimised vs. calling ``Subject.get_retinotopic_roi`` twice (once
+    per hemi):
+      - That path resamples varea AND aparc+aseg into BOLD space on
+        EACH call → 4 expensive resamples for V1_L + V1_R combined.
+      - This version resamples varea once and aparc+aseg once per
+        hemi (3 total) and indexes into the cached arrays directly.
+      - Skips two ``masker.transform`` round-trips (NIfTI → flat) by
+        using the masker's mask array directly.
     """
-    pieces = []
-    for hemi in ("L", "R"):
-        try:
-            roi_img = sub.get_retinotopic_roi(roi=f"V1_{hemi}", bold_space=True)
-        except Exception:
-            continue
-        roi_flat = masker.transform(roi_img).flatten().astype(bool)
-        idx = np.where(roi_flat)[0]
-        pieces.append((idx, np.full(len(idx), hemi, dtype="<U1")))
-    if not pieces:
+    # Resample varea atlas + per-hemi cortex masks ONCE each.
+    varea = sub.get_retinotopic_atlas(bold_space=True).get_fdata().astype(
+        np.int32)
+    lh = sub.get_hemisphere_mask("L", bold_space=True).get_fdata().astype(
+        bool)
+    rh = sub.get_hemisphere_mask("R", bold_space=True).get_fdata().astype(
+        bool)
+    v1 = (varea == 1)   # Benson V1 label.
+
+    # Map BOLD-space boolean masks → masker flat indices. The masker's
+    # `mask_img_` defines which voxels appear (in order) in its flat
+    # output, so we just index the BOLD-shape boolean array by the
+    # mask's ravel-True positions.
+    bold_mask = masker.mask_img_.get_fdata().astype(bool).ravel()
+    v1_l_flat = (v1 & lh).ravel()[bold_mask]
+    v1_r_flat = (v1 & rh).ravel()[bold_mask]
+
+    l_idx = np.where(v1_l_flat)[0]
+    r_idx = np.where(v1_r_flat)[0]
+    if len(l_idx) == 0 and len(r_idx) == 0:
         return np.array([], dtype=int), np.array([], dtype="<U1")
-    idx = np.concatenate([p[0] for p in pieces])
-    hemi = np.concatenate([p[1] for p in pieces])
+    idx = np.concatenate([l_idx, r_idx])
+    hemi = np.concatenate([
+        np.full(len(l_idx), "L", dtype="<U1"),
+        np.full(len(r_idx), "R", dtype="<U1"),
+    ])
     return idx, hemi
 
 
@@ -344,24 +365,39 @@ def fit_one_subject(subject_id, model_label):
     print(f"\n=== sub-{subject_id:02d} · model {model_label} "
           f"(init from m{init_from}) ===")
 
-    # Brain mask + masker.
+    # Brain mask + masker (needed for both cache loading and init).
     first_run = sub.get_runs(1)[0]
     bold_mask = sub.get_bold_mask(session=1, run=first_run)
     masker = maskers.NiftiMasker(mask_img=bold_mask)
     masker.fit()
 
-    # V1 voxel indices into the masker's flat vector.
-    v1_idx, v1_hemi = get_v1_voxel_idx(sub, masker)
+    # Try the pre-built BOLD+paradigm cache first — saves ~6 min of
+    # NIfTI loads. Cache built by `build_prf_cache.py`. Falls back to
+    # full load_concatenated if the cache is missing.
+    cache_file = (derivs / "prf_cache" / f"sub-{subject_id:02d}"
+                  / f"sub-{subject_id:02d}_roi-V1_res-{RESOLUTION}.npz")
+    if cache_file.exists():
+        print(f"  using cached V1 BOLD: {cache_file.name}")
+        c = np.load(cache_file)
+        data = c["bold"].astype(np.float32)
+        paradigm = c["paradigm"].astype(np.float32)
+        grid_coords = c["grid_coords"]
+        v1_idx = c["voxel_idx"]
+        v1_hemi = c["hemi"].astype("<U1")
+    else:
+        print(f"  no cache — building from cleaned NIfTIs (~6 min)")
+        v1_idx, v1_hemi = get_v1_voxel_idx(sub, masker)
+        if len(v1_idx) == 0:
+            print(f"  no V1 voxels — skipping")
+            return None
+        data_full, paradigm, grid_coords = load_concatenated(
+            sub, masker, RESOLUTION, "full")
+        data = data_full[:, v1_idx].astype(np.float32)
     if len(v1_idx) == 0:
         print(f"  no V1 voxels — skipping")
         return None
-    print(f"  V1 voxels: {len(v1_idx)}")
-
-    # Load BOLD + paradigm (full = bar + distractors).
-    data_full, paradigm, grid_coords = load_concatenated(
-        sub, masker, RESOLUTION, "full")
-    data = data_full[:, v1_idx].astype(np.float32)
-    print(f"  BOLD: {data.shape}; paradigm: {paradigm.shape}")
+    print(f"  V1 voxels: {len(v1_idx)};  "
+          f"BOLD: {data.shape}; paradigm: {paradigm.shape}")
 
     # Load init from previous step in the chain. Handles both
     # warmstart-TSV and cached-NIfTI sources via fallback logic.

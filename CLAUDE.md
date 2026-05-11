@@ -21,9 +21,18 @@ Two project conda envs are used. Definitions live under `create_env/` (sometimes
 - `retsupp_cuda` — TF 2.14 with CUDA; for GPU PRF fits.
   - Cluster: `$HOME/data/conda/envs/retsupp_cuda/bin/python`
 
-Both pip-install `libs/braincoder` (git submodule, Gilles's fork) and the local package as `-e .`.
+Both *should* pip-install `libs/braincoder` (git submodule, Gilles's fork) and the local package as `-e .`.
 
-**Default env for any NEW SLURM script in this repo:** `retsupp` (CPU) or `retsupp_cuda` (GPU). Do NOT use `neural_priors2`. Several legacy SLURM scripts still source `neural_priors2` (an env borrowed from the sibling `neural_priors` project, because at one point it was the only env that bundled `braincoder` + CUDA TF) — preserve that name **only** when editing those legacy scripts. New scripts should always reference the project envs.
+**Cluster install state (verified 2026-05-11):**
+
+| Env | Has braincoder? | Notes |
+|---|---|---|
+| `retsupp` | ❌ NO | Env exists but install never finished — braincoder is missing. Local `retsupp` (macOS) does have it. |
+| `retsupp_cuda` | ✓ yes | Use this for cluster CPU **and** GPU jobs until `retsupp` is rebuilt. TF on CUDA falls back to CPU automatically when no GPU is requested. |
+| `retsupp_neuropythy` | n/a | Standalone env for `neuropythy/register_retinotopy.py` and other neuropythy-based atlas work. Doesn't have braincoder/TF — purpose-built for the retinotopic-atlas pipeline (varea, eccen, angle, sigma maps). |
+| `neural_priors2` | ✓ yes | Borrowed env; do not use in new scripts. |
+
+**Until cluster `retsupp` is rebuilt, NEW cluster SLURM scripts should `conda activate retsupp_cuda`** (even for CPU-only jobs). Once `retsupp` is rebuilt with braincoder installed, switch CPU jobs back to it. Do NOT use `neural_priors2`. Several legacy SLURM scripts still source `neural_priors2` — preserve that name only when editing those legacy scripts.
 
 When sourcing conda inside a SLURM script, wrap the activation in `set +u` / `set -u` if the script uses `set -euo pipefail`, because conda's `activate-*.d/` hooks for some packages reference unbound variables (`ADDR2LINE`, `AR`, ...) and would abort under `set -u`.
 
