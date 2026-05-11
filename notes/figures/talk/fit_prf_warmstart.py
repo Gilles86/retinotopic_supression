@@ -92,7 +92,7 @@ sys.path.insert(0, str(REPO))
 from retsupp.modeling.fit_prf import (  # noqa: E402
     MODEL_CFG, load_concatenated, load_prior_pars,
 )
-from retsupp.utils.data import Subject, mask_valid_bold_voxels  # noqa: E402
+from retsupp.utils.data import Subject, mark_invalid_fits  # noqa: E402
 from braincoder.optimize import ParameterFitter  # noqa: E402
 from braincoder.hrf import SPMHRFModel  # noqa: E402
 
@@ -417,18 +417,6 @@ def fit_one_subject(subject_id, model_label):
     if len(v1_idx) == 0:
         print(f"  no V1 voxels — skipping")
         return None
-
-    # Filter out problematic voxels (dead / zero-variance) upstream so
-    # braincoder doesn't have to mask them internally and emit sentinel
-    # rows. See ``retsupp.utils.data.mask_valid_bold_voxels``.
-    valid = mask_valid_bold_voxels(data)
-    if not valid.all():
-        data = data[:, valid]
-        v1_idx = v1_idx[valid]
-        v1_hemi = v1_hemi[valid]
-    if len(v1_idx) == 0:
-        print(f"  no V1 voxels left after variance filter — skipping")
-        return None
     print(f"  V1 voxels: {len(v1_idx)};  "
           f"BOLD: {data.shape}; paradigm: {paradigm.shape}")
 
@@ -453,6 +441,11 @@ def fit_one_subject(subject_id, model_label):
     # runs can verify they're using EXACTLY the same voxel set as the
     # prior fit (rather than just trusting row order).
     pars["voxel_idx"] = v1_idx
+    # Post-hoc: mark zero-variance / NaN-R² voxels by setting all
+    # model params to NaN and r²=0. Output shape stays aligned with
+    # the input voxel set (important if anyone later wants to write a
+    # NIfTI from this DataFrame via masker.inverse_transform).
+    mark_invalid_fits(pars, data)
     return pars
 
 

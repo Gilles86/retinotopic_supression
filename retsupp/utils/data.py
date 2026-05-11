@@ -24,41 +24,86 @@ def get_retinotopic_labels():
 roi_order = ['V1', 'V2', 'V3', 'V3AB', 'hV4', 'LO', 'TO', 'VO']
 
 
-def mask_valid_bold_voxels(data, var_threshold=1e-6, verbose=True):
-    """Return ``valid_mask`` (1D bool array) for a (T, V) BOLD matrix.
+def mask_valid_bold_voxels(data, var_threshold=1e-6):
+    """Return a boolean mask (length V) marking voxels with non-degenerate
+    BOLD signal.
 
-    A voxel is considered *problematic* and excluded when its variance
-    over time is below ``var_threshold``. Such voxels (dead, NaN-filled,
-    drift-only, or entirely regressed-out by cleaning) cause braincoder
-    to emit sentinel rows with all parameters at 0 and a spurious R²=1
-    in the fit output. Filtering them upstream means:
+    A voxel is considered *problematic* when its variance over time is at
+    or below ``var_threshold``. Such voxels (dead, NaN-filled, drift-only,
+    or entirely regressed-out by cleaning) cause braincoder to emit
+    sentinel fit-output rows (all params = 0, spurious R² = 1).
 
-      1. Cleaner fit output (no sentinel rows in TSVs / NIfTIs).
-      2. Honest voxel counts reported in logs.
-      3. Downstream R² selection doesn't need a ``r2 < 0.99`` hack
-         to defend against this specific sentinel.
-
-    Returns a boolean mask of length ``V``. Caller applies it via
-    ``data = data[:, mask]`` and remembers the mask for any
-    auxiliary per-voxel data (e.g., ROI indices, hemisphere labels)
-    so everything stays aligned.
+    This helper does NOT filter the data — it just returns the mask.
+    Use :func:`mark_invalid_fits` to apply it post-hoc to a fit-output
+    DataFrame, which keeps the output shape aligned with the masker
+    (important for downstream NIfTI export).
 
     Args:
-        data: (T, V) array of BOLD time courses (after masker.transform).
-        var_threshold: voxels with var(BOLD) <= this are dropped.
-        verbose: print a one-line summary of the count dropped.
+        data: (T, V) array of BOLD time courses (post masker.transform).
+        var_threshold: voxels with var(BOLD) <= this are flagged invalid.
 
     Returns:
         valid (V,) bool ndarray.
     """
     import numpy as np
-    bold_var = np.var(data, axis=0)
-    valid = bold_var > var_threshold
-    n_drop = int((~valid).sum())
-    if verbose and n_drop > 0:
-        print(f"  mask_valid_bold_voxels: dropping {n_drop} of "
-              f"{len(valid)} voxels with var(BOLD) <= {var_threshold}")
-    return valid
+    return np.var(data, axis=0) > var_threshold
+
+
+def mark_invalid_fits(pars, data, var_threshold=1e-6,
+                       meta_cols=("subject", "hemi", "voxel_idx"),
+                       verbose=True):
+    """Post-hoc mark invalid voxel fits in-place on a parameter DataFrame.
+
+    A voxel's fit is marked invalid when EITHER:
+      - its BOLD variance is below ``var_threshold`` (zero-variance /
+        dead voxel — braincoder typically returns its sentinel here),
+      - or its returned R² is NaN / non-finite (degenerate parameters
+        caused the predicted response to blow up — e.g., DN denominator
+        → 0).
+
+    For each invalid voxel:
+      - all *parameter* columns are set to NaN (so anyone using them
+        gets a loud signal that the fit isn't real),
+      - the ``r2`` column is set to 0.0 (so the standard
+        ``r2 > FDR_thr`` selection drops it cleanly without any
+        ad-hoc ``r2 < 0.99`` cap).
+
+    Output shape is preserved — this is the property that lets you do
+    ``masker.inverse_transform(pars[col].values)`` downstream.
+
+    Args:
+        pars: fit-output DataFrame (one row per voxel, columns include
+              model parameters + ``r2`` + any meta cols).
+        data: (T, V) BOLD matrix the fit was run on; rows of ``pars``
+              must correspond 1-to-1 with columns of ``data``.
+        var_threshold: see :func:`mask_valid_bold_voxels`.
+        meta_cols: column names that are NOT model parameters and
+                   should NOT be replaced with NaN (e.g., subject ID).
+        verbose: print a summary of the count flagged.
+
+    Returns:
+        the modified DataFrame (also modified in place).
+    """
+    import numpy as np
+    if "r2" not in pars.columns:
+        raise ValueError("pars must have an 'r2' column")
+    valid_bold = mask_valid_bold_voxels(data, var_threshold=var_threshold)
+    r2 = pars["r2"].to_numpy()
+    invalid_r2 = ~np.isfinite(r2)
+    invalid = (~valid_bold) | invalid_r2
+    n_invalid = int(invalid.sum())
+    if verbose:
+        print(f"  mark_invalid_fits: flagged {n_invalid} of "
+              f"{len(invalid)} voxels "
+              f"(low BOLD var: {int((~valid_bold).sum())}, "
+              f"non-finite R²: {int(invalid_r2.sum())})")
+    if n_invalid > 0:
+        param_cols = [c for c in pars.columns
+                      if c != "r2" and c not in meta_cols]
+        for col in param_cols:
+            pars.loc[invalid, col] = np.nan
+        pars.loc[invalid, "r2"] = 0.0
+    return pars
 
 class Subject(object):
 
