@@ -3,6 +3,11 @@ import argparse
 import subprocess
 import os
 import numpy as np
+# neuropythy 0.12.16 uses the deprecated `np.complex` alias (numpy<1.20).
+# Restore it before importing neuropythy so register_retinotopy can run
+# under modern numpy (the retsupp_neuropythy env ships 1.26.x).
+if not hasattr(np, 'complex'):
+    np.complex = complex
 import nibabel as nib
 from pathlib import Path
 from retsupp.utils import Subject
@@ -47,12 +52,12 @@ def main(subject_id, bids_dir="/data/ds-retsupp", model=4):
             hemi_files[prefix][suffix] = str(out_file)
 
     # Set the SUBJECTS_DIR environment variable while preserving the existing environment
-    env = os.environ.copy()
-    env['SUBJECTS_DIR'] = str(freesurfer_dir)
+    os.environ['SUBJECTS_DIR'] = str(freesurfer_dir)
 
-    # Define the neuropythy command
-    cmd = [
-        'python', '-m', 'neuropythy', 'register_retinotopy', f"sub-{sub.subject_id:02d}",
+    # Call neuropythy in-process (was subprocess; subprocess loses the
+    # np.complex monkey-patch above and fails under numpy>=1.20).
+    argv = [
+        'register_retinotopy', f"sub-{sub.subject_id:02d}",
         '--lh-eccen', hemi_files['lh']['prf_eccen'],
         '--lh-angle', hemi_files['lh']['prf_angle'],
         '--lh-weight', hemi_files['lh']['prf_vexpl'],
@@ -61,14 +66,13 @@ def main(subject_id, bids_dir="/data/ds-retsupp", model=4):
         '--rh-angle', hemi_files['rh']['prf_angle'],
         '--rh-weight', hemi_files['rh']['prf_vexpl'],
         '--rh-radius', hemi_files['rh']['prf_radius'],
-        '--verbose'
+        '--verbose',
     ]
-
     print("Starting retinotopy registration...")
-    print(' '.join(cmd))  # Print the command for transparency
+    print('neuropythy ' + ' '.join(argv))
 
-    # Run the command with live output
-    result = subprocess.run(cmd, env=env, check=True)
+    from neuropythy.commands import register_retinotopy as rr
+    rr.main(argv[1:])
 
     print("\nRegistration complete! Results saved in:")
     print(f"Surface files: {surf_dir}/")
