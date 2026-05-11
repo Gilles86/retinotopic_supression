@@ -136,11 +136,19 @@ def chunked(work_fn, n_vox: int, chunk_size: int, label: str):
     return pd.concat(out, axis=0).sort_index()
 
 
-def grid_fit(model, data, paradigm, chunk_size, debug=False):
-    """Gaussian (x, y, σ) grid + baseline/amplitude refine."""
+def grid_fit(model, data, paradigm, chunk_size, debug=False, sd_min=0.0):
+    """Gaussian (x, y, σ) grid + baseline/amplitude refine.
+
+    ``sd_min`` is the lower bound for σ enforced by the model's transform
+    (see :func:`braincoder.models._sd_softplus_forward`). The grid's
+    σ-axis lower bound is clamped to at least ``sd_min`` so the initial
+    grid search never proposes a σ that would be rejected by the
+    transform.
+    """
     grid_x = np.linspace(-3, 3, 5 if debug else 12)
     grid_y = np.linspace(-3, 3, 5 if debug else 12)
-    grid_sd = np.linspace(1.0, 4.0, 4 if debug else 8)
+    sd_low = float(max(1.0, sd_min))
+    grid_sd = np.linspace(sd_low, 4.0, 4 if debug else 8)
 
     def work(idx):
         f = ParameterFitter(model, data[:, idx], paradigm)
@@ -246,7 +254,8 @@ def main(subject: int, model_label: int,
          output_suffix: str = '',
          alternating: bool = True,
          outer_cycles: int = 4,
-         inner_iters: int = 1000):
+         inner_iters: int = 1000,
+         sd_min: float = 0.0):
     """Fit one PRF model. If chunk_index/n_chunks given, fit ONLY voxels
     in that chunk and save partial results to a chunks/ subdir; a
     separate merge step concatenates all chunks into final NIfTIs."""
@@ -314,7 +323,9 @@ def main(subject: int, model_label: int,
     hrf = SPMHRFModel(tr=1.6, delay=4.5, dispersion=0.75)
     factory = lambda d, p: cfg['cls'](  # noqa: E731
         grid_coordinates=grid_coords, paradigm=p, hrf_model=hrf, data=d,
-        flexible_hrf_parameters=cfg['flex_hrf'])
+        flexible_hrf_parameters=cfg['flex_hrf'],
+        sd_min=sd_min)
+    print(f"  sd_min={sd_min} (σ lower bound for sd / srf_size / sigma_AF / ...)")
 
     if cfg['init_from'] is None:
         # Model 1: grid + GD.
@@ -322,10 +333,10 @@ def main(subject: int, model_label: int,
         if chunked_mode:
             d_chunk = data[:, chunk_idx]
             init = grid_fit(factory(d_chunk, paradigm), d_chunk, paradigm,
-                             voxel_chunk_size, debug=debug)
+                             voxel_chunk_size, debug=debug, sd_min=sd_min)
         else:
             init = grid_fit(factory(data, paradigm), data, paradigm,
-                             voxel_chunk_size, debug=debug)
+                             voxel_chunk_size, debug=debug, sd_min=sd_min)
     else:
         # Models 2-6: load prior fit, add extras, GD only.
         print(f"\n=== model {model_label} (init from model {cfg['init_from']}) ===")
@@ -397,6 +408,7 @@ def main(subject: int, model_label: int,
         'alternating': bool(use_alt),
         'outer_cycles': (int(outer_cycles) if use_alt else None),
         'inner_iters': (int(inner_iters) if use_alt else None),
+        'sd_min': float(sd_min),
         'n_voxels': int(data.shape[1]),
         'n_timepoints': int(data.shape[0]),
         'chunked_mode': bool(chunked_mode),
@@ -470,6 +482,15 @@ if __name__ == "__main__":
     p.add_argument('--inner-iters', type=int, default=1000,
                    help='Inner GD iterations per phase (spatial or HRF) '
                         'within each outer cycle.')
+    p.add_argument('--sd-min', type=float, default=0.0,
+                   help='Lower bound for every σ-like parameter (sd, '
+                        'srf_size, sigma_AF, sigma_dyn, ...) enforced '
+                        'via shifted softplus σ = sd_min + softplus(raw) '
+                        'in the braincoder model. Default 0.0 preserves '
+                        'the old (unbounded) behaviour. A positive value '
+                        '(e.g. 0.4° ≈ 2 grid pixels at resolution=50) '
+                        'eliminates the σ-collapse pathology that '
+                        'produces NaN predictions and phantom R²=1 voxels.')
     a = p.parse_args()
     main(a.subject, a.model, bids_folder=a.bids_folder,
          resolution=a.resolution, voxel_chunk_size=a.voxel_chunk_size,
@@ -479,4 +500,5 @@ if __name__ == "__main__":
          output_suffix=a.output_suffix,
          alternating=(not a.no_alternating),
          outer_cycles=a.outer_cycles,
-         inner_iters=a.inner_iters)
+         inner_iters=a.inner_iters,
+         sd_min=a.sd_min)

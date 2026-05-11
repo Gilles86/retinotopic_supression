@@ -94,6 +94,8 @@ from braincoder.models import (
     DynamicAttentionFieldPRF2D_v3,
     DynamicAttentionFieldPRF2DWithHRF_v3,
     HRFEncodingModel,
+    _sd_softplus_forward,
+    _sd_softplus_inverse,
 )
 
 
@@ -304,8 +306,9 @@ class DoGDynamicAttentionFieldPRF2D_v3_target(DoGDynamicAttentionFieldPRF2D_v3):
         Slots 0..12 are the v3 encoding parameters: delegate to the v3
         parent's transform. Slots 13 (``g_T_dyn``) and 14
         (``sigma_T_dyn``) are NEW: g_T_dyn is sign-aware (signed mode
-        passes through; otherwise softplus); sigma_T_dyn is always
-        softplus-positive (matches sigma_AF / sigma_dyn).
+        passes through; otherwise softplus); sigma_T_dyn uses the
+        shifted-softplus controlled by ``self.sd_min`` (matches sigma_AF
+        / sigma_dyn).
         """
         v3_pars = DoGDynamicAttentionFieldPRF2D_v3._transform_parameters_forward(
             self, parameters[:, :self._N_V3_ENC_PARS])
@@ -314,7 +317,8 @@ class DoGDynamicAttentionFieldPRF2D_v3_target(DoGDynamicAttentionFieldPRF2D_v3):
             g_T_dyn = parameters[:, 13][:, tf.newaxis]
         else:
             g_T_dyn = tf.math.softplus(parameters[:, 13][:, tf.newaxis])
-        sigma_T_dyn = tf.math.softplus(parameters[:, 14][:, tf.newaxis])
+        sigma_T_dyn = _sd_softplus_forward(
+            parameters[:, 14][:, tf.newaxis], self.sd_min)
 
         return tf.concat([v3_pars, g_T_dyn, sigma_T_dyn], axis=1)
 
@@ -328,8 +332,8 @@ class DoGDynamicAttentionFieldPRF2D_v3_target(DoGDynamicAttentionFieldPRF2D_v3):
         else:
             g_T_dyn_unb = tfp.math.softplus_inverse(
                 parameters[:, 13][:, tf.newaxis])
-        sigma_T_dyn_unb = tfp.math.softplus_inverse(
-            parameters[:, 14][:, tf.newaxis])
+        sigma_T_dyn_unb = _sd_softplus_inverse(
+            parameters[:, 14][:, tf.newaxis], self.sd_min)
 
         return tf.concat([v3_pars, g_T_dyn_unb, sigma_T_dyn_unb], axis=1)
 
@@ -731,17 +735,17 @@ class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_factorial(
 
         x = enc[:, 0:1]
         y = enc[:, 1:2]
-        sd = tf.math.softplus(enc[:, 2:3])
+        sd = _sd_softplus_forward(enc[:, 2:3], self.sd_min)
         baseline = enc[:, 3:4]
         amplitude = enc[:, 4:5]
         srf_amp = tf.math.softplus(enc[:, 5:6])
-        srf_size = tf.math.softplus(enc[:, 6:7])
-        sigma_AF = tf.math.softplus(enc[:, 7:8])
+        srf_size = _sd_softplus_forward(enc[:, 6:7], self.sd_min)
+        sigma_AF = _sd_softplus_forward(enc[:, 7:8], self.sd_min)
         g_HP = _gain_forward_factorial(enc[:, 8:9],
                                        self._sign_pattern['g_HP'])
         g_LP = _gain_forward_factorial(enc[:, 9:10],
                                        self._sign_pattern['g_LP'])
-        sigma_dyn = tf.math.softplus(enc[:, 10:11])
+        sigma_dyn = _sd_softplus_forward(enc[:, 10:11], self.sd_min)
         g_HP_dyn = _gain_forward_factorial(enc[:, 11:12],
                                            self._sign_pattern['g_HP_dyn'])
         g_LP_dyn = _gain_forward_factorial(enc[:, 12:13],
@@ -775,17 +779,17 @@ class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_factorial(
 
         x = enc[:, 0:1]
         y = enc[:, 1:2]
-        sd = tfp.math.softplus_inverse(enc[:, 2:3])
+        sd = _sd_softplus_inverse(enc[:, 2:3], self.sd_min)
         baseline = enc[:, 3:4]
         amplitude = enc[:, 4:5]
         srf_amp = tfp.math.softplus_inverse(enc[:, 5:6])
-        srf_size = tfp.math.softplus_inverse(enc[:, 6:7])
-        sigma_AF = tfp.math.softplus_inverse(enc[:, 7:8])
+        srf_size = _sd_softplus_inverse(enc[:, 6:7], self.sd_min)
+        sigma_AF = _sd_softplus_inverse(enc[:, 7:8], self.sd_min)
         g_HP = _gain_backward_factorial(enc[:, 8:9],
                                         self._sign_pattern['g_HP'])
         g_LP = _gain_backward_factorial(enc[:, 9:10],
                                         self._sign_pattern['g_LP'])
-        sigma_dyn = tfp.math.softplus_inverse(enc[:, 10:11])
+        sigma_dyn = _sd_softplus_inverse(enc[:, 10:11], self.sd_min)
         g_HP_dyn = _gain_backward_factorial(enc[:, 11:12],
                                             self._sign_pattern['g_HP_dyn'])
         g_LP_dyn = _gain_backward_factorial(enc[:, 12:13],
@@ -962,17 +966,17 @@ class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_runPosition(
         # Replicates factorial-parent _transform_parameters_forward.
         x = enc[:, 0:1]
         y = enc[:, 1:2]
-        sd = tf.math.softplus(enc[:, 2:3])
+        sd = _sd_softplus_forward(enc[:, 2:3], self.sd_min)
         baseline = enc[:, 3:4]
         amplitude = enc[:, 4:5]
         srf_amp = tf.math.softplus(enc[:, 5:6])
-        srf_size = tf.math.softplus(enc[:, 6:7])
-        sigma_AF = tf.math.softplus(enc[:, 7:8])
+        srf_size = _sd_softplus_forward(enc[:, 6:7], self.sd_min)
+        sigma_AF = _sd_softplus_forward(enc[:, 7:8], self.sd_min)
         g_HP = _gain_forward_factorial(enc[:, 8:9],
                                        self._sign_pattern['g_HP'])
         g_LP = _gain_forward_factorial(enc[:, 9:10],
                                        self._sign_pattern['g_LP'])
-        sigma_dyn = tf.math.softplus(enc[:, 10:11])
+        sigma_dyn = _sd_softplus_forward(enc[:, 10:11], self.sd_min)
         g_HP_dyn = _gain_forward_factorial(enc[:, 11:12],
                                            self._sign_pattern['g_HP_dyn'])
         g_LP_dyn = _gain_forward_factorial(enc[:, 12:13],
@@ -1014,17 +1018,17 @@ class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_runPosition(
 
         x = enc[:, 0:1]
         y = enc[:, 1:2]
-        sd = tfp.math.softplus_inverse(enc[:, 2:3])
+        sd = _sd_softplus_inverse(enc[:, 2:3], self.sd_min)
         baseline = enc[:, 3:4]
         amplitude = enc[:, 4:5]
         srf_amp = tfp.math.softplus_inverse(enc[:, 5:6])
-        srf_size = tfp.math.softplus_inverse(enc[:, 6:7])
-        sigma_AF = tfp.math.softplus_inverse(enc[:, 7:8])
+        srf_size = _sd_softplus_inverse(enc[:, 6:7], self.sd_min)
+        sigma_AF = _sd_softplus_inverse(enc[:, 7:8], self.sd_min)
         g_HP = _gain_backward_factorial(enc[:, 8:9],
                                         self._sign_pattern['g_HP'])
         g_LP = _gain_backward_factorial(enc[:, 9:10],
                                         self._sign_pattern['g_LP'])
-        sigma_dyn = tfp.math.softplus_inverse(enc[:, 10:11])
+        sigma_dyn = _sd_softplus_inverse(enc[:, 10:11], self.sd_min)
         g_HP_dyn = _gain_backward_factorial(enc[:, 11:12],
                                             self._sign_pattern['g_HP_dyn'])
         g_LP_dyn = _gain_backward_factorial(enc[:, 12:13],
@@ -1940,17 +1944,17 @@ class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_repeat(
         # Replicate parent's encoding-side transform inline.
         x = enc[:, 0:1]
         y = enc[:, 1:2]
-        sd = tf.math.softplus(enc[:, 2:3])
+        sd = _sd_softplus_forward(enc[:, 2:3], self.sd_min)
         baseline = enc[:, 3:4]
         amplitude = enc[:, 4:5]
         srf_amp = tf.math.softplus(enc[:, 5:6])
-        srf_size = tf.math.softplus(enc[:, 6:7])
-        sigma_AF = tf.math.softplus(enc[:, 7:8])
+        srf_size = _sd_softplus_forward(enc[:, 6:7], self.sd_min)
+        sigma_AF = _sd_softplus_forward(enc[:, 7:8], self.sd_min)
         g_HP = _gain_forward_factorial(enc[:, 8:9],
                                        self._sign_pattern['g_HP'])
         g_LP = _gain_forward_factorial(enc[:, 9:10],
                                        self._sign_pattern['g_LP'])
-        sigma_dyn = tf.math.softplus(enc[:, 10:11])
+        sigma_dyn = _sd_softplus_forward(enc[:, 10:11], self.sd_min)
         g_HP_dyn = _gain_forward_factorial(enc[:, 11:12],
                                            self._sign_pattern['g_HP_dyn'])
         g_LP_dyn = _gain_forward_factorial(enc[:, 12:13],
@@ -1990,17 +1994,17 @@ class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_repeat(
 
         x = enc[:, 0:1]
         y = enc[:, 1:2]
-        sd = tfp.math.softplus_inverse(enc[:, 2:3])
+        sd = _sd_softplus_inverse(enc[:, 2:3], self.sd_min)
         baseline = enc[:, 3:4]
         amplitude = enc[:, 4:5]
         srf_amp = tfp.math.softplus_inverse(enc[:, 5:6])
-        srf_size = tfp.math.softplus_inverse(enc[:, 6:7])
-        sigma_AF = tfp.math.softplus_inverse(enc[:, 7:8])
+        srf_size = _sd_softplus_inverse(enc[:, 6:7], self.sd_min)
+        sigma_AF = _sd_softplus_inverse(enc[:, 7:8], self.sd_min)
         g_HP = _gain_backward_factorial(enc[:, 8:9],
                                         self._sign_pattern['g_HP'])
         g_LP = _gain_backward_factorial(enc[:, 9:10],
                                         self._sign_pattern['g_LP'])
-        sigma_dyn = tfp.math.softplus_inverse(enc[:, 10:11])
+        sigma_dyn = _sd_softplus_inverse(enc[:, 10:11], self.sd_min)
         g_HP_dyn = _gain_backward_factorial(enc[:, 11:12],
                                             self._sign_pattern['g_HP_dyn'])
         g_LP_dyn = _gain_backward_factorial(enc[:, 12:13],
@@ -2148,17 +2152,17 @@ class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_runPosition_dyn
         # Replicate factorial-parent transform for the 15 enc slots.
         x = enc[:, 0:1]
         y = enc[:, 1:2]
-        sd = tf.math.softplus(enc[:, 2:3])
+        sd = _sd_softplus_forward(enc[:, 2:3], self.sd_min)
         baseline = enc[:, 3:4]
         amplitude = enc[:, 4:5]
         srf_amp = tf.math.softplus(enc[:, 5:6])
-        srf_size = tf.math.softplus(enc[:, 6:7])
-        sigma_AF = tf.math.softplus(enc[:, 7:8])
+        srf_size = _sd_softplus_forward(enc[:, 6:7], self.sd_min)
+        sigma_AF = _sd_softplus_forward(enc[:, 7:8], self.sd_min)
         g_HP = _gain_forward_factorial(enc[:, 8:9],
                                        self._sign_pattern['g_HP'])
         g_LP = _gain_forward_factorial(enc[:, 9:10],
                                        self._sign_pattern['g_LP'])
-        sigma_dyn = tf.math.softplus(enc[:, 10:11])
+        sigma_dyn = _sd_softplus_forward(enc[:, 10:11], self.sd_min)
         # Force the legacy g_HP_dyn slot to 0; the per-position gains
         # do all the work.
         g_HP_dyn = tf.zeros_like(enc[:, 11:12])
@@ -2205,17 +2209,17 @@ class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_runPosition_dyn
 
         x = enc[:, 0:1]
         y = enc[:, 1:2]
-        sd = tfp.math.softplus_inverse(enc[:, 2:3])
+        sd = _sd_softplus_inverse(enc[:, 2:3], self.sd_min)
         baseline = enc[:, 3:4]
         amplitude = enc[:, 4:5]
         srf_amp = tfp.math.softplus_inverse(enc[:, 5:6])
-        srf_size = tfp.math.softplus_inverse(enc[:, 6:7])
-        sigma_AF = tfp.math.softplus_inverse(enc[:, 7:8])
+        srf_size = _sd_softplus_inverse(enc[:, 6:7], self.sd_min)
+        sigma_AF = _sd_softplus_inverse(enc[:, 7:8], self.sd_min)
         g_HP = _gain_backward_factorial(enc[:, 8:9],
                                         self._sign_pattern['g_HP'])
         g_LP = _gain_backward_factorial(enc[:, 9:10],
                                         self._sign_pattern['g_LP'])
-        sigma_dyn = tfp.math.softplus_inverse(enc[:, 10:11])
+        sigma_dyn = _sd_softplus_inverse(enc[:, 10:11], self.sd_min)
         # Legacy slot — kept at 0 in forward; map to 0 in backward too.
         g_HP_dyn = tf.zeros_like(enc[:, 11:12])
         g_LP_dyn = _gain_backward_factorial(enc[:, 12:13],
@@ -2487,12 +2491,12 @@ class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_perTrial(
         # Parent encoding-side transforms.
         x = enc[:, 0:1]
         y = enc[:, 1:2]
-        sd = tf.math.softplus(enc[:, 2:3])
+        sd = _sd_softplus_forward(enc[:, 2:3], self.sd_min)
         baseline = enc[:, 3:4]
         amplitude = enc[:, 4:5]
         srf_amp = tf.math.softplus(enc[:, 5:6])
-        srf_size = tf.math.softplus(enc[:, 6:7])
-        sigma_AF = tf.math.softplus(enc[:, 7:8])
+        srf_size = _sd_softplus_forward(enc[:, 6:7], self.sd_min)
+        sigma_AF = _sd_softplus_forward(enc[:, 7:8], self.sd_min)
         # g_HP / g_LP : the parent (v3_target / sharedSigma chain) treats
         # them through the parent v3 transform. We replicate the signed
         # branch (the fit script always uses mode='signed') for
@@ -2504,7 +2508,7 @@ class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_perTrial(
         else:
             g_HP = tf.math.softplus(enc[:, 8:9])
             g_LP = tf.math.softplus(enc[:, 9:10])
-        sigma_dyn = tf.math.softplus(enc[:, 10:11])
+        sigma_dyn = _sd_softplus_forward(enc[:, 10:11], self.sd_min)
         # Force legacy scalar dyn gains to zero — per-trial vectors carry
         # the dyn signal.
         g_HP_dyn = tf.zeros_like(enc[:, 11:12])
@@ -2542,19 +2546,19 @@ class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_perTrial(
 
         x = enc[:, 0:1]
         y = enc[:, 1:2]
-        sd = tfp.math.softplus_inverse(enc[:, 2:3])
+        sd = _sd_softplus_inverse(enc[:, 2:3], self.sd_min)
         baseline = enc[:, 3:4]
         amplitude = enc[:, 4:5]
         srf_amp = tfp.math.softplus_inverse(enc[:, 5:6])
-        srf_size = tfp.math.softplus_inverse(enc[:, 6:7])
-        sigma_AF = tfp.math.softplus_inverse(enc[:, 7:8])
+        srf_size = _sd_softplus_inverse(enc[:, 6:7], self.sd_min)
+        sigma_AF = _sd_softplus_inverse(enc[:, 7:8], self.sd_min)
         if self._signed_gains:
             g_HP = enc[:, 8:9]
             g_LP = enc[:, 9:10]
         else:
             g_HP = tfp.math.softplus_inverse(enc[:, 8:9])
             g_LP = tfp.math.softplus_inverse(enc[:, 9:10])
-        sigma_dyn = tfp.math.softplus_inverse(enc[:, 10:11])
+        sigma_dyn = _sd_softplus_inverse(enc[:, 10:11], self.sd_min)
         # Map zero-clamped legacy slots back to zero raw too.
         g_HP_dyn = tf.zeros_like(enc[:, 11:12])
         g_LP_dyn = tf.zeros_like(enc[:, 12:13])
@@ -2843,7 +2847,8 @@ class GaussianDynamicAttentionFieldPRF2D_v3_target(DynamicAttentionFieldPRF2D_v3
             g_T_dyn = parameters[:, 11][:, tf.newaxis]
         else:
             g_T_dyn = tf.math.softplus(parameters[:, 11][:, tf.newaxis])
-        sigma_T_dyn = tf.math.softplus(parameters[:, 12][:, tf.newaxis])
+        sigma_T_dyn = _sd_softplus_forward(
+            parameters[:, 12][:, tf.newaxis], self.sd_min)
 
         return tf.concat([v3_pars, g_T_dyn, sigma_T_dyn], axis=1)
 
@@ -2857,8 +2862,8 @@ class GaussianDynamicAttentionFieldPRF2D_v3_target(DynamicAttentionFieldPRF2D_v3
         else:
             g_T_dyn_unb = tfp.math.softplus_inverse(
                 parameters[:, 11][:, tf.newaxis])
-        sigma_T_dyn_unb = tfp.math.softplus_inverse(
-            parameters[:, 12][:, tf.newaxis])
+        sigma_T_dyn_unb = _sd_softplus_inverse(
+            parameters[:, 12][:, tf.newaxis], self.sd_min)
 
         return tf.concat([v3_pars, g_T_dyn_unb, sigma_T_dyn_unb], axis=1)
 
