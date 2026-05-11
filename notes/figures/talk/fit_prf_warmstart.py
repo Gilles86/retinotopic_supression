@@ -403,6 +403,25 @@ def fit_one_subject(subject_id, model_label):
     if len(v1_idx) == 0:
         print(f"  no V1 voxels — skipping")
         return None
+
+    # Drop voxels with effectively-zero BOLD variance. These are
+    # "problematic" voxels that braincoder would otherwise mask out
+    # internally and stamp with sentinel zeros + r²=1 in the output.
+    # Filtering upstream means: log a count, exclude them cleanly,
+    # never write sentinel rows. The threshold is generous — only
+    # truly dead voxels (NaN, all-zero, or numerically degenerate)
+    # have variance below 1e-6.
+    bold_var = data.var(axis=0)
+    valid = bold_var > 1e-6
+    n_dropped = int(np.sum(~valid))
+    if n_dropped > 0:
+        print(f"  dropping {n_dropped} V1 voxels with var(BOLD) < 1e-6")
+        data = data[:, valid]
+        v1_idx = v1_idx[valid]
+        v1_hemi = v1_hemi[valid]
+    if len(v1_idx) == 0:
+        print(f"  no V1 voxels left after variance filter — skipping")
+        return None
     print(f"  V1 voxels: {len(v1_idx)};  "
           f"BOLD: {data.shape}; paradigm: {paradigm.shape}")
 
