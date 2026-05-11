@@ -23,6 +23,43 @@ def get_retinotopic_labels():
 
 roi_order = ['V1', 'V2', 'V3', 'V3AB', 'hV4', 'LO', 'TO', 'VO']
 
+
+def mask_valid_bold_voxels(data, var_threshold=1e-6, verbose=True):
+    """Return ``valid_mask`` (1D bool array) for a (T, V) BOLD matrix.
+
+    A voxel is considered *problematic* and excluded when its variance
+    over time is below ``var_threshold``. Such voxels (dead, NaN-filled,
+    drift-only, or entirely regressed-out by cleaning) cause braincoder
+    to emit sentinel rows with all parameters at 0 and a spurious R²=1
+    in the fit output. Filtering them upstream means:
+
+      1. Cleaner fit output (no sentinel rows in TSVs / NIfTIs).
+      2. Honest voxel counts reported in logs.
+      3. Downstream R² selection doesn't need a ``r2 < 0.99`` hack
+         to defend against this specific sentinel.
+
+    Returns a boolean mask of length ``V``. Caller applies it via
+    ``data = data[:, mask]`` and remembers the mask for any
+    auxiliary per-voxel data (e.g., ROI indices, hemisphere labels)
+    so everything stays aligned.
+
+    Args:
+        data: (T, V) array of BOLD time courses (after masker.transform).
+        var_threshold: voxels with var(BOLD) <= this are dropped.
+        verbose: print a one-line summary of the count dropped.
+
+    Returns:
+        valid (V,) bool ndarray.
+    """
+    import numpy as np
+    bold_var = np.var(data, axis=0)
+    valid = bold_var > var_threshold
+    n_drop = int((~valid).sum())
+    if verbose and n_drop > 0:
+        print(f"  mask_valid_bold_voxels: dropping {n_drop} of "
+              f"{len(valid)} voxels with var(BOLD) <= {var_threshold}")
+    return valid
+
 class Subject(object):
 
     def __init__(self, subject_id, bids_folder='/data/ds-retsupp'):

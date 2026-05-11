@@ -92,7 +92,7 @@ sys.path.insert(0, str(REPO))
 from retsupp.modeling.fit_prf import (  # noqa: E402
     MODEL_CFG, load_concatenated, load_prior_pars,
 )
-from retsupp.utils.data import Subject  # noqa: E402
+from retsupp.utils.data import Subject, mask_valid_bold_voxels  # noqa: E402
 from braincoder.optimize import ParameterFitter  # noqa: E402
 from braincoder.hrf import SPMHRFModel  # noqa: E402
 
@@ -290,10 +290,11 @@ def build_model_factory(model_label, grid_coords):
     return factory
 
 
-# Columns that are derived statistics, never model parameters. Always
-# stripped from init frames before passing to ParameterFitter.fit so
-# the optimizer can't be confused by them.
-DERIVED_COLS = ["r2", "theta", "ecc", "p_signal", "subject", "hemi"]
+# Columns that are derived statistics or metadata, never model
+# parameters. Always stripped from init frames before passing to
+# ParameterFitter.fit so the optimizer can't be confused by them.
+DERIVED_COLS = ["r2", "theta", "ecc", "p_signal", "subject", "hemi",
+                "voxel_idx"]
 
 
 def load_init_pars(subject_id, init_from, masker, derivs, v1_idx):
@@ -301,17 +302,30 @@ def load_init_pars(subject_id, init_from, masker, derivs, v1_idx):
 
     Strategy:
       1. Try this subject's warm-start TSV (`prf_warmstart_m{N}_V1_
-         sub-{NN}.tsv`) — already V1-only, no subsetting needed.
+         sub-{NN}.tsv`) — already V1-only, filtered the same way as
+         this run. If the TSV has a ``voxel_idx`` column, we verify
+         it matches ``v1_idx`` exactly so any mask drift between
+         runs surfaces as a hard error.
       2. Else fall back to cached NIfTIs at `derivatives/prf/model{N}/`
          and subset to V1 via `v1_idx`.
-    Either way, derived statistic columns (`r2, theta, ecc, p_signal`)
-    are stripped so the optimizer can't see them.
+
+    Either way, derived statistic columns (``r2, theta, ecc, p_signal,
+    voxel_idx, ...``) are stripped before returning so the optimizer
+    sees only model parameters.
     """
     tsv = OUT_DIR / (f"prf_warmstart_m{init_from}_V1_"
                      f"sub-{subject_id:02d}.tsv")
     if tsv.exists():
         print(f"  init source: warmstart TSV (m{init_from})")
         df = pd.read_csv(tsv, sep="\t")
+        # Verify the prior was fit on the same voxel set we're using now.
+        if "voxel_idx" in df.columns:
+            prior_idx = df["voxel_idx"].to_numpy()
+            if not np.array_equal(prior_idx, v1_idx):
+                raise RuntimeError(
+                    f"voxel_idx mismatch between m{init_from} warmstart "
+                    f"and current V1 mask: prior has {len(prior_idx)}, "
+                    f"current has {len(v1_idx)}. Filter / mask drift?")
     else:
         print(f"  init source: cached NIfTIs (m{init_from})")
         df = load_prior_pars(subject_id, init_from, derivs, masker)
@@ -404,18 +418,11 @@ def fit_one_subject(subject_id, model_label):
         print(f"  no V1 voxels — skipping")
         return None
 
-    # Drop voxels with effectively-zero BOLD variance. These are
-    # "problematic" voxels that braincoder would otherwise mask out
-    # internally and stamp with sentinel zeros + r²=1 in the output.
-    # Filtering upstream means: log a count, exclude them cleanly,
-    # never write sentinel rows. The threshold is generous — only
-    # truly dead voxels (NaN, all-zero, or numerically degenerate)
-    # have variance below 1e-6.
-    bold_var = data.var(axis=0)
-    valid = bold_var > 1e-6
-    n_dropped = int(np.sum(~valid))
-    if n_dropped > 0:
-        print(f"  dropping {n_dropped} V1 voxels with var(BOLD) < 1e-6")
+    # Filter out problematic voxels (dead / zero-variance) upstream so
+    # braincoder doesn't have to mask them internally and emit sentinel
+    # rows. See ``retsupp.utils.data.mask_valid_bold_voxels``.
+    valid = mask_valid_bold_voxels(data)
+    if not valid.all():
         data = data[:, valid]
         v1_idx = v1_idx[valid]
         v1_hemi = v1_hemi[valid]
@@ -442,6 +449,10 @@ def fit_one_subject(subject_id, model_label):
 
     pars["subject"] = subject_id
     pars["hemi"] = v1_hemi
+    # Persist the brain-mask flat-vector index per voxel so chained
+    # runs can verify they're using EXACTLY the same voxel set as the
+    # prior fit (rather than just trusting row order).
+    pars["voxel_idx"] = v1_idx
     return pars
 
 
