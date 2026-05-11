@@ -12,7 +12,7 @@ import nibabel as nib
 from pathlib import Path
 from retsupp.utils import Subject
 
-def main(subject_id, bids_dir="/data/ds-retsupp", model=4):
+def main(subject_id, bids_dir="/data/ds-retsupp", model=4, fs_subject=None):
     # Load subject and pRF parameters
     sub = Subject(subject_id, bids_folder=bids_dir)
     pars = sub.get_prf_parameters_surface(model)
@@ -24,10 +24,19 @@ def main(subject_id, bids_dir="/data/ds-retsupp", model=4):
     pars.loc['L', 'angle'] = pars['lh_angle']
     pars.loc['R', 'angle'] = pars['rh_angle']
 
-    # Set up output directories
+    # Set up output directories.  ``fs_subject`` allows pointing at an
+    # alternate freesurfer subject dir (e.g. ``sub-16_ses-1`` when the
+    # canonical ``sub-16`` recon-all has a different vertex count than
+    # the prf .gii inputs).  When given, both the prf .mgz inputs and
+    # neuropythy's registration run against this alternate dir; the
+    # caller is responsible for copying the resulting ``inferred_*.mgz``
+    # back into the canonical sub-XX/mri/ afterwards (safe because the
+    # underlying ``orig.mgz`` is byte-identical between recon runs on
+    # the same input).
+    fs_subject = fs_subject or f"sub-{sub.subject_id:02d}"
     bids_dir = Path(bids_dir)
     freesurfer_dir = bids_dir / "derivatives" / "fmriprep" / "sourcedata" / "freesurfer"
-    subject_dir = freesurfer_dir / f"sub-{sub.subject_id:02d}"
+    subject_dir = freesurfer_dir / fs_subject
     surf_dir = subject_dir / "surf"
     surf_dir.mkdir(parents=True, exist_ok=True)
 
@@ -57,7 +66,7 @@ def main(subject_id, bids_dir="/data/ds-retsupp", model=4):
     # Call neuropythy in-process (was subprocess; subprocess loses the
     # np.complex monkey-patch above and fails under numpy>=1.20).
     argv = [
-        'register_retinotopy', f"sub-{sub.subject_id:02d}",
+        'register_retinotopy', fs_subject,
         '--lh-eccen', hemi_files['lh']['prf_eccen'],
         '--lh-angle', hemi_files['lh']['prf_angle'],
         '--lh-weight', hemi_files['lh']['prf_vexpl'],
@@ -85,5 +94,10 @@ if __name__ == "__main__":
     parser.add_argument("--model", type=int, default=4,
                         help="PRF model number to source surface files from (default 4). "
                              "Use 1 when only Gaussian m1 fits exist (e.g. recovery subjects).")
+    parser.add_argument("--fs-subject", type=str, default=None,
+                        help="Override the freesurfer subject id used as SUBJECTS_DIR/<subject> "
+                             "(default sub-XX). Use for recovery subjects where the canonical "
+                             "freesurfer recon has a different vertex count than the .gii "
+                             "surface PRF fits; the matching recon may live under sub-XX_ses-1.")
     args = parser.parse_args()
-    main(args.subject_id, args.bids_dir, model=args.model)
+    main(args.subject_id, args.bids_dir, model=args.model, fs_subject=args.fs_subject)
