@@ -880,12 +880,20 @@ class Subject(object):
             # Get rid of amplitude parmameter
             labels.pop(labels.index('amplitude'))
             labels.pop(labels.index('baseline'))
-            
+
             labels += ['rf_amplitude', 'srf_amplitude', 'srf_size',
                        'neural_baseline', 'surround_baseline',
                        'bold_baseline']
 
             labels += ['hrf_delay', 'hrf_dispersion']
+        elif model == 5:
+            # Same parameter set as model 6 but WITHOUT flex HRF.
+            labels.pop(labels.index('amplitude'))
+            labels.pop(labels.index('baseline'))
+
+            labels += ['rf_amplitude', 'srf_amplitude', 'srf_size',
+                       'neural_baseline', 'surround_baseline',
+                       'bold_baseline']
         elif model == 1:
             pass
         else:
