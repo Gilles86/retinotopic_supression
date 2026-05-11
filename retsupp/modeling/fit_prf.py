@@ -18,6 +18,13 @@ Output: ``derivatives/prf/model{N}/sub-XX/sub-XX_desc-{par}.nii.gz``.
 
 Voxel chunking: standard PRFs are massively univariate; chunk size sets
 a VRAM-vs-throughput tradeoff. Default 10000 fits comfortably on L4.
+
+Optimization for flex-HRF models (m3/m4/m6): alternating GD. Each outer
+cycle freezes the HRF and fits spatial params for ``--inner-iters`` steps,
+then freezes spatial and fits HRF for ``--inner-iters`` steps. Repeats
+``--outer-cycles`` times. Joint GD on these models at lr=0.005 lets the
+two HRF gradients dominate the dozens of spatial gradients and breaks the
+fit. Pass ``--no-alternating`` to recover the old single-shot joint GD.
 """
 from __future__ import annotations
 
@@ -144,6 +151,9 @@ def grid_fit(model, data, paradigm, chunk_size, debug=False):
     return chunked(work, data.shape[1], chunk_size, 'grid')
 
 
+HRF_PARS = ('hrf_delay', 'hrf_dispersion')
+
+
 def gd_fit(model_factory, data, paradigm, init_pars, chunk_size,
            max_iter, lr=0.005):
     """Per-chunk GD with a model factory rebuilt per chunk."""
@@ -157,6 +167,47 @@ def gd_fit(model_factory, data, paradigm, init_pars, chunk_size,
         return pars
 
     return chunked(work, data.shape[1], chunk_size, 'GD')
+
+
+def gd_fit_alternating(model_factory, data, paradigm, init_pars, chunk_size,
+                       outer_cycles=4, inner_iters=1000, lr=0.005):
+    """Alternating optimization for flex-HRF models.
+
+    Each outer cycle:
+      1. Freeze HRF params, fit spatial params for ``inner_iters`` GD steps.
+      2. Freeze spatial params, fit HRF params for ``inner_iters`` GD steps.
+
+    This avoids HRF gradients dominating spatial-parameter gradients in joint
+    GD, which empirically breaks flex-HRF fits (m3/m4/m6) at lr=0.005.
+    """
+    hrf_pars = [p for p in HRF_PARS if p in init_pars.columns]
+    if not hrf_pars:
+        raise ValueError(
+            "gd_fit_alternating requires hrf_delay/hrf_dispersion in "
+            "init_pars; model appears to be fixed-HRF. Use gd_fit instead.")
+
+    def work(idx):
+        d = data[:, idx]
+        m = model_factory(d, paradigm)
+        f = ParameterFitter(m, d, paradigm)
+        ip = init_pars.iloc[idx].reset_index(drop=True)
+
+        spatial_pars = [p for p in m.parameter_labels if p not in hrf_pars]
+        pars = ip
+        for cycle in range(outer_cycles):
+            print(f'  [alt {cycle + 1}/{outer_cycles}] fitting spatial '
+                  f'(fixed: {hrf_pars})')
+            pars = f.fit(init_pars=pars, max_n_iterations=inner_iters,
+                         learning_rate=lr, fixed_pars=hrf_pars)
+            print(f'  [alt {cycle + 1}/{outer_cycles}] fitting HRF '
+                  f'(fixed: {len(spatial_pars)} spatial pars)')
+            pars = f.fit(init_pars=pars, max_n_iterations=inner_iters,
+                         learning_rate=lr, fixed_pars=spatial_pars)
+
+        pars['r2'] = f.get_rsq(pars).values
+        return pars
+
+    return chunked(work, data.shape[1], chunk_size, 'GD-alt')
 
 
 def load_prior_pars(subject: int, model_label: int, derivs: Path,
@@ -192,7 +243,10 @@ def main(subject: int, model_label: int,
          debug: bool = False,
          chunk_index: int | None = None,
          n_chunks: int | None = None,
-         output_suffix: str = ''):
+         output_suffix: str = '',
+         alternating: bool = True,
+         outer_cycles: int = 4,
+         inner_iters: int = 1000):
     """Fit one PRF model. If chunk_index/n_chunks given, fit ONLY voxels
     in that chunk and save partial results to a chunks/ subdir; a
     separate merge step concatenates all chunks into final NIfTIs."""
@@ -288,13 +342,35 @@ def main(subject: int, model_label: int,
             else:
                 init[k] = v
 
+    # Use alternating optimization for flex-HRF models so HRF gradients don't
+    # dominate the joint update of spatial params at lr=0.005.
+    use_alt = bool(alternating and cfg['flex_hrf']
+                   and ('hrf_delay' in init.columns))
+    if use_alt:
+        print(f"  alternating GD: outer_cycles={outer_cycles}, "
+              f"inner_iters={inner_iters}")
+    else:
+        print(f"  single-shot GD: max_n_iterations={max_n_iterations}")
+
     if chunked_mode:
         d_chunk = data[:, chunk_idx]
-        pars = gd_fit(factory, d_chunk, paradigm, init,
-                      voxel_chunk_size, max_n_iterations)
+        if use_alt:
+            pars = gd_fit_alternating(factory, d_chunk, paradigm, init,
+                                      voxel_chunk_size,
+                                      outer_cycles=outer_cycles,
+                                      inner_iters=inner_iters)
+        else:
+            pars = gd_fit(factory, d_chunk, paradigm, init,
+                          voxel_chunk_size, max_n_iterations)
     else:
-        pars = gd_fit(factory, data, paradigm, init,
-                      voxel_chunk_size, max_n_iterations)
+        if use_alt:
+            pars = gd_fit_alternating(factory, data, paradigm, init,
+                                      voxel_chunk_size,
+                                      outer_cycles=outer_cycles,
+                                      inner_iters=inner_iters)
+        else:
+            pars = gd_fit(factory, data, paradigm, init,
+                          voxel_chunk_size, max_n_iterations)
     print(f"  median R²: {pars['r2'].median():.3f}")
 
     # Output goes to prf/ for full paradigm (canonical) or prf_bar/ for
@@ -318,6 +394,9 @@ def main(subject: int, model_label: int,
         'resolution': int(resolution),
         'voxel_chunk_size': int(voxel_chunk_size),
         'max_n_iterations': int(max_n_iterations),
+        'alternating': bool(use_alt),
+        'outer_cycles': (int(outer_cycles) if use_alt else None),
+        'inner_iters': (int(inner_iters) if use_alt else None),
         'n_voxels': int(data.shape[1]),
         'n_timepoints': int(data.shape[0]),
         'chunked_mode': bool(chunked_mode),
@@ -381,10 +460,23 @@ if __name__ == "__main__":
                         'instead of prf/). Use for benchmarks or '
                         'experimental runs that should not clobber '
                         'canonical results.')
+    p.add_argument('--no-alternating', action='store_true',
+                   help='Disable alternating HRF/spatial optimization for '
+                        'flex-HRF models (m3/m4/m6) and fall back to the '
+                        'old joint GD. Has no effect on fixed-HRF models.')
+    p.add_argument('--outer-cycles', type=int, default=4,
+                   help='Outer alternating cycles (spatial->HRF->...). '
+                        'Only used when alternating is enabled.')
+    p.add_argument('--inner-iters', type=int, default=1000,
+                   help='Inner GD iterations per phase (spatial or HRF) '
+                        'within each outer cycle.')
     a = p.parse_args()
     main(a.subject, a.model, bids_folder=a.bids_folder,
          resolution=a.resolution, voxel_chunk_size=a.voxel_chunk_size,
          max_n_iterations=a.max_n_iterations,
          paradigm_kind=a.paradigm_kind, debug=a.debug,
          chunk_index=a.chunk_index, n_chunks=a.n_chunks,
-         output_suffix=a.output_suffix)
+         output_suffix=a.output_suffix,
+         alternating=(not a.no_alternating),
+         outer_cycles=a.outer_cycles,
+         inner_iters=a.inner_iters)
