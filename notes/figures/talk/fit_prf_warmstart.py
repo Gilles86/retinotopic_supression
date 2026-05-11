@@ -371,13 +371,12 @@ def fit_one_subject(subject_id, model_label):
     masker = maskers.NiftiMasker(mask_img=bold_mask)
     masker.fit()
 
-    # Try the pre-built BOLD+paradigm cache first — saves ~6 min of
-    # NIfTI loads. Cache built by `build_prf_cache.py`. Falls back to
-    # full load_concatenated if the cache is missing.
-    cache_file = (derivs / "prf_cache" / f"sub-{subject_id:02d}"
+    # Try the pre-built cleaned-BOLD ROI cache first — saves ~6 min of
+    # NIfTI loads per task. Built by build_cleaned_roi_cache.py.
+    cache_file = (derivs / "cleaned_roi_cache" / f"sub-{subject_id:02d}"
                   / f"sub-{subject_id:02d}_roi-V1_res-{RESOLUTION}.npz")
     if cache_file.exists():
-        print(f"  using cached V1 BOLD: {cache_file.name}")
+        print(f"  using cleaned-BOLD ROI cache: {cache_file.name}")
         c = np.load(cache_file)
         data = c["bold"].astype(np.float32)
         paradigm = c["paradigm"].astype(np.float32)
