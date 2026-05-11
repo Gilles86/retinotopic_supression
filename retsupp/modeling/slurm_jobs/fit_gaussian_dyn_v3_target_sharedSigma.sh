@@ -24,11 +24,15 @@
 # Output:
 #   derivatives/af_prf_joint_dynamic_v3_gaussian_with_target_sharedSigma/sub-XX/...
 #
-# Submission: 23 working subjects x 8 ROIs = 184 array tasks.
+# Submission: 25 working subjects x 8 ROIs = 200 array tasks.
 # Excludes:
-#   - subjects 6, 8 (broken m1 chunks)
 #   - subjects 19, 22, 24, 27, 30 (broken neuropythy)
-#   sbatch --array=1-184%80 retsupp/modeling/slurm_jobs/fit_gaussian_dyn_v3_target_sharedSigma.sh
+#   sbatch --array=1-200%80 retsupp/modeling/slurm_jobs/fit_gaussian_dyn_v3_target_sharedSigma.sh
+#
+# Note: subjects 6, 8 were excluded earlier (broken m1 chunks); now recovered.
+# Their positions in SUB_IDS:
+#   sub-06 at sub_idx=5 (0-idx) -> array tasks 41..48
+#   sub-08 at sub_idx=7 (0-idx) -> array tasks 57..64
 #
 # The array task id maps to (subject_idx, roi):
 #   idx0 = SLURM_ARRAY_TASK_ID - 1
@@ -48,8 +52,8 @@ echo "Started:     $(date)"
 echo "Test:        Gaussian (m1) + v3 + target + sharedSigma"
 
 # --- Subject + ROI decoding from SLURM_ARRAY_TASK_ID. ---
-# Excludes broken subjects: 6, 8 (m1), 19, 22, 24, 27, 30 (neuropythy).
-SUB_IDS=(1 2 3 4 5 7 9 10 11 12 13 14 15 16 17 18 20 21 23 25 26 28 29)
+# Excludes broken subjects: 19, 22, 24, 27, 30 (neuropythy).
+SUB_IDS=(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 20 21 23 25 26 28 29)
 ROIS=(V1 V2 V3 V3AB hV4 LO TO VO)
 N_ROIS=${#ROIS[@]}
 N_SUBS=${#SUB_IDS[@]}
