@@ -146,6 +146,97 @@ class Subject(object):
 
         return hpd_locations
 
+    def get_runs_by_hp(self, hp=None):
+        """Group (session, run) pairs by their HP-distractor condition.
+
+        Parameters
+        ----------
+        hp : str or None
+            If None, returns the full mapping ``{hp_label:
+            [(session, run), ...]}`` keyed by the 4 HP strings
+            ('upper_right', 'upper_left', 'lower_left', 'lower_right').
+            If a specific HP string, returns just that condition's
+            run list.
+
+        Returns
+        -------
+        dict[str, list[tuple[int, int]]] or list[tuple[int, int]]
+            Per-HP run lists, or a single condition's run list.
+        """
+        groups: dict[str, list[tuple[int, int]]] = {}
+        for sr, h in self.get_hpd_locations().items():
+            groups.setdefault(h, []).append(sr)
+        for k in groups:
+            groups[k].sort()
+        if hp is None:
+            return groups
+        if hp not in groups:
+            raise KeyError(
+                f'HP {hp!r} not found for sub-{self.subject_id:02d}. '
+                f'Available: {sorted(groups)}')
+        return groups[hp]
+
+    def get_bar_stimulus(self, session=1, run=1, resolution=50,
+                         grid_radius=5.0):
+        """Bar-only PRF stimulus on the ±``grid_radius``° extended grid.
+
+        Same bar geometry as :meth:`get_stimulus` and the bar pass of
+        :meth:`get_stimulus_with_distractors`, but rendered on the
+        wider grid (default 5°) instead of the bar aperture's 3.17°
+        so it can be paired with PRF fits / decodes that use the
+        extended grid coordinates.
+        """
+        settings = self.get_experimental_settings(session, run)
+        tr = self.get_tr(session, run)
+        n_volumes = self.get_n_volumes(session, run)
+        frametimes = np.arange(tr / 2., tr * n_volumes + tr / 2., tr)
+
+        bar_aperture = settings['radius_bar_aperture']
+        bar_width = settings['bar_width']
+        speed = settings['speed']
+        fov_size = settings['fov_size']
+
+        gx, gy = self.get_extended_grid_coordinates(
+            resolution=resolution, session=session, run=run,
+            grid_radius=grid_radius)
+        aperture = np.sqrt(gx ** 2 + gy ** 2) <= bar_aperture
+
+        onsets = self.get_onsets(session, run)
+        bar_events = onsets[onsets['event_type'].apply(
+            lambda s: s.startswith('bar'))]
+
+        stim = np.zeros((len(frametimes), resolution, resolution),
+                         dtype=np.float32)
+        ori, pos = 0, -fov_size - bar_width
+
+        for i, t in enumerate(frametimes):
+            if t < bar_events['onset'].min():
+                continue
+            state_row = bar_events[bar_events['onset'] < t].iloc[-1]
+            state = state_row['event_type']
+            dt = t - state_row['onset']
+
+            if state in ('bar_rest', 'bar_break'):
+                continue
+            if state == 'bar_right':
+                ori, pos = 0, -bar_aperture - bar_width / 2 + dt * speed
+            elif state == 'bar_left':
+                ori, pos = 0, bar_aperture + bar_width / 2 - dt * speed
+            elif state == 'bar_up':
+                ori, pos = 90, -bar_aperture - bar_width / 2 + dt * speed
+            elif state == 'bar_down':
+                ori, pos = 90, bar_aperture + bar_width / 2 - dt * speed
+            else:
+                continue
+
+            frame = np.zeros_like(gx, dtype=np.float32)
+            if ori == 0:
+                frame[np.abs(gx - pos) < bar_width / 2] = 1.0
+            else:
+                frame[np.abs(gy - pos) < bar_width / 2] = 1.0
+            stim[i] = frame * aperture
+        return stim
+
     def get_run_position_per_tr(self, session, run, hp_for_runs=None):
         """Position of (session, run) within its HP-condition block.
 
