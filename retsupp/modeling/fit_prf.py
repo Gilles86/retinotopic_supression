@@ -180,14 +180,30 @@ def _assert_no_joint_spatial_hrf():
 _assert_no_joint_spatial_hrf()
 
 
+def _cache_path(sub: Subject, kind: str, resolution: int) -> Path:
+    return (sub.bids_folder / 'derivatives' / 'cleaned_bold_cache'
+            / f'sub-{sub.subject_id:02d}'
+            / f'sub-{sub.subject_id:02d}_kind-{kind}_res-{resolution}.npz')
+
+
 def load_concatenated(sub: Subject, masker, resolution: int, kind: str):
     """Concatenate cleaned BOLD + per-run paradigm across all (ses, run).
 
-    The HP-distractor location varies per run, so the search-array
-    paradigm differs per run too. Averaging the BOLD across runs would
-    average over different stimuli — instead we concatenate along time.
-    Returns (bold (T_total, V), paradigm (T_total, G), grid_coords (G, 2)).
+    Returns ``(bold (T_total, V), paradigm (T_total, G), grid_coords (G, 2))``.
+
+    Uses ``derivatives/cleaned_bold_cache/sub-XX/...npz`` when present
+    (built by ``build_cleaned_bold_cache.py``) — loads in ~5s instead
+    of ~60-120s. Chunked fits get most of their wallclock back this way.
+    The cache is invalidated by deleting the file; rebuild with the
+    builder script's ``--force`` flag.
     """
+    cache = _cache_path(sub, kind, resolution)
+    if cache.exists():
+        d = np.load(cache)
+        print(f"  cache hit: {cache.name} "
+              f"(bold {d['bold'].shape}, paradigm {d['paradigm'].shape})")
+        return d['bold'], d['paradigm'], d['grid_coords']
+
     bold_chunks, par_chunks = [], []
     grid_coords = None
     for ses in (1, 2):
