@@ -103,6 +103,90 @@ def mark_invalid_fits(pars, data, var_threshold=1e-6,
     return pars
 
 
+def validate_prf_parameters(pars, *, sd_min=None, model_label=None,
+                             source=None, raise_on_invalid=True):
+    """Sanity-check PRF parameters loaded from disk before passing them
+    into a fit.
+
+    Catches contract violations EARLY (at load time) so the failure
+    surfaces with caller context, rather than as a deep braincoder
+    assertion mid-GD. Checks:
+
+      - ``σ <= 0`` for any σ-like column (``sd``, ``srf_size``):
+        mathematically impossible — Gaussian PRFs require σ > 0.
+      - ``σ <= sd_min`` if ``sd_min`` is given: would trip braincoder's
+        ``_sd_softplus_inverse`` assertion downstream. Common cause:
+        loading NIfTIs that were fit before the ``sd_min`` hook was
+        added.
+
+    ``mark_invalid_fits`` sentinels (NaN params + r²=0) are *not*
+    flagged — those rows are explicitly invalid and downstream code
+    handles them.
+
+    Args:
+        pars: DataFrame with PRF parameter columns. Typically has
+              ``sd``, ``r2``, optionally ``srf_size`` etc.
+        sd_min: if given, σ floor that downstream fits will enforce.
+                Voxels with σ <= sd_min are flagged.
+        model_label: optional int for the error message context.
+        source: optional str describing where the params came from
+                (e.g. a NIfTI path, "cached model 1"). Included verbatim
+                in the error so users can find the offending data.
+        raise_on_invalid: True → ``ValueError``. False → ``warnings.warn``.
+
+    Returns:
+        ``pars`` unchanged.
+
+    Raises:
+        ValueError: when ``raise_on_invalid`` and any issue is found.
+    """
+    import numpy as np
+
+    issues = []
+    if "r2" in pars.columns:
+        # Active = rows where the fit "exists" (not a NaN-param sentinel)
+        active = pars["r2"].to_numpy() > 0
+    else:
+        active = np.ones(len(pars), dtype=bool)
+
+    for sigma_col in ("sd", "srf_size"):
+        if sigma_col not in pars.columns:
+            continue
+        s = pars[sigma_col].to_numpy()
+        finite_active = active & np.isfinite(s)
+        n_nonpos = int((finite_active & (s <= 0)).sum())
+        if n_nonpos:
+            issues.append(
+                f"  - {n_nonpos} voxels with {sigma_col} <= 0 "
+                f"(mathematically impossible for a Gaussian PRF)")
+        if sd_min is not None and sd_min > 0:
+            n_below = int((finite_active & (s > 0) & (s <= sd_min)).sum())
+            if n_below:
+                issues.append(
+                    f"  - {n_below} voxels with {sigma_col} <= sd_min "
+                    f"(= {sd_min}). braincoder's _sd_softplus_inverse "
+                    f"will raise on these. Likely cause: NIfTIs predate "
+                    f"the sd_min hook — refit the source model with "
+                    f"sd_min > 0 first")
+
+    if not issues:
+        return pars
+
+    msg = "Invalid PRF parameters"
+    if model_label is not None:
+        msg += f" (model {model_label})"
+    if source is not None:
+        msg += f" from {source}"
+    msg += ":\n" + "\n".join(issues)
+
+    if raise_on_invalid:
+        raise ValueError(msg)
+    else:
+        import warnings
+        warnings.warn(msg)
+    return pars
+
+
 def select_well_fit_voxels(df, *, n_params, n_timepoints=258,
                             fdr_alpha=0.05, mass_threshold=0.5,
                             sigma_floor=0.30, sigma_ceil=4.0,

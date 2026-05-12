@@ -51,7 +51,7 @@ from braincoder.models import (
 )
 from braincoder.optimize import ParameterFitter
 
-from retsupp.utils.data import Subject, mark_invalid_fits
+from retsupp.utils.data import Subject, mark_invalid_fits, validate_prf_parameters  # noqa: F401
 
 
 # Schedule primitives. A "schedule" is a list of stage tuples
@@ -71,9 +71,16 @@ DN_PARAMS = ('rf_amplitude', 'srf_amplitude', 'srf_size',
 # expected by the target model. Pair-specific because the
 # parameterisations are not strictly nested.
 def _adapt_m2_from_m1(init):
+    """Seed DoG surround from a Gaussian m1 fit.
+
+    ``srf_size = 3.0`` (i.e. surround σ = 3 × center σ) is in the
+    middle of the V1 literature range (Zuiderbaan 2012, Aqil 2021)
+    and on the high side of empirical retsupp values, so GD typically
+    *shrinks* rather than grows the surround — safer descent path.
+    """
     init = init.copy()
     init['srf_amplitude'] = 5e-2
-    init['srf_size'] = 2.0
+    init['srf_size'] = 3.0
     return init
 
 
@@ -307,8 +314,14 @@ def gd_fit_scheduled(model_factory, data, paradigm, init_pars, chunk_size,
 
 
 def load_prior_pars(subject: int, model_label: int, derivs: Path,
-                    masker) -> pd.DataFrame:
-    """Read NIfTI parameters of a previous model fit back into a DataFrame."""
+                    masker, sd_min: float | None = None) -> pd.DataFrame:
+    """Read NIfTI parameters of a previous model fit into a DataFrame.
+
+    If ``sd_min`` is given, run ``validate_prf_parameters`` and raise
+    on any σ-like column at or below the floor (catches legacy NIfTIs
+    upfront, so the failure surfaces here with the source path rather
+    than as a deep braincoder assertion later).
+    """
     src = derivs / 'prf' / f'model{model_label}' / f'sub-{subject:02d}'
     if not src.exists():
         raise FileNotFoundError(
@@ -318,7 +331,11 @@ def load_prior_pars(subject: int, model_label: int, derivs: Path,
     for nii in sorted(src.glob(f'sub-{subject:02d}_desc-*.nii.gz')):
         name = nii.name.split('desc-')[1].rsplit('.nii.gz', 1)[0]
         pars[name] = masker.transform(str(nii)).flatten()
-    return pd.DataFrame(pars)
+    df = pd.DataFrame(pars)
+    if sd_min is not None:
+        validate_prf_parameters(df, sd_min=sd_min,
+                                 model_label=model_label, source=str(src))
+    return df
 
 
 def save_pars(pars: pd.DataFrame, masker, target_dir: Path, subject: int):
@@ -432,7 +449,10 @@ def main(subject: int, model_label: int,
         # Models 2-6: load prior fit, adapt for this model's column set,
         # then run the multi-stage schedule.
         print(f"\n=== model {model_label} (init from m{cfg['init_from']}) ===")
-        init = load_prior_pars(subject, cfg['init_from'], derivs, masker)
+        # load_prior_pars validates σ > sd_min and raises on legacy
+        # NIfTIs that predate the sd_min hook.
+        init = load_prior_pars(subject, cfg['init_from'], derivs, masker,
+                                sd_min=sd_min)
         if chunked_mode:
             init = init.iloc[chunk_idx].reset_index(drop=True)
         init = init.drop(columns=['r2', 'theta', 'ecc'], errors='ignore')

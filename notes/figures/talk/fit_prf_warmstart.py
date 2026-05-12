@@ -118,10 +118,11 @@ DN_PARAMS = ["rf_amplitude", "srf_amplitude", "srf_size",
 #   we use 1e-4 on warm/coarse stages and 1e-5 on the refine stage
 #   where smaller improvements still matter.
 SCHEDULES = {
-    # m1 is NOT refit by this script — the on-disk m1 fits are
-    # already converged. Refining with all-free GD at lr=0.005
-    # overshoots and degrades them (p90 R² 0.21 → 0.005 in smoke test).
-    # Use cached m1 NIfTIs directly as the chain root.
+    # m1 (Gaussian, fixed HRF). Grid + single refine stage. Independent
+    # of any on-disk NIfTI — chain root for V1 fits.
+    1: [
+        ([],               0.005, 2000, 1e-5),  # GD refine after grid
+    ],
     # m2 (DoG, fixed HRF). Init from m1.
     2: [
         (SPATIAL,          0.005, 3000, 1e-4),  # warm surround
@@ -154,8 +155,9 @@ SCHEDULES = {
 }
 
 # Which model's fit output should we use as the warm-start init?
-# m1 refines from on-disk m1 (no chain).
+# m1 = grid + GD, no prior chain.
 CHAIN_INIT_FROM = {
+    1: None,
     2: 1,
     3: 1,
     4: 2,
@@ -166,7 +168,7 @@ CHAIN_INIT_FROM = {
 
 def _assert_no_joint_spatial_hrf(model_label):
     """Sanity guard for the core rule: spatial and HRF must not be
-    free in the same stage."""
+    free in the same stage (only meaningful for flex-HRF models)."""
     for i, stage in enumerate(SCHEDULES[model_label], start=1):
         fixed = stage[0]
         fixed_set = set(fixed)
@@ -351,8 +353,10 @@ def adapt_init_for(target_model, init_from, prior):
     if pair == (1, 1):
         return init  # refining m1 itself
     if pair == (1, 2):
+        # srf_size = 3.0 starts surround on the high side of the V1
+        # literature range so GD typically shrinks rather than grows.
         init["srf_amplitude"] = 5e-2
-        init["srf_size"] = 2.0
+        init["srf_size"] = 3.0
         return init
     if pair == (1, 3):
         init["hrf_delay"] = 4.5
@@ -419,15 +423,24 @@ def fit_one_subject(subject_id, model_label):
     print(f"  V1 voxels: {len(v1_idx)};  "
           f"BOLD: {data.shape}; paradigm: {paradigm.shape}")
 
-    # Load init from previous step in the chain. Handles both
-    # warmstart-TSV and cached-NIfTI sources via fallback logic.
-    prior = load_init_pars(subject_id, init_from, masker, derivs, v1_idx)
-    if len(prior) != len(v1_idx):
-        raise RuntimeError(
-            f"init voxel count mismatch: prior has {len(prior)}, "
-            f"V1 has {len(v1_idx)}")
-
-    init = adapt_init_for(model_label, init_from, prior)
+    if init_from is None:
+        # m1: grid + GD from scratch (no prior to load).
+        from retsupp.modeling.fit_prf import grid_fit  # noqa: E402
+        factory_fn = build_model_factory(model_label, grid_coords)
+        # Single chunk — V1 fits comfortably in memory.
+        init = grid_fit(factory_fn(data, paradigm), data, paradigm,
+                        chunk_size=max(len(v1_idx), 1),
+                        debug=False, sd_min=SD_MIN)
+        init = init.drop(columns=["r2", "theta", "ecc"], errors="ignore")
+    else:
+        # m2-m6: load prior fit from warmstart TSV or cached NIfTI.
+        prior = load_init_pars(subject_id, init_from, masker, derivs,
+                               v1_idx)
+        if len(prior) != len(v1_idx):
+            raise RuntimeError(
+                f"init voxel count mismatch: prior has {len(prior)}, "
+                f"V1 has {len(v1_idx)}")
+        init = adapt_init_for(model_label, init_from, prior)
     print(f"  init cols: {list(init.columns)}")
 
     factory = build_model_factory(model_label, grid_coords)
