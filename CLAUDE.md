@@ -188,6 +188,28 @@ by default; override via `THROTTLE=N bash submit_prf_chunked.sh ...`.
 
 There is no `--account=zne.uzh` in these scripts — add it when creating new ones (cluster requirement per global instructions).
 
+### Per-subject dependency chains, not phase-wide afterok
+
+When building multi-stage SLURM pipelines (e.g. PRF chunks → merge →
+next model's chunks → merge → ...), prefer **one dependency chain per
+subject** over phase-wide `afterok` across the whole array. Concretely:
+for the PRF sweep, each subject N gets its own
+``m1_chunks → m1_merge → m2_chunks → m2_merge → ... → m6_chunks → m6_merge``
+chain, with `afterok` between sub-N's phases. Subject Y's chain does
+*not* depend on subject X's anything.
+
+**Why:** if one subject's chunk task fails or times out, a phase-wide
+`afterok` blocks the merge for the whole array, which blocks the next
+phase, which blocks everything downstream. With per-subject chains, a
+failure in sub-15 only stops sub-15's downstream models; subs 1-14 and
+16-30 continue normally. Recovering then means resubmitting *that
+subject's* chain from the failed phase, not patching up a 1620-task
+array.
+
+Use the per-subject submitter (`submit_prf_sweep_persub.sh`) for new
+runs. The old phase-wide `submit_prf_sweep_chunked.sh` is kept for
+reference but is brittle on a busy / flaky cluster.
+
 ## Notebooks
 
 `retsupp/notebooks/` is the exploratory workspace. The active analysis notebooks (matching the VSS2026 talk and the conditionwise modeling) are roughly:

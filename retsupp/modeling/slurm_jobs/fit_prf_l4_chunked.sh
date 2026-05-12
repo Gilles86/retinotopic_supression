@@ -39,22 +39,35 @@ KIND="${KIND:-full}"
 if [[ -z "${SLURM_ARRAY_TASK_ID:-}" ]]; then
     echo "ERROR: SLURM_ARRAY_TASK_ID not set." >&2; exit 2
 fi
-if [[ -z "${MODEL:-}" || -z "${N_CHUNKS:-}" || -z "${N_SUBS:-}" ]]; then
-    echo "ERROR: MODEL, N_CHUNKS, N_SUBS env vars required." >&2; exit 2
+if [[ -z "${MODEL:-}" || -z "${N_CHUNKS:-}" ]]; then
+    echo "ERROR: MODEL and N_CHUNKS env vars required." >&2; exit 2
 fi
 if [[ "$KIND" != "full" && "$KIND" != "bar" ]]; then
     echo "ERROR: KIND must be 'full' or 'bar' (got '$KIND')." >&2; exit 2
 fi
 
-idx0=$(( SLURM_ARRAY_TASK_ID - 1 ))
-sub_idx=$(( idx0 / N_CHUNKS ))
-chunk_idx=$(( idx0 % N_CHUNKS ))
-subject=$(( sub_idx + 1 ))
-sub_pad=$(printf "%02d" "$subject")
-
-if [[ "$subject" -gt "$N_SUBS" ]]; then
-    echo "Array index out of range." >&2; exit 2
+# Two modes:
+# (a) Per-subject mode (preferred): SUBJECT is exported by the caller
+#     and the array index just enumerates chunks.  N_SUBS not needed.
+# (b) Phase-wide mode (legacy): SUBJECT not set; array index encodes
+#     both subject and chunk via (idx-1) % N_CHUNKS.  N_SUBS required.
+if [[ -n "${SUBJECT:-}" ]]; then
+    subject="$SUBJECT"
+    chunk_idx=$(( SLURM_ARRAY_TASK_ID - 1 ))
+else
+    if [[ -z "${N_SUBS:-}" ]]; then
+        echo "ERROR: either SUBJECT, or N_SUBS env var must be set." >&2
+        exit 2
+    fi
+    idx0=$(( SLURM_ARRAY_TASK_ID - 1 ))
+    sub_idx=$(( idx0 / N_CHUNKS ))
+    chunk_idx=$(( idx0 % N_CHUNKS ))
+    subject=$(( sub_idx + 1 ))
+    if [[ "$subject" -gt "$N_SUBS" ]]; then
+        echo "Array index out of range." >&2; exit 2
+    fi
 fi
+sub_pad=$(printf "%02d" "$subject")
 
 LOGFILE="$HOME/logs/prf_chunked_m${MODEL}_${KIND}_sub-${sub_pad}_chunk-${chunk_idx}_${SLURM_JOB_ID}.txt"
 mkdir -p "$(dirname "$LOGFILE")"
