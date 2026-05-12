@@ -1,24 +1,28 @@
-"""Per-subject PRF parameter + spatial-coverage distributions.
+"""PRF parameter + spatial-coverage distributions across models.
 
-One big multi-page PDF with:
-  - page 1: spatial coverage — 2D KDE of (x, y) PRF centers within
-    the bar aperture, FacetGrid rows = subjects × cols = ROIs.
-  - one page per scalar parameter (sd, amplitude, baseline, r2, plus
-    eccentricity and polar angle derived from x, y) — histogram
-    FacetGrid rows = subjects × cols = ROIs, shared x-axis per
-    parameter across subjects so distributions are directly
-    comparable.
+Single multi-page PDF, one page per "plot type". Every page is a
+FacetGrid with rows = subjects, cols = models. So the chain
+m1 → m2 → m3 → m4 (etc.) is laid out left-to-right per subject row,
+making the per-voxel effect of each schedule step directly visible
+at the distribution level.
 
-Reads the warm-start TSVs at ``notes/data/prf_warmstart_m{M}_V1_sub-*.tsv``
-for the requested model. Today V1 is the only ROI in the warm-start
-output; when whole-brain fits land we can extend by loading per-ROI
-slices from the canonical NIfTIs.
+Pages produced:
+  - spatial coverage — 2D KDE of (x, y) PRF centers within the bar
+    aperture.
+  - one page per scalar parameter (x, y, eccen, theta, sd,
+    amplitude, baseline, r2, plus surround / DN / HRF params when
+    those columns exist) — histogram per (subject, model).
 
-Output: ``notes/figures/talk/prf_distributions_m{M}.pdf``.
+Reads the warm-start TSVs at
+``notes/data/prf_warmstart_m{M}_V1_sub-*.tsv``. Today V1 is the only
+ROI in the warm-start output.
+
+Output: ``notes/figures/talk/prf_distributions.pdf``.
 
 CLI::
 
-    python plot_prf_distributions.py --model 1 [--data-dir DIR]
+    python plot_prf_distributions.py [--models all|1,2,3,4|1-4]
+                                      [--data-dir DIR]
 """
 from __future__ import annotations
 
@@ -42,77 +46,78 @@ DATA_DIR = REPO / "notes" / "data"
 # `expsettings.yml`: aperture = ecc - size_stimuli / 1.8 = 4 - 1.5/1.8.
 APERTURE_RADIUS = 3.17
 
-# Per-parameter axis ranges (None = auto from data quantile-trimming).
-# Tuned to expose the bulk of the distribution rather than outliers.
+# Hard per-parameter axis ranges. None means: auto-compute from data
+# percentiles (p1/p99 by default, see XLIM_QUANTILES). Hard ranges are
+# only for parameters with natural bounds (e.g. ``theta`` ∈ [-π, π]).
 PARAM_RANGES = {
-    "x": (-APERTURE_RADIUS - 0.5, APERTURE_RADIUS + 0.5),
-    "y": (-APERTURE_RADIUS - 0.5, APERTURE_RADIUS + 0.5),
-    "sd": (0.0, 5.0),
-    "eccen": (0.0, APERTURE_RADIUS + 1.0),
     "theta": (-np.pi, np.pi),
-    "amplitude": None,
-    "baseline": None,
-    # R² mass is heavily concentrated near 0; cap at 0.6 so the body
-    # of the distribution is visible. Long right tail picked up by
-    # log-y scaling (see PARAM_LOG_Y).
-    "r2": (0.0, 0.6),
-    # Surround/DN params (only present for m2, m4-6)
-    "srf_size": (0.0, 8.0),
-    "srf_amplitude": None,
-    "hrf_delay": (0.0, 10.0),
-    "hrf_dispersion": (0.0, 3.0),
-    "rf_amplitude": None,
-    "neural_baseline": None,
-    "surround_baseline": None,
-    "bold_baseline": None,
 }
 
-# Parameters whose histogram should use a log y-axis (long-tailed
-# distributions where the small-bin counts matter for QC).
-PARAM_LOG_Y = {"r2", "sd", "srf_size", "amplitude",
-                "rf_amplitude", "srf_amplitude"}
+# Percentile bounds used for auto xlims (param not in PARAM_RANGES).
+# p1/p99 keeps 98% of the distribution and trims the long tails that
+# made the bulk invisible before.
+XLIM_QUANTILES = (0.01, 0.99)
+
+# Short semantic label per model number — used in column titles +
+# footer legend so reader doesn't have to memorise "m4 = DoG + flex HRF".
+MODEL_LABELS = {
+    1: "Gauss",
+    2: "DoG",
+    3: "Gauss+HRF",
+    4: "DoG+HRF",
+    5: "DN",
+    6: "DN+HRF",
+}
 
 
-def load_warmstart(model: int, data_dir: Path) -> pd.DataFrame:
-    """Concat per-subject warm-start TSVs for one model into one frame
-    tagged with a ``roi`` column. Today every voxel is V1 (sandbox
-    only fits V1); the column is here so callers can extend with
-    additional ROIs later without changing the plot code.
+def _model_legend_text(models):
+    """Return a short 'm1: Gauss · m2: DoG · ...' string for the
+    figure footer."""
+    return "  ·  ".join(f"m{m}: {MODEL_LABELS.get(m, '?')}"
+                         for m in models)
+
+
+def load_warmstart_models(models, data_dir: Path) -> pd.DataFrame:
+    """Long-format frame with one row per (subject, voxel_idx, model).
+
+    Stacks every model's per-subject TSVs and tags rows with a
+    ``model`` column. ``roi='V1'`` for now (sandbox only fits V1).
+    Derived columns ``eccen`` and ``theta`` are added.
     """
-    files = sorted(data_dir.glob(f"prf_warmstart_m{model}_V1_sub-*.tsv"))
-    if not files:
-        raise FileNotFoundError(
-            f"No warmstart TSVs found at {data_dir}/prf_warmstart_m{model}_V1_sub-*.tsv")
     frames = []
-    for f in files:
-        d = pd.read_csv(f, sep="\t")
-        d["roi"] = "V1"
-        frames.append(d)
+    for m in models:
+        files = sorted(data_dir.glob(
+            f"prf_warmstart_m{m}_V1_sub-*.tsv"))
+        if not files:
+            print(f"  m{m}: no TSVs found, skipping")
+            continue
+        for f in files:
+            d = pd.read_csv(f, sep="\t")
+            d["model"] = m
+            frames.append(d)
+    if not frames:
+        raise FileNotFoundError(
+            f"No warmstart TSVs at {data_dir}/prf_warmstart_m*_V1_sub-*.tsv")
     df = pd.concat(frames, ignore_index=True)
-    # Derived geometric params.
+    df["roi"] = "V1"
     df["eccen"] = np.sqrt(df["x"] ** 2 + df["y"] ** 2)
     df["theta"] = np.arctan2(df["y"], df["x"])
     return df
 
 
-def plot_spatial_coverage_page(pdf: PdfPages, df: pd.DataFrame,
-                                 model: int) -> None:
-    """One page: 2D PRF-center density per (subject, ROI). Real voxels
-    only (r² > 0). KDE inside the bar aperture; subjects on rows."""
+def plot_spatial_coverage_page(pdf: PdfPages, df: pd.DataFrame) -> None:
+    """One page: 2D PRF-center KDE per (subject × model). Real voxels
+    only (r² > 0)."""
     real = df[df.r2 > 0].copy()
     subjects = sorted(real.subject.unique())
-    rois = sorted(real.roi.unique())
+    models = sorted(real.model.unique())
 
-    n_rows = len(subjects)
-    n_cols = max(len(rois), 1)
-    # Floor the width so the long suptitle has room when there are few
-    # ROI columns. Leave a 0.3" left gutter for the row labels.
-    fig_w = max(3.4 * n_cols + 1.3, 8.0)
+    n_rows, n_cols = len(subjects), len(models)
+    fig_w = max(2.6 * n_cols + 1.3, 8.0)
     fig, axes = plt.subplots(
-        n_rows, n_cols,
-        figsize=(fig_w, 3.4 * n_rows),
+        n_rows, n_cols, figsize=(fig_w, 2.6 * n_rows),
         squeeze=False)
-    fig.suptitle(f"Model {model} — PRF center density per subject × ROI",
+    fig.suptitle("PRF center density per subject × model",
                  weight="bold", fontsize=16, y=0.995)
 
     grid_n = 120
@@ -120,36 +125,33 @@ def plot_spatial_coverage_page(pdf: PdfPages, df: pd.DataFrame,
                      APERTURE_RADIUS + 0.5, grid_n)
     GX, GY = np.meshgrid(g, g)
     outside = (GX ** 2 + GY ** 2) > APERTURE_RADIUS ** 2
+    from scipy.stats import gaussian_kde
 
     for i, sub in enumerate(subjects):
-        for j, roi in enumerate(rois):
+        for j, m in enumerate(models):
             ax = axes[i, j]
-            sel = real[(real.subject == sub) & (real.roi == roi)]
+            sel = real[(real.subject == sub) & (real.model == m)]
             if len(sel) < 5:
                 ax.text(0.5, 0.5, "n<5", transform=ax.transAxes,
                         ha="center", va="center", color="grey")
             else:
-                # Subsample for speed.
                 if len(sel) > 8000:
                     sel = sel.sample(8000, random_state=0)
-                from scipy.stats import gaussian_kde
                 xy = np.vstack([sel.x.to_numpy(), sel.y.to_numpy()])
                 try:
                     kde = gaussian_kde(xy, bw_method=0.20)
                     Z = kde(np.vstack([GX.ravel(), GY.ravel()])
                             ).reshape(grid_n, grid_n)
                     Z = np.where(outside, np.nan, Z)
-                    ax.imshow(
-                        Z, extent=(g[0], g[-1], g[0], g[-1]),
-                        origin="lower", cmap="viridis",
-                        norm=PowerNorm(gamma=0.45),
-                        interpolation="bilinear")
+                    ax.imshow(Z, extent=(g[0], g[-1], g[0], g[-1]),
+                              origin="lower", cmap="viridis",
+                              norm=PowerNorm(gamma=0.45),
+                              interpolation="bilinear")
                 except Exception as e:
                     ax.text(0.5, 0.5, f"KDE fail\n{type(e).__name__}",
                              transform=ax.transAxes, ha="center",
                              va="center", color="red", fontsize=9)
 
-            # Aperture + eccentricity rings.
             for r_iso in (1.0, 2.0, 3.0):
                 ax.add_patch(Circle((0, 0), r_iso, facecolor="none",
                                      edgecolor="white", lw=0.8,
@@ -158,71 +160,82 @@ def plot_spatial_coverage_page(pdf: PdfPages, df: pd.DataFrame,
                                  facecolor="none", edgecolor="white",
                                  lw=1.8, ls=(0, (5, 3))))
             ax.plot(0, 0, "+", color="white", ms=10, mew=1.6)
-            ax.set_xlim(g[0], g[-1])
-            ax.set_ylim(g[0], g[-1])
+            ax.set_xlim(g[0], g[-1]); ax.set_ylim(g[0], g[-1])
             ax.set_aspect("equal")
             ax.set_xticks([]); ax.set_yticks([])
             for s in ax.spines.values():
                 s.set_visible(False)
 
             if i == 0:
-                ax.set_title(roi, weight="bold", fontsize=14)
+                ax.set_title(f"m{m}\n{MODEL_LABELS.get(m, '')}",
+                              weight="bold", fontsize=12)
             if j == 0:
-                ax.set_ylabel(f"sub-{sub:02d}\nn={len(sel)}",
+                ax.set_ylabel(f"sub-{int(sub):02d}",
                               fontsize=11, rotation=0, ha="right",
-                              va="center", labelpad=18)
+                              va="center", labelpad=14)
 
-    # Leave headroom for the suptitle.
-    plt.tight_layout(rect=(0, 0, 1, 0.96))
+    fig.text(0.5, 0.01, _model_legend_text(models),
+             ha="center", va="bottom", fontsize=10, color="0.30")
+    plt.tight_layout(rect=(0, 0.03, 1, 0.96))
     pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
 
 
-def plot_parameter_page(pdf: PdfPages, df: pd.DataFrame, param: str,
-                          model: int) -> None:
-    """One page per scalar parameter: histogram FacetGrid
-    rows = subjects, cols = ROIs."""
+def plot_parameter_page(pdf: PdfPages, df: pd.DataFrame,
+                          param: str) -> None:
+    """One page: histogram FacetGrid rows = subjects × cols = models
+    for one scalar parameter. Only models that actually carry the
+    column get a column; subjects/models missing the param show empty
+    cells."""
     if param not in df.columns:
         return
-    real = df[df.r2 > 0].copy()
+    real = df[(df.r2 > 0) & df[param].notna()].copy()
     if not len(real):
         return
     subjects = sorted(real.subject.unique())
-    rois = sorted(real.roi.unique())
+    # Restrict to models that actually have any data for this param.
+    models = sorted(real.model.unique())
+    if not models:
+        return
 
-    # Quantile-clip extreme outliers so the bulk is visible.
+    # Hard range if defined, otherwise percentile bounds shared across
+    # all (subject, model) cells so the histograms are comparable.
     rng = PARAM_RANGES.get(param)
     if rng is None:
-        lo = float(real[param].quantile(0.001))
-        hi = float(real[param].quantile(0.999))
+        q_lo, q_hi = XLIM_QUANTILES
+        lo = float(real[param].quantile(q_lo))
+        hi = float(real[param].quantile(q_hi))
+        # Avoid a degenerate zero-width range (constant column).
+        if hi <= lo:
+            hi = lo + 1e-6
         rng = (lo, hi)
     real = real[(real[param] >= rng[0]) & (real[param] <= rng[1])]
 
-    # Wider aspect so single-column FacetGrid still leaves room for
-    # the suptitle on the page.
-    n_cols = max(len(rois), 1)
-    aspect = 2.6 if n_cols == 1 else 1.6
     g = sns.FacetGrid(
-        real, row="subject", col="roi",
-        row_order=subjects, col_order=rois,
-        height=1.7, aspect=aspect, sharex=True, sharey=False,
+        real, row="subject", col="model",
+        row_order=subjects, col_order=models,
+        height=1.7, aspect=1.6, sharex=True, sharey=False,
         margin_titles=True, despine=True)
     g.map_dataframe(
         sns.histplot, x=param, stat="density",
         bins=40, color="#1B4965", alpha=0.85,
         edgecolor="white", linewidth=0.3)
-    g.set_titles(row_template="sub-{row_name:02d}", col_template="{col_name}")
+    # Column titles include the semantic model label.
+    g.set_titles(row_template="sub-{row_name:02d}",
+                 col_template="")
+    for ax, m in zip(g.axes[0], models):
+        ax.set_title(f"m{m}: {MODEL_LABELS.get(m, '')}",
+                     weight="bold", fontsize=12)
     g.set_axis_labels(param, "density")
     for ax in g.axes.flat:
         ax.set_xlim(rng)
-        if param in PARAM_LOG_Y:
-            ax.set_yscale("log")
         ax.grid(alpha=0.18, axis="y")
         ax.tick_params(labelsize=9)
-    # Add headroom above the FacetGrid for the suptitle.
-    g.fig.subplots_adjust(top=0.92)
-    g.fig.suptitle(f"Model {model} — distribution of {param}",
+    g.fig.subplots_adjust(top=0.92, bottom=0.08)
+    g.fig.suptitle(f"Distribution of {param}",
                     weight="bold", fontsize=15)
+    g.fig.text(0.5, 0.01, _model_legend_text(models),
+                ha="center", va="bottom", fontsize=10, color="0.30")
     pdf.savefig(g.fig, bbox_inches="tight")
     plt.close(g.fig)
 
@@ -283,26 +296,25 @@ def main():
     sns.set_theme(context="talk", style="ticks", font_scale=0.85)
 
     print(f"Models: {models}; data: {args.data_dir}; out: {out_path}")
+    df = load_warmstart_models(models, args.data_dir)
+    print(f"  loaded {len(df):,} rows  "
+          f"({df.subject.nunique()} subjects × "
+          f"{df.model.nunique()} models)")
+
+    # Parameters to plot — only those actually present in at least
+    # one model's TSV.
+    candidate_params = ("x", "y", "eccen", "theta", "sd",
+                         "amplitude", "baseline", "r2",
+                         "srf_size", "srf_amplitude",
+                         "hrf_delay", "hrf_dispersion",
+                         "rf_amplitude", "neural_baseline",
+                         "surround_baseline", "bold_baseline")
+    present = [p for p in candidate_params if p in df.columns]
+
     with PdfPages(out_path) as pdf:
-        for model in models:
-            try:
-                df = load_warmstart(model, args.data_dir)
-            except FileNotFoundError as e:
-                print(f"  m{model}: skip ({e})")
-                continue
-            print(f"  m{model}: {len(df):,} voxel-rows "
-                  f"({df.subject.nunique()} subjects)")
-            plot_spatial_coverage_page(pdf, df, model)
-            # Parameters to plot — only those actually present.
-            present = [p for p in ("x", "y", "eccen", "theta", "sd",
-                                    "amplitude", "baseline", "r2",
-                                    "srf_size", "srf_amplitude",
-                                    "hrf_delay", "hrf_dispersion",
-                                    "rf_amplitude", "neural_baseline",
-                                    "surround_baseline", "bold_baseline")
-                       if p in df.columns]
-            for param in present:
-                plot_parameter_page(pdf, df, param, model)
+        plot_spatial_coverage_page(pdf, df)
+        for param in present:
+            plot_parameter_page(pdf, df, param)
 
     print(f"Wrote {out_path}")
 
