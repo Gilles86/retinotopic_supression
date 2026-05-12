@@ -42,12 +42,23 @@ if [[ "$#" -gt 0 ]]; then
 fi
 
 per_sub_m1chunk_dep() {
-    # Echo the afterok dependency clause for sub-N's 10 m1 chunk tasks.
+    # Echo the afterok dependency clause for sub-N's m1 chunk tasks
+    # — but only the ones not yet COMPLETED. SLURM prunes finished
+    # array tasks from its job DB and rejects deps that reference
+    # them with "Job dependency problem". An empty echo means no dep
+    # needed (all tasks already finished).
     local sub=$1
     local k_start=$(( (sub - 1) * N_CHUNKS + 1 ))
     local k_end=$(( sub * N_CHUNKS ))
     local dep=""
     for k in $(seq $k_start $k_end); do
+        # Skip already-COMPLETED tasks.
+        local state
+        state=$(sacct -j "${M1_CHUNKS_JOB}_${k}" -X --format=State -P -n 2>/dev/null \
+                | head -1)
+        if [[ "$state" == "COMPLETED" ]]; then
+            continue
+        fi
         dep="${dep}${M1_CHUNKS_JOB}_${k}:"
     done
     echo "${dep%:}"
@@ -57,10 +68,14 @@ submit_one_subject() {
     local sub=$1
     local sub_pad=$(printf "%02d" "$sub")
 
-    # m1 merge: depends on this subject's 10 m1 chunk tasks only.
+    # m1 merge: depends on this subject's still-live m1 chunk tasks
+    # only. If all 10 already done, submit with no dep — merge fires
+    # immediately.
     local m1_dep=$(per_sub_m1chunk_dep $sub)
+    local DEP_OPT=""
+    [[ -n "$m1_dep" ]] && DEP_OPT="--dependency=afterok:$m1_dep"
     local J1_M=$(sb --array=$sub --time=$T_MERGE \
-        --dependency=afterok:$m1_dep \
+        $DEP_OPT \
         --export=ALL,MODEL=1,KIND=$KIND \
         "$S_MERGE")
 
