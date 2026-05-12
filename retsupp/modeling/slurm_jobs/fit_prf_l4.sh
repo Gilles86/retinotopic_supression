@@ -83,7 +83,11 @@ $PYTHON -c "import tensorflow as tf; print('GPUs:', tf.config.list_physical_devi
 
 DEBUG_FLAG=""
 if [[ "${SMOKE:-0}" == "1" ]]; then DEBUG_FLAG="--debug"; fi
-CHUNK="${CHUNK:-10000}"
+# Bench (notes/prf_models.md §"Chunk size"): 10k is overhead-dominated;
+# 50k is the documented sweet spot across L4 / V100 / A100, ~6 chunks
+# per subject and few XLA recompiles. Override at submit time via
+# `--export=ALL,...,CHUNK=N`.
+CHUNK="${CHUNK:-50000}"
 SUFFIX_FLAG=""
 if [[ -n "${OUTPUT_SUFFIX:-}" ]]; then
     SUFFIX_FLAG="--output-suffix $OUTPUT_SUFFIX"
