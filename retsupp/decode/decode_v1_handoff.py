@@ -208,7 +208,10 @@ def main():
     p.add_argument('--learning-rate', type=float, default=0.5)
     p.add_argument('--max-n-iterations', type=int, default=1000)
     p.add_argument('--min-n-iterations', type=int, default=200)
-    p.add_argument('--resid-max-iter', type=int, default=300)
+    p.add_argument('--resid-max-iter', type=int, default=2000,
+                   help='Max iters for ResidualFitter (default 2000; the '
+                        'omega/dof landscape is shallow so converge with '
+                        'plenty of headroom — early-stops on plateau).')
     p.add_argument('--max-voxels', type=int, default=200,
                    help='Number of top-r² voxels to include (default 200).')
     p.add_argument('--noise-dist', default='gauss', choices=['gauss', 't'],
