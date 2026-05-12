@@ -3,28 +3,24 @@
 #SBATCH --account=hare.econ.uzh
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=16
-#SBATCH --mem=12G
-#SBATCH --time=00:30:00
+#SBATCH --mem=16G
+#SBATCH --time=01:00:00
 
 # Chunked PRF fit: ONE voxel-chunk per array task, distributed across
-# CPU nodes. After all tasks finish, run merge_prf_chunks.sh per
-# subject to assemble the final NIfTIs.
-#
-# Sizing (Gaussian model 1, T=3096, V_per_chunk=5000):
-#   - Base load (BOLD + paradigm + masker)        ~5 GB
-#   - Per-voxel activations during GD backprop    ~5 GB
-#   - Total peak                                  ~10-11 GB  -> 12G request
-#   - DoG/DN models will need larger mem (use --mem on resubmit).
+# CPU nodes.  Runs the same per-model schedule as fit_prf_l4.sh — just
+# in CPU + chunked form so the cluster can parallelise many short
+# tasks instead of one long GPU job per subject.  After all tasks
+# finish for a subject, run merge_prf_chunks.sh to assemble the final
+# NIfTIs.
 #
 # Layout: array task ID maps to (subject_idx, chunk_idx).
 #
 # Usage:
-#   sbatch --array=1-1620 --export=ALL,MODEL=1,N_CHUNKS=54,N_SUBS=30 \
+#   sbatch --array=1-1620 --export=ALL,MODEL=1,N_CHUNKS=54,N_SUBS=30,KIND=full \
 #          retsupp/modeling/slurm_jobs/fit_prf_chunked.sh
 #
 # 30 subjects × 54 chunks = 1620 array tasks. Each task is small
-# (16 CPU, 12 GB, ~6-10 min wall) so the cluster can schedule many
-# in parallel.
+# (16 CPU, 16 GB) so the cluster can schedule many in parallel.
 
 set -euo pipefail
 
@@ -77,17 +73,19 @@ export TF_NUM_INTEROP_THREADS=2
 
 PYTHON="$HOME/data/conda/envs/retsupp_cuda/bin/python"
 
+KIND="${KIND:-full}"
+
 $PYTHON -u "$HOME/git/retsupp/retsupp/modeling/fit_prf.py" \
     "$subject" --model "$MODEL" \
     --bids-folder /shares/zne.uzh/gdehol/ds-retsupp \
     --resolution 50 \
     --voxel-chunk-size 100000 \
-    --max-n-iterations 2000 \
-    --paradigm-kind full \
+    --paradigm-kind "$KIND" \
     --chunk-index "$chunk_idx" \
     --n-chunks "$N_CHUNKS"
 # Note: --voxel-chunk-size 100000 means "no internal batching" — the
-# task processes all its voxels in one GD call (per-task voxel count
-# ~5000 with N_CHUNKS=54).
+# task processes all its voxels in one schedule call (per-task voxel
+# count ~5000 with N_CHUNKS=54).  Iteration count is governed by the
+# per-model schedule defined in fit_prf.MODEL_CFG.
 
 echo "Finished: $(date)"

@@ -23,12 +23,13 @@ from retsupp.utils.data import Subject
 
 
 def main(subject: int, model: int, bids_folder: str = '/data/ds-retsupp',
-         keep_chunks: bool = False):
+         paradigm_kind: str = 'full', keep_chunks: bool = False):
     bids = Path(bids_folder)
     sub = Subject(subject, bids)
-    src_dir = (bids / 'derivatives' / 'prf' / f'model{model}'
+    base_dir = 'prf_bar' if paradigm_kind == 'bar' else 'prf'
+    src_dir = (bids / 'derivatives' / base_dir / f'model{model}'
                / f'sub-{subject:02d}' / 'chunks')
-    out_dir = (bids / 'derivatives' / 'prf' / f'model{model}'
+    out_dir = (bids / 'derivatives' / base_dir / f'model{model}'
                / f'sub-{subject:02d}')
 
     chunks = sorted(src_dir.glob('chunk-*-of-*.npz'))
@@ -84,8 +85,9 @@ if __name__ == "__main__":
     p.add_argument('subject', type=int)
     p.add_argument('--model', type=int, required=True)
     p.add_argument('--bids-folder', default='/data/ds-retsupp')
+    p.add_argument('--paradigm-kind', choices=['full', 'bar'], default='full')
     p.add_argument('--keep-chunks', action='store_true',
                    help="Don't delete chunks/ after merging.")
     a = p.parse_args()
     main(a.subject, a.model, bids_folder=a.bids_folder,
-         keep_chunks=a.keep_chunks)
+         paradigm_kind=a.paradigm_kind, keep_chunks=a.keep_chunks)

@@ -32,9 +32,11 @@ source "$HOME/data/miniforge3/etc/profile.d/conda.sh"
 conda activate retsupp_cuda
 export PYTHONUNBUFFERED=1
 
+KIND="${KIND:-full}"
 PYTHON="$HOME/data/conda/envs/retsupp_cuda/bin/python"
 $PYTHON -u "$HOME/git/retsupp/retsupp/modeling/merge_prf_chunks.py" \
     "$subject" --model "$MODEL" \
-    --bids-folder /shares/zne.uzh/gdehol/ds-retsupp
+    --bids-folder /shares/zne.uzh/gdehol/ds-retsupp \
+    --paradigm-kind "$KIND"
 
 echo "Finished: $(date)"
