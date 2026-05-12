@@ -438,21 +438,6 @@ def main(subject: int, model_label: int,
         init = init.drop(columns=['r2', 'theta', 'ecc'], errors='ignore')
         if cfg.get('adapt') is not None:
             init = cfg['adapt'](init)
-        # Clip σ-like init params to ≥ sd_min. Otherwise braincoder's
-        # ParameterFitter.fit calls _sd_softplus_inverse on a value below
-        # the floor (which expects sd = sd_min + softplus(raw) ≥ sd_min)
-        # and returns NaN — the forward pass then emits the all-zero
-        # parameter sentinel + r²=1.0 phantom voxels we observed in
-        # sub-02 V1 (504/1624 voxels at sd<0.3 in cached m1). Clipping
-        # here makes the new pipeline robust to legacy NIfTIs fit
-        # before sd_min was introduced.
-        for sigma_col in ('sd', 'srf_size'):
-            if sigma_col in init.columns and sd_min > 0:
-                n_clipped = int((init[sigma_col] < sd_min).sum())
-                if n_clipped:
-                    print(f"  clipped {n_clipped} {sigma_col} init values "
-                          f"to >= {sd_min}")
-                init[sigma_col] = init[sigma_col].clip(lower=sd_min)
         print(f"  init cols: {list(init.columns)}")
 
     schedule = cfg['schedule']
@@ -558,14 +543,15 @@ if __name__ == "__main__":
                         'instead of prf/). Use for benchmarks or '
                         'experimental runs that should not clobber '
                         'canonical results.')
-    p.add_argument('--sd-min', type=float, default=0.3,
-                   help='Lower bound for every σ-like parameter (sd, '
-                        'srf_size, sigma_AF, sigma_dyn, ...) enforced '
-                        'via shifted softplus σ = sd_min + softplus(raw) '
-                        'in the braincoder model. Default 0.3 (the '
-                        'sandbox-validated value) eliminates the σ-collapse '
-                        'pathology that otherwise produces NaN predictions '
-                        'and phantom R²=1 voxels.')
+    p.add_argument('--sd-min', type=float, default=0.2,
+                   help='Strict lower bound for every σ-like parameter '
+                        '(sd, srf_size, sigma_AF, sigma_dyn, ...) enforced '
+                        'via shifted softplus σ = sd_min + softplus(raw). '
+                        'Default 0.2° ≈ 1 grid-pixel at resolution=50, '
+                        'which is the mathematical minimum (σ < grid '
+                        'spacing is degenerate). Permits small V1-fovea '
+                        'PRFs while still blocking the σ→0 collapse '
+                        'pathology.')
     a = p.parse_args()
     main(a.subject, a.model, bids_folder=a.bids_folder,
          resolution=a.resolution, voxel_chunk_size=a.voxel_chunk_size,
