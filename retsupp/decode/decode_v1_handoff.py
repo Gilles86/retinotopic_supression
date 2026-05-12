@@ -204,7 +204,12 @@ def main():
     p.add_argument('--model', type=int, default=4, choices=sorted(PARS_BY_MODEL),
                    help='PRF model: 4 = DoG+HRF, 6 = Divisive Normalization+HRF.')
     p.add_argument('--bids-folder', default='/data/ds-retsupp')
-    p.add_argument('--l2-norm', type=float, default=0.01)
+    p.add_argument('--l2-norm', type=float, default=1.0,
+                   help='L2 penalty on decoded stimulus (default 1.0; '
+                        'matches the binary 0/1 paradigm scale via the '
+                        'Gaussian-prior interpretation σ_prior = 1/√(2·L2) ≈ '
+                        '0.71. Smaller L2 → noisy spikes; larger L2 → '
+                        'crushed amplitude.).')
     p.add_argument('--learning-rate', type=float, default=0.5)
     p.add_argument('--max-n-iterations', type=int, default=1000)
     p.add_argument('--min-n-iterations', type=int, default=200)
