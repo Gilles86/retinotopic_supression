@@ -213,39 +213,6 @@ class Subject(object):
         # Defensive clip — shouldn't trigger in practice (max 3 per HP).
         return int(min(pos, 2))
 
-    def get_distractor_mapping_old(self):
-        subject = int(self.subject_id)
-
-        # Counterbalancing lists (fixed indexing: (subject-1) % 8)
-        hp_sequences = [
-            [1, 5, 3, 7],
-            [1, 5, 7, 3],
-            [3, 7, 5, 1],
-            [5, 1, 7, 3],
-            [3, 7, 1, 5],
-            [7, 3, 1, 5],
-            [5, 1, 3, 7],
-            [7, 3, 5, 1],
-        ]
-        hp_list = hp_sequences[(subject - 1) % 8]
-
-        # Build the 12-run block pattern (2 sessions × 6 runs)
-        if subject in (1, 2):
-            # Bugged order: AA BBB CCC DDD A  →  runs: 1..12 = A,A,B,B,B,C,C,C,D,D,D,A
-            block_order = [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 0]
-        else:
-            # Intended order: AAA BBB CCC DDD  →  runs: 1..12 = A,A,A,B,B,B,C,C,C,D,D,D
-            block_order = [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3]
-
-        distractor_locations = {}
-        for session in (1, 2):
-            for run in range(1, 7):
-                global_run = (session - 1) * 6 + run  # 1..12
-                block_idx = block_order[global_run - 1]  # 0..3
-                distractor_locations[(session, run)] = self.location_mapping[hp_list[block_idx]]
-
-        return distractor_locations
-
     def get_experimental_settings(self, session=1, run=1):
         
         print(self.subject_id, session, run)
@@ -635,57 +602,46 @@ class Subject(object):
 
         return stimulus
 
-    def get_dynamic_indicator(self, session=1, run=1,
-                              max_distractor_duration=1.5,
-                              oversampling=1):
-        """Per-TR distractor-on indicator at each of the 4 ring locations.
+    # Ring location code → channel index. Channel order MUST stay
+    # in sync with `CONDITIONS` in fit_*_af_braincoder.py.
+    # 1: upper_right, 3: upper_left, 5: lower_left, 7: lower_right.
+    _LOC_TO_CHANNEL = {1.0: 0, 3.0: 1, 5.0: 2, 7.0: 3}
 
-        Parameters
-        ----------
-        oversampling : int, default 1
-            Temporal oversampling factor. When ``> 1``, the indicator is
-            computed on a fine time grid with step ``dt = tr /
-            oversampling`` instead of TR. Each output row then represents
-            the on-fraction of one fine sub-bin (length ``dt``), not of a
-            full TR. Returned shape becomes ``(n_volumes * oversampling,
-            4)``. With ``oversampling=1`` the result is exactly the
-            previous behaviour.
+    def _per_bin_indicator(self, session, run, location_col,
+                            max_duration, oversampling, trial_filter=None):
+        """Compute a per-bin on-fraction indicator at the 4 ring channels.
 
-        Returns
-        -------
-        d : ndarray, shape (n_volumes * oversampling, 4)
-            Fraction of each (sub-)bin during which a distractor was on
-            screen at each ring location, in [0, 1]. The 4 channels are
-            ordered as
-            ``['upper_right', 'upper_left', 'lower_left', 'lower_right']``
-            to match the ``CONDITIONS`` list used by
-            :mod:`retsupp.modeling.fit_af_prf_braincoder` /
-            :mod:`retsupp.modeling.fit_dynamic_af_braincoder` (and the
-            ``ring_positions`` ordering passed to the
-            ``DynamicAttentionFieldPRF2DWithHRF`` model).
+        Shared machinery behind :meth:`get_dynamic_indicator`,
+        :meth:`get_repeat_distractor_indicator` and
+        :meth:`get_target_indicator`.
 
-        Notes
-        -----
-        Logic mirrors the distractor pass of
-        :meth:`get_stimulus_with_distractors`, but does not paint any
-        spatial grid — it only returns the per-bin per-location overlap
-        fraction.
+        Args:
+            session, run: BIDS indices.
+            location_col: events.tsv column to read the ring code from
+                (``distractor_location`` or ``target_location``).
+            max_duration: cap on each trial's on-duration (s).
+            oversampling: temporal sub-binning factor (>=1).
+            trial_filter: optional callable ``(prev_loc, this_loc) ->
+                bool`` deciding whether to paint a given trial.
+                ``prev_loc`` is the previous trial's location code
+                (or ``None`` at the start); ``this_loc`` is the
+                current one (or ``None`` if missing / 10.0 / not a
+                ring location). Default keeps every trial whose
+                ``this_loc`` is a valid ring code.
+
+        Returns:
+            (n_volumes * oversampling, 4) ``float32`` array of
+            per-bin on-fractions in [0, 1].
         """
         if int(oversampling) < 1:
             raise ValueError(f"oversampling must be >= 1, got {oversampling}")
         oversampling = int(oversampling)
 
-        # Ring location code -> channel index. Channel order MUST stay
-        # in sync with `CONDITIONS` in fit_*_af_braincoder.py.
-        # 1: upper_right, 3: upper_left, 5: lower_left, 7: lower_right.
-        loc_to_channel = {1.0: 0, 3.0: 1, 5.0: 2, 7.0: 3}
-        n_channels = 4
-
+        loc_to_channel = self._LOC_TO_CHANNEL
         tr = self.get_tr(session, run)
         n_volumes = self.get_n_volumes(session, run)
         dt = tr / oversampling
         n_bins = n_volumes * oversampling
-        # Bin centres at dt/2, 3*dt/2, ... ; bin edges = centre ± dt/2.
         frametimes = (np.arange(n_bins, dtype=np.float64) + 0.5) * dt
         tr_starts = frametimes - dt / 2.
         tr_ends = frametimes + dt / 2.
@@ -694,31 +650,51 @@ class Subject(object):
         targets = onsets[onsets["event_type"] == "target"].sort_values("onset")
         feedback = onsets[onsets["event_type"] == "feedback"].sort_values("onset")
 
-        d = np.zeros((len(frametimes), n_channels), dtype=np.float32)
-
+        out = np.zeros((n_bins, len(loc_to_channel)), dtype=np.float32)
+        prev_loc = None
         for _, trial in targets.iterrows():
-            loc_code = trial["distractor_location"]
-            if pd.isna(loc_code) or loc_code == 10.0:
-                continue
-            if loc_code not in loc_to_channel:
-                continue
-            ch = loc_to_channel[loc_code]
+            code = trial[location_col]
+            this_loc = (code if (not pd.isna(code)
+                                  and code in loc_to_channel) else None)
 
+            paint = (trial_filter(prev_loc, this_loc) if trial_filter
+                     else (this_loc is not None))
+            prev_loc = this_loc  # update history regardless of paint
+            if not paint:
+                continue
+
+            ch = loc_to_channel[this_loc]
             t_on = trial["onset"]
             after = feedback[feedback["onset"] > t_on]
             t_off = (after.iloc[0]["onset"] if len(after)
-                     else t_on + max_distractor_duration)
-            t_off = min(t_off, t_on + max_distractor_duration)
-
+                     else t_on + max_duration)
+            t_off = min(t_off, t_on + max_duration)
             overlap = np.clip(
                 np.minimum(tr_ends, t_off) - np.maximum(tr_starts, t_on),
-                0.0, None,
-            ) / dt  # in [0, 1]
+                0.0, None) / dt
+            out[:, ch] = np.maximum(out[:, ch], overlap.astype(np.float32))
+        return out
 
-            # Element-wise max in case of overlapping windows.
-            d[:, ch] = np.maximum(d[:, ch], overlap.astype(np.float32))
+    def get_dynamic_indicator(self, session=1, run=1,
+                              max_distractor_duration=1.5,
+                              oversampling=1):
+        """Per-TR distractor-on indicator at each of the 4 ring locations.
 
-        return d
+        Channel order is
+        ``['upper_right', 'upper_left', 'lower_left', 'lower_right']``,
+        matching the ``CONDITIONS`` list in fit_*_af_braincoder.py and
+        the ``ring_positions`` ordering of
+        ``DynamicAttentionFieldPRF2DWithHRF``.
+
+        ``oversampling`` > 1 returns the indicator on a fine grid with
+        step ``tr / oversampling`` (shape ``(n_volumes * oversampling,
+        4)``).
+        """
+        return self._per_bin_indicator(
+            session, run,
+            location_col="distractor_location",
+            max_duration=max_distractor_duration,
+            oversampling=oversampling)
 
     def get_repeat_distractor_indicator(self, session=1, run=1,
                                         max_distractor_duration=1.5,
@@ -727,142 +703,36 @@ class Subject(object):
 
         A trial counts as a "repeat" iff its distractor is at the SAME
         ring location as the immediately preceding trial's distractor
-        (and both trials had a distractor — distractor_location ∈
-        {1,3,5,7}). The first trial of a run is never a repeat (no
-        previous trial). Trials following a no-distractor trial are
-        not repeats.
-
-        Returns
-        -------
-        d_repeat : ndarray, shape (n_volumes * oversampling, 4)
-            Same shape and channel ordering as
-            :meth:`get_dynamic_indicator`, but with on-fractions set
-            only for repeat trials. Subtracting this from the regular
-            dynamic indicator gives the SWITCH-trial indicator.
+        (both must have a distractor in {1,3,5,7}). The first trial of
+        a run is never a repeat. Subtracting this from the full dynamic
+        indicator gives the SWITCH-trial indicator.
         """
-        if int(oversampling) < 1:
-            raise ValueError(f"oversampling must be >= 1, got {oversampling}")
-        oversampling = int(oversampling)
-
-        loc_to_channel = {1.0: 0, 3.0: 1, 5.0: 2, 7.0: 3}
-        n_channels = 4
-
-        tr = self.get_tr(session, run)
-        n_volumes = self.get_n_volumes(session, run)
-        dt = tr / oversampling
-        n_bins = n_volumes * oversampling
-        frametimes = (np.arange(n_bins, dtype=np.float64) + 0.5) * dt
-        tr_starts = frametimes - dt / 2.
-        tr_ends = frametimes + dt / 2.
-
-        onsets = self.get_onsets(session, run)
-        targets = onsets[onsets["event_type"] == "target"].sort_values("onset")
-        feedback = onsets[onsets["event_type"] == "feedback"].sort_values("onset")
-
-        d = np.zeros((len(frametimes), n_channels), dtype=np.float32)
-
-        prev_loc = None
-        for _, trial in targets.iterrows():
-            loc_code = trial["distractor_location"]
-            this_loc = (loc_code if (not pd.isna(loc_code)
-                                     and loc_code in loc_to_channel)
-                        else None)
-            is_repeat = (this_loc is not None) and (this_loc == prev_loc)
-            prev_loc = this_loc  # update history regardless of paint
-
-            if not is_repeat:
-                continue
-
-            ch = loc_to_channel[this_loc]
-            t_on = trial["onset"]
-            after = feedback[feedback["onset"] > t_on]
-            t_off = (after.iloc[0]["onset"] if len(after)
-                     else t_on + max_distractor_duration)
-            t_off = min(t_off, t_on + max_distractor_duration)
-
-            overlap = np.clip(
-                np.minimum(tr_ends, t_off) - np.maximum(tr_starts, t_on),
-                0.0, None,
-            ) / dt
-            d[:, ch] = np.maximum(d[:, ch], overlap.astype(np.float32))
-
-        return d
+        def is_repeat(prev_loc, this_loc):
+            return this_loc is not None and this_loc == prev_loc
+        return self._per_bin_indicator(
+            session, run,
+            location_col="distractor_location",
+            max_duration=max_distractor_duration,
+            oversampling=oversampling,
+            trial_filter=is_repeat)
 
     def get_target_indicator(self, session=1, run=1,
                              max_target_duration=1.5,
                              oversampling=1):
         """Per-TR target-on indicator at each of the 4 ring locations.
 
-        Identical machinery to :meth:`get_dynamic_indicator`, but reads
-        the ``target_location`` column instead of ``distractor_location``
-        — i.e. tracks the per-TR overlap fraction of the SEARCH TARGET
-        (not the singleton distractor) at each of the 4 ring positions.
-
-        Used by the v3 + target model
-        (``DoGDynamicAttentionFieldPRF2DWithHRF_v3_target``) as a
-        positive-control "phasic capture" channel: the same visual
-        transient that suppresses at the distractor should produce
-        positive gain at the target.
-
-        Parameters
-        ----------
-        oversampling : int, default 1
-            Temporal oversampling factor. See
-            :meth:`get_dynamic_indicator` for details.
-
-        Returns
-        -------
-        t : ndarray, shape (n_volumes * oversampling, 4)
-            Fraction of each (sub-)bin during which a target was on
-            screen at each ring location, in [0, 1]. Channel order is
-            ``['upper_right', 'upper_left', 'lower_left', 'lower_right']``
-            (same as ``get_dynamic_indicator``).
+        Same machinery and channel ordering as
+        :meth:`get_dynamic_indicator`, but reads ``target_location``
+        instead of ``distractor_location`` — tracks the per-TR overlap
+        fraction of the SEARCH TARGET at each of the 4 ring positions.
+        Used as a positive-control "phasic capture" channel in the v3 +
+        target model.
         """
-        if int(oversampling) < 1:
-            raise ValueError(f"oversampling must be >= 1, got {oversampling}")
-        oversampling = int(oversampling)
-
-        # Same channel mapping as get_dynamic_indicator.
-        loc_to_channel = {1.0: 0, 3.0: 1, 5.0: 2, 7.0: 3}
-        n_channels = 4
-
-        tr = self.get_tr(session, run)
-        n_volumes = self.get_n_volumes(session, run)
-        dt = tr / oversampling
-        n_bins = n_volumes * oversampling
-        frametimes = (np.arange(n_bins, dtype=np.float64) + 0.5) * dt
-        tr_starts = frametimes - dt / 2.
-        tr_ends = frametimes + dt / 2.
-
-        onsets = self.get_onsets(session, run)
-        targets = onsets[onsets["event_type"] == "target"].sort_values("onset")
-        feedback = onsets[onsets["event_type"] == "feedback"].sort_values("onset")
-
-        t = np.zeros((len(frametimes), n_channels), dtype=np.float32)
-
-        for _, trial in targets.iterrows():
-            loc_code = trial["target_location"]
-            if pd.isna(loc_code) or loc_code == 10.0:
-                continue
-            if loc_code not in loc_to_channel:
-                continue
-            ch = loc_to_channel[loc_code]
-
-            t_on = trial["onset"]
-            after = feedback[feedback["onset"] > t_on]
-            t_off = (after.iloc[0]["onset"] if len(after)
-                     else t_on + max_target_duration)
-            t_off = min(t_off, t_on + max_target_duration)
-
-            overlap = np.clip(
-                np.minimum(tr_ends, t_off) - np.maximum(tr_starts, t_on),
-                0.0, None,
-            ) / dt  # in [0, 1]
-
-            # Element-wise max in case of overlapping windows.
-            t[:, ch] = np.maximum(t[:, ch], overlap.astype(np.float32))
-
-        return t
+        return self._per_bin_indicator(
+            session, run,
+            location_col="target_location",
+            max_duration=max_target_duration,
+            oversampling=oversampling)
 
     def get_confounds(self, session=1, run=1, filter_confounds=True,
                        n_acompcorr=10):
@@ -1324,39 +1194,28 @@ class Subject(object):
 
         # Decide which atlas to source from.
         use_wang = (roi in self._WANG_ONLY_ROIS) or (roi in self._WANG_ALIASES)
-
         if use_wang:
             atlas = self.get_wang_atlas(bold_space=bold_space)
             labels = self.get_wang_labels()
-            name_to_idx = {v.lower(): k for k, v in labels.items()}
-            if roi in self._WANG_ALIASES:
-                component_rois = self._WANG_ALIASES[roi]
-            else:
-                component_rois = [roi]
-            indices = []
-            for r in component_rois:
-                idx = name_to_idx.get(r.lower())
-                if idx is None:
-                    raise ValueError(f"ROI '{r}' not found in Wang label names.")
-                indices.append(idx)
-            cond = ' | '.join(f'(img == {i})' for i in indices)
-            roi_mask = image.math_img(cond, img=atlas)
+            aliases = self._WANG_ALIASES
+            atlas_name = "Wang"
         else:
             atlas = self.get_retinotopic_atlas(bold_space=bold_space)
             labels = self.get_retinotopic_labels()
-            name_to_idx = {v.lower(): k for k, v in labels.items()}
-            if roi in self._BENSON_ALIASES:
-                component_rois = self._BENSON_ALIASES[roi]
-            else:
-                component_rois = [roi]
-            indices = []
-            for r in component_rois:
-                idx = name_to_idx.get(r.lower())
-                if idx is None:
-                    raise ValueError(f"ROI '{r}' not found in label names.")
-                indices.append(idx)
-            cond = ' | '.join(f'(img == {i})' for i in indices)
-            roi_mask = image.math_img(cond, img=atlas)
+            aliases = self._BENSON_ALIASES
+            atlas_name = "Benson"
+
+        component_rois = aliases.get(roi, [roi])
+        name_to_idx = {v.lower(): k for k, v in labels.items()}
+        indices = []
+        for r in component_rois:
+            idx = name_to_idx.get(r.lower())
+            if idx is None:
+                raise ValueError(
+                    f"ROI '{r}' not found in {atlas_name} label names.")
+            indices.append(idx)
+        cond = ' | '.join(f'(img == {i})' for i in indices)
+        roi_mask = image.math_img(cond, img=atlas)
 
         if hemi is not None:
             hemi_mask = self.get_hemisphere_mask(hemi, bold_space=bold_space)
