@@ -353,10 +353,10 @@ def adapt_init_for(target_model, init_from, prior):
     if pair == (1, 1):
         return init  # refining m1 itself
     if pair == (1, 2):
-        # srf_size = 3.0 starts surround on the high side of the V1
-        # literature range so GD typically shrinks rather than grows.
+        # srf_size = 4.0 starts surround on the high side of the V1
+        # literature range so GD almost always shrinks rather than grows.
         init["srf_amplitude"] = 5e-2
-        init["srf_size"] = 3.0
+        init["srf_size"] = 4.0
         return init
     if pair == (1, 3):
         init["hrf_delay"] = 4.5

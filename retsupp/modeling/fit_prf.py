@@ -73,14 +73,14 @@ DN_PARAMS = ('rf_amplitude', 'srf_amplitude', 'srf_size',
 def _adapt_m2_from_m1(init):
     """Seed DoG surround from a Gaussian m1 fit.
 
-    ``srf_size = 3.0`` (i.e. surround σ = 3 × center σ) is in the
-    middle of the V1 literature range (Zuiderbaan 2012, Aqil 2021)
-    and on the high side of empirical retsupp values, so GD typically
-    *shrinks* rather than grows the surround — safer descent path.
+    ``srf_size = 4.0`` (surround σ = 4 × center σ) sits at the upper
+    end of the V1 literature range (Zuiderbaan 2012, Aqil 2021) and
+    matches empirical retsupp values, so GD almost always *shrinks*
+    rather than grows the surround — safer descent path.
     """
     init = init.copy()
     init['srf_amplitude'] = 5e-2
-    init['srf_size'] = 3.0
+    init['srf_size'] = 4.0
     return init
 
 
