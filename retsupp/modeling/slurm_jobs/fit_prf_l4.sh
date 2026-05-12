@@ -3,9 +3,14 @@
 #SBATCH --account=hare.econ.uzh
 #SBATCH --output=/dev/null
 #SBATCH --gres=gpu:1
-# No GPU type constraint: take whatever is free first (L4/A100/H100/...).
+# Constraint to GPUs whose compute capability the env's CUDA 11.8 ptxas
+# supports. H100/H200 are compute_9.0 (Hopper) and crash with
+# "ptxas: Failed to launch ptxas" — see sub-02 m1 attempt for the trace.
+#SBATCH --constraint="A100|V100|L4"
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=48G
+# Generous walltime — measured m1 GPU is ~40 min, but m2-m6 timing
+# isn't known yet; revisit once we have data.
 #SBATCH --time=04:00:00
 
 # Whole-cortex PRF fit on any GPU. ONE model per job.
