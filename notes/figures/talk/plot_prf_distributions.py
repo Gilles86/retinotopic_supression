@@ -227,48 +227,82 @@ def plot_parameter_page(pdf: PdfPages, df: pd.DataFrame, param: str,
     plt.close(g.fig)
 
 
+def _parse_models(text):
+    """Accept '1,2,3,4' or '1-4' or 'all' → list[int]."""
+    if text.lower() == "all":
+        return None  # auto-detect from available TSVs
+    if "-" in text and "," not in text:
+        lo, hi = text.split("-")
+        return list(range(int(lo), int(hi) + 1))
+    return [int(x) for x in text.split(",")]
+
+
+def _autodetect_models(data_dir: Path):
+    """Return sorted ints for which prf_warmstart_m{M}_V1_sub-*.tsv exists."""
+    found = set()
+    for f in data_dir.glob("prf_warmstart_m*_V1_sub-*.tsv"):
+        try:
+            m = int(f.name.split("_m")[1].split("_")[0])
+            found.add(m)
+        except (IndexError, ValueError):
+            continue
+    return sorted(found)
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", type=int, default=1)
+    ap.add_argument("--models", default="all",
+                     help="Comma list ('1,2,3,4'), range ('1-4'), or "
+                          "'all' (default; auto-detect from TSVs).")
     ap.add_argument("--data-dir", type=Path, default=None,
                      help="Where to find prf_warmstart_m{M}_V1_sub-*.tsv "
                           "(default: notes/data/, falls back to /tmp/v1_results/)")
     ap.add_argument("--out", type=Path, default=None,
                      help="Output PDF path (default: notes/figures/talk/"
-                          "prf_distributions_m{M}.pdf)")
+                          "prf_distributions.pdf)")
     args = ap.parse_args()
 
     # Resolve data dir — prefer repo notes/data; fall back to /tmp.
     if args.data_dir is None:
         for cand in (DATA_DIR, Path("/tmp/v1_results")):
-            if any(cand.glob(f"prf_warmstart_m{args.model}_V1_sub-*.tsv")):
+            if any(cand.glob("prf_warmstart_m*_V1_sub-*.tsv")):
                 args.data_dir = cand
                 break
         if args.data_dir is None:
             args.data_dir = DATA_DIR
 
-    out_path = args.out or (THIS / f"prf_distributions_m{args.model}.pdf")
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+    models = _parse_models(args.models)
+    if models is None:
+        models = _autodetect_models(args.data_dir)
+    if not models:
+        raise RuntimeError(f"No warmstart TSVs at {args.data_dir}")
 
-    df = load_warmstart(args.model, args.data_dir)
-    print(f"Loaded {len(df):,} voxel-rows from {args.data_dir} "
-          f"({df.subject.nunique()} subjects)")
+    out_path = args.out or (THIS / "prf_distributions.pdf")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
 
     sns.set_theme(context="talk", style="ticks", font_scale=0.85)
 
-    # Parameters to plot — only those actually present.
-    present = [p for p in ("x", "y", "eccen", "theta", "sd",
-                            "amplitude", "baseline", "r2",
-                            "srf_size", "srf_amplitude",
-                            "hrf_delay", "hrf_dispersion",
-                            "rf_amplitude", "neural_baseline",
-                            "surround_baseline", "bold_baseline")
-               if p in df.columns]
-
+    print(f"Models: {models}; data: {args.data_dir}; out: {out_path}")
     with PdfPages(out_path) as pdf:
-        plot_spatial_coverage_page(pdf, df, args.model)
-        for param in present:
-            plot_parameter_page(pdf, df, param, args.model)
+        for model in models:
+            try:
+                df = load_warmstart(model, args.data_dir)
+            except FileNotFoundError as e:
+                print(f"  m{model}: skip ({e})")
+                continue
+            print(f"  m{model}: {len(df):,} voxel-rows "
+                  f"({df.subject.nunique()} subjects)")
+            plot_spatial_coverage_page(pdf, df, model)
+            # Parameters to plot — only those actually present.
+            present = [p for p in ("x", "y", "eccen", "theta", "sd",
+                                    "amplitude", "baseline", "r2",
+                                    "srf_size", "srf_amplitude",
+                                    "hrf_delay", "hrf_dispersion",
+                                    "rf_amplitude", "neural_baseline",
+                                    "surround_baseline", "bold_baseline")
+                       if p in df.columns]
+            for param in present:
+                plot_parameter_page(pdf, df, param, model)
 
     print(f"Wrote {out_path}")
 
