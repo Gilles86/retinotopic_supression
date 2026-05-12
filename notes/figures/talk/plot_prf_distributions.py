@@ -52,7 +52,10 @@ PARAM_RANGES = {
     "theta": (-np.pi, np.pi),
     "amplitude": None,
     "baseline": None,
-    "r2": (0.0, 1.0),
+    # R² mass is heavily concentrated near 0; cap at 0.6 so the body
+    # of the distribution is visible. Long right tail picked up by
+    # log-y scaling (see PARAM_LOG_Y).
+    "r2": (0.0, 0.6),
     # Surround/DN params (only present for m2, m4-6)
     "srf_size": (0.0, 8.0),
     "srf_amplitude": None,
@@ -63,6 +66,11 @@ PARAM_RANGES = {
     "surround_baseline": None,
     "bold_baseline": None,
 }
+
+# Parameters whose histogram should use a log y-axis (long-tailed
+# distributions where the small-bin counts matter for QC).
+PARAM_LOG_Y = {"r2", "sd", "srf_size", "amplitude",
+                "rf_amplitude", "srf_amplitude"}
 
 
 def load_warmstart(model: int, data_dir: Path) -> pd.DataFrame:
@@ -97,12 +105,15 @@ def plot_spatial_coverage_page(pdf: PdfPages, df: pd.DataFrame,
 
     n_rows = len(subjects)
     n_cols = max(len(rois), 1)
+    # Floor the width so the long suptitle has room when there are few
+    # ROI columns. Leave a 0.3" left gutter for the row labels.
+    fig_w = max(3.4 * n_cols + 1.3, 8.0)
     fig, axes = plt.subplots(
         n_rows, n_cols,
-        figsize=(3.4 * n_cols, 3.4 * n_rows),
+        figsize=(fig_w, 3.4 * n_rows),
         squeeze=False)
     fig.suptitle(f"Model {model} — PRF center density per subject × ROI",
-                 weight="bold", fontsize=18, y=0.998)
+                 weight="bold", fontsize=16, y=0.995)
 
     grid_n = 120
     g = np.linspace(-APERTURE_RADIUS - 0.5,
@@ -161,8 +172,9 @@ def plot_spatial_coverage_page(pdf: PdfPages, df: pd.DataFrame,
                               fontsize=11, rotation=0, ha="right",
                               va="center", labelpad=18)
 
-    plt.tight_layout()
-    pdf.savefig(fig)
+    # Leave headroom for the suptitle.
+    plt.tight_layout(rect=(0, 0, 1, 0.96))
+    pdf.savefig(fig, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -186,10 +198,14 @@ def plot_parameter_page(pdf: PdfPages, df: pd.DataFrame, param: str,
         rng = (lo, hi)
     real = real[(real[param] >= rng[0]) & (real[param] <= rng[1])]
 
+    # Wider aspect so single-column FacetGrid still leaves room for
+    # the suptitle on the page.
+    n_cols = max(len(rois), 1)
+    aspect = 2.6 if n_cols == 1 else 1.6
     g = sns.FacetGrid(
         real, row="subject", col="roi",
         row_order=subjects, col_order=rois,
-        height=1.7, aspect=1.6, sharex=True, sharey=False,
+        height=1.7, aspect=aspect, sharex=True, sharey=False,
         margin_titles=True, despine=True)
     g.map_dataframe(
         sns.histplot, x=param, stat="density",
@@ -199,12 +215,15 @@ def plot_parameter_page(pdf: PdfPages, df: pd.DataFrame, param: str,
     g.set_axis_labels(param, "density")
     for ax in g.axes.flat:
         ax.set_xlim(rng)
+        if param in PARAM_LOG_Y:
+            ax.set_yscale("log")
         ax.grid(alpha=0.18, axis="y")
         ax.tick_params(labelsize=9)
+    # Add headroom above the FacetGrid for the suptitle.
+    g.fig.subplots_adjust(top=0.92)
     g.fig.suptitle(f"Model {model} — distribution of {param}",
-                    weight="bold", fontsize=15, y=1.005)
-    g.fig.tight_layout()
-    pdf.savefig(g.fig)
+                    weight="bold", fontsize=15)
+    pdf.savefig(g.fig, bbox_inches="tight")
     plt.close(g.fig)
 
 
