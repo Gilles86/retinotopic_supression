@@ -34,10 +34,30 @@ import pandas as pd
 from retsupp.utils.data import Subject, validate_prf_parameters
 
 
-M4_PARS = ['x', 'y', 'sd', 'baseline', 'amplitude',
-           'srf_amplitude', 'srf_size', 'hrf_delay', 'hrf_dispersion']
-M4_SD_MIN = 0.2
+PARS_BY_MODEL = {
+    4: ['x', 'y', 'sd', 'baseline', 'amplitude',
+        'srf_amplitude', 'srf_size', 'hrf_delay', 'hrf_dispersion'],
+    6: ['x', 'y', 'sd',
+        'rf_amplitude', 'srf_amplitude', 'srf_size',
+        'neural_baseline', 'surround_baseline', 'bold_baseline',
+        'hrf_delay', 'hrf_dispersion'],
+}
+SD_MIN_BY_MODEL = {4: 0.2, 6: 0.2}
 N_TR_PER_RUN = 258
+
+
+def _make_model(model: int, *, grid_coordinates, paradigm, hrf_model,
+                data, parameters, sd_min: float):
+    """Build the braincoder PRF model corresponding to ``model``."""
+    from braincoder.models import (
+        DifferenceOfGaussiansPRF2DWithHRF,
+        DivisiveNormalizationGaussianPRF2DWithHRF,
+    )
+    cls = {4: DifferenceOfGaussiansPRF2DWithHRF,
+           6: DivisiveNormalizationGaussianPRF2DWithHRF}[model]
+    return cls(grid_coordinates=grid_coordinates, paradigm=paradigm,
+               hrf_model=hrf_model, data=data, parameters=parameters,
+               flexible_hrf_parameters=True, sd_min=sd_min)
 
 
 def _run_index_in_concat(sub: Subject, session: int, run: int) -> int:
@@ -55,18 +75,20 @@ def _run_index_in_concat(sub: Subject, session: int, run: int) -> int:
                     f'sub-{sub.subject_id:02d}')
 
 
-def decode(*, subject: int, session: int, run: int, bids_folder: str,
+def decode(*, subject: int, session: int, run: int, model: int,
+           bids_folder: str,
            l2_norm: float, learning_rate: float,
            max_n_iterations: int, min_n_iterations: int,
            resid_max_iter: int, max_voxels: int,
            noise_dist: str,
            out_path: Path):
     from braincoder.hrf import SPMHRFModel
-    from braincoder.models import DifferenceOfGaussiansPRF2DWithHRF
     from braincoder.optimize import ResidualFitter, StimulusFitter
 
+    pars_list = PARS_BY_MODEL[model]
+    sd_min = SD_MIN_BY_MODEL[model]
     npz_path = (Path(bids_folder) / 'derivatives' / 'v1_decode_handoffs'
-                / f'sub-{subject:02d}_m4_V1.npz')
+                / f'sub-{subject:02d}_m{model}_V1.npz')
     print(f'Loading {npz_path}', flush=True)
     with np.load(npz_path, allow_pickle=True) as f:
         npz = {k: f[k] for k in f.keys()}
@@ -88,7 +110,7 @@ def decode(*, subject: int, session: int, run: int, bids_folder: str,
 
     # Voxel filter: top-N by r² with finite parameters. No FDR / σ / mass
     # guards — the m4 warmstart fits have sd_min=0.2 built in, no phantoms.
-    pars_all = pd.DataFrame({p: npz[p] for p in M4_PARS}).astype(np.float32)
+    pars_all = pd.DataFrame({p: npz[p] for p in pars_list}).astype(np.float32)
     pars_all['r2'] = npz['r2'].astype(np.float32)
     finite = np.all(np.isfinite(pars_all.values), axis=1) & (pars_all.r2 > 0)
     pars_all = pars_all[finite]
@@ -104,8 +126,8 @@ def decode(*, subject: int, session: int, run: int, bids_folder: str,
     if len(sel) < 20:
         raise RuntimeError(f'Too few voxels selected: {len(sel)}')
 
-    pars_df = sel[M4_PARS].astype(np.float32)
-    validate_prf_parameters(pars_df, sd_min=M4_SD_MIN, model_label='m4',
+    pars_df = sel[pars_list].astype(np.float32)
+    validate_prf_parameters(pars_df, sd_min=sd_min, model_label=f'm{model}',
                              source=str(npz_path))
 
     # BOLD + paradigm for this single run.
@@ -130,10 +152,9 @@ def decode(*, subject: int, session: int, run: int, bids_folder: str,
     hrf = SPMHRFModel(tr=tr, delay=4.5, dispersion=0.75)
 
     def mk_model():
-        return DifferenceOfGaussiansPRF2DWithHRF(
-            grid_coordinates=grid, paradigm=paradigm_flat,
-            hrf_model=hrf, data=bold_df, parameters=pars_df,
-            flexible_hrf_parameters=True, sd_min=M4_SD_MIN)
+        return _make_model(model, grid_coordinates=grid,
+                            paradigm=paradigm_flat, hrf_model=hrf,
+                            data=bold_df, parameters=pars_df, sd_min=sd_min)
 
     print(f'Fitting residual covariance (noise_dist={noise_dist})...',
           flush=True)
@@ -180,6 +201,8 @@ def main():
     p.add_argument('--subject', type=int, required=True)
     p.add_argument('--session', type=int, required=True)
     p.add_argument('--run', type=int, required=True)
+    p.add_argument('--model', type=int, default=4, choices=sorted(PARS_BY_MODEL),
+                   help='PRF model: 4 = DoG+HRF, 6 = Divisive Normalization+HRF.')
     p.add_argument('--bids-folder', default='/data/ds-retsupp')
     p.add_argument('--l2-norm', type=float, default=0.01)
     p.add_argument('--learning-rate', type=float, default=0.5)
@@ -196,6 +219,8 @@ def main():
     args = p.parse_args()
 
     tag = f'ses-{args.session}_run-{args.run}_vox{args.max_voxels}'
+    if args.model != 4:
+        tag = f'm{args.model}_{tag}'
     if args.noise_dist == 't':
         tag = f'{tag}_t'
     out_path = args.out or (Path(__file__).resolve().parents[2]
@@ -203,7 +228,7 @@ def main():
                             / f'sub-{args.subject:02d}'
                             / f'decoded_{tag}.npz')
     decode(subject=args.subject, session=args.session, run=args.run,
-           bids_folder=args.bids_folder,
+           model=args.model, bids_folder=args.bids_folder,
            l2_norm=args.l2_norm, learning_rate=args.learning_rate,
            max_n_iterations=args.max_n_iterations,
            min_n_iterations=args.min_n_iterations,
