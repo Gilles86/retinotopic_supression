@@ -27,11 +27,12 @@ import numpy as np
 import pandas as pd
 from matplotlib.colors import PowerNorm
 from matplotlib.patches import Circle
-from scipy.stats import norm, gaussian_kde
+from scipy.stats import gaussian_kde
 
 THIS = Path(__file__).resolve().parent
 sys.path.insert(0, str(THIS))
 from make_figures import APERTURE_RADIUS, BUILDUP_PALETTE, base_rc  # noqa
+from retsupp.utils.data import select_well_fit_voxels  # noqa: E402
 
 REPO = THIS.parents[2]
 WARM_DIR = REPO / "notes" / "data"
@@ -47,13 +48,6 @@ MODEL_LABELS = {
 WARM_COLOR = "#E76F51"
 CACHED_COLOR = "#1B4965"
 
-SIGMA_FLOOR, SIGMA_CEIL = 0.30, 4.00
-MASS_THR = 0.50
-# Warmstart now marks invalid voxels as r²=0 + NaN params via
-# `mark_invalid_fits`, so we don't need an R2_CEIL hack to defend
-# against braincoder sentinels. We still cap at 0.99 as a soft guard
-# for the CACHED fits which weren't run through the post-hoc helper.
-R2_CEIL = 0.99
 ECC_BINS = np.arange(0, 4.5, 0.5)
 ECC_CTRS = 0.5 * (ECC_BINS[:-1] + ECC_BINS[1:])
 
@@ -81,24 +75,10 @@ def load_cached(model):
 
 
 def filt(df, n_params, n_timepoints=258):
-    """Apply the same FDR + aperture + sigma filter as plot_prf_validity."""
-    from scipy.stats import f as f_dist
-    from statsmodels.stats.multitest import multipletests
-    df = df.copy()
-    df["eccen"] = np.sqrt(df.x**2 + df.y**2)
-    df["mass_in"] = 1.0 - norm.cdf(
-        (df.eccen - APERTURE_RADIUS) / df.sd.clip(lower=0.05))
-    r2c = df.r2.clip(0.0, 0.999999).to_numpy()
-    df1, df2 = n_params, n_timepoints - n_params - 1
-    F = (r2c / df1) / ((1.0 - r2c) / df2)
-    p = 1.0 - f_dist.cdf(F, df1, df2)
-    rejected, _, *_ = multipletests(p, alpha=0.05, method="fdr_bh")
-    fdr_thr = (float(np.min(df.r2.to_numpy()[rejected]))
-               if rejected.any() else np.inf)
-    sel = ((df.r2 >= fdr_thr) & (df.r2 <= R2_CEIL)
-           & (df.mass_in >= MASS_THR)
-           & (df.sd >= SIGMA_FLOOR) & (df.sd <= SIGMA_CEIL))
-    return df[sel], fdr_thr
+    """Thin alias for the canonical filter."""
+    return select_well_fit_voxels(
+        df, n_params=n_params, n_timepoints=n_timepoints,
+        aperture_radius=APERTURE_RADIUS)
 
 
 def draw_field_density(ax, df, palette):

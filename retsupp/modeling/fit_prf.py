@@ -1,30 +1,36 @@
 """Whole-cortex PRF fit, FULL 8-item paradigm. One model per invocation.
 
-Model 1 (Gaussian + fixed HRF) is the only "from scratch" fit (grid + GD).
-Models 2-6 load model 1 (or model 3) parameters from disk as init, then GD only.
-This lets each model be its own SLURM job — model 1 once, then 2/3/4/5/6
-in any order or in parallel after model 1 lands.
+Per-model recipe lives in ``MODEL_CFG``: each entry pairs a model class
+with an ``init_from`` predecessor, an ``adapt`` callable (for the
+parameter remapping between predecessor and target), and a ``schedule``
+(a list of ``(fixed_pars, lr, max_iters, r2_atol)`` GD stages).
 
-Init dependency tree::
+Init dependency chain (warm-start sandbox-validated)::
 
-    1: grid + GD
-    2: init from 1, +DoG params
-    3: init from 1, +flex HRF
-    4: init from 3, +DoG params         <- canonical
-    5: init from 4, +DN params (fixed HRF)
-    6: init from 4, +DN params (flex HRF)
+    1: grid + GD                         (single refine stage)
+    2: init from 1, +DoG params          (spatial then refine)
+    3: init from 1, +flex HRF            (spatial then HRF refine)
+    4: init from 2, +flex HRF            (HRF, then spatial+surround refine)
+    5: init from 2, +DN params           (spatial then refine)
+    6: init from 5, +flex HRF            (HRF then spatial+DN refine)
+
+m4/m5 chain off m2 (clean DoG surround), m6 off m5 (clean DN). HRF is
+always introduced last on each branch so spatial parameters are
+protected during the surround/DN warming stages.
+
+The schedule's core invariant: spatial (x, y, sd) and HRF
+(hrf_delay, hrf_dispersion) are NEVER unlocked in the same stage —
+HRF gradients dominate spatial at lr=0.005 and corrupt retinotopy.
+``_assert_no_joint_spatial_hrf`` catches violations at import time.
 
 Output: ``derivatives/prf/model{N}/sub-XX/sub-XX_desc-{par}.nii.gz``.
+Sentinel rows (zero-variance BOLD or non-finite predictions) are
+marked post-hoc via ``mark_invalid_fits`` → NaN params + r²=0; the
+output shape always matches the input brain mask.
 
-Voxel chunking: standard PRFs are massively univariate; chunk size sets
-a VRAM-vs-throughput tradeoff. Default 10000 fits comfortably on L4.
-
-Optimization for flex-HRF models (m3/m4/m6): alternating GD. Each outer
-cycle freezes the HRF and fits spatial params for ``--inner-iters`` steps,
-then freezes spatial and fits HRF for ``--inner-iters`` steps. Repeats
-``--outer-cycles`` times. Joint GD on these models at lr=0.005 lets the
-two HRF gradients dominate the dozens of spatial gradients and breaks the
-fit. Pass ``--no-alternating`` to recover the old single-shot joint GD.
+Voxel chunking: standard PRFs are massively univariate; chunk size
+sets a VRAM-vs-throughput tradeoff. Default 10000 fits on L4 / A100 /
+H100.
 """
 from __future__ import annotations
 
@@ -45,34 +51,125 @@ from braincoder.models import (
 )
 from braincoder.optimize import ParameterFitter
 
-from retsupp.utils.data import Subject
+from retsupp.utils.data import Subject, mark_invalid_fits
 
 
-# Per-model config. ``extra_init`` values may be either constants or the
-# name of an existing column to copy from (e.g. 'rf_amplitude' = 'amplitude').
+# Schedule primitives. A "schedule" is a list of stage tuples
+#   (fixed_pars, learning_rate, max_iters, r2_atol)
+# Each stage runs GD on the model with `fixed_pars` held constant.
+# r2_atol is the plateau-stop threshold passed to ParameterFitter.fit;
+# braincoder exits the stage early when median ΔR² over the last
+# 100 iters falls below this. 1e-4 is the right scale for warm/coarse
+# stages, 1e-5 for the final refine pass.
+SPATIAL = ('x', 'y', 'sd')
+HRF = ('hrf_delay', 'hrf_dispersion')
+DN_PARAMS = ('rf_amplitude', 'srf_amplitude', 'srf_size',
+             'neural_baseline', 'surround_baseline', 'bold_baseline')
+
+
+# Adapters convert a prior-model parameter frame into the column set
+# expected by the target model. Pair-specific because the
+# parameterisations are not strictly nested.
+def _adapt_m2_from_m1(init):
+    init = init.copy()
+    init['srf_amplitude'] = 5e-2
+    init['srf_size'] = 2.0
+    return init
+
+
+def _adapt_m3_from_m1(init):
+    init = init.copy()
+    init['hrf_delay'] = 4.5
+    init['hrf_dispersion'] = 0.75
+    return init
+
+
+def _adapt_m4_from_m2(init):
+    init = init.copy()
+    init['hrf_delay'] = 4.5
+    init['hrf_dispersion'] = 0.75
+    return init
+
+
+def _adapt_m5_from_m2(init):
+    """m5 (DN, fixed HRF) reuses m2's clean DoG spatial+surround as
+    a seed. Rename amplitude → rf_amplitude; drop baseline; seed the
+    DN-specific scalars."""
+    init = init.copy()
+    if 'amplitude' in init.columns:
+        init['rf_amplitude'] = init['amplitude']
+    init = init.drop(columns=['amplitude', 'baseline'], errors='ignore')
+    init['neural_baseline'] = 1.0
+    init['surround_baseline'] = 1.0
+    init['bold_baseline'] = 0.0
+    return init
+
+
+def _adapt_m6_from_m5(init):
+    init = init.copy()
+    init['hrf_delay'] = 4.5
+    init['hrf_dispersion'] = 0.75
+    return init
+
+
+# Per-model config.
+#   init_from: which model to load as warm-start seed (None = grid)
+#   adapt:     callable (prior_pars_df) -> init_pars_df
+#   schedule:  list of (fixed_pars, lr, max_iters, r2_atol) stages.
+#              None means the legacy single-shot path is used
+#              (currently only m1 grid + GD).
+# CHAIN: m2/m3 from m1, m4/m5 from m2 (clean DoG seed),
+#        m6 from m5 (clean DN seed). HRF is always introduced LAST in
+#        each branch so spatial parameters are protected during the
+#        surround/DN warming stages.
 MODEL_CFG: dict = {
-    1: dict(cls=GaussianPRF2DWithHRF, flex_hrf=False, init_from=None,
-            extra_init={}),
-    2: dict(cls=DifferenceOfGaussiansPRF2DWithHRF, flex_hrf=False, init_from=1,
-            extra_init={'srf_amplitude': 5e-2, 'srf_size': 2.0}),
-    3: dict(cls=GaussianPRF2DWithHRF, flex_hrf=True, init_from=1,
-            extra_init={'hrf_delay': 4.5, 'hrf_dispersion': 0.75}),
-    4: dict(cls=DifferenceOfGaussiansPRF2DWithHRF, flex_hrf=True, init_from=3,
-            extra_init={'srf_amplitude': 1e-3, 'srf_size': 2.0}),
+    1: dict(cls=GaussianPRF2DWithHRF, flex_hrf=False,
+            init_from=None, adapt=None,
+            schedule=[((), 0.005, 2000, 1e-5)]),
+    2: dict(cls=DifferenceOfGaussiansPRF2DWithHRF, flex_hrf=False,
+            init_from=1, adapt=_adapt_m2_from_m1,
+            schedule=[(SPATIAL, 0.005, 3000, 1e-4),
+                      ((),      0.001, 1500, 1e-5)]),
+    3: dict(cls=GaussianPRF2DWithHRF, flex_hrf=True,
+            init_from=1, adapt=_adapt_m3_from_m1,
+            schedule=[(SPATIAL, 0.005, 3000, 1e-4),
+                      (HRF,     0.001, 1500, 1e-5)]),
+    4: dict(cls=DifferenceOfGaussiansPRF2DWithHRF, flex_hrf=True,
+            init_from=2, adapt=_adapt_m4_from_m2,
+            # Stage A: only HRF moves; spatial AND surround frozen.
+            # Stage B: HRF frozen; spatial + surround refine together.
+            schedule=[(SPATIAL + ('srf_amplitude', 'srf_size',
+                                   'amplitude', 'baseline'),
+                       0.005, 3000, 1e-4),
+                      (HRF, 0.001, 1500, 1e-5)]),
     5: dict(cls=DivisiveNormalizationGaussianPRF2DWithHRF, flex_hrf=False,
-            init_from=4,
-            extra_init={'rf_amplitude': 'amplitude',
-                        'srf_amplitude': 1e-2, 'srf_size': 2.0,
-                        'neural_baseline': 1.0, 'surround_baseline': 1.0,
-                        'bold_baseline': 0.0,
-                        'hrf_delay': None, 'hrf_dispersion': None}),
+            init_from=2, adapt=_adapt_m5_from_m2,
+            schedule=[(SPATIAL, 0.005, 3000, 1e-4),
+                      ((),      0.001, 1500, 1e-5)]),
     6: dict(cls=DivisiveNormalizationGaussianPRF2DWithHRF, flex_hrf=True,
-            init_from=4,
-            extra_init={'rf_amplitude': 'amplitude',
-                        'srf_amplitude': 1e-2, 'srf_size': 2.0,
-                        'neural_baseline': 1.0, 'surround_baseline': 1.0,
-                        'bold_baseline': 0.0}),
+            init_from=5, adapt=_adapt_m6_from_m5,
+            schedule=[(SPATIAL + DN_PARAMS, 0.005, 3000, 1e-4),
+                      (HRF, 0.001, 1500, 1e-5)]),
 }
+
+
+def _assert_no_joint_spatial_hrf():
+    """Guard against schedules that free spatial AND HRF simultaneously.
+    HRF gradients at lr=0.005 dominate the per-voxel spatial gradient
+    and corrupt retinotopy when both are loose. Each stage of every
+    flex-HRF schedule must therefore fix at least one of the two."""
+    sp_set, hrf_set = set(SPATIAL), set(HRF)
+    for m, cfg in MODEL_CFG.items():
+        if not cfg.get('flex_hrf') or cfg.get('schedule') is None:
+            continue
+        for i, stage in enumerate(cfg['schedule'], start=1):
+            fixed = set(stage[0])
+            assert (sp_set & fixed) or (hrf_set & fixed), (
+                f"Model {m} stage {i}: spatial AND HRF both free — "
+                f"violates schedule core rule")
+
+
+_assert_no_joint_spatial_hrf()
 
 
 def load_concatenated(sub: Subject, masker, resolution: int, kind: str):
@@ -159,63 +256,54 @@ def grid_fit(model, data, paradigm, chunk_size, debug=False, sd_min=0.0):
     return chunked(work, data.shape[1], chunk_size, 'grid')
 
 
-HRF_PARS = ('hrf_delay', 'hrf_dispersion')
-
-
 def gd_fit(model_factory, data, paradigm, init_pars, chunk_size,
            max_iter, lr=0.005):
-    """Per-chunk GD with a model factory rebuilt per chunk."""
-    def work(idx):
-        d = data[:, idx]
-        m = model_factory(d, paradigm)
-        f = ParameterFitter(m, d, paradigm)
-        ip = init_pars.iloc[idx].reset_index(drop=True)
-        pars = f.fit(init_pars=ip, max_n_iterations=max_iter, learning_rate=lr)
-        pars['r2'] = f.get_rsq(pars).values
-        return pars
-
-    return chunked(work, data.shape[1], chunk_size, 'GD')
-
-
-def gd_fit_alternating(model_factory, data, paradigm, init_pars, chunk_size,
-                       outer_cycles=4, inner_iters=1000, lr=0.005):
-    """Alternating optimization for flex-HRF models.
-
-    Each outer cycle:
-      1. Freeze HRF params, fit spatial params for ``inner_iters`` GD steps.
-      2. Freeze spatial params, fit HRF params for ``inner_iters`` GD steps.
-
-    This avoids HRF gradients dominating spatial-parameter gradients in joint
-    GD, which empirically breaks flex-HRF fits (m3/m4/m6) at lr=0.005.
+    """Single-stage GD wrapper for callers (e.g. ``fit_condition``) that
+    don't need the multi-stage schedule. Equivalent to
+    ``gd_fit_scheduled`` with one fully-free stage.
     """
-    hrf_pars = [p for p in HRF_PARS if p in init_pars.columns]
-    if not hrf_pars:
-        raise ValueError(
-            "gd_fit_alternating requires hrf_delay/hrf_dispersion in "
-            "init_pars; model appears to be fixed-HRF. Use gd_fit instead.")
+    schedule = [((), lr, max_iter, 1e-5)]
+    return gd_fit_scheduled(model_factory, data, paradigm, init_pars,
+                             chunk_size, schedule)
 
+
+def gd_fit_scheduled(model_factory, data, paradigm, init_pars, chunk_size,
+                     schedule):
+    """Per-chunk staged GD according to ``schedule``.
+
+    ``schedule`` is a list of ``(fixed_pars, lr, max_iter, r2_atol)``
+    stages. Within each chunk, parameters are propagated stage-to-stage;
+    only ``fixed_pars`` are held constant per stage. Derived columns
+    (``r2``, ``theta``, ``ecc``) are stripped between stages so the
+    optimizer never sees them.
+
+    Spatial and HRF parameters are NEVER unlocked in the same stage —
+    HRF gradients at lr=0.005 dominate the spatial-parameter gradient
+    and corrupt retinotopy. The schedule design (see ``MODEL_CFG``) is
+    responsible for enforcing this; ``_assert_no_joint_spatial_hrf``
+    catches violations at import time.
+    """
     def work(idx):
         d = data[:, idx]
         m = model_factory(d, paradigm)
         f = ParameterFitter(m, d, paradigm)
-        ip = init_pars.iloc[idx].reset_index(drop=True)
-
-        spatial_pars = [p for p in m.parameter_labels if p not in hrf_pars]
-        pars = ip
-        for cycle in range(outer_cycles):
-            print(f'  [alt {cycle + 1}/{outer_cycles}] fitting spatial '
-                  f'(fixed: {hrf_pars})')
-            pars = f.fit(init_pars=pars, max_n_iterations=inner_iters,
-                         learning_rate=lr, fixed_pars=hrf_pars)
-            print(f'  [alt {cycle + 1}/{outer_cycles}] fitting HRF '
-                  f'(fixed: {len(spatial_pars)} spatial pars)')
-            pars = f.fit(init_pars=pars, max_n_iterations=inner_iters,
-                         learning_rate=lr, fixed_pars=spatial_pars)
-
+        pars = init_pars.iloc[idx].reset_index(drop=True)
+        for stage_i, stage in enumerate(schedule, start=1):
+            fixed, lr, n_iter, r2_atol = stage
+            fixed_present = [p for p in fixed if p in pars.columns]
+            kwargs = dict(init_pars=pars, max_n_iterations=n_iter,
+                          learning_rate=lr,
+                          fixed_pars=fixed_present if fixed_present else None,
+                          r2_atol=r2_atol)
+            pars = f.fit(**kwargs)
+            # Drop derived columns so the next stage sees a clean frame.
+            for derived in ('r2', 'theta', 'ecc'):
+                if derived in pars.columns:
+                    pars = pars.drop(columns=[derived])
         pars['r2'] = f.get_rsq(pars).values
         return pars
 
-    return chunked(work, data.shape[1], chunk_size, 'GD-alt')
+    return chunked(work, data.shape[1], chunk_size, 'GD-sched')
 
 
 def load_prior_pars(subject: int, model_label: int, derivs: Path,
@@ -247,18 +335,22 @@ def save_pars(pars: pd.DataFrame, masker, target_dir: Path, subject: int):
 def main(subject: int, model_label: int,
          bids_folder: str = '/data/ds-retsupp',
          resolution: int = 50, voxel_chunk_size: int = 10000,
-         max_n_iterations: int = 2000, paradigm_kind: str = 'full',
+         paradigm_kind: str = 'full',
          debug: bool = False,
          chunk_index: int | None = None,
          n_chunks: int | None = None,
          output_suffix: str = '',
-         alternating: bool = True,
-         outer_cycles: int = 4,
-         inner_iters: int = 1000,
-         sd_min: float = 0.0):
-    """Fit one PRF model. If chunk_index/n_chunks given, fit ONLY voxels
-    in that chunk and save partial results to a chunks/ subdir; a
-    separate merge step concatenates all chunks into final NIfTIs."""
+         sd_min: float = 0.3):
+    """Fit one PRF model with the per-model schedule defined in
+    ``MODEL_CFG``. If ``chunk_index``/``n_chunks`` given, fit ONLY
+    voxels in that chunk and save partial results to a ``chunks/``
+    subdir; a separate merge step concatenates all chunks into final
+    NIfTIs.
+
+    Default ``sd_min=0.3`` enforces the σ floor that prevents the
+    sigma-collapse pathology (NaN predictions / phantom R²=1) — the
+    same value the V1 sandbox validated.
+    """
     cfg = MODEL_CFG[model_label]
     bids = Path(bids_folder)
     sub = Subject(subject, bids)
@@ -276,7 +368,6 @@ def main(subject: int, model_label: int,
         bold_mask = image.math_img(
             'np.where(m.astype(bool) & (np.random.rand(*m.shape) < 0.01), 1, 0)',
             m=bold_mask)
-        max_n_iterations = 100
         resolution = 25
 
     masker = maskers.NiftiMasker(mask_img=bold_mask)
@@ -320,6 +411,10 @@ def main(subject: int, model_label: int,
     else:
         chunk_idx = np.arange(data.shape[1])
 
+    # Data view for whatever (chunked or not) the rest of the pipeline
+    # operates on.
+    fit_data = data[:, chunk_idx] if chunked_mode else data
+
     hrf = SPMHRFModel(tr=1.6, delay=4.5, dispersion=0.75)
     factory = lambda d, p: cfg['cls'](  # noqa: E731
         grid_coordinates=grid_coords, paradigm=p, hrf_model=hrf, data=d,
@@ -328,61 +423,38 @@ def main(subject: int, model_label: int,
     print(f"  sd_min={sd_min} (σ lower bound for sd / srf_size / sigma_AF / ...)")
 
     if cfg['init_from'] is None:
-        # Model 1: grid + GD.
-        print("\n=== model 1: Gaussian + fixed HRF (grid + GD) ===")
-        if chunked_mode:
-            d_chunk = data[:, chunk_idx]
-            init = grid_fit(factory(d_chunk, paradigm), d_chunk, paradigm,
-                             voxel_chunk_size, debug=debug, sd_min=sd_min)
-        else:
-            init = grid_fit(factory(data, paradigm), data, paradigm,
-                             voxel_chunk_size, debug=debug, sd_min=sd_min)
+        # Model 1: grid + GD. Grid does the heavy lift; the schedule
+        # below is a single refine pass.
+        print("\n=== model 1: Gaussian + fixed HRF (grid + schedule) ===")
+        init = grid_fit(factory(fit_data, paradigm), fit_data, paradigm,
+                         voxel_chunk_size, debug=debug, sd_min=sd_min)
     else:
-        # Models 2-6: load prior fit, add extras, GD only.
-        print(f"\n=== model {model_label} (init from model {cfg['init_from']}) ===")
+        # Models 2-6: load prior fit, adapt for this model's column set,
+        # then run the multi-stage schedule.
+        print(f"\n=== model {model_label} (init from m{cfg['init_from']}) ===")
         init = load_prior_pars(subject, cfg['init_from'], derivs, masker)
         if chunked_mode:
             init = init.iloc[chunk_idx].reset_index(drop=True)
-        # Drop r2/theta/ecc — recomputed on save.
         init = init.drop(columns=['r2', 'theta', 'ecc'], errors='ignore')
-        for k, v in cfg['extra_init'].items():
-            if v is None:
-                init = init.drop(columns=[k], errors='ignore')
-            elif isinstance(v, str) and v in init.columns:
-                init[k] = init[v]
-            else:
-                init[k] = v
+        if cfg.get('adapt') is not None:
+            init = cfg['adapt'](init)
+        print(f"  init cols: {list(init.columns)}")
 
-    # Use alternating optimization for flex-HRF models so HRF gradients don't
-    # dominate the joint update of spatial params at lr=0.005.
-    use_alt = bool(alternating and cfg['flex_hrf']
-                   and ('hrf_delay' in init.columns))
-    if use_alt:
-        print(f"  alternating GD: outer_cycles={outer_cycles}, "
-              f"inner_iters={inner_iters}")
-    else:
-        print(f"  single-shot GD: max_n_iterations={max_n_iterations}")
+    schedule = cfg['schedule']
+    print(f"  schedule: {len(schedule)} stage(s)")
+    for i, stage in enumerate(schedule, start=1):
+        fixed, lr, n_iter, r2_atol = stage
+        print(f"    stage {i}: fix={list(fixed)}  lr={lr}  "
+              f"max_iter={n_iter}  r2_atol={r2_atol}")
 
-    if chunked_mode:
-        d_chunk = data[:, chunk_idx]
-        if use_alt:
-            pars = gd_fit_alternating(factory, d_chunk, paradigm, init,
-                                      voxel_chunk_size,
-                                      outer_cycles=outer_cycles,
-                                      inner_iters=inner_iters)
-        else:
-            pars = gd_fit(factory, d_chunk, paradigm, init,
-                          voxel_chunk_size, max_n_iterations)
-    else:
-        if use_alt:
-            pars = gd_fit_alternating(factory, data, paradigm, init,
-                                      voxel_chunk_size,
-                                      outer_cycles=outer_cycles,
-                                      inner_iters=inner_iters)
-        else:
-            pars = gd_fit(factory, data, paradigm, init,
-                          voxel_chunk_size, max_n_iterations)
-    print(f"  median R²: {pars['r2'].median():.3f}")
+    pars = gd_fit_scheduled(factory, fit_data, paradigm, init,
+                             voxel_chunk_size, schedule)
+
+    # Post-hoc: mark zero-variance / NaN-R² voxels with NaN params +
+    # r²=0. Output shape stays aligned with the masker (NIfTI export
+    # via masker.inverse_transform still works).
+    mark_invalid_fits(pars, fit_data)
+    print(f"  median R² (post-mark): {pars['r2'].median():.3f}")
 
     # Output goes to prf/ for full paradigm (canonical) or prf_bar/ for
     # legacy bar-only paradigm (kept separate so they coexist). The
@@ -404,10 +476,10 @@ def main(subject: int, model_label: int,
         'paradigm_kind': paradigm_kind,
         'resolution': int(resolution),
         'voxel_chunk_size': int(voxel_chunk_size),
-        'max_n_iterations': int(max_n_iterations),
-        'alternating': bool(use_alt),
-        'outer_cycles': (int(outer_cycles) if use_alt else None),
-        'inner_iters': (int(inner_iters) if use_alt else None),
+        'schedule': [{'fixed': list(s[0]), 'lr': float(s[1]),
+                      'max_iter': int(s[2]), 'r2_atol': float(s[3])}
+                     for s in schedule],
+        'init_from': cfg['init_from'],
         'sd_min': float(sd_min),
         'n_voxels': int(data.shape[1]),
         'n_timepoints': int(data.shape[0]),
@@ -456,7 +528,6 @@ if __name__ == "__main__":
     p.add_argument('--bids-folder', default='/data/ds-retsupp')
     p.add_argument('--resolution', type=int, default=50)
     p.add_argument('--voxel-chunk-size', type=int, default=10000)
-    p.add_argument('--max-n-iterations', type=int, default=2000)
     p.add_argument('--paradigm-kind', choices=['full', 'bar'], default='full')
     p.add_argument('--debug', action='store_true')
     p.add_argument('--chunk-index', type=int, default=None,
@@ -472,33 +543,18 @@ if __name__ == "__main__":
                         'instead of prf/). Use for benchmarks or '
                         'experimental runs that should not clobber '
                         'canonical results.')
-    p.add_argument('--no-alternating', action='store_true',
-                   help='Disable alternating HRF/spatial optimization for '
-                        'flex-HRF models (m3/m4/m6) and fall back to the '
-                        'old joint GD. Has no effect on fixed-HRF models.')
-    p.add_argument('--outer-cycles', type=int, default=4,
-                   help='Outer alternating cycles (spatial->HRF->...). '
-                        'Only used when alternating is enabled.')
-    p.add_argument('--inner-iters', type=int, default=1000,
-                   help='Inner GD iterations per phase (spatial or HRF) '
-                        'within each outer cycle.')
-    p.add_argument('--sd-min', type=float, default=0.0,
+    p.add_argument('--sd-min', type=float, default=0.3,
                    help='Lower bound for every σ-like parameter (sd, '
                         'srf_size, sigma_AF, sigma_dyn, ...) enforced '
                         'via shifted softplus σ = sd_min + softplus(raw) '
-                        'in the braincoder model. Default 0.0 preserves '
-                        'the old (unbounded) behaviour. A positive value '
-                        '(e.g. 0.4° ≈ 2 grid pixels at resolution=50) '
-                        'eliminates the σ-collapse pathology that '
-                        'produces NaN predictions and phantom R²=1 voxels.')
+                        'in the braincoder model. Default 0.3 (the '
+                        'sandbox-validated value) eliminates the σ-collapse '
+                        'pathology that otherwise produces NaN predictions '
+                        'and phantom R²=1 voxels.')
     a = p.parse_args()
     main(a.subject, a.model, bids_folder=a.bids_folder,
          resolution=a.resolution, voxel_chunk_size=a.voxel_chunk_size,
-         max_n_iterations=a.max_n_iterations,
          paradigm_kind=a.paradigm_kind, debug=a.debug,
          chunk_index=a.chunk_index, n_chunks=a.n_chunks,
          output_suffix=a.output_suffix,
-         alternating=(not a.no_alternating),
-         outer_cycles=a.outer_cycles,
-         inner_iters=a.inner_iters,
          sd_min=a.sd_min)

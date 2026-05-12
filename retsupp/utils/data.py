@@ -105,6 +105,92 @@ def mark_invalid_fits(pars, data, var_threshold=1e-6,
         pars.loc[invalid, "r2"] = 0.0
     return pars
 
+
+def select_well_fit_voxels(df, *, n_params, n_timepoints=258,
+                            fdr_alpha=0.05, mass_threshold=0.5,
+                            sigma_floor=0.30, sigma_ceil=4.0,
+                            aperture_radius=3.17):
+    """Apply the canonical voxel-selection filter for PRF analyses.
+
+    Filters:
+        - r² > BH-FDR-corrected threshold at level ``fdr_alpha`` (BH on
+          *valid rows only*: rows with r²<=0 or sd NaN are excluded
+          from the multiple-comparisons pool — these are the
+          ``mark_invalid_fits`` sentinels and they would otherwise
+          inflate the test count and pull the threshold up).
+        - ≥ ``mass_threshold`` of the PRF mass inside the bar
+          aperture (Gaussian radial-CDF approximation, same as
+          :meth:`Subject.get_aperture_mass_fraction` and
+          `filter_prf_inside_aperture`).
+        - σ ∈ [``sigma_floor``, ``sigma_ceil``] — drops the
+          pathologically small / large fits.
+
+    The F-test that drives the FDR uses
+    ``F = (R²/k) / ((1-R²)/(n-k-1)) ~ F(k, n-k-1)`` with ``k=n_params``
+    and ``n=n_timepoints``.
+
+    Args:
+        df: per-voxel parameter DataFrame; must have ``r2``, ``sd``,
+            ``x``, ``y`` columns. If ``eccen`` and ``mass_in`` are
+            missing they are computed in a returned copy.
+        n_params: number of free model parameters (e.g. 5 for m1
+            x/y/sd/amp/baseline, 9 for m4, 11 for m6).
+        n_timepoints: number of timepoints in the data the fit was
+            run on. Default 258 = retsupp mean BOLD; concatenated runs
+            are larger.
+        fdr_alpha: BH-FDR significance level.
+        mass_threshold: minimum fraction of PRF mass that must lie
+            inside the aperture.
+        sigma_floor, sigma_ceil: σ bounds (degrees).
+        aperture_radius: bar aperture radius in degrees (retsupp
+            default 3.17 = 4 − 1.5/1.8).
+
+    Returns:
+        ``(selected_df, fdr_threshold)`` — the rows of ``df`` that
+        pass all filters (with ``eccen`` and ``mass_in`` columns
+        guaranteed present), and the FDR-corrected R² cutoff used
+        (``np.inf`` if no voxel survives the FDR test).
+    """
+    import numpy as np
+    from scipy.stats import f as f_dist, norm
+    from statsmodels.stats.multitest import multipletests
+
+    if not {"r2", "sd", "x", "y"}.issubset(df.columns):
+        raise ValueError(
+            "select_well_fit_voxels requires r2, sd, x, y columns")
+
+    out = df.copy()
+    if "eccen" not in out.columns:
+        out["eccen"] = np.sqrt(out["x"] ** 2 + out["y"] ** 2)
+    if "mass_in" not in out.columns:
+        sd_safe = out["sd"].clip(lower=0.05)
+        out["mass_in"] = 1.0 - norm.cdf(
+            (out["eccen"] - aperture_radius) / sd_safe)
+
+    # BH-FDR on real-fit rows only. The mark_invalid_fits sentinels
+    # (r²=0, sd=NaN) would otherwise inflate the multiple-comparisons
+    # pool and pull the threshold up artificially.
+    real = (out["r2"] > 0) & out["sd"].notna()
+    df_real = out[real]
+    if len(df_real) == 0:
+        return out.iloc[0:0], np.inf
+
+    r2c = df_real["r2"].clip(0.0, 0.999999).to_numpy()
+    df1, df2 = n_params, n_timepoints - n_params - 1
+    F = (r2c / df1) / ((1.0 - r2c) / df2)
+    pvals = 1.0 - f_dist.cdf(F, df1, df2)
+    rejected, *_ = multipletests(pvals, alpha=fdr_alpha, method="fdr_bh")
+    fdr_thr = (float(np.min(df_real["r2"].to_numpy()[rejected]))
+               if rejected.any() else np.inf)
+
+    sel = (real
+           & (out["r2"] >= fdr_thr)
+           & (out["mass_in"] >= mass_threshold)
+           & (out["sd"] >= sigma_floor)
+           & (out["sd"] <= sigma_ceil))
+    return out[sel].copy(), fdr_thr
+
+
 class Subject(object):
 
     def __init__(self, subject_id, bids_folder='/data/ds-retsupp'):

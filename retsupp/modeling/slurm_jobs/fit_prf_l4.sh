@@ -13,15 +13,24 @@
 # After MODEL is parsed, the script renames itself via scontrol so
 # squeue shows e.g.  prf_m3_sub-05  instead of the generic prf_gpu.
 #
+# Env vars (all read via --export=ALL,KEY=VAL):
+#   MODEL    int 1..6   (required)
+#   KIND     full|bar   (default: full)
+#   SMOKE    0|1        (1 → --debug)
+#   CHUNK    int        (default: 10000)
+#   OUTPUT_SUFFIX str   (optional)
+#
 # Usage:
 #   sbatch --array=1-30 --export=ALL,MODEL=1 .../fit_prf_l4.sh
+#   sbatch --array=1-30 --export=ALL,MODEL=2,KIND=bar .../fit_prf_l4.sh
 #
-# Run model 1 first; once it lands, models 2/3 (init from 1), then 4
-# (init from 3), then 5/6 (init from 4) can be submitted in any order.
+# Chain: m1 → {m2, m3}; m2 → {m4, m5}; m5 → m6 (see MODEL_CFG.init_from
+# in fit_prf.py). Submit later stages with --dependency=afterok:$PREV.
 
 set -euo pipefail
 
-LOGFILE="$HOME/logs/prf_l4_m${MODEL:-?}_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID:-0}.txt"
+KIND="${KIND:-full}"
+LOGFILE="$HOME/logs/prf_l4_m${MODEL:-?}_${KIND}_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID:-0}.txt"
 mkdir -p "$(dirname "$LOGFILE")"
 exec >"$LOGFILE" 2>&1
 
@@ -31,15 +40,18 @@ fi
 if [[ -z "${MODEL:-}" ]]; then
     echo "ERROR: MODEL env var not set. Pass --export=ALL,MODEL=N." >&2; exit 2
 fi
+if [[ "$KIND" != "full" && "$KIND" != "bar" ]]; then
+    echo "ERROR: KIND must be 'full' or 'bar' (got '$KIND')." >&2; exit 2
+fi
 
 subject="${SLURM_ARRAY_TASK_ID}"
 sub_pad=$(printf "%02d" "$subject")
-echo "Host: $(hostname) | Job ${SLURM_JOB_ID}.${SLURM_ARRAY_TASK_ID} | sub-${subject} | model ${MODEL}"
+echo "Host: $(hostname) | Job ${SLURM_JOB_ID}.${SLURM_ARRAY_TASK_ID} | sub-${subject} | model ${MODEL} | kind ${KIND}"
 echo "Started: $(date)"
 
 # Rename the job in squeue so it tells you what it is doing.
 scontrol update jobid="${SLURM_JOB_ID}" \
-    name="prf_m${MODEL}_sub-${sub_pad}" 2>/dev/null || true
+    name="prf_m${MODEL}_${KIND}_sub-${sub_pad}" 2>/dev/null || true
 
 # cuDNN 8 in the conda env requires libnvrtc.so at runtime, but the env
 # does not bundle nvidia-cuda-nvrtc. On V100/A100/H100 nodes, lmod has
@@ -79,8 +91,7 @@ $PYTHON -u "$HOME/git/retsupp/retsupp/modeling/fit_prf.py" \
     --bids-folder /shares/zne.uzh/gdehol/ds-retsupp \
     --resolution 50 \
     --voxel-chunk-size "$CHUNK" \
-    --max-n-iterations 2000 \
-    --paradigm-kind full \
+    --paradigm-kind "$KIND" \
     $DEBUG_FLAG $SUFFIX_FLAG
 
 echo "Finished: $(date)"
