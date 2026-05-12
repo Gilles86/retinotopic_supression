@@ -69,6 +69,7 @@ EXTRA="--noise-dist $NOISE_DIST"
 OUT_DIR="$HOME/git/retsupp/notes/data/v1_decode/sub-${sub_pad}"
 out_tag="ses-${SES}_run-${RUN}_vox${MAX_VOXELS}"
 [[ "$NOISE_DIST" == "t" ]] && out_tag="${out_tag}_t"
+[[ -n "${SUFFIX:-}" ]]     && out_tag="${out_tag}_${SUFFIX}"
 OUT="${OUT_DIR}/decoded_${out_tag}.npz"
 
 $PYTHON -u -m retsupp.decode.decode_v1_handoff \
