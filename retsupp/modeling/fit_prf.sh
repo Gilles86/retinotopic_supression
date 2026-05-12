@@ -3,7 +3,6 @@
 #SBATCH --output=/home/gdehol/logs/retsupp_prf_%j.out  # Default SLURM log
 #SBATCH --gres=gpu:1
 #SBATCH --time=60:00
-#SBATCH --constraint=A100
 #SBATCH --mem=64G
 
 # Load environment
