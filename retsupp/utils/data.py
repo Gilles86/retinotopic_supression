@@ -758,6 +758,74 @@ class Subject(object):
         keep = [c for c in keep if c in confounds.columns]
         return confounds[keep].fillna(0)
 
+    def get_concatenated_bold(self, type='cleaned', voxel_idx=None,
+                              crop_to=258):
+        """Concatenate BOLD across all this subject's (session, run) pairs.
+
+        One-shot helper for callers who want the whole 12-run timeseries
+        as a single ``(T_total, V)`` array — e.g. decoding pipelines or
+        cross-run statistics. Each run is loaded through a brain-mask
+        ``NiftiMasker`` (so V matches the masker's flat order) and
+        cropped to ``crop_to`` TRs (cleaned BOLD is sometimes 259, the
+        canonical length is 258).
+
+        Args:
+            type: passed through to :meth:`get_bold`
+                  (``cleaned`` / ``fmriprep`` / ``prf_regressed_out`` /
+                  ``raw``).
+            voxel_idx: optional 1D array of masker-flat indices to
+                       restrict to. Useful for ROI workflows where the
+                       caller already has a per-voxel parameter frame
+                       keyed by ``voxel_idx`` (e.g. the V1 warm-start
+                       TSV) and just wants the matching timeseries.
+            crop_to: max TRs per run.
+
+        Returns:
+            ``(T_total, V) float32`` ndarray.
+        """
+        first_run = self.get_runs(1)[0]
+        bold_mask = self.get_bold_mask(session=1, run=first_run)
+        masker = input_data.NiftiMasker(mask_img=bold_mask)
+        masker.fit()
+        chunks = []
+        for ses in (1, 2):
+            for run in self.get_runs(ses):
+                d = masker.transform(self.get_bold(session=ses, run=run,
+                                                     type=type))[:crop_to]
+                if voxel_idx is not None:
+                    d = d[:, voxel_idx]
+                chunks.append(d.astype(np.float32))
+        return np.vstack(chunks)
+
+    def get_warmstart_pars(self, model, roi='V1', notes_dir=None):
+        """Load this subject's warm-start TSV (V1 sandbox output).
+
+        Returns the per-voxel parameter frame written by
+        ``notes/figures/talk/fit_prf_warmstart.py`` for the requested
+        model. Includes ``voxel_idx`` and ``hemi`` columns so the
+        result can be voxel-aligned with
+        :meth:`get_concatenated_bold` without further bookkeeping.
+
+        Args:
+            model: 1..6 — the PRF model number (m1=Gauss, m2=DoG,
+                   m3=Gauss+HRF, m4=DoG+HRF, m5=DN, m6=DN+HRF).
+            roi: ROI tag in the TSV filename (today only ``V1``).
+            notes_dir: optional override for the TSV directory.
+                       Default: ``<repo>/notes/data/``.
+
+        Returns:
+            ``DataFrame`` with at least ``x, y, sd, ..., r2, hemi,
+            voxel_idx`` (parameter set depends on ``model``).
+        """
+        if notes_dir is None:
+            # retsupp/utils/data.py -> retsupp/utils -> retsupp -> repo
+            notes_dir = Path(__file__).resolve().parents[2] / 'notes' / 'data'
+        tsv = (Path(notes_dir) / f'prf_warmstart_m{model}_{roi}_'
+               f'sub-{self.subject_id:02d}.tsv')
+        if not tsv.exists():
+            raise FileNotFoundError(tsv)
+        return pd.read_csv(tsv, sep='\t')
+
     def get_bold(self, session=1, run=1, type='cleaned', return_image=True):
 
         if type == 'fmriprep':
