@@ -59,6 +59,7 @@ def decode(*, subject: int, session: int, run: int, bids_folder: str,
            l2_norm: float, learning_rate: float,
            max_n_iterations: int, min_n_iterations: int,
            resid_max_iter: int, max_voxels: int,
+           noise_dist: str,
            out_path: Path):
     from braincoder.hrf import SPMHRFModel
     from braincoder.models import DifferenceOfGaussiansPRF2DWithHRF
@@ -134,17 +135,20 @@ def decode(*, subject: int, session: int, run: int, bids_folder: str,
             hrf_model=hrf, data=bold_df, parameters=pars_df,
             flexible_hrf_parameters=True, sd_min=M4_SD_MIN)
 
-    print('Fitting residual covariance...', flush=True)
+    print(f'Fitting residual covariance (noise_dist={noise_dist})...',
+          flush=True)
     t0 = time.time()
     rf = ResidualFitter(model=mk_model(), data=bold_df, paradigm=paradigm_df,
                         parameters=pars_df)
-    omega, _ = rf.fit(max_n_iterations=resid_max_iter, progressbar=True)
-    print(f'  omega: {omega.shape}  ({time.time() - t0:.0f}s)', flush=True)
+    omega, dof = rf.fit(max_n_iterations=resid_max_iter, progressbar=True,
+                         method=noise_dist)
+    print(f'  omega: {omega.shape}  dof: {dof}  ({time.time() - t0:.0f}s)',
+          flush=True)
 
     print('Decoding stimulus...', flush=True)
     t0 = time.time()
     sf = StimulusFitter(model=mk_model(), data=bold_df, omega=omega,
-                        parameters=pars_df)
+                        parameters=pars_df, dof=dof)
     decoded = sf.fit(l2_norm=l2_norm, learning_rate=learning_rate,
                      max_n_iterations=max_n_iterations,
                      min_n_iterations=min_n_iterations, progressbar=True)
@@ -165,6 +169,8 @@ def decode(*, subject: int, session: int, run: int, bids_folder: str,
         resolution=np.int32(resolution),
         grid_radius=np.float32(grid_radius),
         tr=np.float32(tr),
+        noise_dist=np.array(noise_dist),
+        dof=np.float32(dof) if dof is not None else np.float32(np.nan),
     )
     print(f'Wrote: {out_path}', flush=True)
 
@@ -182,10 +188,16 @@ def main():
     p.add_argument('--resid-max-iter', type=int, default=300)
     p.add_argument('--max-voxels', type=int, default=200,
                    help='Number of top-r² voxels to include (default 200).')
+    p.add_argument('--noise-dist', default='gauss', choices=['gauss', 't'],
+                   help="Residual noise distribution (default 'gauss'). "
+                        "'t' fits a Student-t and uses it in StimulusFitter "
+                        'to down-weight heavy-tailed (small-PRF) voxels.')
     p.add_argument('--out', type=Path, default=None)
     args = p.parse_args()
 
     tag = f'ses-{args.session}_run-{args.run}_vox{args.max_voxels}'
+    if args.noise_dist == 't':
+        tag = f'{tag}_t'
     out_path = args.out or (Path(__file__).resolve().parents[2]
                             / 'notes' / 'data' / 'v1_decode'
                             / f'sub-{args.subject:02d}'
@@ -196,7 +208,8 @@ def main():
            max_n_iterations=args.max_n_iterations,
            min_n_iterations=args.min_n_iterations,
            resid_max_iter=args.resid_max_iter,
-           max_voxels=args.max_voxels, out_path=out_path)
+           max_voxels=args.max_voxels, noise_dist=args.noise_dist,
+           out_path=out_path)
 
 
 if __name__ == '__main__':
