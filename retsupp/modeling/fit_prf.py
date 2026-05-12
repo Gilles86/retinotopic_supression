@@ -100,13 +100,12 @@ def _adapt_m4_from_m2(init):
 
 def _adapt_m5_from_m2(init):
     """m5 (DN, fixed HRF) reuses m2's clean DoG spatial+surround as
-    a seed. Rename amplitude → rf_amplitude (taking ``abs`` to satisfy
-    the DN ``rf_amplitude > 0`` contract — negative-response voxels
-    will be re-captured downstream via ``bold_baseline``). Drop
-    ``baseline``; seed the DN-specific scalars."""
+    a seed. Rename amplitude → rf_amplitude (signed; the DN model
+    uses |rf_amplitude| in the denominator so negative PRFs are fine).
+    Drop ``baseline``; seed the DN-specific scalars."""
     init = init.copy()
     if 'amplitude' in init.columns:
-        init['rf_amplitude'] = np.abs(init['amplitude']).clip(lower=1e-3)
+        init['rf_amplitude'] = init['amplitude']
     init = init.drop(columns=['amplitude', 'baseline'], errors='ignore')
     init['neural_baseline'] = 1.0
     init['surround_baseline'] = 1.0
