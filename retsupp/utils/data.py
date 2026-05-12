@@ -46,8 +46,7 @@ def select_well_fit_voxels(df, *, n_params, n_timepoints=258,
           inflate the test count and pull the threshold up).
         - ≥ ``mass_threshold`` of the PRF mass inside the bar
           aperture (Gaussian radial-CDF approximation, same as
-          :meth:`Subject.get_aperture_mass_fraction` and
-          `filter_prf_inside_aperture`).
+          ``retsupp.visualize.utils.filter_prf_inside_aperture``).
         - σ ∈ [``sigma_floor``, ``sigma_ceil``] — drops the
           pathologically small / large fits.
 
@@ -214,8 +213,6 @@ class Subject(object):
         return int(min(pos, 2))
 
     def get_experimental_settings(self, session=1, run=1):
-        
-        print(self.subject_id, session, run)
         if self.subject_id < 3:
             yml_file = self.bids_folder / 'sourcedata' / 'behavior' / 'logs' / f'sub-{self.subject_id}' / f'ses-{session+1}' / f'sub-{self.subject_id}_ses-{session+1}_task-ret_sup_run-{run}_expsettings.yml'
         else:
@@ -250,15 +247,10 @@ class Subject(object):
         return 258
     
     def get_runs(self, session=1):
-        if (self.subject_id == 20) & (session == 1):
-            return [1,2,3,4,5]
-        elif (self.subject_id == 24) & (session == 2):
-            return [1,2,3,4,5]
-
-        if (self.subject_id == 24) & (session == 2):
-            return [1,2,3,4, 5]
-
-        return [1,2,3,4,5,6]
+        # sub-20 ses-1 and sub-24 ses-2 only have 5 runs.
+        if (self.subject_id, session) in {(20, 1), (24, 2)}:
+            return [1, 2, 3, 4, 5]
+        return [1, 2, 3, 4, 5, 6]
 
     def get_onsets(self, session=1, run=1):
         if self.subject_id < 3:
@@ -887,10 +879,9 @@ class Subject(object):
             
             if return_images:
                 return pd.Series(images)
-            else:
-                masker = self.get_bold_mask(return_masker=True)
-                data = {par: self._extract_param_arr(images[par], roi=None) for par in param_labels}
-                return pd.DataFrame(data)
+            data = {par: self._extract_param_arr(images[par], roi=None)
+                    for par in param_labels}
+            return pd.DataFrame(data)
 
         elif type=='runwise':
 
@@ -935,39 +926,6 @@ class Subject(object):
             roi_mask = self.get_retinotopic_roi(roi=roi, bold_space=True)
             masker = input_data.NiftiMasker(mask_img=roi_mask)
         return masker.fit_transform(fn).squeeze()
-
-    def get_aperture_mass_fraction(self, model=4, aperture_radius=3.17,
-                                   return_images=False):
-        """Per-voxel fraction of PRF mass inside the bar PRF aperture.
-
-        Uses the 1D normal CDF along the radial direction:
-            f_inside ≈ 1 − Φ((d − R) / σ)
-        where d = ‖(x, y)‖ is the PRF eccentricity, σ is the PRF size,
-        and R is the aperture radius (default 3.17° — the same value
-        used by `retsupp.visualize.utils.filter_prf_inside_aperture`).
-
-        A standard 'well-mapped voxel' criterion thresholds this at ≥ 0.5
-        (≥ 50% mass inside aperture).
-
-        Args:
-            model: PRF model label (default 4 = canonical mean fit).
-            aperture_radius: aperture radius in degrees.
-            return_images: if True, returns a NiftiImage in BOLD space;
-                otherwise returns a 1D array in masker order.
-        """
-        from scipy.stats import norm
-        pars = self.get_prf_parameters_volume(model=model,
-                                              return_images=False)
-        x = pars['x'].to_numpy()
-        y = pars['y'].to_numpy()
-        sd = pars['sd'].to_numpy()
-        d = np.hypot(x, y)
-        sd_safe = np.clip(sd, 0.05, None)
-        f_inside = 1.0 - norm.cdf((d - aperture_radius) / sd_safe)
-        if return_images:
-            masker = self.get_bold_mask(return_masker=True)
-            return masker.inverse_transform(f_inside)
-        return f_inside
 
     def get_prf_parameters_surface(self, model=1, space='fsnative'):
 
