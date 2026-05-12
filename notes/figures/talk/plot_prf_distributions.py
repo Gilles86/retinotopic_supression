@@ -54,9 +54,20 @@ PARAM_RANGES = {
 }
 
 # Percentile bounds used for auto xlims (param not in PARAM_RANGES).
-# p1/p99 keeps 98% of the distribution and trims the long tails that
-# made the bulk invisible before.
-XLIM_QUANTILES = (0.01, 0.99)
+# Default p1/p99 keeps 98% of the distribution. Heavy-tailed params
+# (r², srf_amplitude, …) use tighter upper bounds so the bulk near 0
+# is visible rather than crushed by the tail.
+XLIM_QUANTILES_DEFAULT = (0.01, 0.99)
+XLIM_QUANTILES_BY_PARAM = {
+    "r2": (0.0, 0.95),
+    "srf_amplitude": (0.0, 0.95),
+    "amplitude": (0.02, 0.98),
+}
+
+# Parameters whose density distribution is heavy-tailed enough that
+# linear y crushes the bulk into one bar. Combine percentile xlim
+# with log-y so we see BOTH the bulk and the tail.
+PARAM_LOG_Y = {"r2", "srf_amplitude"}
 
 # Short semantic label per model number — used in column titles +
 # footer legend so reader doesn't have to memorise "m4 = DoG + flex HRF".
@@ -202,7 +213,8 @@ def plot_parameter_page(pdf: PdfPages, df: pd.DataFrame,
     # all (subject, model) cells so the histograms are comparable.
     rng = PARAM_RANGES.get(param)
     if rng is None:
-        q_lo, q_hi = XLIM_QUANTILES
+        q_lo, q_hi = XLIM_QUANTILES_BY_PARAM.get(
+            param, XLIM_QUANTILES_DEFAULT)
         lo = float(real[param].quantile(q_lo))
         hi = float(real[param].quantile(q_hi))
         # Avoid a degenerate zero-width range (constant column).
@@ -229,6 +241,8 @@ def plot_parameter_page(pdf: PdfPages, df: pd.DataFrame,
     g.set_axis_labels(param, "density")
     for ax in g.axes.flat:
         ax.set_xlim(rng)
+        if param in PARAM_LOG_Y:
+            ax.set_yscale("log")
         ax.grid(alpha=0.18, axis="y")
         ax.tick_params(labelsize=9)
     g.fig.subplots_adjust(top=0.92, bottom=0.08)
