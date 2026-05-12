@@ -225,6 +225,22 @@ def load_concatenated(sub: Subject, masker, resolution: int, kind: str):
             grid_coords)
 
 
+def build_model_factory(cfg, grid_coords, sd_min):
+    """Returns a closure ``(data, paradigm) -> model`` for an entry in
+    ``MODEL_CFG``. Shared by fit_prf.main and the V1 sandbox so the
+    model construction lives in exactly one place.
+    """
+    hrf = SPMHRFModel(tr=1.6, delay=4.5, dispersion=0.75)
+
+    def factory(data, paradigm):
+        return cfg['cls'](
+            grid_coordinates=grid_coords, paradigm=paradigm,
+            hrf_model=hrf, data=data,
+            flexible_hrf_parameters=cfg['flex_hrf'],
+            sd_min=sd_min)
+    return factory
+
+
 def chunked(work_fn, n_vox: int, chunk_size: int, label: str):
     """Apply ``work_fn(idx)`` per voxel-chunk, concat by index, sort.
     Outer tqdm across chunks shows total/elapsed/ETA."""
@@ -349,6 +365,58 @@ def save_pars(pars: pd.DataFrame, masker, target_dir: Path, subject: int):
             target_dir / f'sub-{subject:02d}_desc-{col}.nii.gz')
 
 
+def save_chunk(pars, chunk_idx, chunks_dir: Path, chunk_index, n_chunks,
+               fit_meta):
+    """Write per-chunk NPZ + JSON sidecar (merged later)."""
+    import json
+    chunks_dir.mkdir(parents=True, exist_ok=True)
+    npz_path = chunks_dir / f'chunk-{chunk_index:04d}-of-{n_chunks:04d}.npz'
+    cols = {f'col_{c}': pars[c].values for c in pars.columns}
+    np.savez(npz_path, voxel_indices=chunk_idx,
+             columns=list(pars.columns), **cols)
+    with open(npz_path.with_suffix('.json'), 'w') as fh:
+        json.dump(fit_meta, fh, indent=2)
+    print(f"Saved chunk: {npz_path}")
+
+
+def save_full(pars, masker, target_dir: Path, subject, fit_meta):
+    """Write per-parameter NIfTIs + JSON sidecar (final, non-chunked)."""
+    import json
+    save_pars(pars, masker, target_dir, subject)
+    meta_path = target_dir / f'sub-{subject:02d}_fit_metadata.json'
+    with open(meta_path, 'w') as fh:
+        json.dump(fit_meta, fh, indent=2)
+    print(f"Saved: {target_dir}")
+    print(f"Saved metadata: {meta_path}")
+
+
+def build_fit_metadata(*, subject, model_label, paradigm_kind, resolution,
+                       voxel_chunk_size, schedule, init_from, sd_min,
+                       n_voxels, n_timepoints, chunked_mode, chunk_index,
+                       n_chunks, elapsed_s):
+    """Per-fit JSON sidecar payload."""
+    import json, os, socket, platform  # noqa: F401
+    return dict(
+        model=int(model_label), subject=int(subject),
+        paradigm_kind=paradigm_kind, resolution=int(resolution),
+        voxel_chunk_size=int(voxel_chunk_size),
+        schedule=[{'fixed': list(s[0]), 'lr': float(s[1]),
+                   'max_iter': int(s[2]), 'r2_atol': float(s[3])}
+                  for s in schedule],
+        init_from=init_from, sd_min=float(sd_min),
+        n_voxels=int(n_voxels), n_timepoints=int(n_timepoints),
+        chunked_mode=bool(chunked_mode),
+        chunk_index=(None if chunk_index is None else int(chunk_index)),
+        n_chunks=(None if n_chunks is None else int(n_chunks)),
+        elapsed_seconds=round(float(elapsed_s), 2),
+        host=socket.gethostname(),
+        gpu=os.environ.get('CUDA_VISIBLE_DEVICES'),
+        slurm_job_id=os.environ.get('SLURM_JOB_ID'),
+        slurm_array_task_id=os.environ.get('SLURM_ARRAY_TASK_ID'),
+        python=platform.python_version(),
+    )
+
+
 def main(subject: int, model_label: int,
          bids_folder: str = '/data/ds-retsupp',
          resolution: int = 50, voxel_chunk_size: int = 10000,
@@ -432,11 +500,7 @@ def main(subject: int, model_label: int,
     # operates on.
     fit_data = data[:, chunk_idx] if chunked_mode else data
 
-    hrf = SPMHRFModel(tr=1.6, delay=4.5, dispersion=0.75)
-    factory = lambda d, p: cfg['cls'](  # noqa: E731
-        grid_coordinates=grid_coords, paradigm=p, hrf_model=hrf, data=d,
-        flexible_hrf_parameters=cfg['flex_hrf'],
-        sd_min=sd_min)
+    factory = build_model_factory(cfg, grid_coords, sd_min)
     print(f"  sd_min={sd_min} (σ lower bound for sd / srf_size / sigma_AF / ...)")
 
     if cfg['init_from'] is None:
@@ -487,58 +551,21 @@ def main(subject: int, model_label: int,
     if output_suffix:
         base_dir += f'.{output_suffix}'
 
-    elapsed_s = float(time.time() - fit_t0)
-    # Per-fit metadata sidecar — tells you what produced these NIfTIs.
-    import json, os, socket, platform
-    fit_meta = {
-        'model': int(model_label),
-        'subject': int(subject),
-        'paradigm_kind': paradigm_kind,
-        'resolution': int(resolution),
-        'voxel_chunk_size': int(voxel_chunk_size),
-        'schedule': [{'fixed': list(s[0]), 'lr': float(s[1]),
-                      'max_iter': int(s[2]), 'r2_atol': float(s[3])}
-                     for s in schedule],
-        'init_from': cfg['init_from'],
-        'sd_min': float(sd_min),
-        'n_voxels': int(data.shape[1]),
-        'n_timepoints': int(data.shape[0]),
-        'chunked_mode': bool(chunked_mode),
-        'chunk_index': (None if chunk_index is None else int(chunk_index)),
-        'n_chunks': (None if n_chunks is None else int(n_chunks)),
-        'elapsed_seconds': round(elapsed_s, 2),
-        'host': socket.gethostname(),
-        'gpu': os.environ.get('CUDA_VISIBLE_DEVICES'),
-        'slurm_job_id': os.environ.get('SLURM_JOB_ID'),
-        'slurm_array_task_id': os.environ.get('SLURM_ARRAY_TASK_ID'),
-        'python': platform.python_version(),
-    }
+    fit_meta = build_fit_metadata(
+        subject=subject, model_label=model_label,
+        paradigm_kind=paradigm_kind, resolution=resolution,
+        voxel_chunk_size=voxel_chunk_size, schedule=schedule,
+        init_from=cfg['init_from'], sd_min=sd_min,
+        n_voxels=data.shape[1], n_timepoints=data.shape[0],
+        chunked_mode=chunked_mode, chunk_index=chunk_index,
+        n_chunks=n_chunks, elapsed_s=time.time() - fit_t0)
 
+    model_dir = derivs / base_dir / f'model{model_label}' / f'sub-{subject:02d}'
     if chunked_mode:
-        # Save partial chunk: an NPZ with the voxel indices and a column
-        # array per parameter. Cheap; merger reassembles.
-        chunks_dir = (derivs / base_dir
-                      / f'model{model_label}' / f'sub-{subject:02d}'
-                      / 'chunks')
-        chunks_dir.mkdir(parents=True, exist_ok=True)
-        npz_path = chunks_dir / f'chunk-{chunk_index:04d}-of-{n_chunks:04d}.npz'
-        cols = {f'col_{c}': pars[c].values for c in pars.columns}
-        np.savez(npz_path, voxel_indices=chunk_idx, columns=list(pars.columns),
-                 **cols)
-        # Per-chunk metadata sidecar (merge will summarise across chunks).
-        with open(npz_path.with_suffix('.json'), 'w') as fh:
-            json.dump(fit_meta, fh, indent=2)
-        print(f"Saved chunk: {npz_path}")
-        return
-
-    target_dir = derivs / base_dir \
-        / f'model{model_label}' / f'sub-{subject:02d}'
-    save_pars(pars, masker, target_dir, subject)
-    meta_path = target_dir / f'sub-{subject:02d}_fit_metadata.json'
-    with open(meta_path, 'w') as fh:
-        json.dump(fit_meta, fh, indent=2)
-    print(f"Saved: {target_dir}")
-    print(f"Saved metadata: {meta_path}")
+        save_chunk(pars, chunk_idx, model_dir / 'chunks',
+                   chunk_index, n_chunks, fit_meta)
+    else:
+        save_full(pars, masker, model_dir, subject, fit_meta)
 
 
 if __name__ == "__main__":
