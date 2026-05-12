@@ -14,6 +14,7 @@
 # Optional env overrides:
 #   MAX_VOXELS    # top-N by r² (default 200; required at submit time
 #                 # if you want a different cap)
+#   NOISE_DIST    # 'gauss' (default) or 't' — Student-t residual noise
 #   MAX_ITERS     # StimulusFitter max iters (default: script default 1000)
 #   L2_NORM       # L2 penalty on decoded stimulus (default: 0.01)
 #   LR            # learning rate (default: 0.5)
@@ -36,8 +37,10 @@ fi
 SES=$(( TASK_ID / 6 + 1 ))
 RUN=$(( TASK_ID % 6 + 1 ))
 MAX_VOXELS="${MAX_VOXELS:-200}"
+NOISE_DIST="${NOISE_DIST:-gauss}"
 
 tag="sub-${sub_pad}_ses-${SES}_run-${RUN}_vox${MAX_VOXELS}"
+[[ "$NOISE_DIST" == "t" ]] && tag="${tag}_t"
 LOGFILE="$HOME/logs/decode_v1_${tag}_${SLURM_JOB_ID}.txt"
 mkdir -p "$(dirname "$LOGFILE")"
 exec >"$LOGFILE" 2>&1
@@ -58,13 +61,15 @@ export TF_NUM_INTEROP_THREADS=2
 
 PYTHON="$HOME/data/conda/envs/retsupp_cuda/bin/python"
 
-EXTRA=""
+EXTRA="--noise-dist $NOISE_DIST"
 [[ -n "${MAX_ITERS:-}" ]] && EXTRA="$EXTRA --max-n-iterations $MAX_ITERS"
 [[ -n "${L2_NORM:-}" ]]   && EXTRA="$EXTRA --l2-norm $L2_NORM"
 [[ -n "${LR:-}" ]]        && EXTRA="$EXTRA --learning-rate $LR"
 
 OUT_DIR="$HOME/git/retsupp/notes/data/v1_decode/sub-${sub_pad}"
-OUT="${OUT_DIR}/decoded_ses-${SES}_run-${RUN}_vox${MAX_VOXELS}.npz"
+out_tag="ses-${SES}_run-${RUN}_vox${MAX_VOXELS}"
+[[ "$NOISE_DIST" == "t" ]] && out_tag="${out_tag}_t"
+OUT="${OUT_DIR}/decoded_${out_tag}.npz"
 
 $PYTHON -u -m retsupp.decode.decode_v1_handoff \
     --subject "$SUB" \
