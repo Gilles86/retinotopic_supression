@@ -95,12 +95,22 @@ fi
 echo "Using chunk size: $CHUNK"
 echo "Output suffix: ${OUTPUT_SUFFIX:-(none)}"
 
+# Optional voxel-chunking across SLURM tasks (parallelise one subject
+# across many short jobs). When CHUNK_INDEX + N_CHUNKS are both set,
+# this task fits only its slice of the brain and writes a NPZ; a
+# follow-up merge_prf_chunks.sh task assembles the final NIfTIs.
+CHUNK_FLAGS=""
+if [[ -n "${CHUNK_INDEX:-}" && -n "${N_CHUNKS:-}" ]]; then
+    CHUNK_FLAGS="--chunk-index $CHUNK_INDEX --n-chunks $N_CHUNKS"
+    echo "Voxel-chunked mode: chunk $CHUNK_INDEX / $N_CHUNKS"
+fi
+
 $PYTHON -u "$HOME/git/retsupp/retsupp/modeling/fit_prf.py" \
     "$subject" --model "$MODEL" \
     --bids-folder /shares/zne.uzh/gdehol/ds-retsupp \
     --resolution 50 \
     --voxel-chunk-size "$CHUNK" \
     --paradigm-kind "$KIND" \
-    $DEBUG_FLAG $SUFFIX_FLAG
+    $DEBUG_FLAG $SUFFIX_FLAG $CHUNK_FLAGS
 
 echo "Finished: $(date)"
