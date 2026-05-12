@@ -3,7 +3,7 @@
 #SBATCH --account=zne.uzh
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=16G
+#SBATCH --mem=32G
 #SBATCH --time=02:00:00
 
 # Per-subject vol-to-surf BOLD caching. For each subject, projects every
