@@ -50,23 +50,33 @@ def mask_valid_bold_voxels(data, var_threshold=1e-6):
 
 
 def mark_invalid_fits(pars, data, var_threshold=1e-6,
+                       r2_ceiling=0.999,
+                       sd_sentinel=1e-6,
                        meta_cols=("subject", "hemi", "voxel_idx"),
                        verbose=True):
     """Post-hoc mark invalid voxel fits in-place on a parameter DataFrame.
 
-    A voxel's fit is marked invalid when EITHER:
-      - its BOLD variance is below ``var_threshold`` (zero-variance /
-        dead voxel — braincoder typically returns its sentinel here),
-      - or its returned R² is NaN / non-finite (degenerate parameters
-        caused the predicted response to blow up — e.g., DN denominator
-        → 0).
+    A voxel's fit is marked invalid when ANY of:
+      - BOLD variance ≤ ``var_threshold`` (zero-variance / dead voxel
+        — braincoder typically returns its sentinel for these).
+      - R² is NaN / non-finite (the prediction blew up — e.g. DN
+        denominator → 0 producing +Inf).
+      - R² ≥ ``r2_ceiling`` (the "phantom r²≈1" sentinel pattern:
+        braincoder produces a fit whose prediction is a constant or
+        a near-constant, perfectly explaining low-variance noise but
+        not corresponding to any real PRF). 0.999 leaves headroom
+        for high-signal real voxels and still catches the sentinel
+        cluster that sits at r²=1.0 exactly.
+      - sd ≤ ``sd_sentinel`` (σ collapsed to ~0; same pathology
+        observed in DoG / DN under the σ-collapse regime even with
+        sd_min in place).
 
     For each invalid voxel:
       - all *parameter* columns are set to NaN (so anyone using them
         gets a loud signal that the fit isn't real),
       - the ``r2`` column is set to 0.0 (so the standard
         ``r2 > FDR_thr`` selection drops it cleanly without any
-        ad-hoc ``r2 < 0.99`` cap).
+        ad-hoc ``r2 < 0.99`` cap downstream).
 
     Output shape is preserved — this is the property that lets you do
     ``masker.inverse_transform(pars[col].values)`` downstream.
@@ -77,6 +87,10 @@ def mark_invalid_fits(pars, data, var_threshold=1e-6,
         data: (T, V) BOLD matrix the fit was run on; rows of ``pars``
               must correspond 1-to-1 with columns of ``data``.
         var_threshold: see :func:`mask_valid_bold_voxels`.
+        r2_ceiling: voxels with ``r² >= r2_ceiling`` are flagged as
+                    sentinels. Pass ``r2_ceiling=None`` to disable.
+        sd_sentinel: voxels with ``sd <= sd_sentinel`` are flagged
+                     as σ-collapsed. Pass ``None`` to disable.
         meta_cols: column names that are NOT model parameters and
                    should NOT be replaced with NaN (e.g., subject ID).
         verbose: print a summary of the count flagged.
@@ -90,13 +104,23 @@ def mark_invalid_fits(pars, data, var_threshold=1e-6,
     valid_bold = mask_valid_bold_voxels(data, var_threshold=var_threshold)
     r2 = pars["r2"].to_numpy()
     invalid_r2 = ~np.isfinite(r2)
-    invalid = (~valid_bold) | invalid_r2
+    invalid_ceiling = (r2_ceiling is not None) & (r2 >= (r2_ceiling
+                                                          if r2_ceiling is not None else np.inf))
+    invalid = (~valid_bold) | invalid_r2 | invalid_ceiling
+    if sd_sentinel is not None and "sd" in pars.columns:
+        sd = pars["sd"].to_numpy()
+        invalid_sd = np.isfinite(sd) & (sd <= sd_sentinel)
+        invalid = invalid | invalid_sd
+    else:
+        invalid_sd = np.zeros_like(invalid)
     n_invalid = int(invalid.sum())
     if verbose:
         print(f"  mark_invalid_fits: flagged {n_invalid} of "
               f"{len(invalid)} voxels "
               f"(low BOLD var: {int((~valid_bold).sum())}, "
-              f"non-finite R²: {int(invalid_r2.sum())})")
+              f"non-finite R²: {int(invalid_r2.sum())}, "
+              f"R²≥{r2_ceiling}: {int(invalid_ceiling.sum())}, "
+              f"σ-collapsed: {int(invalid_sd.sum())})")
     if n_invalid > 0:
         param_cols = [c for c in pars.columns
                       if c != "r2" and c not in meta_cols]

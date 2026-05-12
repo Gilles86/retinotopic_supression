@@ -429,6 +429,17 @@ def fit_one_subject(subject_id, model_label):
             f"V1 has {len(v1_idx)}")
 
     init = adapt_init_for(model_label, init_from, prior)
+    # Clip σ-like init params to ≥ sd_min. Cached m1 NIfTIs predate the
+    # sd_min hook (commit f8b3c5f) and contain 100s of voxels with
+    # sd ∈ (0, 0.3). Passing sd < sd_min to ParameterFitter.fit triggers
+    # _sd_softplus_inverse to return NaN, which propagates to braincoder's
+    # all-zero+r²=1.0 sentinel — the root cause of the V1 phantom voxels.
+    for sigma_col in ("sd", "srf_size"):
+        if sigma_col in init.columns and SD_MIN > 0:
+            n_clipped = int((init[sigma_col] < SD_MIN).sum())
+            if n_clipped:
+                print(f"  clipped {n_clipped} {sigma_col} init values to >= {SD_MIN}")
+            init[sigma_col] = init[sigma_col].clip(lower=SD_MIN)
     print(f"  init cols: {list(init.columns)}")
 
     factory = build_model_factory(model_label, grid_coords)

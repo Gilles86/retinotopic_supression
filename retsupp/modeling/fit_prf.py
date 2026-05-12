@@ -438,6 +438,21 @@ def main(subject: int, model_label: int,
         init = init.drop(columns=['r2', 'theta', 'ecc'], errors='ignore')
         if cfg.get('adapt') is not None:
             init = cfg['adapt'](init)
+        # Clip σ-like init params to ≥ sd_min. Otherwise braincoder's
+        # ParameterFitter.fit calls _sd_softplus_inverse on a value below
+        # the floor (which expects sd = sd_min + softplus(raw) ≥ sd_min)
+        # and returns NaN — the forward pass then emits the all-zero
+        # parameter sentinel + r²=1.0 phantom voxels we observed in
+        # sub-02 V1 (504/1624 voxels at sd<0.3 in cached m1). Clipping
+        # here makes the new pipeline robust to legacy NIfTIs fit
+        # before sd_min was introduced.
+        for sigma_col in ('sd', 'srf_size'):
+            if sigma_col in init.columns and sd_min > 0:
+                n_clipped = int((init[sigma_col] < sd_min).sum())
+                if n_clipped:
+                    print(f"  clipped {n_clipped} {sigma_col} init values "
+                          f"to >= {sd_min}")
+                init[sigma_col] = init[sigma_col].clip(lower=sd_min)
         print(f"  init cols: {list(init.columns)}")
 
     schedule = cfg['schedule']
