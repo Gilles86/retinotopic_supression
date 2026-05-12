@@ -1,27 +1,26 @@
-"""V1 stimulus decode from the m4 handoff NPZ for one HP condition.
+"""V1 stimulus decode from the m4 handoff NPZ — one single run per call.
 
 Reads ``derivatives/v1_decode_handoffs/sub-{NN}_m4_V1.npz`` (m4 DoG +
 flex-HRF PRF params + cleaned BOLD across all 12 runs, voxel-aligned),
-averages BOLD across the runs of one HP-distractor condition (typically
-3 runs), builds the matching averaged bar-only paradigm via
-:meth:`Subject.get_bar_stimulus`, and decodes the per-TR stimulus with
-braincoder's StimulusFitter.
+selects the rows for one (session, run) from the concatenated BOLD,
+builds the matching bar-only paradigm via :meth:`Subject.get_bar_stimulus`,
+and decodes the per-TR stimulus with braincoder's StimulusFitter.
 
-Averaging before decoding (rather than decoding then averaging) is the
-right move: HRF convolution couples TRs in the StimulusFitter cost, so
-per-condition decodes need self-contained HRF-coupled BOLD.
+Per-run decoding keeps trialwise structure available for later analyses
+(e.g. distractor-locked modulation); per-HP / per-session averages can
+be reconstructed post-hoc by averaging the per-run NPZs.
+
+Voxel filter is **top-N by r² only** — the new warmstart m4 fits enforce
+``sd_min=0.2`` at the model level, so phantom-like degenerate fits don't
+exist and FDR / mass-in-aperture / σ-bound guards are unnecessary.
 
 Usage::
 
-    python -m retsupp.decode.decode_v1_handoff --subject 15 --hp upper_right
+    python -m retsupp.decode.decode_v1_handoff --subject 15 --session 1 --run 1
 
 Output::
 
-    notes/data/v1_decode/sub-{NN}/decoded_hp-{HP}[_vox{N}].npz
-        decoded   (T, R, R)   one HP condition's averaged decode
-        paradigm  (T, R, R)   matched averaged paradigm
-        grid      (G, 2)
-        voxel_idx (V_sel,)    brain-mask flat indices (for back-projection)
+    notes/data/v1_decode/sub-{NN}/decoded_ses-{S}_run-{R}[_vox{N}].npz
 """
 from __future__ import annotations
 
@@ -32,28 +31,34 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from retsupp.utils.data import (
-    Subject, select_well_fit_voxels, validate_prf_parameters,
-)
+from retsupp.utils.data import Subject, validate_prf_parameters
 
 
 M4_PARS = ['x', 'y', 'sd', 'baseline', 'amplitude',
            'srf_amplitude', 'srf_size', 'hrf_delay', 'hrf_dispersion']
 M4_SD_MIN = 0.2
 N_TR_PER_RUN = 258
-HP_CHOICES = ('upper_right', 'upper_left', 'lower_left', 'lower_right')
 
 
-def _run_position_in_concat(sub: Subject) -> dict[tuple[int, int], int]:
-    """(session, run) → row index in the concatenated 12-run BOLD."""
-    return {sr: i for i, sr in enumerate(
-        (ses, run) for ses in (1, 2) for run in sub.get_runs(ses))}
+def _run_index_in_concat(sub: Subject, session: int, run: int) -> int:
+    """Row index of (session, run) in the 12-run concatenated BOLD.
+
+    Order: ses-1 run-1..n, ses-2 run-1..n (matches the handoff NPZ build).
+    """
+    idx = 0
+    for ses in (1, 2):
+        for r in sub.get_runs(ses):
+            if (ses, r) == (session, run):
+                return idx
+            idx += 1
+    raise KeyError(f'(ses={session}, run={run}) not in concat order for '
+                    f'sub-{sub.subject_id:02d}')
 
 
-def decode(*, subject: int, hp: str, bids_folder: str,
+def decode(*, subject: int, session: int, run: int, bids_folder: str,
            l2_norm: float, learning_rate: float,
            max_n_iterations: int, min_n_iterations: int,
-           resid_max_iter: int, max_voxels: int | None,
+           resid_max_iter: int, max_voxels: int,
            out_path: Path):
     from braincoder.hrf import SPMHRFModel
     from braincoder.models import DifferenceOfGaussiansPRF2DWithHRF
@@ -73,28 +78,28 @@ def decode(*, subject: int, hp: str, bids_folder: str,
     if T_all % N_TR_PER_RUN != 0:
         raise RuntimeError(f'T={T_all} not divisible by {N_TR_PER_RUN}.')
     n_runs = T_all // N_TR_PER_RUN
-    bold_runs = bold.reshape(n_runs, N_TR_PER_RUN, V)
-    print(f'  V1 voxels: {V}  runs: {n_runs}  TRs/run: {N_TR_PER_RUN}  '
-          f'res: {resolution}  grid_radius: {grid_radius}°', flush=True)
+    print(f'  V1 voxels: {V}  runs in concat: {n_runs}  TRs/run: {N_TR_PER_RUN}',
+          flush=True)
 
     sub = Subject(subject, bids_folder=bids_folder)
-    hp_runs = sub.get_runs_by_hp(hp)
-    run_pos = _run_position_in_concat(sub)
-    concat_idxs = [run_pos[sr] for sr in hp_runs]
-    print(f'  HP={hp}: {hp_runs}  (concat rows {concat_idxs})', flush=True)
+    row = _run_index_in_concat(sub, session, run)
+    print(f'  ses-{session} run-{run}: concat row {row}', flush=True)
 
-    # Canonical voxel filter, n_timepoints = TRs in the averaged chunk.
+    # Voxel filter: top-N by r² with finite parameters. No FDR / σ / mass
+    # guards — the m4 warmstart fits have sd_min=0.2 built in, no phantoms.
     pars_all = pd.DataFrame({p: npz[p] for p in M4_PARS}).astype(np.float32)
     pars_all['r2'] = npz['r2'].astype(np.float32)
-    sel, fdr_thr = select_well_fit_voxels(
-        pars_all, n_params=len(M4_PARS), n_timepoints=N_TR_PER_RUN,
-        aperture_radius=float(npz['aperture_radius']))
-    if max_voxels is not None and len(sel) > max_voxels:
-        sel = sel.sort_values('r2', ascending=False).head(max_voxels)
+    finite = np.all(np.isfinite(pars_all.values), axis=1) & (pars_all.r2 > 0)
+    pars_all = pars_all[finite]
+    sel = pars_all.sort_values('r2', ascending=False).head(max_voxels)
     npz_rows = sel.index.to_numpy()
     sel = sel.reset_index(drop=True)
     print(f'  Selected voxels: {len(sel)} / {V}  '
-          f'(FDR r²>{fdr_thr:.3f}, mass>0.5, 0.3≤sd≤4)', flush=True)
+          f'(top-{max_voxels} by r², no other filter)', flush=True)
+    print(f'    sd: median {sel.sd.median():.3f}  q05/95 '
+          f'{sel.sd.quantile(.05):.3f}/{sel.sd.quantile(.95):.3f}', flush=True)
+    print(f'    r²: min {sel.r2.min():.3f}  median {sel.r2.median():.3f}  '
+          f'max {sel.r2.max():.3f}', flush=True)
     if len(sel) < 20:
         raise RuntimeError(f'Too few voxels selected: {len(sel)}')
 
@@ -102,24 +107,20 @@ def decode(*, subject: int, hp: str, bids_folder: str,
     validate_prf_parameters(pars_df, sd_min=M4_SD_MIN, model_label='m4',
                              source=str(npz_path))
 
-    # Average BOLD and paradigm across this HP's runs.
-    bold_avg = bold_runs[concat_idxs][:, :, npz_rows].mean(axis=0)
-    par_runs = np.stack([
-        sub.get_bar_stimulus(session=ses, run=run,
-                              resolution=resolution, grid_radius=grid_radius)
-        for ses, run in hp_runs
-    ], axis=0)
-    paradigm_avg = par_runs.mean(axis=0).astype(np.float32)
-    T = paradigm_avg.shape[0]
-    print(f'  averaged BOLD: {bold_avg.shape}  '
-          f'averaged paradigm: {paradigm_avg.shape}', flush=True)
+    # BOLD + paradigm for this single run.
+    bold_run = bold.reshape(n_runs, N_TR_PER_RUN, V)[row][:, npz_rows]
+    paradigm = sub.get_bar_stimulus(
+        session=session, run=run,
+        resolution=resolution, grid_radius=grid_radius).astype(np.float32)
+    T = paradigm.shape[0]
+    print(f'  BOLD: {bold_run.shape}  paradigm: {paradigm.shape}', flush=True)
 
     gx, gy = sub.get_extended_grid_coordinates(
-        resolution=resolution, session=1, run=1, grid_radius=grid_radius)
+        resolution=resolution, session=session, run=run, grid_radius=grid_radius)
     grid = np.stack([gx.ravel(), gy.ravel()], axis=1).astype(np.float32)
 
-    paradigm_flat = paradigm_avg.reshape(T, -1).astype(np.float32)
-    bold_df = pd.DataFrame(bold_avg.astype(np.float32),
+    paradigm_flat = paradigm.reshape(T, -1).astype(np.float32)
+    bold_df = pd.DataFrame(bold_run.astype(np.float32),
                             index=pd.Index(np.arange(T), name='frame'))
     bold_df.columns.name = 'voxel'
     paradigm_df = pd.DataFrame(paradigm_flat,
@@ -155,12 +156,11 @@ def decode(*, subject: int, hp: str, bids_folder: str,
     np.savez_compressed(
         out_path,
         decoded=decoded_arr,
-        paradigm=paradigm_avg,
+        paradigm=paradigm,
         grid=grid,
         voxel_idx=npz['voxel_idx'][npz_rows],
-        hp=np.array(hp),
-        runs=np.array(hp_runs),
-        fdr_thr=np.float32(fdr_thr),
+        session=np.int32(session),
+        run=np.int32(run),
         l2_norm=np.float32(l2_norm), learning_rate=np.float32(learning_rate),
         resolution=np.int32(resolution),
         grid_radius=np.float32(grid_radius),
@@ -172,26 +172,26 @@ def decode(*, subject: int, hp: str, bids_folder: str,
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--subject', type=int, required=True)
-    p.add_argument('--hp', required=True, choices=list(HP_CHOICES))
+    p.add_argument('--session', type=int, required=True)
+    p.add_argument('--run', type=int, required=True)
     p.add_argument('--bids-folder', default='/data/ds-retsupp')
     p.add_argument('--l2-norm', type=float, default=0.01)
     p.add_argument('--learning-rate', type=float, default=0.5)
     p.add_argument('--max-n-iterations', type=int, default=1000)
     p.add_argument('--min-n-iterations', type=int, default=200)
     p.add_argument('--resid-max-iter', type=int, default=300)
-    p.add_argument('--max-voxels', type=int, default=None,
-                   help='Optional cap on # voxels after FDR (top-N by r²).')
+    p.add_argument('--max-voxels', type=int, default=200,
+                   help='Number of top-r² voxels to include (default 200).')
     p.add_argument('--out', type=Path, default=None)
     args = p.parse_args()
 
-    tag = f'hp-{args.hp}'
-    if args.max_voxels is not None:
-        tag = f'{tag}_vox{args.max_voxels}'
+    tag = f'ses-{args.session}_run-{args.run}_vox{args.max_voxels}'
     out_path = args.out or (Path(__file__).resolve().parents[2]
                             / 'notes' / 'data' / 'v1_decode'
                             / f'sub-{args.subject:02d}'
                             / f'decoded_{tag}.npz')
-    decode(subject=args.subject, hp=args.hp, bids_folder=args.bids_folder,
+    decode(subject=args.subject, session=args.session, run=args.run,
+           bids_folder=args.bids_folder,
            l2_norm=args.l2_norm, learning_rate=args.learning_rate,
            max_n_iterations=args.max_n_iterations,
            min_n_iterations=args.min_n_iterations,
