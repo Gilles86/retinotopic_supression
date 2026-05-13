@@ -1,11 +1,19 @@
 #!/bin/bash
 #SBATCH --job-name=prf_chunked
 #SBATCH --account=hare.econ.uzh
+#SBATCH --partition=lowprio
 #SBATCH --output=/dev/null
 #SBATCH --gres=gpu:1
 #SBATCH --constraint="A100|V100|L4"
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=24G
+
+# Partition=lowprio: same physical L4/A100/V100 nodes as standard,
+# but jobs dispatch almost immediately (5-10s) instead of sitting in
+# fairshare queue for hours. Trade-off: a higher-priority standard job
+# can preempt us mid-fit. For a 15-30 min chunk that's a low risk;
+# preempted tasks just get resubmitted. See retsupp/CLAUDE.md
+# §"Lowprio partition for GPU PRF fits".
 
 # Per-(subject, chunk) GPU PRF fit. ONE model + ONE kind per submission.
 # Array task index maps to (sub_idx, chunk_idx) via the same mapping

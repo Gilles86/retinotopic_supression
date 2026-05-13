@@ -188,6 +188,33 @@ by default; override via `THROTTLE=N bash submit_prf_chunked.sh ...`.
 
 There is no `--account=zne.uzh` in these scripts — add it when creating new ones (cluster requirement per global instructions).
 
+### Lowprio partition for GPU PRF fits
+
+When `standard` partition is congested (our jobs sit `(Priority)` for
+hours due to fairshare), use `--partition=lowprio` instead. The
+`lowprio` partition uses the **same physical L4/A100/V100 nodes** as
+`standard` — it's not a separate hardware pool — but jobs dispatch
+near-instantly (5-10s in our tests) because lowprio uses a different
+priority bucket.
+
+Trade-off: a higher-priority `standard` job can preempt a running
+lowprio job at any moment. For our chunked PRF fits (15-30 min/task)
+preemption risk is low, and preempted tasks are cheap to resubmit
+(per-subject dependency chains isolate failures to that subject's
+downstream).
+
+`fit_prf_l4_chunked.sh` already has `#SBATCH --partition=lowprio`
+baked in. Override via `sbatch --partition=standard ...` when you
+explicitly want fairshare-scheduled GPU.
+
+Verify the lowprio queue isn't itself congested before assuming
+instant dispatch:
+
+```bash
+ssh sciencecluster 'sinfo -p lowprio --format="%P %a %D %T" | grep idle'
+squeue -p lowprio -h -t PD | wc -l   # other pending lowprio work
+```
+
 ### Per-subject dependency chains, not phase-wide afterok
 
 When building multi-stage SLURM pipelines (e.g. PRF chunks → merge →
