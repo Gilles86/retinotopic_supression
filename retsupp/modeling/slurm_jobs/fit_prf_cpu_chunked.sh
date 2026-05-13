@@ -2,13 +2,18 @@
 #SBATCH --job-name=prf_cpu_chunked
 #SBATCH --account=hare.econ.uzh
 #SBATCH --output=/dev/null
-#SBATCH --cpus-per-task=32
-#SBATCH --mem=32G
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=16G
 
 # CPU twin of fit_prf_l4_chunked.sh.  Same chunking semantics; no GPU,
 # TF forced to CPU.  Useful when the GPU queue is congested — CPU
 # partitions typically have idle nodes.  Per-task wallclock is ~3-5×
-# slower than GPU, but dispatch is instant.
+# slower than GPU, but dispatch is faster.
+#
+# 16 CPUs / 16 GB chosen for cluster citizenship: 32 CPUs gives only
+# ~1.3× speedup over 16 (TF PRF fitting plateaus past 16 cores due to
+# memory bandwidth), but ties up twice the node.  16 CPUs lets ~2× as
+# many tasks land per node, which matters more on a congested cluster.
 #
 # Required env vars (--export=ALL,...):
 #   MODEL      1..6
