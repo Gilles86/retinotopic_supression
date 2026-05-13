@@ -31,8 +31,17 @@ S_MERGE="$SCRIPT_DIR/merge_prf_chunks.sh"
 S_SURF="$(cd "$SCRIPT_DIR/../../surface/slurm_jobs" && pwd)/sample_prf_to_surface.sh"
 S_NEURO="$(cd "$SCRIPT_DIR/../../neuropythy/slurm_jobs" && pwd)/register_retinotopy.sh"
 
-T_CHUNK=00:45:00   # per chunk; matches lowprio empirical timing
-T_MERGE=00:10:00
+# Per-chunk wallclock observed on L4 lowprio:
+#   m1: ~10 min (2000-iter grid+GD); fast chunks 5 min, slow 15
+#   m2-m6: ~15-30 min (4500-iter two-stage schedule)
+# Walltime is tight-with-headroom so preempted resubmits don't loop.
+T_CHUNK_M1=00:20:00
+T_CHUNK_M2=00:35:00
+T_CHUNK_M3=00:35:00
+T_CHUNK_M4=00:35:00
+T_CHUNK_M5=00:35:00
+T_CHUNK_M6=00:35:00
+T_MERGE=00:03:00   # actual elapsed is 10-30s; tight window helps backfill
 T_CACHE=00:15:00
 T_SURF=00:30:00
 T_NEURO=01:00:00
@@ -47,6 +56,8 @@ submit_model_block() {
     local sub=$1 model=$2 dep_chunks=$3 dep_neuro=$4
     local DEP_C=""
     [[ -n "$dep_chunks" ]] && DEP_C="--dependency=afterok:$dep_chunks"
+    local t_chunk_var="T_CHUNK_M${model}"
+    local T_CHUNK=${!t_chunk_var}
 
     J_CHUNK=$(sb --array=1-$N_CHUNKS --time=$T_CHUNK $DEP_C \
         --export=ALL,SUBJECT=$sub,MODEL=$model,N_CHUNKS=$N_CHUNKS,KIND=$KIND \
