@@ -171,7 +171,7 @@ PER_MODEL_PAGES = [
 # R² pair pages: each cell = (subject, (model_y, model_x))
 # Compare model_y vs model_x R² per voxel; expect points above identity
 # when model_y is the more flexible model.
-R2_PAIRS = [(2, 1), (3, 1), (4, 1), (4, 2), (5, 2), (6, 5)]
+R2_PAIRS = [(2, 1), (3, 1), (4, 1), (4, 2), (5, 2), (6, 5), (6, 4)]
 
 
 def cell_r2_pair(ax, sid, m_y, m_x, cache):
