@@ -159,10 +159,11 @@ PER_MODEL_PAGES = [
 
 def panel_pointplot(ax, cache, roi, par, models, ylim=None, ref_line=None):
     """One ROI panel: x=model, y=median(par) per subject.
-    Light scatter = individual subjects (jittered), bold = mean ± SEM.
+    Light scatter = individual subjects (jittered), bold line + dots =
+    mean across subjects with SEM shaded band + errorbars.
     """
     rng = np.random.default_rng(0)
-    has_any = False
+    xs, mus, sems = [], [], []
     for j, m in enumerate(models):
         dfs = cache.get((roi, m))
         if dfs is None or dfs[1] is None or par not in dfs[1].columns:
@@ -170,14 +171,21 @@ def panel_pointplot(ax, cache, roi, par, models, ylim=None, ref_line=None):
         per_sub = dfs[1].groupby("subject")[par].median().dropna()
         if len(per_sub) == 0:
             continue
-        has_any = True
         jitter = rng.uniform(-0.18, 0.18, size=len(per_sub))
-        ax.scatter(j + jitter, per_sub.values, s=14, alpha=0.4,
+        ax.scatter(j + jitter, per_sub.values, s=14, alpha=0.35,
                     color="#1B4965", edgecolor="none", zorder=2)
-        mu = per_sub.mean(); sem = per_sub.sem()
-        ax.errorbar([j], [mu], yerr=[sem], fmt="o", color="#E76F51",
-                    ms=8, capsize=4, capthick=1.6, zorder=5,
-                    markeredgecolor="white", markeredgewidth=1.2)
+        xs.append(j); mus.append(per_sub.mean()); sems.append(per_sub.sem())
+    if len(xs) >= 1:
+        xs = np.array(xs); mus = np.array(mus); sems = np.array(sems)
+        # SEM shaded band (continuous across visible models).
+        if len(xs) >= 2:
+            ax.fill_between(xs, mus - sems, mus + sems,
+                            color="#E76F51", alpha=0.20, zorder=3)
+            ax.plot(xs, mus, color="#E76F51", lw=1.8, zorder=4)
+        ax.errorbar(xs, mus, yerr=sems, fmt="o", color="#E76F51",
+                    ms=7, capsize=3, capthick=1.4, zorder=5,
+                    markeredgecolor="white", markeredgewidth=1.0,
+                    elinewidth=1.4, lw=0)
     ax.set_xticks(range(len(models)))
     ax.set_xticklabels([MODEL_LABELS[m].split()[0] for m in models],
                        fontsize=8)
@@ -186,7 +194,7 @@ def panel_pointplot(ax, cache, roi, par, models, ylim=None, ref_line=None):
     if ylim is not None: ax.set_ylim(*ylim)
     if ref_line is not None:
         ax.axhline(ref_line, color="0.4", lw=0.6, ls=":", alpha=0.6)
-    if not has_any:
+    if len(xs) == 0:
         ax.text(0.5, 0.5, "no data", ha="center", va="center",
                 transform=ax.transAxes, fontsize=8, color="0.6")
 
