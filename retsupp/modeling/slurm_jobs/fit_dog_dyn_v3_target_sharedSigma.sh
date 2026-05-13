@@ -83,6 +83,13 @@ SCRIPT="$HOME/git/retsupp/retsupp/modeling/fit_dog_dynamic_af_braincoder.py"
 
 echo "Running v3 + target + sharedSigma fit for sub-${subject}, roi=${roi}"
 
+# When USE_FDR=1, pass r2_thr=-1 → fit_dog_dynamic_af_braincoder.py
+# queries Subject.get_r2_fdr_threshold(model=4, roi, alpha=0.05) for the
+# per-(subject, ROI) mixture tail-FDR threshold instead of using a
+# fixed 0.05 hard threshold.
+R2_FLAG=""
+[[ "${USE_FDR:-0}" == "1" ]] && R2_FLAG="--r2_thr -1"
+
 "$PYTHON" -u "$SCRIPT" \
     "$subject" \
     --bids-folder "$bids_folder" \
@@ -95,6 +102,7 @@ echo "Running v3 + target + sharedSigma fit for sub-${subject}, roi=${roi}"
     --sigma-af-init 2.0 \
     --sigma-dyn-init 2.0 \
     --sigma-t-dyn-init 2.0 \
-    --g-t-dyn-init 0.0
+    --g-t-dyn-init 0.0 \
+    $R2_FLAG
 
 echo "Finished:    $(date)"
