@@ -71,7 +71,12 @@ def main(subject, session, bids_folder='/data/ds-retsupp'):
             standardize='psc',
         )
 
-        # Save cleaned data
+        # Save cleaned data. Float32 wrap is defensive — see CLAUDE.md
+        # §"NIfTI dtype trap". fmriprep preproc BOLD is already float32
+        # so clean_img's output inherits float32, but wrap ensures we
+        # never accidentally pick up a uint8 mask dtype upstream.
+        cleaned_data.set_data_dtype(np.float32)
+        cleaned_data.header.set_slope_inter(slope=1, inter=0)
         target_fn = target_dir / f'sub-{subject:02d}_ses-{session}_task-search_desc-cleaned_run-{run}_bold.nii.gz'
         cleaned_data.to_filename(target_fn)
 
