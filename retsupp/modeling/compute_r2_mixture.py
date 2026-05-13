@@ -195,7 +195,12 @@ def main():
 
     out_dir = (bids / 'derivatives' / args.prf_base_dir
                / f'model{args.model}' / f'sub-{args.subject:02d}')
+    # Float32 wrap — see CLAUDE.md §"NIfTI dtype trap". p_signal is a
+    # posterior probability in [0, 1]; uint8 quantization would drop us
+    # to 256 distinct levels and break downstream mixture inference.
     nii = masker.inverse_transform(p_signal_all)
+    nii.set_data_dtype(np.float32)
+    nii.header.set_slope_inter(slope=1, inter=0)
     out_nii = out_dir / f'sub-{args.subject:02d}_desc-p_signal.nii.gz'
     nii.to_filename(str(out_nii))
     out_json = out_dir / f'sub-{args.subject:02d}_desc-p_signal.json'

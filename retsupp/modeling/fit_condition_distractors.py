@@ -332,11 +332,14 @@ def main(subject, model_label=1, bids_folder='/data/ds-retsupp',
 
         # Save NIfTIs (one per parameter) using the base masker so
         # downstream code can read them like the bar-only conditionfit.
+        # Float32 wrap — see CLAUDE.md §"NIfTI dtype trap".
         n_full = int(brain_masker.mask_img_.get_fdata().sum())
         for par in fit_pars.columns:
             arr = np.zeros(n_full, dtype=np.float32)
             arr[voxel_idx_global] = fit_pars[par].values
             par_img = brain_masker.inverse_transform(arr)
+            par_img.set_data_dtype(np.float32)
+            par_img.header.set_slope_inter(slope=1, inter=0)
             par_img.to_filename(
                 target_dir / f'sub-{subject:02d}_cond-{cond}_desc-{par}.nii.gz'
             )
@@ -344,6 +347,8 @@ def main(subject, model_label=1, bids_folder='/data/ds-retsupp',
         pred_full = np.zeros((pred.shape[0], n_full), dtype=np.float32)
         pred_full[:, voxel_idx_global] = pred
         pred_img = brain_masker.inverse_transform(pred_full)
+        pred_img.set_data_dtype(np.float32)
+        pred_img.header.set_slope_inter(slope=1, inter=0)
         pred_img.to_filename(
             target_dir / f'sub-{subject:02d}_cond-{cond}_desc-pred.nii.gz'
         )

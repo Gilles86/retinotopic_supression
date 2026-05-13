@@ -179,16 +179,21 @@ def main(subject: int,
         print(f'  HP={cond}: fit {len(fit_pars)} voxels, mean R²={np.nanmean(r2_arr):.3f}')
 
         if save_nifti:
+            # Float32 wrap — see CLAUDE.md §"NIfTI dtype trap".
             n_full = roi_mask.size
             for par in ['x', 'y', 'sd', 'baseline', 'amplitude']:
                 arr = np.zeros(n_full)
                 arr[voxel_idx_global] = fit_pars[par].values
                 img = masker.inverse_transform(arr)
+                img.set_data_dtype(np.float32)
+                img.header.set_slope_inter(slope=1, inter=0)
                 img.to_filename(out_dir / f'sub-{subject:02d}_cond-{cond}_desc-{par}.nii.gz')
             arr = np.zeros(n_full)
             arr[voxel_idx_global] = r2_arr
-            masker.inverse_transform(arr).to_filename(
-                out_dir / f'sub-{subject:02d}_cond-{cond}_desc-r2.nii.gz')
+            img = masker.inverse_transform(arr)
+            img.set_data_dtype(np.float32)
+            img.header.set_slope_inter(slope=1, inter=0)
+            img.to_filename(out_dir / f'sub-{subject:02d}_cond-{cond}_desc-r2.nii.gz')
 
     df_out = pd.DataFrame(rows)
     out_tsv = out_dir / f'sub-{subject:02d}_gaussian_roi.tsv'

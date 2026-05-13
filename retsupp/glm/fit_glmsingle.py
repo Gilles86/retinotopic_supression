@@ -270,12 +270,13 @@ def main(
         f"sub-{int(subject):02d}{ses_entity}_task-search"
         f"_space-T1w_desc-{{desc}}_pe.nii.gz"
     )
-    image.new_img_like(ref_bold_img, betas).to_filename(
-        str(out_dir / fn_template.format(desc="distractor"))
-    )
-    image.new_img_like(ref_bold_img, results["typed"]["R2"]).to_filename(
-        str(out_dir / fn_template.format(desc="R2"))
-    )
+    # Float32 wrap — see CLAUDE.md §"NIfTI dtype trap". Defensive even
+    # if ref_bold_img is already float (cheap insurance).
+    for arr, desc in [(betas, "distractor"), (results["typed"]["R2"], "R2")]:
+        img = image.new_img_like(ref_bold_img, arr)
+        img.set_data_dtype(np.float32)
+        img.header.set_slope_inter(slope=1, inter=0)
+        img.to_filename(str(out_dir / fn_template.format(desc=desc)))
 
     # Per-trial metadata as TSV. Order matches the 4th dimension of the betas.
     meta_df = pd.DataFrame(all_trial_meta)

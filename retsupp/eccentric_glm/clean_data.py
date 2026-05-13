@@ -71,8 +71,12 @@ def main(subject, mean_prf=True, bids_folder='/data/ds-retsupp'):
             predicted = A @ coeffs  # (T, V)
             cleaned_ts = bold_ts - predicted
 
-        # Reconstruct 4D image from cleaned time series and save
-        out_img = masker.inverse_transform(cleaned_ts)  # nifti image in original space
+        # Reconstruct 4D image from cleaned time series and save.
+        # Float32 wrap — see CLAUDE.md §"NIfTI dtype trap". The cleaned
+        # 4D series feeds downstream GLM, so quantization is fatal.
+        out_img = masker.inverse_transform(cleaned_ts)
+        out_img.set_data_dtype(np.float32)
+        out_img.header.set_slope_inter(slope=1, inter=0)
         out_fname = target_dir / f"sub-{subject:02d}_ses-{session}_run-{run}_task-prf_cleaned_regressed.nii.gz"
         out_img.to_filename(out_fname)
         print(f"Saved regressed image to {out_fname}")

@@ -255,7 +255,7 @@ def main(subject, model_label, bids_folder='/data/ds-retsupp',
     final_pars['ecc'] = np.sqrt(final_pars['x'] ** 2 + final_pars['y'] ** 2)
     final_pars['r2'] = r2
 
-    # --- Write parameter maps. ---
+    # --- Write parameter maps. Float32 wrap — see CLAUDE.md §"NIfTI dtype trap".
     for par in final_pars.columns:
         final_par_img = r2_masker.inverse_transform(final_pars[par])
         if par in grid_pars.columns:
@@ -269,9 +269,13 @@ def main(subject, model_label, bids_folder='/data/ds-retsupp',
             r2=r2_grid_img, final_pars=final_par_img,
             grid_pars=grid_par_img,
         )
+        par_img.set_data_dtype(np.float32)
+        par_img.header.set_slope_inter(slope=1, inter=0)
         par_img.to_filename(target_dir / f'sub-{subject:02d}_desc-{par}.nii.gz')
 
     pred_img = r2_masker.inverse_transform(pred)
+    pred_img.set_data_dtype(np.float32)
+    pred_img.header.set_slope_inter(slope=1, inter=0)
     pred_img.to_filename(target_dir / f'sub-{subject:02d}_desc-pred.nii.gz')
 
     print(f"Wrote outputs to {target_dir}")

@@ -136,7 +136,10 @@ def run_one(subject: int, model: int, bids_folder: Path,
 
     out_dir = (bids_folder / 'derivatives' / 'prf'
                / f'model{model}' / f'sub-{subject:02d}')
+    # Float32 wrap — see CLAUDE.md §"NIfTI dtype trap".
     nii = masker.inverse_transform(p_signal_all)
+    nii.set_data_dtype(np.float32)
+    nii.header.set_slope_inter(slope=1, inter=0)
     nii.to_filename(str(out_dir
                        / f'sub-{subject:02d}_desc-p_signal.nii.gz'))
     with open(out_dir / f'sub-{subject:02d}_desc-p_signal.json',

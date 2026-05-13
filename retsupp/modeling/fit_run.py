@@ -75,17 +75,23 @@ def main(subject, session, run, model_label=1, bids_folder='/data/ds-retsupp', m
     fit_pars['r2'] = r2
 
     # Save parameter maps (only fitted voxels, others set to 0)
+    # Float32 wrap avoids uint8 dtype inheritance from mask — see CLAUDE.md
+    # §"NIfTI dtype trap".
     n_voxels = brain_masker.mask_img_.get_fdata().sum().astype(int)
     for par in fit_pars.columns:
         arr = np.zeros(n_voxels)
         arr[mask_r2.values] = fit_pars[par].values
         par_img = brain_masker.inverse_transform(arr)
+        par_img.set_data_dtype(np.float32)
+        par_img.header.set_slope_inter(slope=1, inter=0)
         par_img.to_filename(target_dir / f'sub-{subject:02d}_ses-{session}_run-{run}_desc-{par}.nii.gz')
 
     # Save prediction (only fitted voxels, others set to 0)
     pred_full = np.zeros((pred.shape[0], n_voxels))
     pred_full[:, mask_r2.values] = pred
     pred_img = brain_masker.inverse_transform(pred_full)
+    pred_img.set_data_dtype(np.float32)
+    pred_img.header.set_slope_inter(slope=1, inter=0)
     pred_img.to_filename(target_dir / f'sub-{subject:02d}_ses-{session}_run-{run}_desc-pred.nii.gz')
 
 if __name__ == "__main__":

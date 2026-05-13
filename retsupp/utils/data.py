@@ -1162,6 +1162,23 @@ class Subject(object):
         # 
 
 
+    @staticmethod
+    def safe_inverse_transform_save(masker, values, path, dtype=np.float32):
+        """Inverse-transform `values` into a NIfTI and save it safely.
+
+        Wraps the uint8-quantization trap: nilearn maskers inherit the
+        mask's dtype (typically uint8) and let nibabel auto-pick an
+        scl_slope, which quantizes parameter values to 256 distinct
+        levels across the brain. Forcing dtype + clearing the scale
+        factor before write avoids that. See CLAUDE.md §"NIfTI dtype
+        trap".
+        """
+        img = masker.inverse_transform(values)
+        img.set_data_dtype(dtype)
+        img.header.set_slope_inter(slope=1, inter=0)
+        img.to_filename(str(path))
+        return img
+
     def _neuropythy_mgz_path(self, name, location, model=4):
         """Resolve an `inferred_*.mgz` path with per-model snapshot fallback.
 
