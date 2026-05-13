@@ -87,6 +87,29 @@ def main(subject_id, bids_dir="/data/ds-retsupp", model=4, fs_subject=None):
     print(f"Surface files: {surf_dir}/")
     print(f"Volumetric files: {subject_dir}/mri/")
 
+    # Snapshot per-model: copy inferred_*.mgz to
+    # derivatives/neuropythy/model{N}/sub-XX/{surf,mri}/ so multiple
+    # model runs don't clobber each other and a loader can pick the
+    # model of interest. Canonical freesurfer location keeps the most
+    # recent run (model-4 by default, downstream code reads from there).
+    import shutil
+    archive_root = bids_dir / 'derivatives' / 'neuropythy' / \
+        f'model{model}' / f'sub-{sub.subject_id:02d}'
+    arch_surf = archive_root / 'surf'
+    arch_mri = archive_root / 'mri'
+    arch_surf.mkdir(parents=True, exist_ok=True)
+    arch_mri.mkdir(parents=True, exist_ok=True)
+    mri_dir = subject_dir / 'mri'
+
+    n_copied = 0
+    for f in surf_dir.glob('*.inferred_*'):
+        shutil.copy2(f, arch_surf / f.name)
+        n_copied += 1
+    for f in mri_dir.glob('inferred_*.mgz'):
+        shutil.copy2(f, arch_mri / f.name)
+        n_copied += 1
+    print(f"Snapshot {n_copied} files to {archive_root}")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Register retinotopy for a subject.")
     parser.add_argument("subject_id", type=int, help="Subject ID (integer, e.g., 3)")

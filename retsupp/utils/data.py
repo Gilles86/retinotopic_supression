@@ -26,10 +26,15 @@ roi_order = ['V1', 'V2', 'V3', 'V3AB', 'hV4', 'LO', 'TO', 'VO']
 
 # Generic post-fit helpers live in braincoder.utils.postfit; re-export
 # here so retsupp code that still imports them from this module
-# (including in-flight cluster jobs) keeps working.
-from braincoder.utils.postfit import (  # noqa: E402, F401
-    mask_valid_bold_voxels, mark_invalid_fits, validate_prf_parameters,
-)
+# (including in-flight cluster jobs) keeps working. Optional so that
+# braincoder-less envs (e.g. pycortex2 used by visualize/) can still
+# import Subject from this module.
+try:
+    from braincoder.utils.postfit import (  # noqa: E402, F401
+        mask_valid_bold_voxels, mark_invalid_fits, validate_prf_parameters,
+    )
+except ImportError:
+    pass
 
 
 def select_well_fit_voxels(df, *, n_params, n_timepoints=258,
@@ -1157,17 +1162,24 @@ class Subject(object):
         # 
 
 
-    def get_retinotopic_atlas(self, bold_space=False):
-        varea_file = (
-            self.bids_folder
-            / "derivatives"
-            / "fmriprep"
-            / "sourcedata"
-            / "freesurfer"
-            / f"sub-{self.subject_id:02d}"
-            / "mri"
-            / "inferred_varea.mgz"
-        )
+    def _neuropythy_mgz_path(self, name, location, model=4):
+        """Resolve an `inferred_*.mgz` path with per-model snapshot fallback.
+
+        Reads from ``derivatives/neuropythy/model{N}/sub-XX/{location}/`` when
+        available; otherwise falls back to the canonical freesurfer subject
+        dir (most recent neuropythy run, typically model 4).
+        """
+        per_model = (self.bids_folder / 'derivatives' / 'neuropythy'
+                     / f'model{model}' / f'sub-{self.subject_id:02d}'
+                     / location / name)
+        if per_model.exists():
+            return per_model
+        return (self.bids_folder / 'derivatives' / 'fmriprep' / 'sourcedata'
+                / 'freesurfer' / f'sub-{self.subject_id:02d}' / location / name)
+
+    def get_retinotopic_atlas(self, bold_space=False, model=4):
+        varea_file = self._neuropythy_mgz_path('inferred_varea.mgz', 'mri',
+                                                model=model)
         varea_img = image.load_img(str(varea_file))
 
         # Make Nifti1Image out of MGZImage
@@ -1281,7 +1293,7 @@ class Subject(object):
             return float('inf')
         return float(grid[start + cr[0]])
 
-    def get_retinotopic_roi(self, roi=None, bold_space=False,):
+    def get_retinotopic_roi(self, roi=None, bold_space=False, model=4):
         """
         Returns a mask image for the specified retinotopic ROI (e.g., 'V1', 'V2', etc.).
         If hemi is 'L' or 'R', restricts to that hemisphere.
@@ -1289,14 +1301,16 @@ class Subject(object):
         Sources the atlas based on the ROI name:
         - Benson (``inferred_varea.mgz``) for V1, V2, V3, hV4, VO1, VO2,
           LO1, LO2, TO1, TO2, V3A, V3B, plus the alias ``V3AB`` (=V3A∪V3B).
+          ``model`` selects which PRF-fit basis the Benson atlas was
+          derived from (default 4; pass 6 to use the DN+HRF run).
         - Wang 2015 (``wang15_atlas.mgz``) for IPS0..IPS5, SPL1, FEF,
-          plus the alias ``IPS`` (=IPS0∪..∪IPS5).
+          plus the alias ``IPS`` (=IPS0∪..∪IPS5). Wang is model-independent.
 
         ROI names ending in ``_L`` or ``_R`` are restricted to the
         corresponding hemisphere via :meth:`get_hemisphere_mask`.
         """
         if roi is None:
-            atlas = self.get_retinotopic_atlas(bold_space=bold_space)
+            atlas = self.get_retinotopic_atlas(bold_space=bold_space, model=model)
             labels = self.get_retinotopic_labels()
             return atlas, [label for _, label in sorted(labels.items())]
 
@@ -1317,7 +1331,7 @@ class Subject(object):
             aliases = self._WANG_ALIASES
             atlas_name = "Wang"
         else:
-            atlas = self.get_retinotopic_atlas(bold_space=bold_space)
+            atlas = self.get_retinotopic_atlas(bold_space=bold_space, model=model)
             labels = self.get_retinotopic_labels()
             aliases = self._BENSON_ALIASES
             atlas_name = "Benson"
@@ -1363,35 +1377,27 @@ class Subject(object):
             return pd.DataFrame(data, index=pd.Index(range(data.shape[0]), name='time'), columns=pd.Index(range(data.shape[1], name='voxel')))
 
 
-    def get_inferred_pars_volume(self, return_images=True):
-        from nibabel.freesurfer.io import read_morph_data
-        import numpy as np
+    def get_inferred_pars_volume(self, return_images=True, model=4):
         import pandas as pd
-        from itertools import product
 
-        freesurfer_dir = self.bids_folder / 'derivatives' / 'fmriprep' / 'sourcedata' / 'freesurfer' / f'sub-{self.subject_id:02d}' / 'mri'
         par_labels = ['angle', 'eccen', 'sigma', 'varea']
-
         results = {}
-
         for par in par_labels:
-            img = nib.load(freesurfer_dir / f'inferred_{par}.mgz')
-            results[par] = img
+            results[par] = nib.load(self._neuropythy_mgz_path(
+                f'inferred_{par}.mgz', 'mri', model=model))
 
         if return_images:
             return pd.Series(results)
         else:
-            masker = self.get_bold_mask(return_masker=True)
             data = {par: self._extract_param_arr(results[par], roi=None) for par in par_labels}
             return pd.DataFrame(data)
 
-    def get_inferred_prf_pars_surf(self):
+    def get_inferred_prf_pars_surf(self, model=4):
         from nibabel.freesurfer.io import read_morph_data
         import numpy as np
         import pandas as pd
         from itertools import product
 
-        freesurfer_dir = self.bids_folder / 'derivatives' / 'fmriprep' / 'sourcedata' / 'freesurfer' / f'sub-{self.subject_id:02d}'
         par_labels = ['angle', 'eccen', 'sigma', 'varea']
         hemis = ['L', 'R']
         fs_hemi = {'L': 'lh', 'R': 'rh'}
@@ -1400,7 +1406,9 @@ class Subject(object):
         dfs = []
         for hemi in hemis:
             df = pd.DataFrame({
-                par: read_morph_data(freesurfer_dir / 'surf' / f'{fs_hemi[hemi]}.inferred_{par}').squeeze().astype(np.float32)
+                par: read_morph_data(self._neuropythy_mgz_path(
+                    f'{fs_hemi[hemi]}.inferred_{par}', 'surf', model=model)
+                ).squeeze().astype(np.float32)
                 for par in par_labels
             })
             n_vertices = len(df)
