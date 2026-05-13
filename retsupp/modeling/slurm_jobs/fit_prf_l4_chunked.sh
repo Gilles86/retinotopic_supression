@@ -4,7 +4,13 @@
 #SBATCH --partition=lowprio
 #SBATCH --output=/dev/null
 #SBATCH --gres=gpu:1
-#SBATCH --constraint="A100|V100|L4"
+# L4-only: L4 nodes have 1 GPU each, so each job owns its node and there's
+# no cuInit race condition. V100/A100/H100/H200 nodes pack 8 GPUs each;
+# when 8 of our jobs land simultaneously, the driver locks up with
+# CUDA_ERROR_UNKNOWN and TF falls back to CPU (60× slowdown, timeouts).
+# Observed 2026-05-13 on u24-chiivm0-604. Cluster has ~16 L4 nodes
+# (gpu:L4:1) which throttles us but the dispatch is reliable.
+#SBATCH --constraint="L4"
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=24G
 
