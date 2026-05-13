@@ -157,6 +157,60 @@ PER_MODEL_PAGES = [
 ]
 
 
+def panel_pointplot(ax, cache, roi, par, models, ylim=None, ref_line=None):
+    """One ROI panel: x=model, y=median(par) per subject.
+    Light scatter = individual subjects (jittered), bold = mean ± SEM.
+    """
+    rng = np.random.default_rng(0)
+    has_any = False
+    for j, m in enumerate(models):
+        dfs = cache.get((roi, m))
+        if dfs is None or dfs[1] is None or par not in dfs[1].columns:
+            continue
+        per_sub = dfs[1].groupby("subject")[par].median().dropna()
+        if len(per_sub) == 0:
+            continue
+        has_any = True
+        jitter = rng.uniform(-0.18, 0.18, size=len(per_sub))
+        ax.scatter(j + jitter, per_sub.values, s=14, alpha=0.4,
+                    color="#1B4965", edgecolor="none", zorder=2)
+        mu = per_sub.mean(); sem = per_sub.sem()
+        ax.errorbar([j], [mu], yerr=[sem], fmt="o", color="#E76F51",
+                    ms=8, capsize=4, capthick=1.6, zorder=5,
+                    markeredgecolor="white", markeredgewidth=1.2)
+    ax.set_xticks(range(len(models)))
+    ax.set_xticklabels([MODEL_LABELS[m].split()[0] for m in models],
+                       fontsize=8)
+    ax.set_xlim(-0.5, len(models) - 0.5)
+    ax.grid(axis="y", alpha=0.2)
+    if ylim is not None: ax.set_ylim(*ylim)
+    if ref_line is not None:
+        ax.axhline(ref_line, color="0.4", lw=0.6, ls=":", alpha=0.6)
+    if not has_any:
+        ax.text(0.5, 0.5, "no data", ha="center", va="center",
+                transform=ax.transAxes, fontsize=8, color="0.6")
+
+
+# (parameter, ylabel, ylim, ref_line) for the swarm pages.
+# ref_line = canonical reference value (e.g. 5s for hrf_delay, 4 for
+# srf_size from m2 seed). N/A cells (param missing from model) are
+# rendered blank with a small "N/A" label.
+SWARM_PAGES = [
+    ("r2",                "Median R²",                (0, 0.30),  None),
+    ("sd",                "Median σ (°)",             (0, 1.5),   None),
+    ("amplitude",         "Median amplitude",         None,       None),
+    ("baseline",          "Median baseline",          None,       0.0),
+    ("srf_size",          "Median srf_size",          (0, 12),    4.0),
+    ("srf_amplitude",     "Median srf_amplitude",     (0, 1.0),   None),
+    ("rf_amplitude",      "Median rf_amplitude (DN)", None,       None),
+    ("neural_baseline",   "Median neural_baseline",   None,       1.0),
+    ("surround_baseline", "Median surround_baseline", None,       1.0),
+    ("bold_baseline",     "Median bold_baseline",     None,       0.0),
+    ("hrf_delay",         "Median HRF delay (s)",     (3, 8),     5.0),
+    ("hrf_dispersion",    "Median HRF dispersion",    (0, 3),     1.0),
+]
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--bids-folder", default="/data/ds-retsupp")
@@ -194,6 +248,28 @@ def main():
                         ax.set_ylabel(roi, fontsize=11, weight="bold",
                                        rotation=0, ha="right", va="center")
             fig.suptitle(f"GROUP — {page_title}", weight="bold")
+            fig.tight_layout(rect=(0, 0, 1, 0.97))
+            pdf.savefig(fig); plt.close(fig)
+
+        # Pointplot pages: rows=ROIs, x=model. One row per ROI,
+        # bold red dot = mean ± SEM across subjects, faint blue dots =
+        # per-subject medians (jittered around the model x-position).
+        for par, ylabel, ylim, ref in SWARM_PAGES:
+            fig, axes = plt.subplots(n_rows, 1,
+                                      figsize=(1.0 * n_cols + 2.5,
+                                                1.2 * n_rows),
+                                      sharex=True, squeeze=False)
+            for i, roi in enumerate(args.rois):
+                ax = axes[i, 0]
+                panel_pointplot(ax, cache, roi, par, MODELS,
+                                 ylim=ylim, ref_line=ref)
+                ax.set_ylabel(f"{roi}\n{ylabel}", fontsize=9,
+                               rotation=0, ha="right", va="center",
+                               labelpad=12)
+            fig.suptitle(
+                f"GROUP — {ylabel} per subject (mean ± SEM; "
+                "FDR-surviving voxels)",
+                weight="bold")
             fig.tight_layout(rect=(0, 0, 1, 0.97))
             pdf.savefig(fig); plt.close(fig)
 
