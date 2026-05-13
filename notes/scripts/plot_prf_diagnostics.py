@@ -95,27 +95,22 @@ def cell_coverage(ax, dfs):
         ax.set_axis_off()
         return
     well = dfs[1]
-    if len(well) >= 30:
-        # Subsample for KDE speed; ROIs can have 30k+ voxels and
-        # gaussian_kde scales O(N²) in evaluation.
-        sample = (well.sample(n=4000, random_state=0)
-                   if len(well) > 4000 else well)
-        try:
-            sns.kdeplot(x=sample["x"], y=sample["y"], ax=ax,
-                         fill=True, cmap="viridis", levels=8,
-                         thresh=0.05, bw_adjust=0.7)
-        except Exception:
-            ax.scatter(well["x"], well["y"], s=2, alpha=0.3,
-                        color="#1B4965")
+    if len(well) >= 20:
+        # hexbin: faithful per-cell count with log color scale. KDE
+        # was tried earlier but its Gaussian smoothing artificially
+        # pulled density toward the centre — peripheral points
+        # contributed mass to the foveal cluster via overlapping blobs.
+        ax.hexbin(well["x"], well["y"], gridsize=20, cmap="viridis",
+                  bins="log", extent=(-5, 5, -5, 5), mincnt=1)
     else:
         ax.scatter(well["x"], well["y"], s=3, alpha=0.7,
                     color="#1B4965")
     ax.add_patch(Circle((0, 0), APERTURE_R, facecolor="none",
-                         edgecolor="black", lw=1.0, ls="--", alpha=0.7))
+                         edgecolor="white", lw=1.0, ls="--", alpha=0.8))
     ax.set_xlim(-5, 5); ax.set_ylim(-5, 5); ax.set_aspect("equal")
     ax.set_xticks([-3, 0, 3]); ax.set_yticks([-3, 0, 3])
     ax.text(0.02, 0.98, f"n={len(well)}", transform=ax.transAxes,
-            color="black", fontsize=6, va="top")
+            color="white", fontsize=6, va="top")
 
 
 def cell_r2_hist(ax, dfs):
@@ -168,9 +163,9 @@ def cell_sd_vs_ecc(ax, dfs):
 
 # Per-model pages: each cell = (subject, model)
 PER_MODEL_PAGES = [
-    ("PRF center coverage (well-fit, r²>0.05)", cell_coverage),
-    ("R² distribution (log-y)", cell_r2_hist),
-    ("σ vs eccentricity (well-fit)", cell_sd_vs_ecc),
+    ("PRF center coverage (FDR-surviving voxels, α=0.05)", cell_coverage),
+    ("R² distribution (log-y; FDR-surviving count annotated)", cell_r2_hist),
+    ("σ vs eccentricity (FDR-surviving voxels)", cell_sd_vs_ecc),
 ]
 
 # R² pair pages: each cell = (subject, (model_y, model_x))
