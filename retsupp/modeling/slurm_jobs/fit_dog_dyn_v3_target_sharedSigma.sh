@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=dog_dyn_target_shS
-#SBATCH --account=zne.uzh
+#SBATCH --account=hare.econ.uzh
+#SBATCH --partition=lowprio
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=24G
@@ -28,7 +29,9 @@
 #   subject = SUB_IDS[ idx0 // 8 ]
 #   roi     = ROIS[    idx0 %  8 ]
 
-set -euo pipefail
+set -eo pipefail   # no -u: conda's activate-*.d/ touches unbound vars
+
+sleep $(( RANDOM % 30 ))   # NFS dogpile defense; harmless when sparse
 
 # --- Logging. ---
 LOGFILE="$HOME/logs/dog_dyn_v3_target_sharedSigma_${SLURM_JOB_NAME:-target_shS}_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID:-0}.txt"
