@@ -23,16 +23,10 @@ Two project conda envs are used. Definitions live under `create_env/` (sometimes
 
 Both *should* pip-install `libs/braincoder` (git submodule, Gilles's fork) and the local package as `-e .`.
 
-**Cluster install state (verified 2026-05-11):**
-
-| Env | Has braincoder? | Notes |
-|---|---|---|
-| `retsupp` | ❌ NO | Env exists but install never finished — braincoder is missing. Local `retsupp` (macOS) does have it. |
-| `retsupp_cuda` | ✓ yes | Use this for cluster CPU **and** GPU jobs until `retsupp` is rebuilt. TF on CUDA falls back to CPU automatically when no GPU is requested. |
-| `retsupp_neuropythy` | n/a | Standalone env for `neuropythy/register_retinotopy.py` and other neuropythy-based atlas work. Doesn't have braincoder/TF — purpose-built for the retinotopic-atlas pipeline (varea, eccen, angle, sigma maps). |
-| `neural_priors2` | ✓ yes | Borrowed env; do not use in new scripts. |
-
-**Until cluster `retsupp` is rebuilt, NEW cluster SLURM scripts should `conda activate retsupp_cuda`** (even for CPU-only jobs). Once `retsupp` is rebuilt with braincoder installed, switch CPU jobs back to it. Do NOT use `neural_priors2`. Several legacy SLURM scripts still source `neural_priors2` — preserve that name only when editing those legacy scripts.
+**Cluster env quirks** (verified 2026-05-13):
+- `retsupp` (cluster) is incomplete — braincoder isn't installed. Use `retsupp_cuda` for both CPU and GPU jobs on the cluster until `retsupp` is rebuilt. TF on CUDA falls back to CPU automatically when no GPU is requested.
+- `retsupp_neuropythy` — purpose-built for `neuropythy/register_retinotopy.py`. No braincoder/TF.
+- `neural_priors2` — borrowed env; do not use in new scripts.
 
 When sourcing conda inside a SLURM script, wrap the activation in `set +u` / `set -u` if the script uses `set -euo pipefail`, because conda's `activate-*.d/` hooks for some packages reference unbound variables (`ADDR2LINE`, `AR`, ...) and would abort under `set -u`.
 
@@ -118,75 +112,45 @@ All SLURM scripts:
 
 ### SLURM job-name convention
 
-Always set an informative `--job-name`. It is what shows up in
-`squeue`, `sacct`, and task-notifications; a generic value (`prf_l4`,
-`myjob`) is useless when the queue scrolls. Encode *what* + key
-parameters — analysis name, model index when relevant, subject id when
-one task = one subject. Examples:
-
-- `prf_m1_sub-02`     — model-1 PRF fit, subject 2
-- `prf_merge_m1`      — merge chunked model-1 outputs
-- `glmsingle_sub-08`  — GLMsingle for sub-08
-- `bench_V100_30000`  — benchmark, V100, chunk size 30k
+Always set an informative `--job-name`. Encode *what* + key parameters
+(analysis name, model index, subject id). Generic names like `prf_gpu`
+are useless when the queue scrolls. Examples: `prf_m1_sub-02`,
+`prf_merge_m1`, `glmsingle_sub-08`.
 
 For array jobs whose name can't be set at submit time, rename
-in-script once `MODEL` / `SLURM_ARRAY_TASK_ID` are known:
+in-script once env vars are known:
 
 ```bash
 scontrol update jobid="${SLURM_JOB_ID}" \
     name="prf_m${MODEL}_sub-$(printf %02d $SLURM_ARRAY_TASK_ID)"
 ```
 
-`fit_prf_l4.sh` does this — squeue shows `prf_m3_sub-05` once the
-array task starts, instead of the SBATCH-default `prf_gpu`.
+**Caveat:** SLURM's `JobName` field is array-shared — whichever task
+calls `scontrol update` last wins the displayed name for ALL sibling
+tasks. So don't try to bake the array task index (e.g. chunk_idx)
+into the name; it would mislead in squeue. The task index is always
+visible in the `_N` suffix of the JobID column anyway.
 
 ### Avoid the "user env retrieval failed" dogpile
 
-When you submit a large array (~500+ tasks) on this cluster, hundreds
-of jobs will start within seconds of each other. They all then attempt
-to read `$HOME/.bashrc` and the rest of the user-profile chain at the
-same instant. The NFS server hosting `$HOME` can't keep up, so a
-fraction of tasks fail with `user env retrieval failed requeued held`
-and end up stuck pending. They don't auto-retry; you have to
-`scontrol release <jobid>` them by hand.
+Submitting a large array (~500+ tasks) lets all tasks start within
+seconds of each other; they then dogpile the NFS server reading
+`$HOME/.bashrc` and a fraction fail with `user env retrieval failed
+requeued held`. Held tasks don't auto-retry — release with
+`scontrol release <jobid>`.
 
-**Primary mitigation: SLURM array throttle.** Cap how many array
-tasks run simultaneously, e.g. `--array=1-1620%150` runs at most 150
-concurrently. SLURM's task-launch phase (which reads `$HOME` from
-autofs) is what fails when too many tasks start at once; the throttle
-bounds that. Default `%150` is a *guess* — empirically:
+**Fix: throttle the array.** `--array=1-N%150` runs at most 150
+concurrent tasks (caps SLURM's task-launch phase, which is what
+reads `$HOME`). `%150` is conservative; push higher if clean runs.
+The per-subject submitter naturally avoids this (only ~10 chunks
+per subject at a time).
 
-- `%no-throttle` with 1620 tasks: ~40% FAIL at startup
-- `%no-throttle` with 639 tasks (and our 60s jitter): still many held
-- `%50, %150, %300` not yet measured — adjust based on observed
-  failure rate
-
-Note this also caps RUNNING tasks, so throughput trades off against
-NFS safety. If `%150` produces clean runs with no held tasks, you can
-push higher next time.
-
-**Secondary: random startup jitter** inside the bash script. This
-runs AFTER SLURM's prolog (so it does NOT help with "user env
-retrieval failed"), but it does spread out the in-script NFS reads
-(`source conda.sh`, etc.). Kept as defense-in-depth:
+Recovery if held tasks accumulate:
 
 ```bash
-# Spread out NFS profile reads across a 60-second window.
-sleep $(( (RANDOM % 60) + 1 ))
+squeue --me -t PD -r --format="%i %r" | grep -i "user env" |
+    awk '{print $1}' | xargs -I {} scontrol release {}
 ```
-
-If you still see held tasks despite both mitigations, release them:
-
-```bash
-held=$(squeue --me -t PD -r --format="%i %r" | grep -i "user env" | awk '{print $1}')
-echo "$held" | xargs -I {} scontrol release {}
-```
-
-The provided `submit_prf_chunked.sh` already applies `%50` throttle
-by default; override via `THROTTLE=N bash submit_prf_chunked.sh ...`.
-- Source `$HOME/init_conda.sh` then `source activate neural_priors2`.
-
-There is no `--account=zne.uzh` in these scripts — add it when creating new ones (cluster requirement per global instructions).
 
 ### NIfTI dtype trap
 
@@ -237,9 +201,9 @@ failure in sub-15 only stops sub-15's downstream models; subs 1-14 and
 subject's* chain from the failed phase, not patching up a 1620-task
 array.
 
-Use the per-subject submitter (`submit_prf_sweep_persub.sh`) for new
-runs. The old phase-wide `submit_prf_sweep_chunked.sh` is kept for
-reference but is brittle on a busy / flaky cluster.
+Use `submit_prf_sweep_persub.sh` for new runs — it chains
+cache → m1 → m2/m3 → m4/m5 → m6 plus surface sampling + neuropythy
+per model, all with per-subject afterok deps.
 
 ## Notebooks
 
@@ -306,5 +270,4 @@ and routinely confuses people. Same goes for `sigma_AF`,
 
 `notes/` holds standalone working notes:
 - `rsync_commands.md` — useful rsync recipes for pulling specific derivatives subsets from the cluster.
-- `VSS2026.pdf` — Dock Duncan's draft VSS 2026 talk slides (figures TBD).
-- `sumiya_thesis_A_Light_of_Our_Own.pdf` — Sumiya Sheikh Abdirashid's thesis. Chapter 2 (offset constants in attention field models) is directly relevant — see `notes/sumiya_implementation_plan.md` if present.
+- `sumiya_implementation_plan.md` — implementation notes for the offset-constants attention-field model (from Sumiya Sheikh Abdirashid's thesis, Chapter 2).
