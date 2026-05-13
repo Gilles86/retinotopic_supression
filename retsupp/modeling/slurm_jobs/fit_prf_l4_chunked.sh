@@ -73,8 +73,11 @@ LOGFILE="$HOME/logs/prf_chunked_m${MODEL}_${KIND}_sub-${sub_pad}_chunk-${chunk_i
 mkdir -p "$(dirname "$LOGFILE")"
 exec >"$LOGFILE" 2>&1
 
+# SLURM's Name field is array-shared — whichever task renames last wins
+# for ALL tasks. Don't put chunk_idx here (it would mislead in squeue).
+# The chunk index is recoverable from the array task suffix on JobID.
 scontrol update jobid="${SLURM_JOB_ID}" \
-    name="prf_m${MODEL}_${KIND}_sub-${sub_pad}_c${chunk_idx}" 2>/dev/null || true
+    name="prf_m${MODEL}_${KIND}_sub-${sub_pad}" 2>/dev/null || true
 
 echo "Host: $(hostname) | sub-${subject} | model ${MODEL} | kind ${KIND}"
 echo "  chunk ${chunk_idx}/${N_CHUNKS}  array_task=${SLURM_ARRAY_TASK_ID}"
