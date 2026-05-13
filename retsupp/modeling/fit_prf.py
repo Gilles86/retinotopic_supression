@@ -396,7 +396,13 @@ def save_pars(pars: pd.DataFrame, masker, target_dir: Path, subject: int):
         p['theta'] = np.arctan2(p['y'], p['x'])
         p['ecc'] = np.sqrt(p['x'] ** 2 + p['y'] ** 2)
     for col in p.columns:
-        masker.inverse_transform(p[col].values).to_filename(
+        img = masker.inverse_transform(p[col].values)
+        # Force float32 — see retsupp/CLAUDE.md §"NIfTI dtype trap".
+        # Without this, the inherited uint8 mask dtype + auto scl_slope
+        # quantizes every parameter to 256 bins across the brain.
+        img.set_data_dtype(np.float32)
+        img.header.set_slope_inter(slope=1, inter=0)
+        img.to_filename(
             target_dir / f'sub-{subject:02d}_desc-{col}.nii.gz')
 
 

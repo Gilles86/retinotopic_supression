@@ -188,6 +188,10 @@ by default; override via `THROTTLE=N bash submit_prf_chunked.sh ...`.
 
 There is no `--account=zne.uzh` in these scripts — add it when creating new ones (cluster requirement per global instructions).
 
+### NIfTI dtype trap
+
+See global CLAUDE.md §"NIfTI dtype trap" — every `inverse_transform().to_filename()` must explicitly set `float32` + clear scl_slope/scl_inter, or the output is uint8-quantized to 256 unique values across the brain. Already wrapped in `fit_prf.save_pars` and `modeling/merge_prf_chunks.py`. Hit by retsupp PRF pipeline 2026-05-13.
+
 ### Lowprio partition for GPU PRF fits
 
 When `standard` partition is congested (our jobs sit `(Priority)` for

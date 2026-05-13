@@ -66,8 +66,16 @@ def main(subject: int, model: int, bids_folder: str = '/data/ds-retsupp',
     masker.fit()
     out_dir.mkdir(parents=True, exist_ok=True)
     for col in pars.columns:
-        masker.inverse_transform(pars[col].values).to_filename(
-            out_dir / f'sub-{subject:02d}_desc-{col}.nii.gz')
+        img = masker.inverse_transform(pars[col].values)
+        # The BOLD mask is uint8 (datatype=2). Without an explicit cast
+        # here, nilearn lets nibabel inherit that dtype + auto-pick a
+        # scl_slope to fit the output range, quantizing per-voxel values
+        # to 256 bins (with outliers up to ~50000, real values around 0
+        # get crushed into 1-2 bins — the merged amplitude looks like
+        # ~30 unique values across the whole brain). Force float32.
+        img.set_data_dtype(np.float32)
+        img.header.set_slope_inter(slope=1, inter=0)
+        img.to_filename(out_dir / f'sub-{subject:02d}_desc-{col}.nii.gz')
     print(f"Merged {len(chunks)} chunks -> {out_dir} ({len(pars.columns)} params)")
 
     if not keep_chunks:
