@@ -1083,6 +1083,88 @@ class Subject(object):
         else:
             raise ValueError("type must be 'mean', 'runwise', or 'conditionwise'")
 
+    def get_prf_roi_pars(self, roi: str, model: int = 4,
+                         params=None, cache: bool = True,
+                         force_refresh: bool = False) -> pd.DataFrame:
+        """Per-voxel PRF parameters restricted to one ROI, cached as NPZ.
+
+        For each `(subject, model, roi)`, extracts the chosen parameters
+        from the volumetric NIfTIs and masks them to the ROI. Returns a
+        DataFrame with one row per voxel and columns = parameter names.
+
+        Caching: if `cache=True`, writes/reads
+        `<bids>/derivatives/prf_roi_cache/model{M}/sub-XX/{roi}.npz`.
+        Cache is reused when the latest source-NIfTI mtime is ≤ the
+        mtime recorded in the cache; otherwise re-extracted.
+
+        Args:
+            roi: ROI name accepted by `get_retinotopic_roi`
+                 (e.g. 'V1', 'V1_L', 'V3AB', 'IPS').
+            model: PRF model index (default 4).
+            params: which parameter NIfTIs to extract. Default is
+                the union of {'x', 'y', 'sd', 'r2'} and the parameter
+                labels reported by `get_prf_parameter_labels(model)`.
+            cache: whether to read/write the on-disk cache.
+            force_refresh: if True, ignore the cache and re-extract.
+
+        Returns:
+            pd.DataFrame indexed 0..N-1 (one row per ROI voxel), with
+            one column per requested parameter (float32).
+        """
+        from time import time
+        base_dir = (self.bids_folder / 'derivatives' / 'prf'
+                    / f'model{model}' / f'sub-{self.subject_id:02d}')
+        if params is None:
+            base_pars = ('x', 'y', 'sd', 'r2')
+            label_pars = tuple(self.get_prf_parameter_labels(model=model))
+            params = list(dict.fromkeys(base_pars + label_pars))
+
+        src_paths = [base_dir
+                     / f'sub-{self.subject_id:02d}_desc-{par}.nii.gz'
+                     for par in params]
+        missing = [p for p in src_paths if not p.exists()]
+        if missing:
+            raise FileNotFoundError(
+                f"PRF NIfTIs missing for sub-{self.subject_id:02d} "
+                f"model {model}: {[p.name for p in missing[:3]]}")
+        src_mtime = max(p.stat().st_mtime for p in src_paths)
+
+        # Cache fast-path: if the npz is fresh and covers the requested
+        # params, return without ever touching the ROI atlas
+        # (get_retinotopic_roi loads + resamples varea — ~1s).
+        cache_path = (self.bids_folder / 'derivatives' / 'prf_roi_cache'
+                      / f'model{model}' / f'sub-{self.subject_id:02d}'
+                      / f'{roi}.npz')
+        if cache and not force_refresh and cache_path.exists():
+            with np.load(cache_path, allow_pickle=False) as d:
+                cached_mtime = float(d['source_mtime'])
+                cached_params = [str(p) for p in d['params']]
+                if (cached_mtime >= src_mtime
+                        and set(params).issubset(cached_params)):
+                    return pd.DataFrame(
+                        {p: d[f'col_{p}'] for p in params})
+
+        # Cache miss → load mask + extract.
+        roi_img = self.get_retinotopic_roi(roi=roi, bold_space=True)
+        roi_mask = np.asarray(roi_img.get_fdata(), dtype=bool)
+        if not roi_mask.any():
+            return pd.DataFrame({p: np.array([], dtype=np.float32)
+                                 for p in params})
+        flat = roi_mask.ravel()
+        cols = {}
+        for par, path in zip(params, src_paths):
+            arr = nib.load(str(path)).get_fdata().ravel()[flat]
+            cols[par] = arr.astype(np.float32)
+        df = pd.DataFrame(cols)
+
+        if cache:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            np.savez(cache_path,
+                     source_mtime=np.float64(src_mtime),
+                     params=np.array(params),
+                     **{f'col_{p}': cols[p] for p in params})
+        return df
+
     def _extract_param_arr(self, fn, roi):
         if roi is None:
             masker = self.get_bold_mask(return_masker=True)

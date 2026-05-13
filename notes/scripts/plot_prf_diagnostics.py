@@ -54,30 +54,19 @@ APERTURE_R = 3.17  # bar PRF mapping aperture, degrees
 def load_roi_voxels(sub: Subject, roi: str, model: int):
     """Return (all_df, well_df) for one (subject, model, ROI).
 
-    ``all_df`` has every voxel in the ROI with sd > 0 (active);
-    ``well_df`` is the subset passing FDR + aperture + σ filters via
-    :func:`select_well_fit_voxels`. Returns ``(None, None)`` if the
-    NIfTI is missing.
+    Uses :meth:`Subject.get_prf_roi_pars` — extracts x/y/sd/r2 from
+    NIfTIs once per (subject, model, ROI), then caches as NPZ for
+    later runs. Cache is invalidated when source-NIfTI mtimes change.
+
+    ``well_df`` is the subset of ``all_df`` (sd > 1e-3) passing
+    FDR + aperture + σ filters. Returns ``(None, None)`` if NIfTIs
+    are missing.
     """
-    bids = sub.bids_folder
-    base = bids / "derivatives" / "prf" / f"model{model}" / f"sub-{sub.subject_id:02d}"
-    r2_path = base / f"sub-{sub.subject_id:02d}_desc-r2.nii.gz"
-    if not r2_path.exists():
-        return None, None
     try:
-        roi_img = sub.get_retinotopic_roi(roi, bold_space=True)
-    except Exception:
+        df = sub.get_prf_roi_pars(roi=roi, model=model,
+                                   params=["x", "y", "sd", "r2"])
+    except (FileNotFoundError, Exception):
         return None, None
-    roi_mask = np.asarray(roi_img.get_fdata(), dtype=bool).ravel()
-    if roi_mask.sum() == 0:
-        return None, None
-    pars = {}
-    for p in ("x", "y", "sd", "r2"):
-        f = base / f"sub-{sub.subject_id:02d}_desc-{p}.nii.gz"
-        if not f.exists():
-            return None, None
-        pars[p] = nib.load(f).get_fdata().ravel()[roi_mask]
-    df = pd.DataFrame(pars)
     df = df[df["sd"] > 1e-3].reset_index(drop=True)
     if len(df) == 0:
         return df, df
