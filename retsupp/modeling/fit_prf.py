@@ -367,13 +367,28 @@ def load_prior_pars(subject: int, model_label: int, derivs: Path,
     df = pd.DataFrame(pars)
     if sd_min is not None:
         floor = sd_min * 1.01
+        # Non-degenerate reset for sentinel-zero / NaN voxels — start from
+        # a sensible σ so GD has a chance instead of pinning to the floor.
+        # Matches grid σ_low (see grid_fit:287).
+        sentinel_reset_sd = max(1.0, sd_min * 5)
         if 'sd' in df.columns:
             s = df['sd'].to_numpy()
+            # σ=0 / NaN are sentinel-invalid voxels: reset to a non-degenerate
+            # init so the strict σ > sd_min softplus_inverse assertion passes.
+            # These voxels still get filtered by R² FDR downstream.
+            bad = ~np.isfinite(s) | (s == 0)
+            if bad.any():
+                df.loc[bad, 'sd'] = sentinel_reset_sd
+            # σ ∈ (0, sd_min] are legitimate m1 fits that collapsed to floor —
+            # bump just above floor to satisfy strict assertion.
             mask = (s > 0) & (s <= sd_min)
             if mask.any():
                 df.loc[mask, 'sd'] = floor
         if 'srf_size' in df.columns:
             r = df['srf_size'].to_numpy()
+            bad = ~np.isfinite(r) | (r == 0)
+            if bad.any():
+                df.loc[bad, 'srf_size'] = 4.0  # matches _adapt_m2_from_m1 seed
             mask = (r > 0) & (r <= 1.0)
             if mask.any():
                 df.loc[mask, 'srf_size'] = 1.01
