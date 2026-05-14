@@ -83,12 +83,11 @@ SCRIPT="$HOME/git/retsupp/retsupp/modeling/fit_dog_dynamic_af_braincoder.py"
 
 echo "Running v3 + target + sharedSigma fit for sub-${subject}, roi=${roi}"
 
-# When USE_FDR=1, pass r2_thr=-1 → fit_dog_dynamic_af_braincoder.py
-# queries Subject.get_r2_fdr_threshold(model=4, roi, alpha=0.05) for the
-# per-(subject, ROI) mixture tail-FDR threshold instead of using a
-# fixed 0.05 hard threshold.
-R2_FLAG=""
-[[ "${USE_FDR:-0}" == "1" ]] && R2_FLAG="--r2_thr -1"
+# Voxel selection: posterior-based via the logit-GMM p_signal NIfTI.
+#   PSIGNAL_THR (default 0.95)        → keep voxels with P(signal | R²) > this
+#   APERTURE_MASS_THR (default 0)     → optional: also require PRF mass inside
+#                                       bar aperture ≥ this. 0 to skip.
+# Variants are segregated by output_subdir (Python appends _pSig{thr}[_apt{thr}]).
 
 "$PYTHON" -u "$SCRIPT" \
     "$subject" \
@@ -103,6 +102,7 @@ R2_FLAG=""
     --sigma-dyn-init 2.0 \
     --sigma-t-dyn-init 2.0 \
     --g-t-dyn-init 0.0 \
-    $R2_FLAG
+    --p-signal-thr "${PSIGNAL_THR:-0.95}" \
+    --aperture-mass-thr "${APERTURE_MASS_THR:-0}"
 
 echo "Finished:    $(date)"

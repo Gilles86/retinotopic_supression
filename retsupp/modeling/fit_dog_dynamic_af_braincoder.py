@@ -306,15 +306,14 @@ def select_roi_voxels(sub: Subject, roi: str, prf_pars: pd.DataFrame,
                        sd_min: float = 0.05):
     """Boolean voxel mask: ROI ∧ (r2_thr < R² < r2_max) ∧ (sd > sd_min).
 
-    The ``r2_max`` upper bound drops phantom voxels — m4 (DoG flex-HRF)
-    sometimes collapses σ → 0, producing NaN model predictions, which
-    ``(resid**2).sum(skipna=True)`` reduces to 0, giving R²=1.0. These
-    phantom voxels store identical degenerate parameters across
-    thousands of voxels; without this filter they monopolise the top-N
-    selection by R² and corrupt the AF fit.
+    Legacy R²-based selector. The ``r2_max`` upper bound drops phantom
+    voxels — m4 (DoG flex-HRF) sometimes collapses σ → 0, producing NaN
+    model predictions, which ``(resid**2).sum(skipna=True)`` reduces to
+    0, giving R²=1.0. The ``sd_min`` filter also drops collapsed-σ
+    voxels (some have R²<1 but σ ≈ 0).
 
-    The ``sd_min`` filter also drops collapsed-σ voxels (some have R²<1
-    but σ ≈ 0).
+    Use :func:`select_roi_voxels_psignal` when you want the posterior-
+    based selector that consumes the GMM ``p_signal`` NIfTI directly.
     """
     roi_aliases = {
         'V3AB': ['V3A', 'V3B'],
@@ -335,13 +334,82 @@ def select_roi_voxels(sub: Subject, roi: str, prf_pars: pd.DataFrame,
     return (r2 > r2_thr) & (r2 < r2_max) & (sd > sd_min) & roi_arr
 
 
+def select_roi_voxels_psignal(
+        sub: Subject, roi: str, prf_pars: pd.DataFrame,
+        *,
+        model_label: int,
+        p_signal_thr: float,
+        aperture_mass_thr: float = 0.0,
+        aperture_radius: float = 3.17):
+    """Boolean voxel mask using the GMM per-voxel ``p_signal`` posterior.
+
+    Drops all the legacy R²-band-aids (``r2_max``, ``sd_min``,
+    fixed-α R²-FDR threshold) — the logit-Gaussian mixture's per-voxel
+    posterior already handles phantom voxels (p_signal → 0 at R² → 1)
+    and σ-collapsed voxels (low R² → low p_signal).
+
+    Args:
+        sub, roi, prf_pars: as :func:`select_roi_voxels`.
+        model_label: PRF model whose ``desc-p_signal.nii.gz`` to read.
+        p_signal_thr: keep voxels with P(signal | R²) > this. 0.95
+            ≈ "individually ≥95% likely to be signal".
+        aperture_mass_thr: optional aperture-mass filter. If > 0, also
+            require ≥ this fraction of the PRF Gaussian's mass to fall
+            inside the bar-paradigm aperture (Gaussian radial-CDF
+            approximation; matches
+            ``retsupp.utils.data.select_well_fit_voxels``). Set 0 to
+            skip — useful for testing whether peripheral-RF voxels
+            change the AF result.
+        aperture_radius: aperture radius in deg (retsupp default 3.17).
+    """
+    from scipy.stats import norm
+
+    roi_aliases = {
+        'V3AB': ['V3A', 'V3B'],
+        'LO': ['LO1', 'LO2'],
+        'TO': ['TO1', 'TO2'],
+        'VO': ['VO1', 'VO2'],
+    }
+    component_rois = roi_aliases.get(roi, [roi])
+
+    masker_full = sub.get_bold_mask(return_masker=True)
+    masker_full.fit()
+    roi_arr = np.zeros(prf_pars.shape[0], dtype=bool)
+    for r in component_rois:
+        roi_img = sub.get_retinotopic_roi(roi=r, bold_space=True)
+        roi_arr |= masker_full.transform(roi_img).astype(bool).flatten()
+
+    # Per-voxel p_signal NIfTI written by run_r2_mixture_all (NaN for
+    # voxels outside any per-ROI fit / below count threshold).
+    p_sig_path = (sub.bids_folder / 'derivatives' / 'prf'
+                   / f'model{model_label}' / f'sub-{sub.subject_id:02d}'
+                   / f'sub-{sub.subject_id:02d}_desc-p_signal.nii.gz')
+    if not p_sig_path.exists():
+        raise FileNotFoundError(
+            f'p_signal NIfTI missing for sub-{sub.subject_id:02d} '
+            f'model {model_label}: {p_sig_path}. Run r2_mixture first.')
+    p_sig = masker_full.transform(str(p_sig_path)).flatten()
+    # NaN treated as False (not signal).
+    sig_ok = np.isfinite(p_sig) & (p_sig > p_signal_thr)
+
+    mask = roi_arr & sig_ok
+    if aperture_mass_thr > 0:
+        x = prf_pars['x'].to_numpy()
+        y = prf_pars['y'].to_numpy()
+        sd = prf_pars['sd'].to_numpy()
+        sd_safe = np.where(np.isfinite(sd) & (sd > 0.05), sd, 0.05)
+        eccen = np.sqrt(x ** 2 + y ** 2)
+        mass_in = 1.0 - norm.cdf((eccen - aperture_radius) / sd_safe)
+        mask &= np.isfinite(mass_in) & (mass_in >= aperture_mass_thr)
+    return mask
+
+
 def main(subject: int, bids_folder: str = '/data/ds-retsupp',
          roi: str = 'V3AB',
          resolution: int = 50,
          max_n_iterations: int = 1500,
-         r2_thr: float = 0.05,
-         r2_max: float = 0.999,
-         sd_min: float = 0.05,
+         p_signal_thr: float = 0.95,
+         aperture_mass_thr: float = 0.0,
          model_label: int = 4,
          max_voxels: int | None = 500,
          mode: str = 'signed',
@@ -458,6 +526,13 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
             # Keep rectangle fits in their own folder so they don't
             # overwrite the canonical circle baseline.
             base = f'{base}_rect'
+        if p_signal_thr > 0:
+            # Posterior-based voxel selection — segregate from legacy
+            # R²-FDR runs so the two can be compared.
+            tag = f'pSig{p_signal_thr:g}'
+            if aperture_mass_thr > 0:
+                tag = f'{tag}_apt{aperture_mass_thr:g}'
+            base = f'{base}_{tag}'
         output_subdir = base
     out_dir = bids_folder / 'derivatives' / output_subdir / f'sub-{subject:02d}'
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -496,32 +571,24 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
         distractor_short_side=distractor_short_side,
     )
 
-    # 2) Restrict to ROI voxels with decent mean-model PRF R².
-    # When r2_thr<0 (e.g. -1 from --use-fdr), query the per-ROI mixture
-    # tail-FDR threshold from the cached p_signal.json sidecar (see
-    # Subject.get_r2_fdr_threshold + compute_r2_mixture).
-    effective_r2_thr = r2_thr
-    if r2_thr < 0:
-        try:
-            effective_r2_thr = float(sub.get_r2_fdr_threshold(
-                model=model_label, roi=roi, alpha=0.05))
-            print(f'  mixture-FDR threshold (α=0.05) for ROI={roi}: '
-                  f'r²>{effective_r2_thr:.4f}')
-        except Exception as e:
-            raise RuntimeError(
-                f'--use-fdr requested but mixture sidecar missing for '
-                f'sub-{sub.subject_id:02d} model {model_label} ROI {roi}: {e}')
+    # 2) Restrict to ROI voxels via the logit-GMM per-voxel p_signal
+    #    posterior. No R²/σ band-aids — the mixture handles phantom and
+    #    σ-collapsed voxels naturally (p_signal → 0 at R²→1 and at low R²).
     prf_pars = sub.get_prf_parameters_volume(model=model_label, return_images=False)
     if not isinstance(prf_pars, pd.DataFrame):
         prf_pars = pd.DataFrame(prf_pars)
-    voxel_mask = select_roi_voxels(sub, roi, prf_pars,
-                                     r2_thr=effective_r2_thr, r2_max=r2_max,
-                                     sd_min=sd_min)
-    print(f'ROI {roi} | {effective_r2_thr:.4f} < r² < {r2_max}, sd > {sd_min}: '
-          f'{voxel_mask.sum()} voxels')
+
+    voxel_mask = select_roi_voxels_psignal(
+        sub, roi, prf_pars,
+        model_label=model_label,
+        p_signal_thr=p_signal_thr,
+        aperture_mass_thr=aperture_mass_thr)
+    descr = (f'ROI {roi} | p_signal > {p_signal_thr}'
+             + (f' AND mass_in ≥ {aperture_mass_thr}'
+                if aperture_mass_thr > 0 else ''))
+    print(f'{descr}: {voxel_mask.sum()} voxels')
     if voxel_mask.sum() == 0:
-        raise RuntimeError(
-            f'No voxels survive: ROI={roi}, r2>{effective_r2_thr:.4f}.')
+        raise RuntimeError(f'No voxels survive: {descr}.')
 
     if max_voxels is not None and voxel_mask.sum() > max_voxels:
         order = np.argsort(prf_pars['r2'].values)[::-1]
@@ -747,14 +814,18 @@ if __name__ == '__main__':
     parser.add_argument('--resolution', type=int, default=50,
                         help='Stimulus grid resolution (default 50).')
     parser.add_argument('--max-n-iterations', type=int, default=1500)
-    parser.add_argument('--r2-thr', type=float, default=0.05)
-    parser.add_argument('--r2-max', type=float, default=0.999,
-                        help='Phantom filter: drop voxels with r² ≥ this. '
-                             'DoG m4 has voxels with σ→0 → NaN preds → r²=1. '
-                             '(default 0.999).')
-    parser.add_argument('--sd-min', type=float, default=0.05,
-                        help='Phantom filter: drop voxels with center σ ≤ '
-                             'this (default 0.05°).')
+    parser.add_argument('--p-signal-thr', type=float, default=0.95,
+                        help='Posterior-based voxel selector. Load the '
+                             'per-voxel GMM p_signal NIfTI and keep voxels '
+                             'with P(signal | R²) > this. Default 0.95 '
+                             '(each kept voxel ≥ 95%% likely signal).')
+    parser.add_argument('--aperture-mass-thr', type=float, default=0.0,
+                        help='Optional additional filter: keep voxels whose '
+                             'PRF Gaussian has at least this fraction of mass '
+                             'inside the bar aperture (3.17°, Gaussian '
+                             'radial-CDF). 0 to skip (lets peripheral RFs '
+                             'through — useful for comparing whether they '
+                             'matter for the AF estimate).')
     parser.add_argument('--model-label', type=int, default=4,
                         help='Mean-model PRF used for DoG-init (x, y, sd, '
                              'amplitude, baseline, srf_amplitude, srf_size). '
@@ -867,9 +938,8 @@ if __name__ == '__main__':
         roi=args.roi,
         resolution=args.resolution,
         max_n_iterations=args.max_n_iterations,
-        r2_thr=args.r2_thr,
-        r2_max=args.r2_max,
-        sd_min=args.sd_min,
+        p_signal_thr=args.p_signal_thr,
+        aperture_mass_thr=args.aperture_mass_thr,
         model_label=args.model_label,
         max_voxels=None if args.max_voxels == 0 else args.max_voxels,
         mode=args.mode,
