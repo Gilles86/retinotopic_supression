@@ -325,9 +325,32 @@ def gd_fit_scheduled(model_factory, data, paradigm, init_pars, chunk_size,
     """
     def work(idx):
         d = data[:, idx]
+        pars_full = init_pars.iloc[idx].reset_index(drop=True)
+
+        # Sentinel filter: voxels with NaN in any init parameter come from
+        # mark_invalid_fits on the upstream model (low BOLD variance / non-
+        # finite R²). They'd trip the strict σ > sd_min softplus_inverse
+        # assertion and kill the whole chunk. Drop them here, fit the rest,
+        # and re-attach NaN params + r²=0 in the result so the output shape
+        # matches masker.inverse_transform's expectations.
+        sentinel = pars_full.isna().any(axis=1).to_numpy()
+        n_sentinel = int(sentinel.sum())
+        if n_sentinel == len(pars_full):
+            # Entire chunk is sentinels — skip GD; emit all-NaN frame.
+            out = pars_full.copy()
+            out['r2'] = 0.0
+            return out
+
+        if n_sentinel:
+            valid_idx = np.where(~sentinel)[0]
+            d = d[:, valid_idx]
+            pars = pars_full.iloc[valid_idx].reset_index(drop=True)
+        else:
+            valid_idx = None
+            pars = pars_full
+
         m = model_factory(d, paradigm)
         f = ParameterFitter(m, d, paradigm)
-        pars = init_pars.iloc[idx].reset_index(drop=True)
         for stage_i, stage in enumerate(schedule, start=1):
             fixed, lr, n_iter, r2_atol = stage
             fixed_present = [p for p in fixed if p in pars.columns]
@@ -341,7 +364,17 @@ def gd_fit_scheduled(model_factory, data, paradigm, init_pars, chunk_size,
                 if derived in pars.columns:
                     pars = pars.drop(columns=[derived])
         pars['r2'] = f.get_rsq(pars).values
-        return pars
+
+        if valid_idx is None:
+            return pars
+
+        # Re-expand to the chunk's full shape: sentinels → NaN params, r²=0.
+        out = pd.DataFrame(index=range(len(pars_full)), columns=pars.columns,
+                           dtype=np.float64)
+        out.iloc[valid_idx] = pars.to_numpy()
+        out.loc[sentinel, [c for c in pars.columns if c != 'r2']] = np.nan
+        out.loc[sentinel, 'r2'] = 0.0
+        return out
 
     return chunked(work, data.shape[1], chunk_size, 'GD-sched')
 
@@ -367,28 +400,13 @@ def load_prior_pars(subject: int, model_label: int, derivs: Path,
     df = pd.DataFrame(pars)
     if sd_min is not None:
         floor = sd_min * 1.01
-        # Non-degenerate reset for sentinel-zero / NaN voxels — start from
-        # a sensible σ so GD has a chance instead of pinning to the floor.
-        # Matches grid σ_low (see grid_fit:287).
-        sentinel_reset_sd = max(1.0, sd_min * 5)
         if 'sd' in df.columns:
             s = df['sd'].to_numpy()
-            # σ=0 / NaN are sentinel-invalid voxels: reset to a non-degenerate
-            # init so the strict σ > sd_min softplus_inverse assertion passes.
-            # These voxels still get filtered by R² FDR downstream.
-            bad = ~np.isfinite(s) | (s == 0)
-            if bad.any():
-                df.loc[bad, 'sd'] = sentinel_reset_sd
-            # σ ∈ (0, sd_min] are legitimate m1 fits that collapsed to floor —
-            # bump just above floor to satisfy strict assertion.
             mask = (s > 0) & (s <= sd_min)
             if mask.any():
                 df.loc[mask, 'sd'] = floor
         if 'srf_size' in df.columns:
             r = df['srf_size'].to_numpy()
-            bad = ~np.isfinite(r) | (r == 0)
-            if bad.any():
-                df.loc[bad, 'srf_size'] = 4.0  # matches _adapt_m2_from_m1 seed
             mask = (r > 0) & (r <= 1.0)
             if mask.any():
                 df.loc[mask, 'srf_size'] = 1.01
