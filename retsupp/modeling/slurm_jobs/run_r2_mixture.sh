@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=r2_mixture
 #SBATCH --account=hare.econ.uzh
-#SBATCH --partition=lowprio
+#SBATCH --partition=standard
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=8G

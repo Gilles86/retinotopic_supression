@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=gauss_dyn_target_shS
 #SBATCH --account=hare.econ.uzh
-#SBATCH --partition=lowprio
+#SBATCH --partition=standard
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=24G
