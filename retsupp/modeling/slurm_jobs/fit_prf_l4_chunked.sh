@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=prf_chunked
 #SBATCH --account=hare.econ.uzh
-#SBATCH --partition=lowprio
+#SBATCH --partition=standard
 #SBATCH --output=/dev/null
 #SBATCH --gres=gpu:1
 # L4-only: L4 nodes have 1 GPU each, so each job owns its node and there's
