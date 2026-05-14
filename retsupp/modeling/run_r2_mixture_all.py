@@ -24,24 +24,35 @@ from retsupp.modeling.compute_r2_mixture import (
 
 
 def make_plot(sub: Subject, masker, summary: dict, p_signal_all,
-              r2: np.ndarray, rois, out_pdf: Path):
+              r2: np.ndarray, rois, out_pdf: Path,
+              fdr_alpha: float = 0.05):
+    """Per-ROI diagnostic PDF: histogram of logit(R²) + the two GMM
+    components + the tail-FDR threshold at α=``fdr_alpha``. Delegates
+    each subplot to :func:`braincoder.utils.stats.plot_r2_mixture`.
+    """
+    from braincoder.utils.stats import plot_r2_mixture
     sns.set_style('whitegrid')
-    from scipy.stats import beta as beta_dist
     n = len(rois)
     cols = (n + 1) // 2
-    fig, axes = plt.subplots(2, cols, figsize=(2.4 * cols, 6.4),
+    fig, axes = plt.subplots(2, cols, figsize=(3.6 * cols, 7.2),
                               squeeze=False)
     axes = axes.ravel()
     for i, roi in enumerate(rois):
         ax = axes[i]
         info = summary.get(roi, {})
-        if 'signal_mean' not in info:
+        if not info or 'signal_mu' not in info:
             ax.text(0.5, 0.5, f'{roi}: skipped',
                     transform=ax.transAxes, ha='center')
             ax.set_axis_off()
             continue
         if roi == 'BRAIN':
             roi_mask = np.ones(r2.size, dtype=bool)
+        elif roi == 'GM':
+            try:
+                roi_mask = masker.transform(sub.get_gm_mask(bold_space=True))\
+                                 .flatten().astype(bool)
+            except Exception:
+                ax.set_axis_off(); continue
         else:
             try:
                 roi_mask = masker.transform(
@@ -50,40 +61,19 @@ def make_plot(sub: Subject, masker, summary: dict, p_signal_all,
             except Exception:
                 ax.set_axis_off(); continue
         in_roi = roi_mask & np.isfinite(r2) & (r2 > 0) & (r2 < 0.99)
-        x = np.clip(r2[in_roi], 1e-6, 1 - 1e-6)
-        # Plot histogram on raw R² with log y-axis to expose the signal tail.
-        ax.hist(x, bins=80, density=True, color='0.85',
-                edgecolor='0.5', alpha=0.9)
-        # Beta-mixture component pdfs.
-        grid = np.linspace(1e-3, max(x.max(), 0.2), 500)
-        n_g = (beta_dist.pdf(grid, info['noise_alpha'],  info['noise_beta'])
-               * info['noise_weight'])
-        s_g = (beta_dist.pdf(grid, info['signal_alpha'], info['signal_beta'])
-               * info['signal_weight'])
-        ax.plot(grid, n_g, color='#1f77b4', lw=2, label='noise (Beta)')
-        ax.plot(grid, s_g, color='#d62728', lw=2, label='signal (Beta)')
-        ax.plot(grid, n_g + s_g, color='k', lw=1, ls='--', alpha=0.6)
-        # Threshold where p_sig=0.5.
-        p_at_grid = s_g / (n_g + s_g + 1e-12)
-        # Pick first crossing right of the noise mode.
-        start = max(0, int(np.searchsorted(grid, info['noise_mean'])))
-        seg = p_at_grid[start:]
-        cr = np.where(seg >= 0.5)[0]
-        if len(cr):
-            r2_thresh = float(grid[start + cr[0]])
-            ax.axvline(r2_thresh, color='k', ls=':', lw=1.3,
-                        label=f'p_sig=0.5\n(R²={r2_thresh:.3f})')
-        n_sig = (p_signal_all[in_roi] > 0.5).sum()
-        ax.set_title(f'{roi}  ({in_roi.sum()} vox; {n_sig} signal)',
-                     fontsize=10, weight='bold')
-        ax.set_xlabel('R²', fontsize=8)
-        ax.set_yscale('log')
-        ax.set_ylim(1e-2, max(n_g.max(), s_g.max()) * 4)
-        ax.legend(fontsize=6, loc='upper right')
+        n_sig = int((p_signal_all[in_roi] > 0.5).sum())
+        plot_r2_mixture(info, r2=r2[in_roi], alpha=fdr_alpha, ax=ax,
+                         title=f'{roi}  ({int(in_roi.sum())} vox; '
+                               f'{n_sig} p_sig>0.5)')
+        # Cross-component tails (signal PDF evaluated deep in noise, etc.)
+        # plummet to 1e-30; clamp so the histogram is visible.
+        ax.set_ylim(bottom=1e-3, top=ax.get_ylim()[1])
+        ax.tick_params(axis='x', labelsize=8)
+        ax.legend(fontsize=7, loc='upper right', framealpha=0.9)
     for j in range(n, len(axes)):
         axes[j].set_axis_off()
     fig.suptitle(f'sub-{sub.subject_id:02d} model {summary.get("model", "?")}: '
-                 'per-ROI 2-component Beta mixture on R² (log y)',
+                 f'per-ROI 2-comp Gaussian mixture on logit(R²), α={fdr_alpha}',
                  fontsize=11, weight='bold')
     fig.tight_layout(rect=[0, 0, 1, 0.96])
     out_pdf.parent.mkdir(parents=True, exist_ok=True)
@@ -105,12 +95,18 @@ def run_one(subject: int, model: int, bids_folder: Path,
 
     p_signal_all = np.full(r2.size, np.nan, dtype=np.float32)
     summary = {'model': model}
-    # 'BRAIN' is a pseudo-ROI using the whole BOLD mask. Fitted first
-    # so robust mixtures are available even for ROIs with little signal.
-    rois_with_brain = ['BRAIN'] + [r for r in rois if r != 'BRAIN']
-    for roi in rois_with_brain:
+    # 'BRAIN' and 'GM' are whole-mask pseudo-ROIs (BOLD mask, GM probseg≥0.5).
+    # Fitted first so robust whole-brain mixtures exist before per-ROI fits.
+    rois_with_global = ['BRAIN', 'GM'] + [r for r in rois if r not in ('BRAIN', 'GM')]
+    for roi in rois_with_global:
         if roi == 'BRAIN':
             roi_mask = np.ones(r2.size, dtype=bool)
+        elif roi == 'GM':
+            try:
+                roi_mask = masker.transform(sub.get_gm_mask(bold_space=True))\
+                                 .flatten().astype(bool)
+            except Exception as e:
+                summary[roi] = {'reason': f'gm load failed: {e}'}; continue
         else:
             try:
                 roi_mask = masker.transform(
@@ -126,9 +122,8 @@ def run_one(subject: int, model: int, bids_folder: Path,
         out = fit_one_roi(r2[idx])
         if out['fit'] is not None:
             # Per-voxel posteriors only stored for the per-ROI fits
-            # (not BRAIN — the BRAIN posterior would overwrite ROI
-            # values otherwise).
-            if roi != 'BRAIN':
+            # (not BRAIN / GM — those would overwrite ROI values).
+            if roi not in ('BRAIN', 'GM'):
                 p_signal_all[idx] = out['p_signal']
             summary[roi] = out['fit']
         else:
@@ -146,7 +141,7 @@ def run_one(subject: int, model: int, bids_folder: Path,
               'w') as fh:
         json.dump(summary, fh, indent=2)
     pdf = plots_dir / f'sub-{subject:02d}_r2_mixture.pdf'
-    plot_rois = ['BRAIN'] + list(rois)
+    plot_rois = ['BRAIN', 'GM'] + [r for r in rois if r not in ('BRAIN', 'GM')]
     make_plot(sub, masker, summary, p_signal_all, r2, plot_rois, pdf)
     return summary
 
@@ -190,14 +185,14 @@ def main():
         sub = Subject(s, bids)
         for roi in (['BRAIN'] + list(args.rois)):
             info = summary.get(roi, {})
-            if 'signal_alpha' not in info:
+            if 'signal_mu' not in info:
                 continue
             t05 = sub.get_r2_threshold(args.model, roi, posterior=0.5)
             rows.append({
                 'subject': s, 'roi': roi,
                 'signal_weight_pct': 100 * info['signal_weight'],
-                'signal_mean': info['signal_mean'],
-                'noise_mean':  info['noise_mean'],
+                'signal_mean': info['signal_mean_r2'],
+                'noise_mean':  info['noise_mean_r2'],
                 'r2_thresh_p50': t05,
                 'n_voxels': info['n_voxels'],
             })
@@ -228,8 +223,8 @@ def main():
         axes[1].set_xlabel(''); axes[1].set_ylabel('R² threshold')
         axes[1].tick_params(axis='x', rotation=20)
 
-        fig.suptitle(f'Beta-mixture R²-thresholding — model {args.model}, '
-                     f'n={df.subject.nunique()} subjects',
+        fig.suptitle(f'Logit-Gaussian mixture R²-thresholding — model '
+                     f'{args.model}, n={df.subject.nunique()} subjects',
                      fontsize=13, weight='bold')
         fig.tight_layout(rect=[0, 0, 1, 0.94])
         out = plots_dir / 'overview_swarm.pdf'
