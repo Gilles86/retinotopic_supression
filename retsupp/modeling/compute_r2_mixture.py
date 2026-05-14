@@ -37,35 +37,15 @@ def _is_gmm_logit(info: dict | None) -> bool:
 def fit_one_roi(r2: np.ndarray) -> dict:
     """Fit the mixture on one ROI's R²; return per-voxel posterior + fit dict.
 
-    Returns ``{'p_signal', 'fit', 'reason'}``. ``p_signal`` is a
-    ``float32`` array of per-voxel P(signal | R²) under the logit-GMM;
-    NaN for non-real voxels. ``fit`` is the
-    :func:`braincoder.utils.stats.fit_r2_mixture` result, or ``None``
-    if the fit was skipped.
+    Thin wrapper around :func:`braincoder.utils.stats.fit_and_classify`
+    that returns ``{'p_signal', 'fit', 'reason'}`` (the keys retsupp
+    callers expect).
     """
-    from scipy.stats import norm
-    n = len(r2)
-    if n < 50:
-        return {'p_signal': np.full(n, np.nan, dtype=np.float32),
-                'fit': None,
-                'reason': f'n_voxels={n} too small for stable mixture'}
-    try:
-        fit = fit_r2_mixture(r2)
-    except ValueError as e:
-        return {'p_signal': np.full(n, np.nan, dtype=np.float32),
-                'fit': None, 'reason': str(e)}
-
-    r2_arr = np.asarray(r2, dtype=float)
-    keep = np.isfinite(r2_arr) & (r2_arr > 0) & (r2_arr < 0.99)
-    z = np.log(np.clip(r2_arr[keep], 1e-6, 1 - 1e-6)
-               / (1 - np.clip(r2_arr[keep], 1e-6, 1 - 1e-6)))
-    p_n = (fit['noise_weight']
-           * norm.pdf(z, fit['noise_mu'], fit['noise_sigma']))
-    p_s = (fit['signal_weight']
-           * norm.pdf(z, fit['signal_mu'], fit['signal_sigma']))
-    p_signal = np.full(n, np.nan, dtype=np.float32)
-    p_signal[keep] = (p_s / (p_n + p_s + 1e-30)).astype(np.float32)
-    return {'p_signal': p_signal, 'fit': fit, 'reason': 'ok'}
+    from braincoder.utils.stats import fit_and_classify
+    out = fit_and_classify(r2)
+    return {'p_signal': out['p_signal'],
+            'fit': out['fit'],
+            'reason': out['reason']}
 
 
 def get_or_fit_brain_mixture(subject: int, model: int,

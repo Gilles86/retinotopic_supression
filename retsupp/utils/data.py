@@ -46,7 +46,7 @@ def select_well_fit_voxels(df, *, r2_threshold,
     Pure-filter — does not compute any threshold itself. Callers
     supply ``r2_threshold`` (typically via
     :meth:`Subject.get_r2_fdr_threshold`, which gives the cached
-    Beta-mixture tail-FDR threshold for that (subject, model, ROI)).
+    logit-Gaussian tail-FDR threshold for that (subject, model, ROI)).
 
     Filters:
         - ``r² ≥ r2_threshold`` AND the row is "real" (r² > 0 and σ not
@@ -61,7 +61,7 @@ def select_well_fit_voxels(df, *, r2_threshold,
         df: per-voxel parameter DataFrame; must have ``r2``, ``sd``,
             ``x``, ``y`` columns. If ``eccen`` and ``mass_in`` are
             missing they are computed in a returned copy.
-        r2_threshold: R² cutoff (typically from the cached Beta-mixture
+        r2_threshold: R² cutoff (typically from the cached logit-Gaussian
             tail-FDR helper). Use ``np.inf`` to disable the R² filter
             entirely (will pass everything else through).
         mass_threshold: minimum fraction of PRF mass that must lie
@@ -1354,11 +1354,11 @@ class Subject(object):
                               roi: str = 'BRAIN',
                               prf_base_dir: str = 'prf',
                               force: bool = False) -> float:
-        """Cached tail-FDR R² threshold from the 2-component Beta mixture.
+        """Cached tail-FDR R² threshold from the logit-Gaussian mixture.
 
-        ``roi='BRAIN'`` (default) → whole-brain mixture. Any other ROI
-        name → per-ROI mixture (fit + cached on first call). Thin
-        wrapper around
+        ``roi='BRAIN'`` → whole BOLD mask; ``roi='GM'`` → fmriprep GM
+        probseg ≥ 0.5; any other ROI name → per-retinotopic-ROI mixture
+        (fit + cached on first call). Thin wrapper around
         :func:`retsupp.modeling.compute_r2_mixture.r2_fdr_threshold` —
         see there for caching paths and PDF side-effects.
 
@@ -1375,7 +1375,7 @@ class Subject(object):
                           posterior: float = 0.5,
                           prf_base_dir: str = 'prf') -> float:
         """R² threshold for (subject, ROI) at which the 2-component
-        Beta-mixture posterior P(signal | R²) first exceeds
+        logit-Gaussian posterior P(signal | R²) first exceeds
         ``posterior`` (moving right from the noise mode).
 
         Reads the per-(subject, ROI) mixture parameters from the JSON
