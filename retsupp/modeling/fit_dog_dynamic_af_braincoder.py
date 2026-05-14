@@ -443,7 +443,7 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
          roi: str = 'V3AB',
          resolution: int = 50,
          max_n_iterations: int = 1500,
-         p_signal_thr: float = 0.95,
+         p_signal_thr: float = 0.5,
          aperture_mass_thr: float = 0.0,
          model_label: int = 4,
          max_voxels: int | None = 500,
@@ -876,11 +876,12 @@ if __name__ == '__main__':
     parser.add_argument('--resolution', type=int, default=50,
                         help='Stimulus grid resolution (default 50).')
     parser.add_argument('--max-n-iterations', type=int, default=1500)
-    parser.add_argument('--p-signal-thr', type=float, default=0.95,
+    parser.add_argument('--p-signal-thr', type=float, default=0.5,
                         help='Posterior-based voxel selector. Load the '
                              'per-voxel GMM p_signal NIfTI and keep voxels '
-                             'with P(signal | R²) > this. Default 0.95 '
-                             '(each kept voxel ≥ 95%% likely signal).')
+                             'with P(signal | R²) > this. Default 0.5 '
+                             '(matches FDR-α=0.05 pool size; the canonical '
+                             'choice as of 2026-05-14).')
     parser.add_argument('--aperture-mass-thr', type=float, default=0.0,
                         help='Optional additional filter: keep voxels whose '
                              'PRF Gaussian has at least this fraction of mass '

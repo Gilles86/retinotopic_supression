@@ -111,7 +111,7 @@ MODEL_FLAGS=""
     --sigma-dyn-init 2.0 \
     --sigma-t-dyn-init 2.0 \
     --g-t-dyn-init 0.0 \
-    --p-signal-thr "${PSIGNAL_THR:-0.95}" \
+    --p-signal-thr "${PSIGNAL_THR:-0.5}" \
     --aperture-mass-thr "${APERTURE_MASS_THR:-0}"
 
 echo "Finished:    $(date)"
