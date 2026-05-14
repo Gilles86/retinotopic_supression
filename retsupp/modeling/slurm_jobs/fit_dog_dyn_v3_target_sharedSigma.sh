@@ -89,6 +89,14 @@ echo "Running v3 + target + sharedSigma fit for sub-${subject}, roi=${roi}"
 #                                       bar aperture ≥ this. 0 to skip.
 # Variants are segregated by output_subdir (Python appends _pSig{thr}[_apt{thr}]).
 
+# Model-family knobs (default: base sharedSigma — σ_T_dyn := σ_dyn only):
+#   SHARED_DYN_GAIN=1   → additionally tie g_LP_dyn := g_HP_dyn
+#   ALL_SHARED_SIGMA=1  → additionally tie σ_AF := σ_dyn (single AF width)
+# Either or both can be enabled; output_subdir is suffixed accordingly.
+MODEL_FLAGS=""
+[[ "${SHARED_DYN_GAIN:-0}" == "1" ]] && MODEL_FLAGS="$MODEL_FLAGS --shared-dyn-gain"
+[[ "${ALL_SHARED_SIGMA:-0}" == "1" ]] && MODEL_FLAGS="$MODEL_FLAGS --all-shared-sigma"
+
 "$PYTHON" -u "$SCRIPT" \
     "$subject" \
     --bids-folder "$bids_folder" \
@@ -98,6 +106,7 @@ echo "Running v3 + target + sharedSigma fit for sub-${subject}, roi=${roi}"
     --model-version v3 \
     --with-target \
     --shared-target-sigma \
+    $MODEL_FLAGS \
     --sigma-af-init 2.0 \
     --sigma-dyn-init 2.0 \
     --sigma-t-dyn-init 2.0 \

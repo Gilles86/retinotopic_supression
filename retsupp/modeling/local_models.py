@@ -614,6 +614,110 @@ class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma(
 
 
 # ---------------------------------------------------------------------------
+# Stricter-tied variants of the shared-σ + target DoG model.
+# ---------------------------------------------------------------------------
+
+class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_sharedDynGain(
+    DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma,
+):
+    """sharedSigma v3+target with a SINGLE dynamic-distractor gain.
+
+    On top of the parent's σ_T_dyn := σ_dyn tying, this also ties
+    ``g_LP_dyn := g_HP_dyn`` (slot 12 := slot 11). Tests whether the
+    distractor-onset transient is meaningfully different at HP vs LP
+    locations, or whether one gain suffices.
+
+    Initialisation
+    --------------
+    Callers should set ``init_pars['g_LP_dyn'] = init_pars['g_HP_dyn']``
+    before passing inits to the fitter. The fit script handles this
+    when ``--shared-dyn-gain`` is set.
+    """
+
+    @tf.function
+    def _transform_parameters_forward(self, parameters):
+        out = super()._transform_parameters_forward(parameters)
+        # Tie g_LP_dyn (slot 12) := g_HP_dyn (slot 11).
+        g_hp_dyn_col = out[:, 11:12]
+        before = out[:, :12]
+        after = out[:, 13:]
+        return tf.concat([before, g_hp_dyn_col, after], axis=1)
+
+    @tf.function
+    def _transform_parameters_backward(self, parameters):
+        out = super()._transform_parameters_backward(parameters)
+        raw_g_hp_dyn_col = out[:, 11:12]
+        before = out[:, :12]
+        after = out[:, 13:]
+        return tf.concat([before, raw_g_hp_dyn_col, after], axis=1)
+
+
+class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_allSharedSigma(
+    DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma,
+):
+    """v3+target with ALL three attention-Gaussian widths tied.
+
+    Strictest σ-constraint: ties ``σ_AF`` (slot 7) := ``σ_dyn`` (slot 10)
+    on top of the parent's already-existing ``σ_T_dyn := σ_dyn``. One
+    shared width parameter (``σ_dyn``) controls the sustained, phasic-
+    distractor, and phasic-target Gaussians.
+
+    Initialisation
+    --------------
+    Callers should set
+    ``init_pars['sigma_AF'] = init_pars['sigma_T_dyn'] = init_pars['sigma_dyn']``
+    before passing inits to the fitter. The fit script handles this
+    when ``--all-shared-sigma`` is set.
+    """
+
+    @tf.function
+    def _transform_parameters_forward(self, parameters):
+        # Parent already ties σ_T_dyn (slot 14) := σ_dyn (slot 10).
+        out = super()._transform_parameters_forward(parameters)
+        # Additionally tie σ_AF (slot 7) := σ_dyn (slot 10).
+        sigma_dyn_col = out[:, 10:11]
+        before = out[:, :7]
+        after = out[:, 8:]
+        return tf.concat([before, sigma_dyn_col, after], axis=1)
+
+    @tf.function
+    def _transform_parameters_backward(self, parameters):
+        out = super()._transform_parameters_backward(parameters)
+        raw_sigma_dyn_col = out[:, 10:11]
+        before = out[:, :7]
+        after = out[:, 8:]
+        return tf.concat([before, raw_sigma_dyn_col, after], axis=1)
+
+
+class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_allSharedSigma_sharedDynGain(
+    DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_allSharedSigma,
+):
+    """All-σ-tied AND single-dyn-gain variant.
+
+    Inherits the ``σ_AF := σ_T_dyn := σ_dyn`` tying from
+    :class:`...allSharedSigma`, AND additionally ties
+    ``g_LP_dyn := g_HP_dyn``. The most-restricted of the four-variant
+    family.
+    """
+
+    @tf.function
+    def _transform_parameters_forward(self, parameters):
+        out = super()._transform_parameters_forward(parameters)
+        g_hp_dyn_col = out[:, 11:12]
+        before = out[:, :12]
+        after = out[:, 13:]
+        return tf.concat([before, g_hp_dyn_col, after], axis=1)
+
+    @tf.function
+    def _transform_parameters_backward(self, parameters):
+        out = super()._transform_parameters_backward(parameters)
+        raw_g_hp_dyn_col = out[:, 11:12]
+        before = out[:, :12]
+        after = out[:, 13:]
+        return tf.concat([before, raw_g_hp_dyn_col, after], axis=1)
+
+
+# ---------------------------------------------------------------------------
 # Factorial sign-constraint variant of the shared-σ + target model.
 # Used by ``fit_af_prf_cv_v2.py`` (CV-v2 18-class factorial).
 # ---------------------------------------------------------------------------

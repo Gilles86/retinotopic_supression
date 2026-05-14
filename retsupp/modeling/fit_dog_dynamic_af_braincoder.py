@@ -65,6 +65,9 @@ from retsupp.modeling.local_models import (
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target,
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_oversampled,
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma,
+    DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_sharedDynGain,
+    DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_allSharedSigma,
+    DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_allSharedSigma_sharedDynGain,
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_runPosition,
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_runPosition_dynHP,
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_repeat,
@@ -424,6 +427,8 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
          sigma_t_dyn_init: float = 2.0,
          temporal_oversampling: int | None = None,
          shared_target_sigma: bool = False,
+         shared_dyn_gain: bool = False,
+         all_shared_sigma: bool = False,
          per_run_position_gains: bool = False,
          per_run_position_dyn_hp: bool = False,
          with_repeat_split: bool = False,
@@ -455,6 +460,10 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
         raise ValueError(
             "--shared-target-sigma is only supported with "
             "--model-version v3 + --with-target.")
+    if (shared_dyn_gain or all_shared_sigma) and not shared_target_sigma:
+        raise ValueError(
+            "--shared-dyn-gain / --all-shared-sigma require "
+            "--shared-target-sigma (built on top of the sharedSigma family).")
     if per_run_position_gains and not (with_target and shared_target_sigma
                                        and model_version == 'v3'):
         raise ValueError(
@@ -514,6 +523,10 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
             }[model_version]
         if shared_target_sigma:
             base = f'{base}_sharedSigma'
+        if all_shared_sigma:
+            base = f'{base}_allSharedSigma'
+        if shared_dyn_gain:
+            base = f'{base}_sharedDynGain'
         if per_run_position_gains:
             base = f'{base}_runPosition'
         if per_run_position_dyn_hp:
@@ -642,6 +655,16 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
             else:
                 init_pars['sigma_T_dyn'] = sigma_t_dyn_init
             shared_pars = shared_pars + ['g_T_dyn', 'sigma_T_dyn']
+        if all_shared_sigma:
+            # Tie sigma_AF to sigma_dyn at init. The model forward transform
+            # overrides slot 7 with slot 10 on every iteration; this just
+            # makes the (effectively unused) σ_AF raw variable start at
+            # the right place.
+            init_pars['sigma_AF'] = init_pars['sigma_dyn']
+        if shared_dyn_gain:
+            # Tie g_LP_dyn to g_HP_dyn at init. Model forward tying
+            # handles the rest.
+            init_pars['g_LP_dyn'] = init_pars['g_HP_dyn']
 
         if per_run_position_gains:
             # 6 new sustained gains, one pair per within-block run-position.
@@ -702,7 +725,14 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
             ModelCls = (
                 DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_repeat)
         elif shared_target_sigma:
-            ModelCls = DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma
+            if all_shared_sigma and shared_dyn_gain:
+                ModelCls = DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_allSharedSigma_sharedDynGain
+            elif all_shared_sigma:
+                ModelCls = DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_allSharedSigma
+            elif shared_dyn_gain:
+                ModelCls = DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_sharedDynGain
+            else:
+                ModelCls = DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma
         else:
             ModelCls = DoGDynamicAttentionFieldPRF2DWithHRF_v3_target
     else:
@@ -867,6 +897,15 @@ if __name__ == '__main__':
                         help='Initial value for sigma_T_dyn (default 2.0; '
                              'matches the neutral sigma_AF / sigma_dyn '
                              'inits).')
+    parser.add_argument('--all-shared-sigma', action='store_true',
+                        help='Additionally tie sigma_AF := sigma_dyn so all '
+                             'three AF Gaussians share a single width. '
+                             'Requires --shared-target-sigma.')
+    parser.add_argument('--shared-dyn-gain', action='store_true',
+                        help='Additionally tie g_LP_dyn := g_HP_dyn so the '
+                             'phasic-distractor transient has one gain '
+                             'regardless of HP/LP location. Requires '
+                             '--shared-target-sigma.')
     parser.add_argument('--shared-target-sigma', action='store_true',
                         help='Force sigma_T_dyn := sigma_dyn so the two '
                              'phasic Gaussians (distractor-onset and '
@@ -954,6 +993,8 @@ if __name__ == '__main__':
         sigma_t_dyn_init=args.sigma_t_dyn_init,
         temporal_oversampling=args.temporal_oversampling,
         shared_target_sigma=args.shared_target_sigma,
+        shared_dyn_gain=args.shared_dyn_gain,
+        all_shared_sigma=args.all_shared_sigma,
         per_run_position_gains=args.per_run_position_gains,
         per_run_position_dyn_hp=args.per_run_position_dyn_hp,
         with_repeat_split=args.with_repeat_split,
