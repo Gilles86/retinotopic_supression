@@ -5,7 +5,7 @@
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=24G
-#SBATCH --time=03:00:00
+#SBATCH --time=00:25:00
 
 # v3 + target ('phasic capture') joint AF + DoG-PRF braincoder fit,
 # with sigma_T_dyn TIED to sigma_dyn (shared phasic σ).

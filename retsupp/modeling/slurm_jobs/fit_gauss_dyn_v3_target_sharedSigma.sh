@@ -5,14 +5,18 @@
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=24G
-#SBATCH --time=03:00:00
+#SBATCH --time=00:25:00
 
 # v3 + target + sharedSigma joint AF + GAUSSIAN-PRF braincoder fit.
-# Uses Gaussian PRF parameters (model 1 or 3) as the per-voxel
-# stimulus-drive init. AF parameters jointly fit.
+# Default init: model 3 (Gaussian + flex HRF) per the "HRF optim" canonical.
 #
-# Submission: 30 × N_ROIS array tasks; same (subject_idx, roi_idx)
-# decoding as fit_dog_dyn_v3_target_sharedSigma.sh.
+# Voxel selection: posterior-based via the logit-GMM p_signal NIfTI.
+#   PSIGNAL_THR (default 0.5)         → keep voxels with P(signal|R²) > this
+#   APERTURE_MASS_THR (default 0)     → optional aperture-mass filter
+# Model variants (factorial with DoG):
+#   SHARED_DYN_GAIN=1   → tie g_LP_dyn := g_HP_dyn
+#   ALL_SHARED_SIGMA=1  → tie σ_AF := σ_dyn := σ_T_dyn
+# MODEL (default 3) selects the mean-PRF NIfTI to init from.
 
 set -eo pipefail
 
@@ -44,7 +48,7 @@ fi
 subject="${SUB_IDS[$sub_idx]}"
 roi="${ROIS[$roi_idx]}"
 
-MODEL="${MODEL:-1}"   # 1 = Gaussian no-HRF, 3 = Gaussian + flex HRF
+MODEL="${MODEL:-3}"   # 1 = Gaussian no-HRF, 3 = Gaussian + flex HRF (canonical)
 
 scontrol update jobid="${SLURM_JOB_ID}" \
     name="gauss_af_m${MODEL}_sub-$(printf %02d $subject)_${roi}" 2>/dev/null || true

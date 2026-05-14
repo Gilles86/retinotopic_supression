@@ -646,14 +646,16 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     bold_sub = bold_df.loc[:, voxel_mask].copy()
 
     # 3) Initialize from model 4 (DoG + flexible HRF). KEEP the
-    # srf_amplitude/srf_size columns — that's what makes this DoG fit
-    # different from the Gaussian fit.
+    # srf_amplitude/srf_size + hrf_delay/hrf_dispersion columns —
+    # the per-voxel HRF is fixed during AF (see fitter.fit fixed_pars
+    # below) but its m4-estimated values are preserved per voxel.
     init_cols = ['x', 'y', 'sd', 'baseline', 'amplitude',
-                 'srf_amplitude', 'srf_size']
+                 'srf_amplitude', 'srf_size',
+                 'hrf_delay', 'hrf_dispersion']
     missing = [c for c in init_cols if c not in prf_pars.columns]
     if missing:
         raise RuntimeError(
-            f'Mean model {model_label} is missing DoG params {missing}. '
+            f'Mean model {model_label} is missing DoG/HRF params {missing}. '
             f'Use model 4 (DoG + flexible HRF) for the init.')
     init_pars = prf_pars.loc[voxel_mask, init_cols].copy()
 
@@ -774,6 +776,7 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
         grid_coordinates=grid_coords,
         paradigm=paradigm,
         hrf_model=hrf_model,
+        flexible_hrf_parameters=True,  # per-voxel HRF from m4; fixed during AF
         condition_indicator=condition_indicator,
         dynamic_indicator=dynamic_indicator,
         ring_positions=ring_positions,
@@ -795,11 +798,15 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     # 5) Refine baseline/amplitude given current AF params.
     refined_pars = fitter.refine_baseline_and_amplitude(init_pars, l2_alpha=1e-3)
 
-    # 6) Joint fit. Shared pars depend on model version.
+    # 6) Joint fit. Shared pars depend on model version. HRF params
+    #    are held fixed at m4's per-voxel estimates (we want AF to
+    #    adapt only x/y/sd/baseline/amplitude + the surround on top
+    #    of m4's HRF, not re-fit the HRF itself).
     fit_pars = fitter.fit(
         init_pars=refined_pars,
         max_n_iterations=max_n_iterations,
         shared_pars=shared_pars,
+        fixed_pars=['hrf_delay', 'hrf_dispersion'],
         learning_rate=learning_rate,
     )
 

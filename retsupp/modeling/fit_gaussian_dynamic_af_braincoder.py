@@ -55,8 +55,10 @@ from tqdm import tqdm
 from braincoder.hrf import SPMHRFModel
 from braincoder.optimize import ParameterFitter
 from retsupp.modeling.local_models import (
-    GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_allSharedSigma,
     GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma,
+    GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_sharedDynGain,
+    GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_allSharedSigma,
+    GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_allSharedSigma_sharedDynGain,
 )
 from retsupp.utils.data import (
     Subject,
@@ -190,10 +192,8 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
 def select_roi_voxels(sub: Subject, roi: str, prf_pars: pd.DataFrame,
                        r2_thr: float = 0.05,
                        r2_max: float = 0.999):
-    """Boolean voxel mask: ROI ∧ (r2_thr < R² < r2_max).
-
-    The upper bound ``r2_max`` filters phantom voxels (R² ≥ 0.999 is
-    almost certainly a degenerate fit, not real signal).
+    """Legacy R²-based voxel mask. Use :func:`select_roi_voxels_psignal`
+    for the posterior-based (GMM) selector instead.
     """
     roi_aliases = {
         'V3AB': ['V3A', 'V3B'],
@@ -217,13 +217,64 @@ def select_roi_voxels(sub: Subject, roi: str, prf_pars: pd.DataFrame,
     return r2_mask
 
 
+def select_roi_voxels_psignal(sub: Subject, roi: str,
+                               prf_pars: pd.DataFrame, *,
+                               model_label: int,
+                               p_signal_thr: float,
+                               aperture_mass_thr: float = 0.0,
+                               aperture_radius: float = 3.17):
+    """Boolean voxel mask using the GMM per-voxel ``p_signal`` posterior.
+
+    Mirrors the DoG-AF driver's selector. Drops legacy r2_thr/r2_max
+    band-aids — the logit-Gaussian mixture's posterior handles phantom
+    and σ-collapsed voxels naturally.
+    """
+    from scipy.stats import norm
+
+    roi_aliases = {
+        'V3AB': ['V3A', 'V3B'],
+        'LO': ['LO1', 'LO2'],
+        'TO': ['TO1', 'TO2'],
+        'VO': ['VO1', 'VO2'],
+    }
+    component_rois = roi_aliases.get(roi, [roi])
+    masker_full = sub.get_bold_mask(return_masker=True)
+    masker_full.fit()
+    roi_arr = np.zeros(prf_pars.shape[0], dtype=bool)
+    for r in component_rois:
+        roi_img = sub.get_retinotopic_roi(roi=r, bold_space=True)
+        roi_arr |= masker_full.transform(roi_img).astype(bool).flatten()
+
+    p_sig_path = (sub.bids_folder / 'derivatives' / 'prf'
+                   / f'model{model_label}' / f'sub-{sub.subject_id:02d}'
+                   / f'sub-{sub.subject_id:02d}_desc-p_signal.nii.gz')
+    if not p_sig_path.exists():
+        raise FileNotFoundError(
+            f'p_signal NIfTI missing for sub-{sub.subject_id:02d} '
+            f'model {model_label}: {p_sig_path}. Run r2_mixture first.')
+    p_sig = masker_full.transform(str(p_sig_path)).flatten()
+    sig_ok = np.isfinite(p_sig) & (p_sig > p_signal_thr)
+    mask = roi_arr & sig_ok
+    if aperture_mass_thr > 0:
+        x = prf_pars['x'].to_numpy()
+        y = prf_pars['y'].to_numpy()
+        sd = prf_pars['sd'].to_numpy()
+        sd_safe = np.where(np.isfinite(sd) & (sd > 0.05), sd, 0.05)
+        eccen = np.sqrt(x ** 2 + y ** 2)
+        mass_in = 1.0 - norm.cdf((eccen - aperture_radius) / sd_safe)
+        mask &= np.isfinite(mass_in) & (mass_in >= aperture_mass_thr)
+    return mask
+
+
 def main(subject: int, bids_folder: str = '/data/ds-retsupp',
          roi: str = 'V1',
          resolution: int = 50,
          max_n_iterations: int = 1500,
          r2_thr: float = 0.05,
          r2_max: float = 0.999,
-         model_label: int = 1,
+         p_signal_thr: float = 0.5,
+         aperture_mass_thr: float = 0.0,
+         model_label: int = 3,
          max_voxels: int | None = 500,
          mode: str = 'signed',
          learning_rate: float = 0.01,
@@ -232,19 +283,22 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
          sigma_af_init: float = 2.0,
          sigma_dyn_init: float = 2.0,
          g_t_dyn_init: float = 0.0,
-         all_shared_sigma: bool = False):
+         all_shared_sigma: bool = False,
+         shared_dyn_gain: bool = False):
     """Top-level fit driver."""
     bids_folder = Path(bids_folder)
     sub = Subject(subject, bids_folder)
     if output_subdir is None:
+        base = 'af_prf_joint_dynamic_v3_gaussian_with_target_sharedSigma'
         if all_shared_sigma:
-            output_subdir = (
-                'af_prf_joint_dynamic_v3_gaussian_with_target_allSharedSigma'
-            )
-        else:
-            output_subdir = (
-                'af_prf_joint_dynamic_v3_gaussian_with_target_sharedSigma'
-            )
+            base = 'af_prf_joint_dynamic_v3_gaussian_with_target_allSharedSigma'
+        if shared_dyn_gain:
+            base = f'{base}_sharedDynGain'
+        if p_signal_thr > 0:
+            base = f'{base}_pSig{p_signal_thr:g}'
+            if aperture_mass_thr > 0:
+                base = f'{base}_apt{aperture_mass_thr:g}'
+        output_subdir = base
     out_dir = (bids_folder / 'derivatives' / output_subdir
                / f'sub-{subject:02d}')
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -262,33 +316,48 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
         grid_radius=grid_radius,
     )
 
-    # 2) Restrict to ROI voxels with decent mean-model PRF R² and below
-    # the phantom-R² ceiling. r2_thr<0 (e.g. -1 from --use-fdr) queries
-    # the per-ROI mixture tail-FDR threshold (Subject.get_r2_fdr_threshold).
-    effective_r2_thr = r2_thr
-    if r2_thr < 0:
-        try:
-            effective_r2_thr = float(sub.get_r2_fdr_threshold(
-                model=model_label, roi=roi, alpha=0.05))
-            print(f'  mixture-FDR threshold (α=0.05) for ROI={roi}: '
-                  f'r²>{effective_r2_thr:.4f}')
-        except Exception as e:
-            raise RuntimeError(
-                f'--r2_thr<0 (FDR mode) but mixture sidecar missing '
-                f'for sub-{sub.subject_id:02d} m{model_label} {roi}: {e}')
-
+    # 2) Restrict to ROI voxels via the logit-GMM per-voxel p_signal
+    #    posterior (canonical as of 2026-05-14). Mirrors the DoG-AF
+    #    driver. If p_signal_thr == 0, falls back to the legacy R²-band
+    #    selector — kept for backward-compat with older drivers.
     prf_pars = sub.get_prf_parameters_volume(model=model_label,
                                               return_images=False)
     if not isinstance(prf_pars, pd.DataFrame):
         prf_pars = pd.DataFrame(prf_pars)
-    voxel_mask = select_roi_voxels(sub, roi, prf_pars,
-                                    r2_thr=effective_r2_thr, r2_max=r2_max)
-    print(f'ROI {roi} | {effective_r2_thr:.4f} < r2 < {r2_max}: '
-          f'{voxel_mask.sum()} voxels')
-    if voxel_mask.sum() == 0:
-        raise RuntimeError(
-            f'No voxels survive: ROI={roi}, '
-            f'{effective_r2_thr:.4f} < r2 < {r2_max}.')
+
+    if p_signal_thr > 0:
+        voxel_mask = select_roi_voxels_psignal(
+            sub, roi, prf_pars,
+            model_label=model_label,
+            p_signal_thr=p_signal_thr,
+            aperture_mass_thr=aperture_mass_thr)
+        descr = (f'ROI {roi} | p_signal > {p_signal_thr}'
+                 + (f' AND mass_in ≥ {aperture_mass_thr}'
+                    if aperture_mass_thr > 0 else ''))
+        print(f'{descr}: {voxel_mask.sum()} voxels')
+        if voxel_mask.sum() == 0:
+            raise RuntimeError(f'No voxels survive: {descr}.')
+    else:
+        effective_r2_thr = r2_thr
+        if r2_thr < 0:
+            try:
+                effective_r2_thr = float(sub.get_r2_fdr_threshold(
+                    model=model_label, roi=roi, alpha=0.05))
+                print(f'  mixture-FDR threshold (α=0.05) for ROI={roi}: '
+                      f'r²>{effective_r2_thr:.4f}')
+            except Exception as e:
+                raise RuntimeError(
+                    f'--r2_thr<0 (FDR mode) but mixture sidecar missing '
+                    f'for sub-{sub.subject_id:02d} m{model_label} {roi}: {e}')
+        voxel_mask = select_roi_voxels(sub, roi, prf_pars,
+                                        r2_thr=effective_r2_thr,
+                                        r2_max=r2_max)
+        print(f'ROI {roi} | {effective_r2_thr:.4f} < r2 < {r2_max}: '
+              f'{voxel_mask.sum()} voxels')
+        if voxel_mask.sum() == 0:
+            raise RuntimeError(
+                f'No voxels survive: ROI={roi}, '
+                f'{effective_r2_thr:.4f} < r2 < {r2_max}.')
 
     if max_voxels is not None and voxel_mask.sum() > max_voxels:
         order = np.argsort(prf_pars['r2'].values)[::-1]
@@ -300,13 +369,15 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
 
     bold_sub = bold_df.loc[:, voxel_mask].copy()
 
-    # 3) Initialize from model 1 (Gaussian PRF, fixed HRF). NO DoG params.
-    init_cols = ['x', 'y', 'sd', 'baseline', 'amplitude']
+    # 3) Initialize from model 3 (Gaussian + flexible HRF, canonical).
+    #    HRF params are kept fixed during AF (see fitter.fit fixed_pars).
+    init_cols = ['x', 'y', 'sd', 'baseline', 'amplitude',
+                 'hrf_delay', 'hrf_dispersion']
     missing = [c for c in init_cols if c not in prf_pars.columns]
     if missing:
         raise RuntimeError(
-            f'Mean model {model_label} is missing Gaussian PRF params '
-            f'{missing}. Use model 1 (Gaussian + fixed HRF) for the init.'
+            f'Mean model {model_label} is missing Gaussian/HRF params '
+            f'{missing}. Use model 3 (Gaussian + flexible HRF) for the init.'
         )
     init_pars = prf_pars.loc[voxel_mask, init_cols].copy()
 
@@ -326,6 +397,10 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
         # sigma_AF := sigma_dyn at init too; forward transform overwrites
         # slot 5 with slot 8 every iteration.
         init_pars['sigma_AF'] = init_pars['sigma_dyn']
+    if shared_dyn_gain:
+        # Tie g_LP_dyn := g_HP_dyn at init; model forward enforces it
+        # every iteration anyway.
+        init_pars['g_LP_dyn'] = init_pars['g_HP_dyn']
 
     shared_pars = ['sigma_AF', 'g_HP', 'g_LP',
                    'sigma_dyn', 'g_HP_dyn', 'g_LP_dyn',
@@ -338,9 +413,17 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     tr = sub.get_tr(session=1, run=1)
     hrf_model = SPMHRFModel(tr=tr, delay=4.5, dispersion=0.75)
 
-    if all_shared_sigma:
+    if all_shared_sigma and shared_dyn_gain:
+        model_cls = (
+            GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_allSharedSigma_sharedDynGain
+        )
+    elif all_shared_sigma:
         model_cls = (
             GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_allSharedSigma
+        )
+    elif shared_dyn_gain:
+        model_cls = (
+            GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_sharedDynGain
         )
     else:
         model_cls = (
@@ -350,6 +433,7 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
         grid_coordinates=grid_coords,
         paradigm=paradigm,
         hrf_model=hrf_model,
+        flexible_hrf_parameters=True,  # per-voxel HRF from m3; fixed in AF
         condition_indicator=condition_indicator,
         dynamic_indicator=dynamic_indicator,
         target_indicator=target_indicator,
@@ -363,11 +447,12 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     refined_pars = fitter.refine_baseline_and_amplitude(init_pars,
                                                         l2_alpha=1e-3)
 
-    # 6) Joint fit.
+    # 6) Joint fit — HRF held fixed at m3's per-voxel estimates.
     fit_pars = fitter.fit(
         init_pars=refined_pars,
         max_n_iterations=max_n_iterations,
         shared_pars=shared_pars,
+        fixed_pars=['hrf_delay', 'hrf_dispersion'],
         learning_rate=learning_rate,
     )
 
@@ -460,6 +545,16 @@ if __name__ == '__main__':
                              'sigma_dyn only). Outputs go to '
                              '..._allSharedSigma/ unless --output-subdir '
                              'is set.')
+    parser.add_argument('--shared-dyn-gain', action='store_true',
+                        help='Tie g_LP_dyn := g_HP_dyn so the phasic-'
+                             'distractor transient has one gain '
+                             'regardless of HP/LP location.')
+    parser.add_argument('--p-signal-thr', type=float, default=0.5,
+                        help='Posterior-based voxel selector. Keep voxels '
+                             'with P(signal | R²) > this (canonical 0.5).')
+    parser.add_argument('--aperture-mass-thr', type=float, default=0.0,
+                        help='Optional: require ≥ this fraction of PRF '
+                             'Gaussian mass inside the bar aperture.')
     args = parser.parse_args()
     main(
         args.subject,
@@ -469,6 +564,8 @@ if __name__ == '__main__':
         max_n_iterations=args.max_n_iterations,
         r2_thr=args.r2_thr,
         r2_max=args.r2_max,
+        p_signal_thr=args.p_signal_thr,
+        aperture_mass_thr=args.aperture_mass_thr,
         model_label=args.model_label,
         max_voxels=None if args.max_voxels == 0 else args.max_voxels,
         mode=args.mode,
@@ -479,4 +576,5 @@ if __name__ == '__main__':
         sigma_dyn_init=args.sigma_dyn_init,
         g_t_dyn_init=args.g_t_dyn_init,
         all_shared_sigma=args.all_shared_sigma,
+        shared_dyn_gain=args.shared_dyn_gain,
     )

@@ -3119,6 +3119,40 @@ class GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma(
         return out_tied
 
 
+class GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_sharedDynGain(
+    GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma,
+):
+    """Gaussian sharedSigma v3+target with single dynamic-distractor gain.
+
+    On top of the parent's σ_T_dyn := σ_dyn tying, also ties
+    ``g_LP_dyn`` (slot 10) := ``g_HP_dyn`` (slot 9). Tests whether
+    the distractor-onset transient is meaningfully different at HP
+    vs LP locations, or whether one gain suffices.
+
+    Initialisation
+    --------------
+    Callers should set ``init_pars['g_LP_dyn'] = init_pars['g_HP_dyn']``
+    before passing inits to the fitter.
+    """
+
+    @tf.function
+    def _transform_parameters_forward(self, parameters):
+        out = super()._transform_parameters_forward(parameters)
+        # Tie g_LP_dyn (slot 10) := g_HP_dyn (slot 9).
+        g_hp_dyn_col = out[:, 9:10]
+        before = out[:, :10]
+        after = out[:, 11:]
+        return tf.concat([before, g_hp_dyn_col, after], axis=1)
+
+    @tf.function
+    def _transform_parameters_backward(self, parameters):
+        out = super()._transform_parameters_backward(parameters)
+        raw_g_hp_dyn_col = out[:, 9:10]
+        before = out[:, :10]
+        after = out[:, 11:]
+        return tf.concat([before, raw_g_hp_dyn_col, after], axis=1)
+
+
 class GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_allSharedSigma(
     GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma,
 ):
@@ -3176,3 +3210,30 @@ class GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_allSharedSigma(
         after = out[:, 6:]                                    # (V, rest)
         out_tied = tf.concat([before, raw_sigma_dyn_col, after], axis=1)
         return out_tied
+
+
+class GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_allSharedSigma_sharedDynGain(
+    GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_allSharedSigma,
+):
+    """Gaussian: all σ tied AND single dyn-gain.
+
+    Inherits the σ_AF := σ_T_dyn := σ_dyn tying from the parent and
+    additionally ties g_LP_dyn (slot 10) := g_HP_dyn (slot 9). Most-
+    restricted Gaussian variant in the 4-class factorial.
+    """
+
+    @tf.function
+    def _transform_parameters_forward(self, parameters):
+        out = super()._transform_parameters_forward(parameters)
+        g_hp_dyn_col = out[:, 9:10]
+        before = out[:, :10]
+        after = out[:, 11:]
+        return tf.concat([before, g_hp_dyn_col, after], axis=1)
+
+    @tf.function
+    def _transform_parameters_backward(self, parameters):
+        out = super()._transform_parameters_backward(parameters)
+        raw_g_hp_dyn_col = out[:, 9:10]
+        before = out[:, :10]
+        after = out[:, 11:]
+        return tf.concat([before, raw_g_hp_dyn_col, after], axis=1)
