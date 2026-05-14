@@ -143,6 +143,28 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
     hp_per_run = sub.get_hpd_locations()
     print('HP per run:', hp_per_run)
 
+    # Cached cleaned BOLD: ~5s vs ~60-120s of per-run masker.transform.
+    # The cache concatenates ALL (ses, run) at 258 TR/run regardless of
+    # whether AF later skips a run for non-canonical HP, so we always
+    # advance the cum_offset by CACHE_T_PER_RUN on every iteration of
+    # the run loop. Distractor shape is NOT baked into BOLD — the cache
+    # builder uses rectangle, but BOLD is the same regardless, so this
+    # cache works for any distractor_shape argument.
+    CACHE_T_PER_RUN = 258
+    cache_path = (sub.bids_folder / 'derivatives' / 'cleaned_bold_cache'
+                  / f'sub-{sub.subject_id:02d}'
+                  / f'sub-{sub.subject_id:02d}_kind-full_res-{resolution}.npz')
+    cached_bold = None
+    if cache_path.exists():
+        try:
+            _c = np.load(cache_path)
+            cached_bold = _c['bold']
+            _c.close()
+            print(f'  cached BOLD: {cache_path.name} ({cached_bold.shape})')
+        except Exception as exc:
+            print(f'  cache load failed ({exc}); falling back to NIfTIs')
+            cached_bold = None
+
     bold_chunks = []
     paradigm_chunks = []
     cond_indicator_chunks = []
@@ -151,12 +173,17 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
     runpos_chunks = [] if with_run_position else None
     repeat_indicator_chunks = [] if with_repeat_split else None
     masker.fit(bold_mask)
+    cum_offset = 0
 
     session_runs = [(s, r) for s in [1, 2] for r in sub.get_runs(s)]
     for session, run in tqdm(session_runs, desc='Loading runs'):
         hp = hp_per_run[(session, run)]
         if hp not in CONDITIONS:
             print(f'  ses-{session}_run-{run}: HP={hp!r}, skipping')
+            # Advance the cache cursor even on skip — the cache concatenates
+            # every (ses, run) pair regardless of HP filtering.
+            if cached_bold is not None:
+                cum_offset += CACHE_T_PER_RUN
             continue
 
         par_run = sub.get_stimulus_with_distractors(
@@ -169,13 +196,18 @@ def build_data_and_paradigm(sub: Subject, resolution: int = 50,
         par_run_flat = par_run.reshape((par_run.shape[0], -1))
         n_T_run = par_run_flat.shape[0]
 
-        bold_fn = (
-            sub.bids_folder / 'derivatives' / 'cleaned'
-            / f'sub-{sub.subject_id:02d}' / f'ses-{session}' / 'func'
-            / f'sub-{sub.subject_id:02d}_ses-{session}_task-search_'
-              f'desc-cleaned_run-{run}_bold.nii.gz'
-        )
-        data = masker.transform(bold_fn).astype(np.float32)
+        if cached_bold is not None:
+            data = cached_bold[cum_offset:cum_offset + CACHE_T_PER_RUN].astype(
+                np.float32)
+            cum_offset += CACHE_T_PER_RUN
+        else:
+            bold_fn = (
+                sub.bids_folder / 'derivatives' / 'cleaned'
+                / f'sub-{sub.subject_id:02d}' / f'ses-{session}' / 'func'
+                / f'sub-{sub.subject_id:02d}_ses-{session}_task-search_'
+                  f'desc-cleaned_run-{run}_bold.nii.gz'
+            )
+            data = masker.transform(bold_fn).astype(np.float32)
         if data.shape[0] < n_T_run:
             print(f'  ses-{session}_run-{run}: short by '
                   f'{n_T_run - data.shape[0]} TRs, padding with zeros')
