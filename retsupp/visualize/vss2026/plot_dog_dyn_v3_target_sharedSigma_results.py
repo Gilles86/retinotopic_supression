@@ -128,16 +128,16 @@ def panel_two_raw(axes, df, cols, labels, ylim, suptitle):
         ax.grid(alpha=0.2, axis='y')
 
 
-def main():
-    df = pd.read_csv(TSV, sep='\t')
+def main(tsv_path: Path = TSV, out_path: Path = OUT):
+    df = pd.read_csv(tsv_path, sep='\t')
     n = df['subject'].nunique()
     print(f'n subjects: {n}, n rows: {len(df)}')
     df['g_diff_sus'] = df['g_HP'] - df['g_LP']
     df['g_diff_dyn'] = df['g_HP_dyn'] - df['g_LP_dyn']
     df['g_dyn_avg'] = 0.5 * (df['g_HP_dyn'] + df['g_LP_dyn'])
-    OUT.parent.mkdir(parents=True, exist_ok=True)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with PdfPages(OUT) as pdf:
+    with PdfPages(out_path) as pdf:
         # Page 1: g_T_dyn per ROI — THE headline figure for target capture
         fig, ax = plt.subplots(figsize=(11, 5.5))
         panel_one_value(
@@ -301,8 +301,16 @@ def main():
         fig.tight_layout(rect=[0, 0, 1, 0.94])
         pdf.savefig(fig); plt.close(fig)
 
-    print(f'wrote {OUT}')
+    print(f'wrote {out_path}')
 
 
 if __name__ == '__main__':
-    main()
+    import argparse
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--tsv', type=Path, default=TSV,
+                   help='Per-(subject, ROI) AF params TSV. Default: '
+                        'notes/data/af_dog_v3_target_sharedSigma_parameters.tsv')
+    p.add_argument('--out', type=Path, default=OUT,
+                   help='Output PDF path.')
+    a = p.parse_args()
+    main(tsv_path=a.tsv, out_path=a.out)
