@@ -263,19 +263,32 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     )
 
     # 2) Restrict to ROI voxels with decent mean-model PRF R² and below
-    # the phantom-R² ceiling.
+    # the phantom-R² ceiling. r2_thr<0 (e.g. -1 from --use-fdr) queries
+    # the per-ROI mixture tail-FDR threshold (Subject.get_r2_fdr_threshold).
+    effective_r2_thr = r2_thr
+    if r2_thr < 0:
+        try:
+            effective_r2_thr = float(sub.get_r2_fdr_threshold(
+                model=model_label, roi=roi, alpha=0.05))
+            print(f'  mixture-FDR threshold (α=0.05) for ROI={roi}: '
+                  f'r²>{effective_r2_thr:.4f}')
+        except Exception as e:
+            raise RuntimeError(
+                f'--r2_thr<0 (FDR mode) but mixture sidecar missing '
+                f'for sub-{sub.subject_id:02d} m{model_label} {roi}: {e}')
+
     prf_pars = sub.get_prf_parameters_volume(model=model_label,
                                               return_images=False)
     if not isinstance(prf_pars, pd.DataFrame):
         prf_pars = pd.DataFrame(prf_pars)
     voxel_mask = select_roi_voxels(sub, roi, prf_pars,
-                                    r2_thr=r2_thr, r2_max=r2_max)
-    print(f'ROI {roi} | {r2_thr} < r2 < {r2_max}: '
+                                    r2_thr=effective_r2_thr, r2_max=r2_max)
+    print(f'ROI {roi} | {effective_r2_thr:.4f} < r2 < {r2_max}: '
           f'{voxel_mask.sum()} voxels')
     if voxel_mask.sum() == 0:
         raise RuntimeError(
             f'No voxels survive: ROI={roi}, '
-            f'{r2_thr} < r2 < {r2_max}.')
+            f'{effective_r2_thr:.4f} < r2 < {r2_max}.')
 
     if max_voxels is not None and voxel_mask.sum() > max_voxels:
         order = np.argsort(prf_pars['r2'].values)[::-1]
