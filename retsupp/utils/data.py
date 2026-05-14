@@ -1125,6 +1125,10 @@ class Subject(object):
                 f"PRF NIfTIs missing for sub-{self.subject_id:02d} "
                 f"model {model}: {[p.name for p in missing[:3]]}")
         src_mtime = max(p.stat().st_mtime for p in src_paths)
+        # Neuropythy ROI atlas mtime — invalidates the cache when ROIs
+        # are regenerated (e.g. after a re-run of register_retinotopy).
+        roi_mtime = self.neuropythy_mtime(model=model)
+        fresh_threshold = max(src_mtime, roi_mtime)
 
         # Cache fast-path: if the npz is fresh and covers the requested
         # params, return without ever touching the ROI atlas
@@ -1135,8 +1139,12 @@ class Subject(object):
         if cache and not force_refresh and cache_path.exists():
             with np.load(cache_path, allow_pickle=False) as d:
                 cached_mtime = float(d['source_mtime'])
+                cached_roi_mtime = float(d['roi_mtime']) if 'roi_mtime' in d.files else 0.0
                 cached_params = [str(p) for p in d['params']]
+                # Treat cache as valid only if it covers BOTH the source
+                # NIfTIs and the current neuropythy ROI atlas.
                 if (cached_mtime >= src_mtime
+                        and cached_roi_mtime >= roi_mtime
                         and set(params).issubset(cached_params)):
                     return pd.DataFrame(
                         {p: d[f'col_{p}'] for p in params})
@@ -1158,6 +1166,7 @@ class Subject(object):
             cache_path.parent.mkdir(parents=True, exist_ok=True)
             np.savez(cache_path,
                      source_mtime=np.float64(src_mtime),
+                     roi_mtime=np.float64(roi_mtime),
                      params=np.array(params),
                      **{f'col_{p}': cols[p] for p in params})
         return df
@@ -1257,6 +1266,27 @@ class Subject(object):
         img.header.set_slope_inter(slope=1, inter=0)
         img.to_filename(str(path))
         return img
+
+    def neuropythy_mtime(self, model: int = 4) -> float:
+        """Latest mtime among the neuropythy `inferred_*.mgz` files.
+
+        Returns the max mtime across ``inferred_varea/eccen/angle/sigma.mgz``
+        in the per-model snapshot dir (with freesurfer fallback). Used by
+        ROI-keyed caches (`get_prf_roi_pars`, the per-ROI entries in
+        `desc-p_signal.json`) to detect when a neuropythy re-run has
+        invalidated them. Returns 0.0 if no MGZs are found (no caching
+        invalidation triggered).
+        """
+        mtimes = []
+        for name in ('inferred_varea.mgz', 'inferred_eccen.mgz',
+                     'inferred_angle.mgz', 'inferred_sigma.mgz'):
+            try:
+                p = self._neuropythy_mgz_path(name, 'mri', model=model)
+                if p.exists():
+                    mtimes.append(p.stat().st_mtime)
+            except Exception:
+                pass
+        return max(mtimes) if mtimes else 0.0
 
     def _neuropythy_mgz_path(self, name, location, model=4):
         """Resolve an `inferred_*.mgz` path with per-model snapshot fallback.

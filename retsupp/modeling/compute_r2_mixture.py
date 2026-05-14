@@ -131,14 +131,18 @@ def r2_fdr_threshold(subject: int, model: int,
     sidecar = (bids_folder / 'derivatives' / prf_base_dir
                / f'model{model}' / f'sub-{subject:02d}'
                / f'sub-{subject:02d}_desc-p_signal.json')
+    sub = Subject(subject, bids_folder)
+    roi_mtime = sub.neuropythy_mtime(model=model)
     if not force and sidecar.exists():
         with open(sidecar) as fh:
             summary = json.load(fh)
         info = summary.get(roi)
-        if _is_gmm_logit(info):
+        # Invalidate cache when neuropythy ROIs have been regenerated
+        # since this ROI entry was written.
+        cached_roi_mtime = float(info.get('_roi_mtime', 0.0)) if info else 0.0
+        if _is_gmm_logit(info) and cached_roi_mtime >= roi_mtime:
             return _r2_fdr_threshold_from_fit(info, alpha=alpha)
 
-    sub = Subject(subject, bids_folder)
     df = sub.get_prf_roi_pars(roi=roi, model=model)
     real = (df['r2'] > 0) & df['sd'].notna() & (df['r2'] < 0.99)
     if real.sum() < 50:
@@ -146,7 +150,8 @@ def r2_fdr_threshold(subject: int, model: int,
     out = fit_one_roi(df.loc[real, 'r2'].to_numpy())
     if out['fit'] is None:
         return float('inf')
-    info = out['fit']
+    info = dict(out['fit'])
+    info['_roi_mtime'] = roi_mtime
     summary = {}
     if sidecar.exists():
         with open(sidecar) as fh:
