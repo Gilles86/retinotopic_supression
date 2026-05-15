@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=prf_cpu_chunked
-#SBATCH --account=hare.econ.uzh
+#SBATCH --account=zne.uzh
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=16G

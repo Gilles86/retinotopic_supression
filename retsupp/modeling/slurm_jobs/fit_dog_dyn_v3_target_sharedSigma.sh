@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=dog_dyn_target_shS
-#SBATCH --account=hare.econ.uzh
+#SBATCH --account=zne.uzh
 #SBATCH --partition=standard
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=8

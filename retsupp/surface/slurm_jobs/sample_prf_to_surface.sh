@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=prf_surf_sample
-#SBATCH --account=hare.econ.uzh
+#SBATCH --account=zne.uzh
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=24G
