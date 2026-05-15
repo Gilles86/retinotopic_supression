@@ -22,9 +22,9 @@
 #SBATCH --job-name=decode_v1
 #SBATCH --account=zne.uzh
 #SBATCH --output=/dev/null
-#SBATCH --cpus-per-task=32
-#SBATCH --mem=64G
-#SBATCH --time=02:00:00
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=16G
+#SBATCH --time=00:10:00
 
 set -eo pipefail
 
