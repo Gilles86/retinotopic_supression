@@ -164,6 +164,10 @@ if __name__ == '__main__':
     p.add_argument('--out-npz', default='notes/data/decoded_smoke_sub-02_V1.npz',
                    help='Save full decoded tensor + paradigm + grid '
                         'for the movie renderer. Pass empty string to skip.')
+    p.add_argument('--out-fig', default='notes/figures/decoded_smoke_sub-02_V1.pdf',
+                   help='Per-TR-grid sanity PDF.')
+    p.add_argument('--out-tsv', default='notes/data/decoded_smoke_sub-02_V1_ring.tsv',
+                   help='Per-ring-position decoded drive TSV.')
     a = p.parse_args()
     main(bids_folder=a.bids_folder, subject=a.subject, roi=a.roi,
          session=a.session, run=a.run, resolution=a.resolution,
@@ -173,4 +177,5 @@ if __name__ == '__main__':
          learning_rate=a.learning_rate,
          max_n_iterations=a.max_n_iterations,
          resid_max_iter=a.resid_max_iter,
+         out_fig=a.out_fig, out_tsv=a.out_tsv,
          out_npz=a.out_npz if a.out_npz else None)
