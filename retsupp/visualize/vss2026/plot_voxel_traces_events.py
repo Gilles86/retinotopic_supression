@@ -40,14 +40,14 @@ import numpy as np
 import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
 from nideconv import ResponseFitter
-from nilearn import maskers
+from nilearn import maskers, masking
 from tqdm import tqdm
 
 from retsupp.utils.data import Subject, distractor_locations
-from retsupp.visualize.plot_voxel_traces_af_vs_no_af import (
+from retsupp.visualize.vss2026.plot_voxel_traces_af_vs_no_af import (
     CONDITIONS, COND_TO_XY,
 )
-from retsupp.visualize.plot_voxel_traces_aggregate import (
+from retsupp.visualize.vss2026.plot_voxel_traces_aggregate import (
     find_matched_voxels,
 )
 
@@ -137,7 +137,9 @@ def aggregate_subject(sub: Subject, masker, opts):
     pars = {}
     for p in ('x', 'y', 'sd', 'r2'):
         pth = prf_pars_path_x.parent / f'sub-{sub.subject_id:02d}_desc-{p}.nii.gz'
-        pars[p] = masker.transform(str(pth)).flatten()
+        # ensure_finite=False so mark_invalid_fits NaN sentinels survive.
+        pars[p] = masking.apply_mask(str(pth), masker.mask_img_,
+                                      ensure_finite=False)
     prf_df = pd.DataFrame(pars)
 
     matched = find_matched_voxels(

@@ -42,7 +42,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
-from nilearn import input_data
+from nilearn import input_data, masking
 
 from retsupp.utils.data import Subject, distractor_locations
 
@@ -150,10 +150,13 @@ def load_observed_centers(sub: Subject, voxel_indices: np.ndarray,
 
     for ci, cond in enumerate(CONDITIONS):
         for pi, par in enumerate(['x', 'y']):
-            arr = masker.transform(df.loc[cond, par]).flatten()
+            # ensure_finite=False so mark_invalid_fits NaN sentinels survive.
+            arr = masking.apply_mask(df.loc[cond, par], masker.mask_img_,
+                                      ensure_finite=False)
             obs[:, ci, pi] = arr[voxel_indices]
         if 'r2' in df.columns:
-            r2_arr = masker.transform(df.loc[cond, 'r2']).flatten()
+            r2_arr = masking.apply_mask(df.loc[cond, 'r2'], masker.mask_img_,
+                                         ensure_finite=False)
             obs_r2[:, ci] = r2_arr[voxel_indices]
     return obs, obs_r2
 

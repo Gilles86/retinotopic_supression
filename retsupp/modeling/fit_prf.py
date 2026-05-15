@@ -383,11 +383,14 @@ def load_prior_pars(subject: int, model_label: int, derivs: Path,
                     masker, sd_min: float | None = None) -> pd.DataFrame:
     """Read NIfTI parameters of a previous model fit into a DataFrame.
 
-    If ``sd_min`` is given, clip σ-like columns to slightly above the
-    floor so braincoder's `_sd_softplus_inverse` doesn't trip on
-    numerical drift around the boundary. Sentinel zeros (invalid fits)
-    are left alone — they get filtered out by the active-mask later.
+    Reads through ``nilearn.masking.apply_mask`` with
+    ``ensure_finite=False`` so the NaN sentinels written by
+    ``mark_invalid_fits`` survive. ``NiftiMasker.transform`` silently
+    zero-imputes NaN (signal.clean's default), which makes invalid
+    voxels indistinguishable from σ=0 fits and trips braincoder's
+    strict σ > sd_min check during downstream warm-starts.
     """
+    from nilearn import masking
     src = derivs / 'prf' / f'model{model_label}' / f'sub-{subject:02d}'
     if not src.exists():
         raise FileNotFoundError(
@@ -396,27 +399,10 @@ def load_prior_pars(subject: int, model_label: int, derivs: Path,
     pars = {}
     for nii in sorted(src.glob(f'sub-{subject:02d}_desc-*.nii.gz')):
         name = nii.name.split('desc-')[1].rsplit('.nii.gz', 1)[0]
-        pars[name] = masker.transform(str(nii)).flatten()
+        pars[name] = masking.apply_mask(str(nii), masker.mask_img_,
+                                         ensure_finite=False)
     df = pd.DataFrame(pars)
     if sd_min is not None:
-        floor = sd_min * 1.01
-        if 'sd' in df.columns:
-            s = df['sd'].to_numpy()
-            mask = (s > 0) & (s <= sd_min)
-            if mask.any():
-                df.loc[mask, 'sd'] = floor
-        if 'srf_size' in df.columns:
-            r = df['srf_size'].to_numpy()
-            mask = (r > 0) & (r <= 1.0)
-            if mask.any():
-                df.loc[mask, 'srf_size'] = 1.01
-        for pos_col in ('neural_baseline', 'surround_baseline',
-                        'srf_amplitude'):
-            if pos_col in df.columns:
-                v = df[pos_col].to_numpy()
-                mask = np.isfinite(v) & (v <= 0)
-                if mask.any():
-                    df.loc[mask, pos_col] = 1e-4
         validate_prf_parameters(df, sd_min=sd_min,
                                  model_label=model_label, source=str(src))
     return df

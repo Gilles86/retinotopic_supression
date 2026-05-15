@@ -17,19 +17,41 @@
 # Usage:
 #   KIND=full bash submit_prf_sweep_persub.sh           # all subjects
 #   SUBJECTS="1 5 10" KIND=full bash submit_prf_sweep_persub.sh   # subset
+#   NICE_M3=10000 NICE_M5=10000 NICE_M6=10000 WITH_AF=1 \
+#       SUBJECTS="3 5 8 10 13 17 20 26 27 30" \
+#       bash submit_prf_sweep_persub.sh
+#       # ↑ critical path m1→m2→m4 normal priority; m3/m5/m6 deprioritized;
+#       #   AF (sharedSigma) chained per-subject after m4 neuropythy.
 
 set -eo pipefail
 
 KIND="${KIND:-full}"
 N_CHUNKS=10
 SUBJECTS="${SUBJECTS:-$(seq 1 30)}"
+BIDS="${BIDS:-/shares/zne.uzh/gdehol/ds-retsupp}"
+
+# Per-model SLURM --nice value (higher = lower scheduling priority).
+# Default 0 = no nice adjustment. Use to deprioritize non-critical-path
+# models so m4 (and downstream AF) get scheduled first.
+NICE_M1="${NICE_M1:-0}"
+NICE_M2="${NICE_M2:-0}"
+NICE_M3="${NICE_M3:-0}"
+NICE_M4="${NICE_M4:-0}"
+NICE_M5="${NICE_M5:-0}"
+NICE_M6="${NICE_M6:-0}"
+
+# WITH_AF=1 chains the canonical dynamic AF model
+# (fit_dog_dyn_v3_target_sharedSigma) after each subject's m4 neuropythy.
+WITH_AF="${WITH_AF:-0}"
+N_ROIS_AF=11   # must match ROIS array in fit_dog_dyn_v3_target_sharedSigma.sh
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 S_CACHE="$SCRIPT_DIR/build_cleaned_bold_cache.sh"
-S_CHUNK="$SCRIPT_DIR/fit_prf_l4_chunked.sh"
+S_CHUNK="${S_CHUNK:-$SCRIPT_DIR/fit_prf_cpu_chunked.sh}"
 S_MERGE="$SCRIPT_DIR/merge_prf_chunks.sh"
 S_SURF="$(cd "$SCRIPT_DIR/../../surface/slurm_jobs" && pwd)/sample_prf_to_surface.sh"
 S_NEURO="$(cd "$SCRIPT_DIR/../../neuropythy/slurm_jobs" && pwd)/register_retinotopy.sh"
+S_AF="$SCRIPT_DIR/fit_dog_dyn_v3_target_sharedSigma.sh"
 
 # Per-chunk wallclock observed on L4 lowprio:
 #   m1: ~10 min (2000-iter grid+GD); fast chunks 5 min, slow 15
@@ -43,30 +65,58 @@ T_CHUNK_M5=00:35:00
 T_CHUNK_M6=00:35:00
 T_MERGE=00:03:00   # actual elapsed is 10-30s; tight window helps backfill
 T_CACHE=00:15:00
-T_SURF=00:30:00
+T_SURF=00:08:00   # actual elapsed ~2:30-3:00; tight window helps backfill
 T_NEURO=01:00:00
 
 sb() { sbatch "$@" | awk '{print $4}'; }
+
+block_already_done() {
+    # Treat the model block as done iff the merged r2 NIfTI exists.
+    local sub=$1 model=$2
+    local sp=$(printf "%02d" "$sub")
+    [[ -f "${BIDS}/derivatives/prf/model${model}/sub-${sp}/sub-${sp}_desc-r2.nii.gz" ]]
+}
+
+cache_already_done() {
+    local sub=$1
+    local sp=$(printf "%02d" "$sub")
+    compgen -G "${BIDS}/derivatives/cleaned_bold_cache/sub-${sp}/sub-${sp}_kind-${KIND}_res-50.npz" >/dev/null
+}
 
 submit_model_block() {
     # Submit chunks → merge → surface → neuropythy for one (subject, model).
     # Args: sub, model, dep_chunks (afterok for chunks; empty if m1),
     #       dep_neuro (afterok for neuropythy from previous model; empty for m1)
     # Sets globals J_CHUNK J_MERGE J_SURF J_NEURO.
+    #
+    # Skips the whole block (sets the four J_* globals to "") iff the
+    # merged r2 NIfTI already exists. Downstream blocks pass these
+    # empty strings as their afterok deps and correctly submit with no
+    # dependency (the file is already on disk).
     local sub=$1 model=$2 dep_chunks=$3 dep_neuro=$4
+    if block_already_done "$sub" "$model"; then
+        local sp=$(printf "%02d" "$sub")
+        echo "  sub-${sp} m${model}: r2 exists; skipping chunks/merge/surf/neuro"
+        J_CHUNK="" J_MERGE="" J_SURF="" J_NEURO=""
+        return
+    fi
     local DEP_C=""
     [[ -n "$dep_chunks" ]] && DEP_C="--dependency=afterok:$dep_chunks"
     local t_chunk_var="T_CHUNK_M${model}"
     local T_CHUNK=${!t_chunk_var}
+    local nice_var="NICE_M${model}"
+    local NICE_VAL=${!nice_var}
+    local NICE_ARG=""
+    [[ "$NICE_VAL" -gt 0 ]] && NICE_ARG="--nice=$NICE_VAL"
 
-    J_CHUNK=$(sb --array=1-$N_CHUNKS --time=$T_CHUNK $DEP_C \
+    J_CHUNK=$(sb $NICE_ARG --array=1-$N_CHUNKS --time=$T_CHUNK $DEP_C \
         --export=ALL,SUBJECT=$sub,MODEL=$model,N_CHUNKS=$N_CHUNKS,KIND=$KIND \
         "$S_CHUNK")
-    J_MERGE=$(sb --array=$sub --time=$T_MERGE \
+    J_MERGE=$(sb $NICE_ARG --array=$sub --time=$T_MERGE \
         --dependency=afterok:$J_CHUNK \
         --export=ALL,MODEL=$model,KIND=$KIND \
         "$S_MERGE")
-    J_SURF=$(sb --partition=lowprio --array=$sub --time=$T_SURF \
+    J_SURF=$(sb $NICE_ARG --partition=lowprio --array=$sub --time=$T_SURF \
         --dependency=afterok:$J_MERGE \
         --export=ALL,MODEL=$model \
         "$S_SURF")
@@ -75,7 +125,7 @@ submit_model_block() {
     # is no longer in use).
     local NEURO_DEP="afterok:$J_SURF"
     [[ -n "$dep_neuro" ]] && NEURO_DEP="$NEURO_DEP,afterok:$dep_neuro"
-    J_NEURO=$(sb --partition=lowprio --array=$sub --time=$T_NEURO \
+    J_NEURO=$(sb $NICE_ARG --partition=lowprio --array=$sub --time=$T_NEURO \
         --dependency=$NEURO_DEP \
         --export=ALL,MODEL=$model \
         "$S_NEURO")
@@ -84,8 +134,13 @@ submit_model_block() {
 submit_one_subject() {
     local sub=$1
     local sub_pad=$(printf "%02d" "$sub")
-    local J_CACHE=$(sb --array=$sub --time=$T_CACHE \
-        --export=ALL,KIND=$KIND "$S_CACHE")
+    local J_CACHE=""
+    if cache_already_done "$sub"; then
+        echo "  sub-${sub_pad} cache: exists; skipping"
+    else
+        J_CACHE=$(sb --array=$sub --time=$T_CACHE \
+            --export=ALL,KIND=$KIND "$S_CACHE")
+    fi
 
     # m1 chunks gated on cache; everything else cascades.
     submit_model_block "$sub" 1 "$J_CACHE" ""
@@ -100,12 +155,29 @@ submit_one_subject() {
     submit_model_block "$sub" 4 "$J2_M" "$J3_N"
     local J4_N=$J_NEURO
 
+    # AF chain (canonical dynamic v3 + target + sharedSigma). Depends on
+    # m4 neuropythy so the inferred-varea atlas exists when AF asks for
+    # per-ROI voxels. One array task per ROI for this subject.
+    local J_AF=""
+    if [[ "$WITH_AF" == "1" ]]; then
+        local sub_idx=$((sub - 1))
+        local af_start=$((sub_idx * N_ROIS_AF + 1))
+        local af_end=$((sub * N_ROIS_AF))
+        local AF_DEP=""
+        [[ -n "$J4_N" ]] && AF_DEP="--dependency=afterok:$J4_N"
+        J_AF=$(sb --array=${af_start}-${af_end} $AF_DEP "$S_AF")
+    fi
+
     submit_model_block "$sub" 5 "$J2_M" "$J4_N"
     local J5_M=$J_MERGE J5_N=$J_NEURO
 
     submit_model_block "$sub" 6 "$J5_M" "$J5_N"
 
-    echo "sub-${sub_pad}: cache=$J_CACHE chain submitted (last neuropythy job $J_NEURO)"
+    if [[ -n "$J_AF" ]]; then
+        echo "sub-${sub_pad}: cache=$J_CACHE  m4_neuro=$J4_N  af=$J_AF  last_neuro=$J_NEURO"
+    else
+        echo "sub-${sub_pad}: cache=$J_CACHE chain submitted (last neuropythy job $J_NEURO)"
+    fi
 }
 
 echo "=== per-subject full pipeline, kind=$KIND, ${N_CHUNKS} chunks/subject ==="

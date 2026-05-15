@@ -14,7 +14,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import norm
-from nilearn import maskers
+from nilearn import maskers, masking
 from tqdm import tqdm
 
 from retsupp.utils.data import Subject
@@ -91,7 +91,9 @@ def run_one(subject: int, model: int, bids_folder: Path,
                / f'sub-{subject:02d}_desc-r2.nii.gz')
     if not r2_path.exists():
         return None
-    r2 = masker.transform(str(r2_path)).flatten()
+    # ensure_finite=False so mark_invalid_fits NaN sentinels survive.
+    r2 = masking.apply_mask(str(r2_path), masker.mask_img_,
+                             ensure_finite=False)
 
     p_signal_all = np.full(r2.size, np.nan, dtype=np.float32)
     summary = {'model': model}
