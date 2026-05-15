@@ -64,9 +64,17 @@ tmux capture-pane -t snake_demo -p | tail -30
 
 ## What to expect
 
-Wall time on lowprio (very rough, sub-01 / m1): chunks dispatch within
-30s, finish ~10 min each, merge runs ~1 min, surface ~3 min. Total
-~15 min from submit to all done if no preemption.
+Wall time on lowprio (very rough, sub-01 / m1): each chunk finishes
+~10 min on an L4 GPU, merge runs ~1 min, surface ~3 min. **Caveat:**
+how fast chunks dispatch depends entirely on the lowprio L4 queue;
+when the queue is busy (~80 PD jobs observed 2026-05-15) you may only
+get 4 concurrent L4 slots and the rest sit at `(Priority)`. With
+plenty of idle L4s, 10 chunks dispatch in under a minute. Plan for
+anywhere between 15 min and several hours wall-clock.
+
+Snakemake names every SLURM job after its run UUID, so `squeue` shows
+`0866e12f-6d64-4ea1-...` instead of a human-readable name. To find
+your demo jobs: `squeue --me -O jobid,name,state | grep <first-8-of-uuid>`.
 
 Final output the driver waits on:
 
@@ -83,3 +91,31 @@ The whole demo lives in one folder; remove with:
 ```bash
 rm -rf /shares/zne.uzh/gdehol/ds-retsupp/derivatives/prf.snakemake_demo/
 ```
+
+## Gotchas hit during the proof-of-concept
+
+(2026-05-15, snakemake 9.20.0 + snakemake-executor-plugin-slurm 2.6.1)
+
+- **`slurm_extra` is locked-down.** The plugin maintains a `forbidden_options`
+  list (see `validation.py::get_forbidden_slurm_options`) covering
+  `--gres`, `--constraint`, `--job-name`, `--account`, `--partition`,
+  `--mem`, `--time`, etc. Putting any of those in `slurm_extra` raises
+  `WorkflowError` inside the threadpool worker, which is then swallowed
+  — symptom: snakemake logs "Submitting 10 ready jobs" and silently
+  does nothing. Use first-class resource keys instead:
+  `gres="gpu:1"`, `constraint="L4"`, `slurm_partition`, `slurm_account`,
+  `runtime`, `mem_mb`, `cpus_per_task`.
+- **SLURM job-names are UUIDs.** The plugin sets `--job-name <run-uuid>`
+  itself so it can correlate `sacct/squeue` output back to the
+  workflow run. It's intentional; just unfortunate for visual
+  inspection in `squeue`.
+- **`time.sleep(5)` per submission.** The plugin sleeps 5 seconds
+  between each sbatch call (see `__init__.py:1138`). With 10 chunks
+  that's a ~50s ramp-up before all are queued. Tolerable; harmless.
+- **No cuInit warm-up flock.** Our Snakefile skips the per-host
+  `/dev/shm` flock the canonical `fit_prf_l4_chunked.sh` does — safe
+  here because we constrain to L4 (1 GPU per node), so two jobs can't
+  cuInit-race on the same hardware.
+- **Cleaned-BOLD cache is a hard prereq.** The demo doesn't rebuild
+  it (the canonical `build_cleaned_bold_cache.sh` is a separate job);
+  Snakefile errors immediately at load time if missing.
