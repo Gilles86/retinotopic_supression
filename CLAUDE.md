@@ -57,7 +57,8 @@ Several scripts dispatch on an integer `model_label`:
 | 2 | Difference-of-Gaussians | no | |
 | 3 | Gaussian | yes | |
 | 4 | DoG | yes | the **canonical "mean" model** used as baseline in conditionwise/runwise fits |
-| 6 | Divisive Normalization Gaussian | yes | from braincoder `DivisiveNormalizationGaussianPRF2DWithHRF` |
+| 5 | Divisive Normalization Gaussian | no | DN with fixed canonical HRF; inits from m2 (DoG seed) — see `_adapt_m5_from_m2` in `modeling/fit_prf.py` |
+| 6 | Divisive Normalization Gaussian | yes | from braincoder `DivisiveNormalizationGaussianPRF2DWithHRF`; inits from m5 |
 | 7–11 | DoG variants | yes | parameter labels match model 4 (see `get_prf_parameter_labels`) |
 | 8 | DoG variant | yes | the model used by `fit_attention_model.py` |
 
@@ -77,6 +78,23 @@ When adding a new model, update `get_prf_parameter_labels` *and* the dispatch in
 10. **Attention model** — `modeling/fit_attention_model.py` fits a 2-parameter model (`attention_sd`, log-`ratio`) per ROI per subject from the conditionwise PRF parameters using a precision-weighted product of Gaussians (4 attention Gaussians × PRF Gaussian).
 
 The `Subject.get_bold(type='prf_regressed_out')` files are produced by `eccentric_glm/clean_data.py` — that is, the eccentric GLM operates on data with the mean PRF prediction regressed out, which isolates the residual stimulus-locked signal at HP-distractor locations.
+
+### Stimulus decoding entrypoint (canonical)
+
+The validated decode pipeline is **`retsupp/decode/decode_v1_handoff.py`**, NOT `decode_runwise.py` (the latter was written from `notes/decoding_runwise_plan.md` and drifted from the working defaults — kept around but uses different paradigm/sd_min/lr).
+
+Calibrated defaults in `decode_v1_handoff.py` that took real work to tune — don't change without understanding why:
+
+- **`l2_norm=1.0`** — matches the binary 0/1 paradigm scale via the Gaussian-prior interpretation `σ_prior = 1/√(2·L2) ≈ 0.71`. Smaller L2 → noisy spikes; larger L2 → crushed amplitude.
+- **`learning_rate=0.5`** for `StimulusFitter.fit` (NOT 0.05 — that's too slow for this scale).
+- **`resid_max_iter=2000`** — omega/dof landscape is shallow, fitter early-stops on plateau but needs the headroom.
+- **`max_voxels=200`** top-N by r² as the SOLE voxel filter — m4 warmstart fits enforce `sd_min=0.2` at the model level so phantoms don't exist; no FDR / σ / ecc filters needed.
+- **`sd_min=0.2`** passed to the PRF *model* constructor (not just as a filter). Required because the m4 warmstart fits use the same floor; mismatched `sd_min` makes the softplus-inverse fail.
+- **Paradigm is bar-only** via `Subject.get_bar_stimulus(...)`, NOT bar+distractors. Distractors are not part of the PRF mapping stimulus from the decoder's perspective — including them gives the encoder extra structure at the 4 corners that pulls decoded mass to those locations.
+
+Input: per-subject handoff NPZ at `derivatives/v1_decode_handoffs/sub-NN_m4_V1.npz` (PRF params + cleaned BOLD concat across 12 runs + voxel metadata, all aligned). Built by `retsupp/modeling/slurm_jobs/build_v1_handoff.sh`.
+
+If you want a per-run decode without the handoff NPZ, replicate the pipeline using regular m4 NIfTIs + `sub.get_bar_stimulus(...)` + `sd_min=0.2` in the model. **Do not** invoke `decode_runwise.py` and expect the same results — it uses different paradigm and model floor.
 
 ### Data flow conventions
 
@@ -265,6 +283,39 @@ and routinely confuses people. Same goes for `sigma_AF`,
 - All fitting scripts take a positional `subject` (int) and `--bids_folder`; SLURM array index `$SLURM_ARRAY_TASK_ID` provides the subject ID, zero-padded for the directory pattern `sub-{N:02d}`.
 - Plotting prefers seaborn (per global instructions). For per-condition panels, use `FacetGrid`/`relplot`/`catplot`. For polar/rotated visualizations of the conditionwise PRFs, use the rotated `(x_rotated, y_rotated)` columns from `get_conditionwise_summary_prf_pars` — this puts every condition's distractor at the top, so attention effects average meaningfully across conditions.
 - Distractor locations are encoded with two parallel conventions: the integer codes `1.0/3.0/5.0/7.0/10.0` from the events.tsv (`Subject.location_mapping` translates) and the string keys `'upper_right'/'upper_left'/'lower_left'/'lower_right'` used by the conditionwise PRFs and the attention model. The string form (with underscore) is the canonical form for `condition_pars`; the space-separated form (`'upper right'`) appears in some legacy code (`distractor_locations` dict in `data.py`). Watch for this when joining data.
+
+## Subject QC: PRF fit quality (m4, as of 2026-05-13)
+
+Computed from `derivatives/prf_summaries/model4/sub-XX/sub-XX_model-4_prf_voxels.tsv` — per-voxel R² inside neuropythy-defined ROIs. Metric: median R² in V1/V2/V3 (both hemispheres, full paradigm, mean-across-runs fit). Ranking captured at one point in time — re-run the snippet in `notebooks/` if model 4 has been refit.
+
+**Top tier (use these by default for single-subject demos, figure exemplars, sanity checks).** Strong early-visual retinotopy, >50% VC voxels above R² = 0.1:
+
+| Subject | V1 med R² | V2 med | V3 med | VC %>0.1 |
+|---|---|---|---|---|
+| sub-23 | 0.095 | 0.169 | 0.325 | 60% |
+| sub-03 | 0.077 | 0.103 | 0.273 | 60% |
+| sub-17 | 0.111 | 0.077 | 0.114 | 55% |
+| sub-08 | 0.109 | 0.089 | 0.145 | 45% |
+| sub-13 | 0.089 | 0.037 | 0.163 | 54% |
+| sub-15 | 0.082 | 0.050 | 0.144 | 52% |
+| sub-14 | 0.075 | 0.117 | 0.142 | 45% |
+| sub-21 | 0.040 | 0.038 | 0.285 | 58% |
+
+**Bottom tier (treat with caution — flat retinotopy or noisy data).** Avoid these as exemplars; for group-level analysis weigh or screen by R²:
+
+| Subject | V1 med R² | V2 med | V3 med | VC %>0.1 |
+|---|---|---|---|---|
+| sub-25 | 0.021 | 0.021 | 0.027 | 25% |
+| sub-22 | 0.025 | 0.024 | 0.043 | 31% |
+| sub-01 | 0.013 | 0.016 | 0.125 | 46% |
+| sub-29 | 0.020 | 0.022 | 0.039 | 44% |
+| sub-18 | 0.021 | 0.029 | 0.087 | 44% |
+
+Notes:
+- V1 medians look low everywhere because the ROI extends well beyond the bar-mapped FOV (3.17° radius); high-R² fovea voxels are mixed with low-R² peripheral voxels that the paradigm doesn't cover.
+- V3 / hV4 medians are usually higher than V1 — these ROIs are smaller and more concentrated in the mapped region.
+- **sub-08** has no volume PRF outputs locally (sub-dir empty) — summary TSV exists, so it was fit on the cluster but not synced.
+- For a full ranking re-run the script (uses ~5s, no fitting): iterate `prf_summaries/model4/sub-*/`, compute `df['r2'].median()` per ROI.
 
 ## Notes folder
 
