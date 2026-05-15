@@ -121,7 +121,9 @@ rule prf_chunks:
         mem_mb=32000,
         cpus_per_task=4,
         gres="gpu:1",
-        constraint="L4|V100|A100",
+        # L4 only: 1-GPU-per-node, so concurrent jobs can't race cuInit
+        # on a shared node. Matches the current fit_prf_l4_chunked.sh.
+        constraint="L4",
     shell:
         r"""
         set -eo pipefail
