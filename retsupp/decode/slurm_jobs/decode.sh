@@ -74,8 +74,21 @@ EXTRA="--noise-dist $NOISE_DIST"
 
 if [[ -n "${OUT:-}" ]]; then
     OUT_ARG="--out $OUT"
+    expected_out="$OUT"
 else
     OUT_ARG=""
+    # decode.py default tag: ses-{S}_run-{R}_roi-{ROI}_vox{N}[_psigP][_t]
+    out_tag="ses-${SES}_run-${RUN}_roi-${ROI:-V1}_vox${MAX_VOXELS}"
+    [[ "${VOXEL_FILTER:-}" == "p_signal" ]] && \
+        out_tag="${out_tag}_psig${PSIGNAL_POSTERIOR:-0.5}"
+    [[ "$NOISE_DIST" == "t" ]] && out_tag="${out_tag}_t"
+    expected_out="/shares/zne.uzh/gdehol/ds-retsupp/derivatives/decoded/model4/sub-${sub_pad}/decoded_${out_tag}.npz"
+fi
+
+if [[ -f "$expected_out" ]]; then
+    echo "Output already exists, skipping: $expected_out"
+    echo "Finished (skipped): $(date)"
+    exit 0
 fi
 
 $PYTHON -u -m retsupp.decode.decode \
