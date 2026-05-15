@@ -26,7 +26,7 @@
 set -eo pipefail
 
 KIND="${KIND:-full}"
-N_CHUNKS=10
+N_CHUNKS="${N_CHUNKS:-10}"
 SUBJECTS="${SUBJECTS:-$(seq 1 30)}"
 BIDS="${BIDS:-/shares/zne.uzh/gdehol/ds-retsupp}"
 
