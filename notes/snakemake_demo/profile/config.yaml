@@ -1,0 +1,40 @@
+# Snakemake workflow profile for the retsupp PRF demo on UZH sciencecluster.
+#
+# Loaded via:
+#   snakemake --workflow-profile notes/snakemake_demo/profile ...
+#
+# Pins the SLURM executor + defaults shared across all rules; rule-level
+# `resources:` blocks add/override (GPU gres, mem, walltime, etc.).
+
+executor: slurm
+
+# Cluster-wide defaults. Per-rule resources override these.
+default-resources:
+  slurm_partition: lowprio
+  slurm_account: zne.uzh
+  runtime: 30
+  mem_mb: 8000
+  cpus_per_task: 2
+
+# Cap concurrent SLURM jobs Snakemake will keep in flight at once.
+# 12 covers 10 chunks + merge + surface with headroom; no NFS dogpile
+# concern at this scale.
+jobs: 12
+
+# Always print which rule a SLURM job belongs to in logs.
+printshellcmds: True
+
+# Surface log path under notes/snakemake_demo/logs/ — keeps the demo
+# self-contained instead of mixing with ~/logs/.
+slurm-logdir: ./notes/snakemake_demo/logs/slurm
+
+# Retain incomplete files on rule failure so we can inspect; without
+# this snakemake helpfully deletes partial outputs.
+keep-incomplete: True
+
+# Re-run any rule whose inputs are newer than its outputs (default).
+# Don't auto-trigger on shell-command changes — the Snakefile edits
+# during dev would otherwise re-run finished work.
+rerun-triggers:
+  - mtime
+  - input

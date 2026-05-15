@@ -1,0 +1,232 @@
+# Snakemake proof-of-concept for the retsupp PRF pipeline.
+#
+# Demo scope (deliberately narrow):
+#   - one subject (sub-01) — the cleaned-BOLD cache must already exist
+#   - one model (m1, Gaussian PRF)
+#   - 10 voxel chunks → merge → surface sample (both hemis in one rule)
+#   - outputs land under derivatives/prf.snakemake_demo/ via the
+#     --output-suffix flag — canonical derivatives/prf/ is untouched
+#
+# Driver (from the cluster login node, inside ~/git/retsupp):
+#   snakemake \
+#       --snakefile notes/snakemake_demo/Snakefile \
+#       --workflow-profile notes/snakemake_demo/profile \
+#       --executor slurm \
+#       --jobs 12
+#
+# The profile pins account=zne.uzh + partition=lowprio defaults; each
+# rule below overrides resources where appropriate (gpu for the chunk
+# rule, more mem for surface, etc.).
+#
+# Why a separate file (not a port of submit_prf_sweep_persub.sh):
+# this Snakefile is intentionally small and dependency-driven; the
+# afterok chains in the bash submitter melt away because the DAG is
+# inferred from input/output files. If something fails midway the
+# fix is `snakemake -F merged_r2_output_file` — no manual scontrol
+# release dance.
+
+from pathlib import Path
+
+# ---------------------------------------------------------------------------
+# Demo config (kept inline for clarity; real workflow would config.yaml this)
+# ---------------------------------------------------------------------------
+BIDS = "/shares/zne.uzh/gdehol/ds-retsupp"
+SUBJECT = 1
+MODEL = 1
+N_CHUNKS = 10
+KIND = "full"
+OUTPUT_SUFFIX = "snakemake_demo"
+REPO = "/home/gdehol/git/retsupp"
+PYTHON = "/home/gdehol/data/conda/envs/retsupp_cuda/bin/python"
+
+# Output dir = derivatives/prf.<suffix>/model{N}/sub-XX/
+SUB_PAD = f"{SUBJECT:02d}"
+PRF_DIR = f"prf.{OUTPUT_SUFFIX}" if OUTPUT_SUFFIX else "prf"
+MODEL_DIR = f"{BIDS}/derivatives/{PRF_DIR}/model{MODEL}/sub-{SUB_PAD}"
+CHUNKS_DIR = f"{MODEL_DIR}/chunks"
+CACHE_FILE = (
+    f"{BIDS}/derivatives/cleaned_bold_cache/sub-{SUB_PAD}/"
+    f"sub-{SUB_PAD}_kind-{KIND}_res-50.npz"
+)
+
+# Pre-formatted zero-padded chunk indices for {chunk} wildcards.
+# Snakemake's expand() can't do ":04d" inside the brace template, so
+# we expand chunk strings ourselves and inject them as plain labels.
+CHUNK_IDS = [f"{i:04d}" for i in range(N_CHUNKS)]
+N_CHUNKS_STR = f"{N_CHUNKS:04d}"
+
+# A representative merged param ("r2") — its existence is the signal
+# that the merge step completed successfully.
+MERGED_SENTINEL = f"{MODEL_DIR}/sub-{SUB_PAD}_desc-r2.nii.gz"
+# Surface sentinel (one of the hemis); the rule below writes both L and R
+# plus their fsaverage transforms.
+SURF_SENTINEL = (
+    f"{MODEL_DIR}/sub-{SUB_PAD}_desc-r2.optim.nilearn_"
+    f"space-fsnative_hemi-L.func.gii"
+)
+
+
+# ---------------------------------------------------------------------------
+# Pre-flight: the cleaned-BOLD cache is a hard prereq (we don't rebuild
+# it in this demo — sub-01's cache is already on disk; see CLAUDE.md).
+# ---------------------------------------------------------------------------
+if not Path(CACHE_FILE).exists():
+    raise FileNotFoundError(
+        f"Cleaned BOLD cache missing: {CACHE_FILE}\n"
+        f"Rebuild via "
+        f"sbatch --array={SUBJECT} retsupp/modeling/slurm_jobs/"
+        f"build_cleaned_bold_cache.sh"
+    )
+
+
+# ---------------------------------------------------------------------------
+# all: the final artefact we want on disk
+# ---------------------------------------------------------------------------
+rule all:
+    input:
+        SURF_SENTINEL,
+
+
+# ---------------------------------------------------------------------------
+# prf_chunks: one SLURM task per voxel chunk (10 total for sub-01).
+#
+# Snakemake's SLURM executor dispatches each {chunk} as its own sbatch
+# call — there's no array job (each gets its own jobid). Resources
+# match fit_prf_l4_chunked.sh §SBATCH lines: 4 cpus, 32G, GPU.
+#
+# Note we skip the per-host flock cuInit warm-up. The flock matters
+# when 8 jobs land on the same V100/A100 node simultaneously; with
+# Snakemake throttled to --jobs 12 across 10 chunks it's unlikely
+# any two land on the same node within 1s. If this turns out to be
+# wrong, switch to invoking fit_prf_l4_chunked.sh as a wrapper.
+# ---------------------------------------------------------------------------
+rule prf_chunks:
+    input:
+        cache=CACHE_FILE,
+    output:
+        f"{CHUNKS_DIR}/chunk-{{chunk}}-of-{N_CHUNKS_STR}.npz",
+    wildcard_constraints:
+        chunk=r"\d{4}",
+    log:
+        f"{REPO}/notes/snakemake_demo/logs/prf_chunks_sub-{SUB_PAD}_m{MODEL}_chunk-{{chunk}}.log",
+    resources:
+        slurm_partition="lowprio",
+        slurm_account="zne.uzh",
+        runtime=20,              # 20 min wall (m1 ≈ 10 min on L4)
+        mem_mb=32000,
+        cpus_per_task=4,
+        slurm_extra=(
+            "--gres=gpu:1 "
+            "--constraint='L4|V100|A100' "
+            f"--job-name=snake_prf_m{MODEL}_sub-{SUB_PAD}"
+        ),
+    shell:
+        r"""
+        set -eo pipefail
+        echo "Host: $(hostname) chunk={wildcards.chunk}"
+        echo "Started: $(date)"
+
+        # CUDA runtime (TF 2.14 / CUDA 11.8 ABI). Mirrors fit_prf_l4_chunked.sh.
+        SYS_CUDA_GLOB=( /apps/u24/opt/x86_64_v3/cuda-11.8.0-* )
+        if [[ -d "${{SYS_CUDA_GLOB[0]}}/targets/x86_64-linux/lib" ]]; then
+            export LD_LIBRARY_PATH="${{SYS_CUDA_GLOB[0]}}/targets/x86_64-linux/lib${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}"
+        fi
+        export PYTHONUNBUFFERED=1
+
+        {PYTHON} -u "{REPO}/retsupp/modeling/fit_prf.py" \
+            {SUBJECT} --model {MODEL} \
+            --bids-folder {BIDS} \
+            --resolution 50 \
+            --voxel-chunk-size 100000 \
+            --paradigm-kind {KIND} \
+            --chunk-index {wildcards.chunk} \
+            --n-chunks {N_CHUNKS} \
+            --output-suffix {OUTPUT_SUFFIX}
+
+        echo "Finished: $(date)"
+        """
+
+
+# ---------------------------------------------------------------------------
+# prf_merge: glue all 10 chunks into merged NIfTIs. CPU-only, low mem.
+# Sentinel output is sub-XX_desc-r2.nii.gz (merged writes many files;
+# r2 is the canonical "did it succeed" marker — see CLAUDE.md block_already_done).
+# ---------------------------------------------------------------------------
+rule prf_merge:
+    input:
+        expand(
+            f"{CHUNKS_DIR}/chunk-{{chunk}}-of-{N_CHUNKS_STR}.npz",
+            chunk=CHUNK_IDS,
+        ),
+    output:
+        MERGED_SENTINEL,
+    log:
+        f"{REPO}/notes/snakemake_demo/logs/prf_merge_sub-{SUB_PAD}_m{MODEL}.log",
+    resources:
+        slurm_partition="lowprio",
+        slurm_account="zne.uzh",
+        runtime=10,
+        mem_mb=8000,
+        cpus_per_task=2,
+        slurm_extra=f"--job-name=snake_merge_m{MODEL}_sub-{SUB_PAD}",
+    shell:
+        r"""
+        set -eo pipefail
+        echo "Host: $(hostname)"
+        echo "Started: $(date)"
+
+        export PYTHONUNBUFFERED=1
+        {PYTHON} -u "{REPO}/retsupp/modeling/merge_prf_chunks.py" \
+            {SUBJECT} --model {MODEL} \
+            --bids-folder {BIDS} \
+            --paradigm-kind {KIND} \
+            --output-suffix {OUTPUT_SUFFIX} \
+            --keep-chunks
+
+        echo "Finished: $(date)"
+        """
+
+
+# ---------------------------------------------------------------------------
+# prf_surface: vol -> fsnative .gii (both hemis) + fsaverage transform.
+# Uses notes/snakemake_demo/scripts/sample_to_surface_demo.py — a thin
+# fork of retsupp/surface/sample_prf_to_surface_nilearn.py that reads
+# from prf.<suffix>/ instead of the hardcoded prf/.
+# ---------------------------------------------------------------------------
+rule prf_surface:
+    input:
+        MERGED_SENTINEL,
+    output:
+        SURF_SENTINEL,
+    log:
+        f"{REPO}/notes/snakemake_demo/logs/prf_surface_sub-{SUB_PAD}_m{MODEL}.log",
+    resources:
+        slurm_partition="lowprio",
+        slurm_account="zne.uzh",
+        runtime=15,
+        mem_mb=24000,
+        cpus_per_task=4,
+        slurm_extra=f"--job-name=snake_surf_m{MODEL}_sub-{SUB_PAD}",
+    shell:
+        r"""
+        set -eo pipefail
+        echo "Host: $(hostname)"
+        echo "Started: $(date)"
+
+        export FREESURFER_HOME=/shares/zne.uzh/containers/fmriprep-25.2.5/opt/freesurfer
+        export PATH="$FREESURFER_HOME/bin:$PATH"
+        export FS_LICENSE=/shares/zne.uzh/containers/freesurfer/license.txt
+        [[ -f "$FREESURFER_HOME/SetUpFreeSurfer.sh" ]] && \
+            source "$FREESURFER_HOME/SetUpFreeSurfer.sh" >/dev/null 2>&1
+        export SUBJECTS_DIR={BIDS}/derivatives/fmriprep/sourcedata/freesurfer
+        echo "FREESURFER_HOME=${{FREESURFER_HOME}}"
+        echo "SUBJECTS_DIR=${{SUBJECTS_DIR}}"
+
+        export PYTHONUNBUFFERED=1
+        {PYTHON} -u "{REPO}/notes/snakemake_demo/scripts/sample_to_surface_demo.py" \
+            {SUBJECT} --model {MODEL} \
+            --bids-folder {BIDS} \
+            --output-suffix {OUTPUT_SUFFIX}
+
+        echo "Finished: $(date)"
+        """

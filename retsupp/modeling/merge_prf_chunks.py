@@ -23,10 +23,15 @@ from retsupp.utils.data import Subject
 
 
 def main(subject: int, model: int, bids_folder: str = '/data/ds-retsupp',
-         paradigm_kind: str = 'full', keep_chunks: bool = False):
+         paradigm_kind: str = 'full', keep_chunks: bool = False,
+         output_suffix: str = ''):
     bids = Path(bids_folder)
     sub = Subject(subject, bids)
+    # Mirror the suffix logic in fit_prf.main so chunks/ written under
+    # e.g. prf.snakemake_demo/ are also merged out of that folder.
     base_dir = 'prf_bar' if paradigm_kind == 'bar' else 'prf'
+    if output_suffix:
+        base_dir += f'.{output_suffix}'
     src_dir = (bids / 'derivatives' / base_dir / f'model{model}'
                / f'sub-{subject:02d}' / 'chunks')
     out_dir = (bids / 'derivatives' / base_dir / f'model{model}'
@@ -129,6 +134,12 @@ if __name__ == "__main__":
     p.add_argument('--paradigm-kind', choices=['full', 'bar'], default='full')
     p.add_argument('--keep-chunks', action='store_true',
                    help="Don't delete chunks/ after merging.")
+    p.add_argument('--output-suffix', default='',
+                   help='Mirror of fit_prf.py --output-suffix; merge '
+                        'chunks under derivatives/prf.<suffix>/ instead '
+                        'of derivatives/prf/. Use to keep demo / '
+                        'benchmark runs separate from canonical outputs.')
     a = p.parse_args()
     main(a.subject, a.model, bids_folder=a.bids_folder,
-         paradigm_kind=a.paradigm_kind, keep_chunks=a.keep_chunks)
+         paradigm_kind=a.paradigm_kind, keep_chunks=a.keep_chunks,
+         output_suffix=a.output_suffix)
