@@ -10,7 +10,14 @@
 # we're on 11.8.
 #SBATCH --constraint="L4|V100|A100"
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=24G
+#SBATCH --mem=32G
+# (Bumped from 24G after sub-05 / sub-08 m4 chunks OOM'd at host-RAM
+# step 0:125 during stage-2 transition. Subjects with the largest
+# BOLD masks have V ≈ 350k voxels, ~20% more than typical V=300k;
+# combined with --voxel-chunk-size=100000 they exceeded the 24G
+# budget when TF allocated gradient tape for the 7-free-param
+# spatial+amplitude stage. 32G has headroom; bump again or shrink
+# --voxel-chunk-size if it recurs.)
 
 # Partition=lowprio: same physical L4/A100/V100 nodes as standard,
 # but jobs dispatch almost immediately (5-10s) instead of sitting in
