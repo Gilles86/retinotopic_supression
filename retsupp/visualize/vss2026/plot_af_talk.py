@@ -55,6 +55,7 @@ OUTLIER_ABS_CUTOFF = 4.0
 TALK_HP     = '#D62828'   # red: sustained HP / static suppression
 TALK_AF     = '#0077B6'   # blue: dynamic distractor / phasic differential
 TALK_TARGET = '#F77F00'   # orange: target capture
+TALK_STIM   = '#3D5A80'   # deep blue: location-marginalized distractor (stim)
 TALK_FG     = '#1F2933'   # near-black: axes, text
 TALK_MUTED  = '#9AA5B1'   # light gray: zero-line, secondary marks
 
@@ -122,7 +123,7 @@ def _p_text(p):
 
 
 def _plot_one(df, *, col, ylim, ylabel, title, alternative,
-              out_stem, theme_color):
+              out_stem, theme_color, variant=''):
     """Render ONE single-panel talk figure for one quantity × ROIs.
 
     ``theme_color`` is the panel's identity color (HP-red / AF-blue /
@@ -164,10 +165,13 @@ def _plot_one(df, *, col, ylim, ylabel, title, alternative,
         m = float(np.mean(sub))
         sem = float(stats.sem(sub))
         m_plot = float(np.clip(m, *ylim))
+        # Smaller marker so SEM error bars are visible above tiny
+        # within-subject variance (n=18, σ~0.1 → SEM~0.024; a 13pt
+        # marker swallowed the bar entirely).
         ax.errorbar(i, m_plot, yerr=sem,
                     fmt='D',
-                    mfc=theme_color, mec=C_MEAN_EDGE, mew=1.6,
-                    markersize=13,
+                    mfc=theme_color, mec=C_MEAN_EDGE, mew=1.2,
+                    markersize=9,
                     ecolor=C_SEM, elinewidth=2.2,
                     capsize=0, zorder=10)
         # Wilcoxon stars (only printed if significant).
@@ -192,13 +196,13 @@ def _plot_one(df, *, col, ylim, ylabel, title, alternative,
     # Per-ROI label shows n_used; if any subjects were trimmed (|g|
     # > cutoff), append `−k` to be honest about how many were
     # excluded for that ROI.
-    labels = []
-    for r, k, d in zip(rois, n_kept_by_roi, n_dropped_by_roi):
-        if d > 0:
-            labels.append(f'{r}\nn={k}  (−{d})')
-        else:
-            labels.append(f'{r}\nn={k}')
-    ax.set_xticklabels(labels)
+    # Just show ROI + kept-n. The outlier-drop count (−k) is honest
+    # but the audience reads Wilcoxon p-values; the trim only protects
+    # the mean+SEM marker from a single bad fit and Wilcoxon doesn't
+    # care about it. Mentioning it in the figure footer instead of
+    # cluttering each x-tick.
+    ax.set_xticklabels([f'{r}\nn={k}'
+                        for r, k in zip(rois, n_kept_by_roi)])
     ax.set_ylabel(ylabel)
     ax.set_ylim(ylim[0], ylim[1] + 0.20 * (ylim[1] - ylim[0]))
     ax.set_title(title, pad=14, fontweight='bold')
@@ -209,17 +213,18 @@ def _plot_one(df, *, col, ylim, ylabel, title, alternative,
     # we're trimming. VSS visitors expect SEM by default, but they
     # should know about the trim.
     if any(d > 0 for d in n_dropped_by_roi):
-        note = (f'Mean ± SEM · outliers |g| > {OUTLIER_ABS_CUTOFF:g} '
-                f'excluded (−k under each ROI)')
+        note = (f'Mean ± SEM (markers); Wilcoxon stats. '
+                f'Outliers |g| > {OUTLIER_ABS_CUTOFF:g} excluded.')
     else:
-        note = 'Mean ± SEM'
+        note = 'Mean ± SEM (markers); Wilcoxon stats.'
     ax.text(0.02, -0.30, note,
             transform=ax.transAxes,
             fontsize=10, color='0.35', ha='left', va='top',
             style='italic')
 
-    pdf = OUT_DIR / f'{out_stem}.pdf'
-    svg = OUT_DIR / f'{out_stem}.svg'
+    suffix = f'_{variant}' if variant else ''
+    pdf = OUT_DIR / f'{out_stem}{suffix}.pdf'
+    svg = OUT_DIR / f'{out_stem}{suffix}.svg'
     pdf.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(pdf, dpi=300, bbox_inches='tight', pad_inches=0.05)
     fig.savefig(svg, bbox_inches='tight', pad_inches=0.05)
@@ -228,8 +233,13 @@ def _plot_one(df, *, col, ylim, ylabel, title, alternative,
     print(f'wrote {svg}')
 
 
-def main(tsv_path: Path):
+def main(tsv_path: Path, variant: str = ''):
     df = pd.read_csv(tsv_path, sep='\t')
+    # Derived: average distractor gain across HP & LP locations
+    # (location-marginalized distractor effect; tests "does a
+    # distractor — anywhere — suppress or enhance the PRF, on average?").
+    df['g_distractor_avg_static'] = (df['g_HP'] + df['g_LP']) / 2.0
+    df['g_distractor_avg_dyn'] = (df['g_HP_dyn'] + df['g_LP_dyn']) / 2.0
     n_sub = df['subject'].nunique()
     print(f'n subjects: {n_sub}, n rows: {len(df)}')
 
@@ -242,6 +252,7 @@ def main(tsv_path: Path):
         alternative='less',
         out_stem='af_talk_static_HP_suppression',
         theme_color=TALK_HP,
+        variant=variant,
     )
 
     _plot_one(
@@ -253,6 +264,7 @@ def main(tsv_path: Path):
         alternative='two-sided',
         out_stem='af_talk_phasic_distractor',
         theme_color=TALK_AF,
+        variant=variant,
     )
 
     _plot_one(
@@ -264,11 +276,46 @@ def main(tsv_path: Path):
         alternative='greater',
         out_stem='af_talk_phasic_target_capture',
         theme_color=TALK_TARGET,
+        variant=variant,
+    )
+
+    # Location-marginalized "average distractor effect":
+    # what does a distractor — at HP or LP — do to the PRF on average?
+    # If both HP and LP suppress relative to baseline, the average is
+    # negative. Color: stim-blue (the BUILDUP_PALETTE "stim" entry),
+    # since this is the location-marginal stimulus-driven effect.
+    _plot_one(
+        df,
+        col='g_distractor_avg_static',
+        ylim=(-0.7, 0.5),
+        ylabel=r'(g$_{HP}$ + g$_{LP}$) / 2  (sustained)',
+        title=f'Sustained distractor effect (HP & LP avg)  (n={n_sub})',
+        alternative='less',
+        out_stem='af_talk_static_distractor_avg',
+        theme_color=TALK_STIM,
+        variant=variant,
+    )
+
+    _plot_one(
+        df,
+        col='g_distractor_avg_dyn',
+        ylim=(-1.4, 1.4),
+        ylabel=r'(g$_{HP,dyn}$ + g$_{LP,dyn}$) / 2  (phasic)',
+        title=f'Phasic distractor effect (HP & LP avg)  (n={n_sub})',
+        alternative='two-sided',
+        out_stem='af_talk_phasic_distractor_avg',
+        theme_color=TALK_STIM,
+        variant=variant,
     )
 
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--tsv', type=Path, default=DEFAULT_TSV)
+    p.add_argument('--variant', default='',
+                   help='Suffix appended to all output filenames. '
+                        'Use to keep figures from different model variants '
+                        '(e.g. sharedSigma vs allSharedSigma) from '
+                        'overwriting each other.')
     a = p.parse_args()
-    main(a.tsv)
+    main(a.tsv, variant=a.variant)
