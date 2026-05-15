@@ -82,7 +82,8 @@ def panel_one_value(ax, df, col, ylim, title, ylabel,
                 color=c, weight='bold' if (np.isfinite(p) and p < 0.05) else 'normal')
     ax.axhline(0, color='gray', lw=0.7, ls='--')
     ax.set_xticks(range(len(rois)))
-    ax.set_xticklabels(rois)
+    ax.set_xticklabels([f'{r}\nn={len(df[df["roi"] == r])}' for r in rois],
+                       fontsize=9)
     ax.set_ylabel(ylabel)
     ax.set_ylim(ylim[0], ylim[1] + 0.30 * (ylim[1] - ylim[0]))
     ax.set_title(title)
@@ -152,7 +153,7 @@ def main(tsv_path: Path = TSV, out_path: Path = OUT):
         )
         fig.suptitle(
             f'DoG dyn-v3 + target sharedSigma  —  PHASIC TARGET-CAPTURE gain  '
-            f'(n={n})',
+            f'(n varies per ROI; annotated below)',
             fontsize=13, weight='bold',
         )
         fig.tight_layout(rect=[0, 0, 1, 0.95])
@@ -170,7 +171,7 @@ def main(tsv_path: Path = TSV, out_path: Path = OUT):
         )
         fig.suptitle(
             f'DoG dyn-v3 + target sharedSigma  —  RAW dynamic-distractor gains  '
-            f'(survives target expansion?)  n={n}',
+            f'(survives target expansion?)  n varies per ROI',
             fontsize=12, weight='bold',
         )
         fig.tight_layout(rect=[0, 0, 1, 0.94])
@@ -188,7 +189,7 @@ def main(tsv_path: Path = TSV, out_path: Path = OUT):
         )
         fig.suptitle(
             f'DoG dyn-v3 + target sharedSigma  —  sustained HP-specificity  '
-            f'(n={n})',
+            f'(n varies per ROI; annotated below)',
             fontsize=13, weight='bold',
         )
         fig.tight_layout(rect=[0, 0, 1, 0.95])
@@ -206,7 +207,7 @@ def main(tsv_path: Path = TSV, out_path: Path = OUT):
         )
         fig.suptitle(
             f'DoG dyn-v3 + target sharedSigma  —  dynamic HP-specificity  '
-            f'(n={n})',
+            f'(n varies per ROI; annotated below)',
             fontsize=13, weight='bold',
         )
         fig.tight_layout(rect=[0, 0, 1, 0.95])
@@ -224,7 +225,7 @@ def main(tsv_path: Path = TSV, out_path: Path = OUT):
         )
         fig.suptitle(
             f'DoG dyn-v3 + target sharedSigma  —  RAW sustained gains  '
-            f'(green=suppression / red=capture)  n={n}',
+            f'(green=suppression / red=capture)  n varies per ROI',
             fontsize=12, weight='bold',
         )
         fig.tight_layout(rect=[0, 0, 1, 0.94])
@@ -242,7 +243,7 @@ def main(tsv_path: Path = TSV, out_path: Path = OUT):
         )
         fig.suptitle(
             f'DoG dyn-v3 + target sharedSigma  —  net phasic distractor effect  '
-            f'(n={n})',
+            f'(n varies per ROI; annotated below)',
             fontsize=13, weight='bold',
         )
         fig.tight_layout(rect=[0, 0, 1, 0.95])
