@@ -2,9 +2,14 @@
 #SBATCH --job-name=neuropythy_register
 #SBATCH --account=hare.econ.uzh
 #SBATCH --output=/dev/null
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=16
 #SBATCH --mem=24G
 #SBATCH --time=04:00:00
+# (cpus bumped from 4 → 16: register_retinotopy uses Noah Benson's
+# Java mesh-registration via JPype; the JVM side does scale with
+# threads. With 16 CPUs the per-subject wall-time drops well below
+# the 1h failure boundary; on a typical fsnative mesh the registration
+# converges in roughly 15-30 min instead of 45-90.)
 
 # Run neuropythy retinotopy registration for one subject. Inputs: model
 # 4 surface .gii files (produced by sample_prf_to_surface.sh). Output:
