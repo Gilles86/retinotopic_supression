@@ -65,11 +65,15 @@ S_AF="$SCRIPT_DIR/fit_dog_dyn_v3_target_sharedSigma.sh"
 #   m2-m6: ~15-30 min (4500-iter two-stage schedule)
 # Walltime is tight-with-headroom so preempted resubmits don't loop.
 T_CHUNK_M1=00:20:00
-T_CHUNK_M2=00:35:00
-T_CHUNK_M3=00:35:00
-T_CHUNK_M4=00:35:00
-T_CHUNK_M5=00:35:00
-T_CHUNK_M6=00:35:00
+T_CHUNK_M2=00:50:00
+T_CHUNK_M3=00:50:00
+T_CHUNK_M4=01:00:00
+T_CHUNK_M5=01:00:00
+T_CHUNK_M6=01:00:00
+# (Bumped from 35 min after sub-13 m4 chunks TIMEOUT-ed at 00:35:08.
+# Per-chunk iter speed varies ~10× across runs on the same data:
+# fast paths finish 4500 iter in 7 min, slow paths take 35+ min.
+# Likely XLA recompile + GPU type variance. 60 min has headroom.)
 T_MERGE=00:03:00   # actual elapsed is 10-30s; tight window helps backfill
 T_CACHE=00:15:00
 T_SURF=00:08:00   # actual elapsed ~2:30-3:00; tight window helps backfill
