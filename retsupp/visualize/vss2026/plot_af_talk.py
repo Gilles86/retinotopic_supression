@@ -41,6 +41,13 @@ OUT_DIR = REPO / 'notes' / 'figures'
 ROI_ORDER = ['V1', 'V2', 'V3', 'V3AB', 'hV4', 'LO', 'TO', 'VO',
              'IPS', 'SPL1', 'FEF']
 
+# Outlier cutoff for AF gain parameters. AF fits in low-SNR ROIs
+# (FEF, SPL1) occasionally produce |g| > 5 — those are degenerate
+# fits, not real biology. Drop them per (ROI × column) before
+# computing mean + SEM so the central tendency reflects the
+# well-behaved subjects.
+OUTLIER_ABS_CUTOFF = 4.0
+
 # Colors — match the talk illustrations' palette (notes/figures/talk/
 # make_figures.py BUILDUP_PALETTE). Each panel's color encodes the
 # *thing being measured*: HP-static → red, dynamic distractor → blue,
@@ -104,8 +111,17 @@ def _stars(p):
     return ''
 
 
+def _p_text(p):
+    """Format p-value for in-panel annotation. None if not significant."""
+    if not np.isfinite(p) or p >= 0.05:
+        return None
+    if p < 0.001:
+        return 'p < .001'
+    # APA: drop leading zero, 3 decimals
+    return f'p = .{int(round(p * 1000)):03d}'
+
+
 def _plot_one(df, *, col, ylim, ylabel, title, alternative,
-              annotation_text, annotation_xy, annotation_xytext,
               out_stem, theme_color):
     """Render ONE single-panel talk figure for one quantity × ROIs.
 
@@ -120,19 +136,31 @@ def _plot_one(df, *, col, ylim, ylabel, title, alternative,
     rois = [r for r in ROI_ORDER if r in df['roi'].unique()]
     rng = np.random.default_rng(seed=42)
 
+    n_kept_by_roi = []
+    n_dropped_by_roi = []
     for i, roi in enumerate(rois):
-        sub = df.loc[df['roi'] == roi, col].dropna().values
+        raw = df.loc[df['roi'] == roi, col].dropna().values
+        if len(raw) < 2:
+            n_kept_by_roi.append(0)
+            n_dropped_by_roi.append(0)
+            continue
+        # Outlier filter: drop subjects with |g| > cutoff (per-ROI,
+        # per-column). FEF / SPL1 AF gains can blow up to |g|>5 on
+        # subjects with bad fits — those distort mean and SEM.
+        mask_kept = np.abs(raw) <= OUTLIER_ABS_CUTOFF
+        sub = raw[mask_kept]
+        n_kept_by_roi.append(int(mask_kept.sum()))
+        n_dropped_by_roi.append(int((~mask_kept).sum()))
         if len(sub) < 2:
             continue
-        # Subject dots — panel's theme color, transparent so the swarm
-        # reads as a cloud and the mean marker on top stays legible.
+        # Subject dots — panel's theme color, transparent. Show all
+        # kept subjects; clip to ylim so the panel stays compact.
         v_plot = np.clip(sub, *ylim)
         xs = i + rng.uniform(-0.16, 0.16, size=len(v_plot))
         ax.scatter(xs, v_plot,
                    s=46, color=theme_color, alpha=0.35,
                    edgecolor=C_DOT_EDGE, linewidth=0.5, zorder=2)
-        # Mean ± SEM — large filled diamond in the same theme color, but
-        # with a thick dark edge so it pops above the translucent swarm.
+        # Mean ± SEM on trimmed values — VSS audience default.
         m = float(np.mean(sub))
         sem = float(stats.sem(sub))
         m_plot = float(np.clip(m, *ylim))
@@ -149,28 +177,46 @@ def _plot_one(df, *, col, ylim, ylabel, title, alternative,
         except ValueError:
             p = np.nan
         star = _stars(p)
+        ptxt = _p_text(p)
         if star:
-            ax.text(i, ylim[1] + 0.03 * (ylim[1] - ylim[0]),
+            ax.text(i, ylim[1] + 0.02 * (ylim[1] - ylim[0]),
                     star, ha='center', va='bottom',
                     fontsize=18, color=C_STAR_SIG, fontweight='bold')
+        if ptxt:
+            ax.text(i, ylim[1] + 0.13 * (ylim[1] - ylim[0]),
+                    ptxt, ha='center', va='bottom',
+                    fontsize=10, color=C_STAR_SIG)
 
     ax.axhline(0, color='0.6', lw=0.9, ls='--', zorder=0)
     ax.set_xticks(range(len(rois)))
-    ns = [int((df['roi'] == r).sum()) for r in rois]
-    ax.set_xticklabels([f'{r}\nn={n}' for r, n in zip(rois, ns)])
+    # Per-ROI label shows n_used; if any subjects were trimmed (|g|
+    # > cutoff), append `−k` to be honest about how many were
+    # excluded for that ROI.
+    labels = []
+    for r, k, d in zip(rois, n_kept_by_roi, n_dropped_by_roi):
+        if d > 0:
+            labels.append(f'{r}\nn={k}  (−{d})')
+        else:
+            labels.append(f'{r}\nn={k}')
+    ax.set_xticklabels(labels)
     ax.set_ylabel(ylabel)
     ax.set_ylim(ylim[0], ylim[1] + 0.20 * (ylim[1] - ylim[0]))
     ax.set_title(title, pad=14, fontweight='bold')
 
-    if annotation_text:
-        ax.annotate(annotation_text,
-                    xy=annotation_xy, xytext=annotation_xytext,
-                    fontsize=13, ha='left', va='center', color='0.25',
-                    arrowprops=dict(arrowstyle='-',
-                                    connectionstyle='arc3,rad=0.2',
-                                    color='0.4', lw=0.9))
-
     sns.despine(ax=ax, offset=6, trim=False)
+
+    # Small in-figure note for the audience: this is mean ± SEM AND
+    # we're trimming. VSS visitors expect SEM by default, but they
+    # should know about the trim.
+    if any(d > 0 for d in n_dropped_by_roi):
+        note = (f'Mean ± SEM · outliers |g| > {OUTLIER_ABS_CUTOFF:g} '
+                f'excluded (−k under each ROI)')
+    else:
+        note = 'Mean ± SEM'
+    ax.text(0.02, -0.30, note,
+            transform=ax.transAxes,
+            fontsize=10, color='0.35', ha='left', va='top',
+            style='italic')
 
     pdf = OUT_DIR / f'{out_stem}.pdf'
     svg = OUT_DIR / f'{out_stem}.svg'
@@ -194,11 +240,8 @@ def main(tsv_path: Path):
         ylabel=r'g$_{HP}$ − g$_{LP}$  (sustained)',
         title=f'Sustained HP suppression  (n={n_sub})',
         alternative='less',
-        annotation_text='HP suppressed\n(< 0)',
-        annotation_xy=(2.5, -0.20),
-        annotation_xytext=(6.0, -0.50),
         out_stem='af_talk_static_HP_suppression',
-        theme_color=TALK_HP,  # red — matches sustained-HP in talk illustrations
+        theme_color=TALK_HP,
     )
 
     _plot_one(
@@ -208,11 +251,8 @@ def main(tsv_path: Path):
         ylabel=r'g$_{HP,dyn}$ − g$_{LP,dyn}$  (phasic)',
         title=f'Phasic distractor differential  (n={n_sub})',
         alternative='two-sided',
-        annotation_text='Mostly flat\nin early visual',
-        annotation_xy=(1.5, 0.1),
-        annotation_xytext=(5.5, 1.0),
         out_stem='af_talk_phasic_distractor',
-        theme_color=TALK_AF,  # blue — matches dynamic-distractor in illustrations
+        theme_color=TALK_AF,
     )
 
     _plot_one(
@@ -222,11 +262,8 @@ def main(tsv_path: Path):
         ylabel=r'g$_{T,dyn}$  (target capture)',
         title=f'Phasic target capture  (n={n_sub})',
         alternative='greater',
-        annotation_text='Capture\n(> 0)',
-        annotation_xy=(5.5, 0.45),
-        annotation_xytext=(2.0, 1.6),
         out_stem='af_talk_phasic_target_capture',
-        theme_color=TALK_TARGET,  # orange — matches target in talk illustrations
+        theme_color=TALK_TARGET,
     )
 
 

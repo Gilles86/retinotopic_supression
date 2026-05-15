@@ -72,6 +72,7 @@ from retsupp.modeling.local_models import (
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_runPosition_dynHP,
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_repeat,
 )
+from retsupp.utils.sentinels import assert_gpu_available_if_expected
 from retsupp.utils.data import (
     Subject,
     distractor_locations,
@@ -525,6 +526,7 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
         own folder, segregated from the legacy fits). Only valid with
         ``model_version='v3'`` and ``with_target=True``.
     """
+    assert_gpu_available_if_expected()   # fail fast on cuInit-race CPU fallback
     if model_version not in ('v2', 'v3'):
         raise ValueError(
             f"model_version must be 'v2' or 'v3', got {model_version!r}")

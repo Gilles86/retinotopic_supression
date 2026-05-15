@@ -52,6 +52,7 @@ from braincoder.models import (
 from braincoder.optimize import ParameterFitter
 
 from retsupp.utils.data import Subject, mark_invalid_fits, validate_prf_parameters  # noqa: F401
+from retsupp.utils.sentinels import assert_gpu_available_if_expected
 
 
 # Schedule primitives. A "schedule" is a list of stage tuples
@@ -496,6 +497,7 @@ def main(subject: int, model_label: int,
     sigma-collapse pathology (NaN predictions / phantom R²=1) — the
     same value the V1 sandbox validated.
     """
+    assert_gpu_available_if_expected()   # fail fast on cuInit-race CPU fallback
     cfg = MODEL_CFG[model_label]
     bids = Path(bids_folder)
     sub = Subject(subject, bids)

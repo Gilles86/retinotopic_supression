@@ -45,6 +45,13 @@ NICE_M6="${NICE_M6:-0}"
 WITH_AF="${WITH_AF:-0}"
 N_ROIS_AF=11   # must match ROIS array in fit_dog_dyn_v3_target_sharedSigma.sh
 
+# CANARY=1: submit chunk #1 alone, then chunks 2..N_CHUNKS gated on
+# its success. If the canary fails fast (e.g., the sentinel in
+# fit_prf.py catches a cuInit-race CPU fallback and exits 1) the
+# other N-1 chunks don't waste a slot each. Default ON; flip to 0
+# to restore the old "submit all chunks at once" behavior.
+CANARY="${CANARY:-1}"
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 S_CACHE="$SCRIPT_DIR/build_cleaned_bold_cache.sh"
 S_CHUNK="${S_CHUNK:-$SCRIPT_DIR/fit_prf_l4_chunked.sh}"
@@ -109,13 +116,29 @@ submit_model_block() {
     local NICE_ARG=""
     [[ "$NICE_VAL" -gt 0 ]] && NICE_ARG="--nice=$NICE_VAL"
 
-    J_CHUNK=$(sb $NICE_ARG --array=1-$N_CHUNKS --time=$T_CHUNK $DEP_C \
-        --export=ALL,SUBJECT=$sub,MODEL=$model,N_CHUNKS=$N_CHUNKS,KIND=$KIND \
-        "$S_CHUNK")
-    J_MERGE=$(sb $NICE_ARG --array=$sub --time=$T_MERGE \
-        --dependency=afterok:$J_CHUNK \
-        --export=ALL,MODEL=$model,KIND=$KIND \
-        "$S_MERGE")
+    local CHUNK_EXPORT="ALL,SUBJECT=$sub,MODEL=$model,N_CHUNKS=$N_CHUNKS,KIND=$KIND"
+    if [[ "$CANARY" == "1" && "$N_CHUNKS" -gt 1 ]]; then
+        # Canary chunk #1 — runs alone so the sentinels at job start
+        # (assert_gpu_available_if_expected, OOM, etc.) get exercised
+        # before we sink 9 more slots into the same fault.
+        local J_CANARY=$(sb $NICE_ARG --array=1 --time=$T_CHUNK $DEP_C \
+            --export=$CHUNK_EXPORT "$S_CHUNK")
+        J_CHUNK=$(sb $NICE_ARG --array=2-$N_CHUNKS --time=$T_CHUNK \
+            --dependency=afterok:$J_CANARY \
+            --export=$CHUNK_EXPORT "$S_CHUNK")
+        # Merge needs BOTH the canary AND the rest. Use compound dep.
+        J_MERGE=$(sb $NICE_ARG --array=$sub --time=$T_MERGE \
+            --dependency=afterok:$J_CANARY:$J_CHUNK \
+            --export=ALL,MODEL=$model,KIND=$KIND \
+            "$S_MERGE")
+    else
+        J_CHUNK=$(sb $NICE_ARG --array=1-$N_CHUNKS --time=$T_CHUNK $DEP_C \
+            --export=$CHUNK_EXPORT "$S_CHUNK")
+        J_MERGE=$(sb $NICE_ARG --array=$sub --time=$T_MERGE \
+            --dependency=afterok:$J_CHUNK \
+            --export=ALL,MODEL=$model,KIND=$KIND \
+            "$S_MERGE")
+    fi
     J_SURF=$(sb $NICE_ARG --partition=lowprio --array=$sub --time=$T_SURF \
         --dependency=afterok:$J_MERGE \
         --export=ALL,MODEL=$model \

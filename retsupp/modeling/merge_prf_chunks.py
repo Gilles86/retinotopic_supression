@@ -32,10 +32,43 @@ def main(subject: int, model: int, bids_folder: str = '/data/ds-retsupp',
     out_dir = (bids / 'derivatives' / base_dir / f'model{model}'
                / f'sub-{subject:02d}')
 
-    chunks = sorted(src_dir.glob('chunk-*-of-*.npz'))
-    if not chunks:
+    # Pick the most populated -of-MMMM family in the dir. Stale chunks
+    # from earlier sweeps with a different N_CHUNKS (e.g., previous
+    # of-0040 or of-0060 runs that didn't get cleaned up) would
+    # otherwise be silently glued onto the current of-0010 set and
+    # the merge would mis-concatenate or fail with a misleading count.
+    all_chunks = sorted(src_dir.glob('chunk-*-of-*.npz'))
+    if not all_chunks:
         raise FileNotFoundError(f"No chunk NPZ files in {src_dir}")
-    total = int(chunks[0].name.split('-of-')[1].split('.npz')[0])
+    from collections import Counter
+    families = Counter(p.name.split('-of-')[1].split('.npz')[0]
+                       for p in all_chunks)
+    if len(families) > 1:
+        # Multiple suffixes present — keep only the family with the
+        # full count (i.e., one whose count matches its MMMM). Print
+        # a warning so the user notices the stale chunks were skipped.
+        candidates = [m for m, c in families.items() if int(m) == c]
+        if not candidates:
+            raise RuntimeError(
+                f"Mixed -of-MMMM chunks in {src_dir}: {dict(families)}. "
+                f"None of them form a complete set. Clean the dir "
+                f"manually (rm chunk-*-of-{{stale}}.* ; rerun this merge)."
+            )
+        if len(candidates) > 1:
+            raise RuntimeError(
+                f"Multiple complete -of-MMMM families in {src_dir}: "
+                f"{candidates}. Ambiguous which is canonical; clean "
+                f"the dir."
+            )
+        chosen = candidates[0]
+        print(f"WARN: stale chunks present — ignoring "
+              f"{ {m: c for m, c in families.items() if m != chosen} }; "
+              f"merging the of-{chosen} set ({families[chosen]} chunks).")
+        chunks = sorted(src_dir.glob(f'chunk-*-of-{chosen}.npz'))
+        total = int(chosen)
+    else:
+        chunks = all_chunks
+        total = int(chunks[0].name.split('-of-')[1].split('.npz')[0])
     if len(chunks) != total:
         raise RuntimeError(
             f"{len(chunks)} chunk files found but expected {total}. "
