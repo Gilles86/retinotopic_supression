@@ -24,14 +24,19 @@ ROI="${ROI:-V1}"
 SESSION="${SESSION:-1}"
 RUN="${RUN:-1}"
 BIDS="${BIDS:-/shares/zne.uzh/gdehol/ds-retsupp}"
+VOXEL_R2_MIN="${VOXEL_R2_MIN:-0.1}"
+VOXEL_ECC_MAX="${VOXEL_ECC_MAX:-4.5}"
+VOXEL_MAX="${VOXEL_MAX:-200}"
+L2="${L2:-0.5}"
+LEARNING_RATE="${LEARNING_RATE:-0.05}"
 
-LOGFILE="$HOME/logs/decode_replicate_sub-$(printf %02d $SUBJECT)_${ROI}_${SLURM_JOB_ID}.txt"
+LOGFILE="$HOME/logs/decode_replicate_sub-$(printf %02d $SUBJECT)_${ROI}_r2-${VOXEL_R2_MIN}_${SLURM_JOB_ID}.txt"
 mkdir -p "$(dirname "$LOGFILE")"
 exec >"$LOGFILE" 2>&1
 
-echo "[$(date)] === replicate prior sweep on sub-$(printf %02d $SUBJECT) $ROI ==="
-echo "  filters (prior defaults): sd>=0.05, r2>=0.1, ecc<=4.5, top-200, res=30"
-echo "  cell: L2=0.5, lr=0.05  (prior winner config)"
+echo "[$(date)] === replicate sweep on sub-$(printf %02d $SUBJECT) $ROI ==="
+echo "  filters: sd>=0.05, r2>=${VOXEL_R2_MIN}, ecc<=${VOXEL_ECC_MAX}, top-${VOXEL_MAX}, res=30"
+echo "  cell: L2=${L2}, lr=${LEARNING_RATE}"
 
 source /etc/profile.d/lmod.sh 2>/dev/null || true
 SYS_CUDA_GLOB=( /apps/u24/opt/x86_64_v3/cuda-11.8.0-* )
@@ -54,7 +59,10 @@ python -u -m retsupp.decode.smoke_test_sweep \
     --subject "$SUBJECT" --roi "$ROI" \
     --session "$SESSION" --run "$RUN" \
     --model 4 --resolution 30 \
-    --l2-norms 0.5 --learning-rates 0.05 \
+    --l2-norms "$L2" --learning-rates "$LEARNING_RATE" \
+    --voxel-r2-min "$VOXEL_R2_MIN" \
+    --voxel-ecc-max "$VOXEL_ECC_MAX" \
+    --voxel-max "$VOXEL_MAX" \
     --max-n-iterations 1000 --resid-max-iter 300
 END=$(date +%s)
 echo "[$(date)] done in $((END - START)) s"
