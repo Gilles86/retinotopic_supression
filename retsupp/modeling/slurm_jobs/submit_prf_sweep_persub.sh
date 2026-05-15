@@ -47,7 +47,7 @@ N_ROIS_AF=11   # must match ROIS array in fit_dog_dyn_v3_target_sharedSigma.sh
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 S_CACHE="$SCRIPT_DIR/build_cleaned_bold_cache.sh"
-S_CHUNK="${S_CHUNK:-$SCRIPT_DIR/fit_prf_cpu_chunked.sh}"
+S_CHUNK="${S_CHUNK:-$SCRIPT_DIR/fit_prf_l4_chunked.sh}"
 S_MERGE="$SCRIPT_DIR/merge_prf_chunks.sh"
 S_SURF="$(cd "$SCRIPT_DIR/../../surface/slurm_jobs" && pwd)/sample_prf_to_surface.sh"
 S_NEURO="$(cd "$SCRIPT_DIR/../../neuropythy/slurm_jobs" && pwd)/register_retinotopy.sh"
