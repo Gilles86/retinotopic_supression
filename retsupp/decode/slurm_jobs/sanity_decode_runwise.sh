@@ -15,10 +15,10 @@
 #
 #SBATCH --job-name=decode_sanity
 #SBATCH --output=/dev/null
-#SBATCH --time=30:00
+#SBATCH --time=45:00
 #SBATCH --account=zne.uzh
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=24G
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=32G
 
 set -eo pipefail
 
@@ -49,7 +49,17 @@ echo "  model=${MODEL} res=${RESOLUTION} posterior=${POSTERIOR}"
 echo "  L2=${L2_NORM} lr=${LEARNING_RATE} iter=${MAX_ITER}"
 
 if [[ "$DEVICE" == "gpu" ]]; then
-    module load gpu
+    # u24 nodes have no `module load gpu`; instead point LD_LIBRARY_PATH
+    # at the system CUDA 11.8 (matches TF 2.14 + cuDNN 8.7 in
+    # retsupp_cuda). Mirrors retsupp/modeling/slurm_jobs/fit_prf_l4.sh.
+    source /etc/profile.d/lmod.sh 2>/dev/null || true
+    SYS_CUDA_GLOB=( /apps/u24/opt/x86_64_v3/cuda-11.8.0-* )
+    if [[ -d "${SYS_CUDA_GLOB[0]}/targets/x86_64-linux/lib" ]]; then
+        export LD_LIBRARY_PATH="${SYS_CUDA_GLOB[0]}/targets/x86_64-linux/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+        echo "Using system CUDA: ${SYS_CUDA_GLOB[0]}"
+    else
+        echo "WARN: system cuda-11.8.0 not found"
+    fi
     nvidia-smi --query-gpu=name,memory.total --format=csv,noheader || true
 fi
 
