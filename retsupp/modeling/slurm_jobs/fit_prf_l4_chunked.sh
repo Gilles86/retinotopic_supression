@@ -132,6 +132,15 @@ PYTHON="$HOME/data/conda/envs/retsupp_cuda/bin/python"
 # driver, and releases. Lock is on /tmp (node-local), not NFS, so
 # semantics are correct even at scale.
 #
+# IMPORTANT — the lock file MUST be on a path that is shared across
+# all SLURM job-steps on the same physical node. On sciencecluster,
+# `/tmp` is bind-mounted to `/var/spool/slurmd/job<id>/tmp` per job,
+# so a lock at `/tmp/foo.flock` is per-JOB, not per-NODE. Multiple
+# jobs landing on the same V100/A100 8-GPU node each acquire their
+# own /tmp lock instantly and all proceed in parallel → cuInit race
+# → 0 GPUs visible to TF in each. We use `/dev/shm` (RAM-backed
+# tmpfs) which IS shared across all processes on the node.
+#
 # Crash safety: flock is released by the kernel when the holding
 # process dies (any reason). The subshell below only holds the lock
 # during its own execution; if the Python warm-up segfaults / hangs /
@@ -139,7 +148,7 @@ PYTHON="$HOME/data/conda/envs/retsupp_cuda/bin/python"
 # is belt-and-suspenders: even if some pathological state prevents
 # acquisition, the job proceeds after 60s rather than hanging until
 # SLURM walltime.
-LOCK="/tmp/cuinit_warm_$(hostname -s).flock"
+LOCK="/dev/shm/cuinit_warm_$(hostname -s).flock"
 echo "cuInit warm-up under flock $LOCK ..."
 (
     flock -w 60 -x 200 || {
@@ -147,13 +156,21 @@ echo "cuInit warm-up under flock $LOCK ..."
         exit 0;
     }
     "$PYTHON" -c "
-import os
+import os, sys
 os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
 import tensorflow as tf
 gpus = tf.config.list_physical_devices('GPU')
-print(f'cuInit OK: {len(gpus)} GPU(s) visible to TF', flush=True)
-" || echo "cuInit warm-up call exited non-zero (continuing — main fit will retry)"
-) 200>"$LOCK"
+print(f'cuInit warm-up: {len(gpus)} GPU(s) visible to TF', flush=True)
+sys.exit(0 if gpus else 1)
+"
+)
+WARMUP_RC=$?
+if [[ $WARMUP_RC -ne 0 ]]; then
+    echo "FATAL: cuInit warm-up returned $WARMUP_RC (no GPU after lock-protected init). " \
+         "The driver on this node may be in a bad state from a prior cuInit race; exiting fast" \
+         " so the afterok chain fails visibly instead of running 25x slower until walltime."
+    exit 1
+fi
 
 $PYTHON -u "$HOME/git/retsupp/retsupp/modeling/fit_prf.py" \
     "$subject" --model "$MODEL" \
