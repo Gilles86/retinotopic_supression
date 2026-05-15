@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=prf_chunked
-#SBATCH --account=hare.econ.uzh
-#SBATCH --partition=standard
+#SBATCH --account=zne.uzh
+#SBATCH --partition=lowprio
 #SBATCH --output=/dev/null
 #SBATCH --gres=gpu:1
 # GPU constraint: L4|V100|A100. The cuInit race (multiple jobs on the
