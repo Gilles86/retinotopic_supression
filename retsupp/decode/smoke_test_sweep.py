@@ -115,7 +115,8 @@ def run_one_cell(sub: Subject, *, roi: str, session: int, run: int,
                  max_n_iterations: int, resid_max_iter: int,
                  voxel_sd_min: float, voxel_r2_min: float,
                  voxel_ecc_max: float, voxel_max: int,
-                 par: np.ndarray, data_dir: Path) -> dict:
+                 par: np.ndarray, data_dir: Path,
+                 residual_method: str = 'gauss') -> dict:
     """Decode one (l2, lr) cell and persist npz + 1-row TSV. Returns the row."""
     tag = cell_tag(l2, lr)
     print(f'\n=== {tag} (model {model}) ===', flush=True)
@@ -128,6 +129,7 @@ def run_one_cell(sub: Subject, *, roi: str, session: int, run: int,
         l2_norm=l2, learning_rate=lr,
         max_n_iterations=max_n_iterations,
         resid_max_iter=resid_max_iter,
+        residual_method=residual_method,
         progressbar=False, verbose=True)
     dt = time.time() - t0
     T = decoded.shape[0]
@@ -266,6 +268,10 @@ def main():
                         'decode signal at the 4-deg corners.')
     p.add_argument('--voxel-max', type=int, default=VOXEL_MAX,
                    help='Cap on # of voxels used (top-N by r2).')
+    p.add_argument('--residual-method', choices=['gauss', 't'], default='gauss',
+                   help='ResidualFitter likelihood; "t" fits dof and uses '
+                        'Student-t residuals in StimulusFitter (more robust '
+                        'to outliers).')
     p.add_argument('--repo-root', type=Path,
                    default=Path(__file__).resolve().parents[2])
     p.add_argument('--aggregate-only', action='store_true',
@@ -322,6 +328,7 @@ def main():
                      voxel_r2_min=args.voxel_r2_min,
                      voxel_ecc_max=args.voxel_ecc_max,
                      voxel_max=args.voxel_max,
+                     residual_method=args.residual_method,
                      par=par, data_dir=data_dir)
 
     # Only aggregate at the end if we actually ran the full grid. In

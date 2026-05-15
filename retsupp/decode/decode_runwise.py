@@ -124,6 +124,7 @@ def decode_runwise(sub: Subject, session: int, run: int, roi: str, *,
                     max_n_iterations: int = 1000,
                     min_n_iterations: int = 200,
                     resid_max_iter: int = 300,
+                    residual_method: str = 'gauss',
                     progressbar: bool = False,
                     verbose: bool = True):
     """Decode one run; returns dict of arrays ready to be written to npz."""
@@ -182,10 +183,14 @@ def decode_runwise(sub: Subject, session: int, run: int, roi: str, *,
     prf_model = make_prf_model(model, grid, paradigm, pars_df, data=bold_df)
     rf = ResidualFitter(model=prf_model, data=bold_df, paradigm=paradigm_df,
                          parameters=pars_df.astype(np.float32))
-    omega, _ = rf.fit(max_n_iterations=resid_max_iter,
-                       progressbar=progressbar)
+    omega, dof = rf.fit(max_n_iterations=resid_max_iter,
+                          method=residual_method,
+                          progressbar=progressbar)
     if verbose:
-        print(f'  [{time.time() - t0:5.1f}s] ResidualFitter done',
+        dof_msg = (f', t-likelihood dof={float(dof):.2f}'
+                   if dof is not None
+                   else ', Gaussian likelihood')
+        print(f'  [{time.time() - t0:5.1f}s] ResidualFitter done{dof_msg}',
               flush=True)
 
     # Rebuild model on filtered data; StimulusFitter writes to model.parameters.
@@ -193,7 +198,8 @@ def decode_runwise(sub: Subject, session: int, run: int, roi: str, *,
 
     t0 = time.time()
     sf = StimulusFitter(model=prf_model, data=bold_df, omega=omega,
-                         parameters=pars_df.astype(np.float32))
+                         parameters=pars_df.astype(np.float32),
+                         dof=dof)
     decoded = sf.fit(l2_norm=l2_norm, learning_rate=learning_rate,
                       max_n_iterations=max_n_iterations,
                       min_n_iterations=min_n_iterations,
@@ -254,6 +260,10 @@ def main():
     p.add_argument('--model', type=int, default=4)
     p.add_argument('--resolution', type=int, default=50)
     p.add_argument('--posterior', type=float, default=0.5)
+    p.add_argument('--residual-method', choices=['gauss', 't'], default='gauss',
+                   help='ResidualFitter likelihood; "t" fits dof and uses '
+                        'Student-t residuals in StimulusFitter (more robust '
+                        'to outlier voxels).')
     p.add_argument('--l2-norm', type=float, default=1.0)
     p.add_argument('--learning-rate', type=float, default=0.01)
     p.add_argument('--max-n-iterations', type=int, default=1000)
@@ -285,6 +295,7 @@ def main():
         max_n_iterations=a.max_n_iterations,
         min_n_iterations=a.min_n_iterations,
         resid_max_iter=a.resid_max_iter,
+        residual_method=a.residual_method,
         progressbar=a.progressbar,
     )
 

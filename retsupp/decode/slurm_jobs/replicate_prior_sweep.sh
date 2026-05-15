@@ -29,6 +29,7 @@ VOXEL_ECC_MAX="${VOXEL_ECC_MAX:-4.5}"
 VOXEL_MAX="${VOXEL_MAX:-200}"
 L2="${L2:-0.5}"
 LEARNING_RATE="${LEARNING_RATE:-0.05}"
+RESIDUAL_METHOD="${RESIDUAL_METHOD:-gauss}"
 
 LOGFILE="$HOME/logs/decode_replicate_sub-$(printf %02d $SUBJECT)_${ROI}_r2-${VOXEL_R2_MIN}_${SLURM_JOB_ID}.txt"
 mkdir -p "$(dirname "$LOGFILE")"
@@ -63,6 +64,7 @@ python -u -m retsupp.decode.smoke_test_sweep \
     --voxel-r2-min "$VOXEL_R2_MIN" \
     --voxel-ecc-max "$VOXEL_ECC_MAX" \
     --voxel-max "$VOXEL_MAX" \
+    --residual-method "$RESIDUAL_METHOD" \
     --max-n-iterations 1000 --resid-max-iter 300
 END=$(date +%s)
 echo "[$(date)] done in $((END - START)) s"

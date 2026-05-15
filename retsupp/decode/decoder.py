@@ -189,6 +189,7 @@ def decode_run(sub, session: int, run: int, *,
                max_n_iterations: int = 600,
                min_n_iterations: int = 200,
                resid_max_iter: int = 300,
+               residual_method: str = 'gauss',
                progressbar: bool = True,
                verbose: bool = True):
     """Decode one run of cleaned BOLD into a per-TR stimulus map.
@@ -252,11 +253,17 @@ def decode_run(sub, session: int, run: int, *,
     prf_model = make_prf_model(model, grid, paradigm, pars_df, data=bold_df)
 
     if verbose:
-        print('  Fitting residual covariance...')
+        print(f'  Fitting residual covariance (method={residual_method!r})...')
     rf = ResidualFitter(model=prf_model, data=bold_df, paradigm=paradigm_df,
                         parameters=pars_df.astype(np.float32))
-    omega, _ = rf.fit(max_n_iterations=resid_max_iter,
-                      progressbar=progressbar)
+    omega, dof = rf.fit(max_n_iterations=resid_max_iter,
+                          method=residual_method,
+                          progressbar=progressbar)
+    if verbose:
+        if dof is None:
+            print('  ResidualFitter: Gaussian likelihood (dof=Inf)')
+        else:
+            print(f'  ResidualFitter: t-likelihood, dof={float(dof):.2f}')
 
     # Rebuild model on filtered data (StimulusFitter writes to model.parameters)
     prf_model = make_prf_model(model, grid, paradigm, pars_df, data=bold_df)
@@ -264,7 +271,8 @@ def decode_run(sub, session: int, run: int, *,
     if verbose:
         print('  Fitting stimulus...')
     sf = StimulusFitter(model=prf_model, data=bold_df, omega=omega,
-                        parameters=pars_df.astype(np.float32))
+                        parameters=pars_df.astype(np.float32),
+                        dof=dof)
     decoded = sf.fit(l2_norm=l2_norm, learning_rate=learning_rate,
                      max_n_iterations=max_n_iterations,
                      min_n_iterations=min_n_iterations,
