@@ -439,6 +439,50 @@ def select_roi_voxels_psignal(
     return mask
 
 
+def _write_dataset_description_if_missing(
+        analysis_dir: Path, *,
+        script_name: str, parameters: dict) -> None:
+    """Write a BIDS-derivatives ``dataset_description.json`` at the
+    top-level analysis dir, idempotently.
+
+    Race-safe between sibling SLURM array tasks: open-with-'x' fails
+    cleanly if another task got there first. Captures the current
+    repo's git commit hash so anyone reading the dir later knows
+    exactly which fitter version produced it.
+    """
+    import datetime
+    import json
+    import subprocess
+    desc_path = analysis_dir / 'dataset_description.json'
+    if desc_path.exists():
+        return
+    analysis_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        repo_root = Path(__file__).resolve().parents[2]
+        commit = subprocess.check_output(
+            ['git', '-C', str(repo_root), 'rev-parse', '--short', 'HEAD'],
+            text=True, stderr=subprocess.DEVNULL).strip()
+    except Exception:
+        commit = 'unknown'
+    desc = {
+        'Name': analysis_dir.name,
+        'BIDSVersion': '1.7.0',
+        'DatasetType': 'derivative',
+        'GeneratedBy': [{
+            'Name': script_name,
+            'Version': commit,
+            'CodeURL': 'https://github.com/Gilles86/retinotopic_supression',
+            'Parameters': parameters,
+        }],
+        'FirstWritten': datetime.datetime.now().isoformat(timespec='seconds'),
+    }
+    try:
+        with open(desc_path, 'x') as f:
+            json.dump(desc, f, indent=2)
+    except FileExistsError:
+        pass  # another array task got there first; harmless.
+
+
 def main(subject: int, bids_folder: str = '/data/ds-retsupp',
          roi: str = 'V3AB',
          resolution: int = 50,
@@ -579,8 +623,41 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
                 tag = f'{tag}_apt{aperture_mass_thr:g}'
             base = f'{base}_{tag}'
         output_subdir = base
-    out_dir = bids_folder / 'derivatives' / output_subdir / f'sub-{subject:02d}'
+    analysis_dir = bids_folder / 'derivatives' / output_subdir
+    out_dir = analysis_dir / f'sub-{subject:02d}'
     out_dir.mkdir(parents=True, exist_ok=True)
+    _write_dataset_description_if_missing(
+        analysis_dir,
+        script_name='fit_dog_dynamic_af_braincoder.py',
+        parameters=dict(
+            model_version=model_version,
+            spatial_model='dog',
+            with_target=with_target,
+            shared_target_sigma=shared_target_sigma,
+            shared_dyn_gain=shared_dyn_gain,
+            all_shared_sigma=all_shared_sigma,
+            per_run_position_gains=per_run_position_gains,
+            per_run_position_dyn_hp=per_run_position_dyn_hp,
+            with_repeat_split=with_repeat_split,
+            distractor_shape=distractor_shape,
+            distractor_long_side=distractor_long_side,
+            distractor_short_side=distractor_short_side,
+            p_signal_thr=p_signal_thr,
+            aperture_mass_thr=aperture_mass_thr,
+            mode=mode,
+            max_voxels=max_voxels,
+            resolution=resolution,
+            grid_radius=grid_radius,
+            max_n_iterations=max_n_iterations,
+            learning_rate=learning_rate,
+            sigma_af_init=sigma_af_init,
+            sigma_dyn_init=sigma_dyn_init,
+            sigma_t_dyn_init=sigma_t_dyn_init,
+            g_t_dyn_init=g_t_dyn_init,
+            model_label=model_label,
+            temporal_oversampling=temporal_oversampling,
+        ),
+    )
 
     tos_str = (f' | tos={temporal_oversampling}'
                if use_oversampled_codepath else '')

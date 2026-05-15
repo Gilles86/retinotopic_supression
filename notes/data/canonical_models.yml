@@ -1,0 +1,83 @@
+# Canonical-model registry for retsupp.
+#
+# Each entry maps an analysis short-name to the BIDS derivatives subdir
+# that holds the canonical fits for that analysis. Used by aggregators
+# / plotting scripts: pass --analysis <name> to resolve the fits-dir
+# unambiguously, instead of hand-typing a long suffixed dirname.
+#
+# **When the canonical configuration changes**, update the `fits_dir`
+# here (a 1-line change). The OLD dir is moved to a `*_legacy_<date>`
+# entry below with a clear "do not use" comment.
+#
+# Fields per entry:
+#   fits_dir:        path relative to BIDS root (i.e., derivatives/...)
+#   config:          (optional) the key model-config knobs, for grep
+#                    sanity. Source of truth is each dir's
+#                    `dataset_description.json` (BIDS-mandated).
+#   pinned_commit:   (optional) short hash of the fitter commit that
+#                    produced these fits.
+#   comment:         human description / why this is canonical / etc.
+
+af_dynamic_sharedSigma:
+  fits_dir: derivatives/af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_pSig0.5
+  config:
+    model_version: v3
+    spatial_model: dog
+    with_target: true
+    shared_target_sigma: true
+    shared_dyn_gain: false
+    all_shared_sigma: false
+    p_signal_thr: 0.5
+    aperture_mass_thr: 0.0
+  pinned_commit: 488e0a9
+  comment: |
+    Canonical DoG-AF (v3 + target + sharedSigma, σ_T_dyn := σ_dyn) for
+    the VSS2026 talk. Uses GMM p_signal > 0.5 voxel selection (drops
+    legacy R²/σ band-aids). Pinned at commit 488e0a9 which fixed the
+    upstream-HRF handling.
+
+af_dynamic_sharedSigma_legacy_2026-05-11:
+  fits_dir: derivatives/af_prf_joint_dynamic_v3_dog_with_target_sharedSigma
+  config:
+    model_version: v3
+    spatial_model: dog
+    with_target: true
+    shared_target_sigma: true
+    p_signal_thr: null
+  pinned_commit: pre-488e0a9
+  comment: |
+    STALE May 10-11 fits, pre-HRF-fix and pre-pSig threshold.
+    DO NOT USE for figures or comparisons.
+
+af_dynamic_allSharedSigma:
+  fits_dir: derivatives/af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_allSharedSigma_pSig0.5
+  config:
+    model_version: v3
+    spatial_model: dog
+    with_target: true
+    shared_target_sigma: true
+    all_shared_sigma: true
+    p_signal_thr: 0.5
+  comment: |
+    Stricter-tied variant: σ_AF := σ_dyn := σ_T_dyn (single AF width).
+    For ablation comparisons against the canonical sharedSigma.
+
+af_dynamic_sharedDynGain:
+  fits_dir: derivatives/af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_sharedDynGain_pSig0.5
+  config:
+    model_version: v3
+    spatial_model: dog
+    with_target: true
+    shared_target_sigma: true
+    shared_dyn_gain: true
+    p_signal_thr: 0.5
+  comment: |
+    Stricter-tied variant: g_LP_dyn := g_HP_dyn (one phasic distractor
+    gain). For testing whether HP/LP phasic difference is identifiable.
+
+prf_canonical:
+  fits_dir: derivatives/prf/model4
+  comment: |
+    Canonical mean DoG-PRF fit with flexible HRF (model 4 in
+    fit_prf.py's MODEL_CFG). Baseline for conditionwise refits and
+    AF warm-starts.
