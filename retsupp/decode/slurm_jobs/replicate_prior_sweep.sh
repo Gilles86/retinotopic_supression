@@ -1,0 +1,60 @@
+#!/bin/bash
+# Replicate the prior working decode sweep (the "much better" GIFs at
+# notes/figures/decode_sweep/m4/) on sub-23 V1 ses-1 run-1. Uses
+# smoke_test_sweep.py as-is with its original voxel filters:
+#   sd >= 0.05, r2 >= 0.1, ecc <= 4.5, top-200 by r2, resolution=30
+# at the prior winner cell L2=0.5, lr=0.05.
+#
+#   sbatch retsupp/decode/slurm_jobs/replicate_prior_sweep.sh
+#
+#SBATCH --job-name=decode_replicate
+#SBATCH --output=/dev/null
+#SBATCH --time=15:00
+#SBATCH --account=zne.uzh
+#SBATCH --partition=lowprio
+#SBATCH --gres=gpu:1
+#SBATCH --constraint=L4|V100|A100
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=24G
+
+set -eo pipefail
+
+SUBJECT="${SUBJECT:-23}"
+ROI="${ROI:-V1}"
+SESSION="${SESSION:-1}"
+RUN="${RUN:-1}"
+BIDS="${BIDS:-/shares/zne.uzh/gdehol/ds-retsupp}"
+
+LOGFILE="$HOME/logs/decode_replicate_sub-$(printf %02d $SUBJECT)_${ROI}_${SLURM_JOB_ID}.txt"
+mkdir -p "$(dirname "$LOGFILE")"
+exec >"$LOGFILE" 2>&1
+
+echo "[$(date)] === replicate prior sweep on sub-$(printf %02d $SUBJECT) $ROI ==="
+echo "  filters (prior defaults): sd>=0.05, r2>=0.1, ecc<=4.5, top-200, res=30"
+echo "  cell: L2=0.5, lr=0.05  (prior winner config)"
+
+source /etc/profile.d/lmod.sh 2>/dev/null || true
+SYS_CUDA_GLOB=( /apps/u24/opt/x86_64_v3/cuda-11.8.0-* )
+if [[ -d "${SYS_CUDA_GLOB[0]}/targets/x86_64-linux/lib" ]]; then
+    export LD_LIBRARY_PATH="${SYS_CUDA_GLOB[0]}/targets/x86_64-linux/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
+nvidia-smi --query-gpu=name --format=csv,noheader || true
+
+source "$HOME/data/miniforge3/etc/profile.d/conda.sh"
+set +u
+conda activate retsupp_cuda
+set -u
+export PYTHONUNBUFFERED=1
+
+cd "$HOME/git/retsupp"
+
+START=$(date +%s)
+python -u -m retsupp.decode.smoke_test_sweep \
+    --bids-folder "$BIDS" \
+    --subject "$SUBJECT" --roi "$ROI" \
+    --session "$SESSION" --run "$RUN" \
+    --model 4 --resolution 30 \
+    --l2-norms 0.5 --learning-rates 0.05 \
+    --max-n-iterations 1000 --resid-max-iter 300
+END=$(date +%s)
+echo "[$(date)] done in $((END - START)) s"
