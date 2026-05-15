@@ -66,11 +66,15 @@ EXTRA="--noise-dist $NOISE_DIST"
 [[ -n "${L2_NORM:-}" ]]   && EXTRA="$EXTRA --l2-norm $L2_NORM"
 [[ -n "${LR:-}" ]]        && EXTRA="$EXTRA --learning-rate $LR"
 
-OUT_DIR="$HOME/git/retsupp/notes/data/v1_decode/sub-${sub_pad}"
-out_tag="ses-${SES}_run-${RUN}_vox${MAX_VOXELS}"
-[[ "$NOISE_DIST" == "t" ]] && out_tag="${out_tag}_t"
-[[ -n "${SUFFIX:-}" ]]     && out_tag="${out_tag}_${SUFFIX}"
-OUT="${OUT_DIR}/decoded_${out_tag}.npz"
+# Output: rely on decode.py's default path
+# (<bids>/derivatives/decoded/model{M}/sub-{NN}/decoded_<tag>.npz)
+# unless OUT is explicitly set via --export=ALL,OUT=... .
+
+if [[ -n "${OUT:-}" ]]; then
+    OUT_ARG="--out $OUT"
+else
+    OUT_ARG=""
+fi
 
 $PYTHON -u -m retsupp.decode.decode \
     --subject "$SUB" \
@@ -79,7 +83,7 @@ $PYTHON -u -m retsupp.decode.decode \
     --roi "${ROI:-V1}" \
     --bids-folder /shares/zne.uzh/gdehol/ds-retsupp \
     --max-voxels "$MAX_VOXELS" \
-    --out "$OUT" \
+    $OUT_ARG \
     $EXTRA
 
 echo "Finished: $(date)"
