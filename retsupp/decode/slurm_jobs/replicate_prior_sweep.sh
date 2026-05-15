@@ -66,5 +66,18 @@ python -u -m retsupp.decode.smoke_test_sweep \
     --voxel-max "$VOXEL_MAX" \
     --residual-method "$RESIDUAL_METHOD" \
     --max-n-iterations 1000 --resid-max-iter 300
+
+# smoke_test_sweep names outputs only by (l2, lr) — they collide across
+# cells that share L2/lr but differ in voxel filters / residual method.
+# Rename to a unique tag so the cells don't clobber each other.
+TAG="sub-$(printf %02d $SUBJECT)_${ROI}_ses-${SESSION}_run-${RUN}"
+DATA_DIR="$HOME/git/retsupp/notes/data/decode_sweep/m4/${TAG}"
+SRC="${DATA_DIR}/l2-${L2}_lr-${LEARNING_RATE}.npz"
+DST="${DATA_DIR}/l2-${L2}_lr-${LEARNING_RATE}_r2-${VOXEL_R2_MIN}_n-${VOXEL_MAX}_method-${RESIDUAL_METHOD}.npz"
+if [[ -f "$SRC" ]]; then
+    mv "$SRC" "$DST"
+    mv "${SRC%.npz}.tsv" "${DST%.npz}.tsv" 2>/dev/null || true
+    echo "Renamed output: $DST"
+fi
 END=$(date +%s)
 echo "[$(date)] done in $((END - START)) s"
