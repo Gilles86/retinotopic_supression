@@ -263,10 +263,16 @@ def main():
                    help='Show iter-level progress (off by default for cleaner SLURM logs).')
     p.add_argument('--force', action='store_true',
                    help='Overwrite existing output npz.')
+    p.add_argument('--output-path', default=None,
+                   help='Override the default derivatives/decoded_paradigm/... '
+                        'output path. Useful for L2 sweeps.')
     a = p.parse_args()
 
-    out = output_path(Path(a.bids_folder), a.subject, a.model, a.roi,
-                       a.session, a.run)
+    if a.output_path:
+        out = Path(a.output_path)
+    else:
+        out = output_path(Path(a.bids_folder), a.subject, a.model, a.roi,
+                           a.session, a.run)
     if out.exists() and not a.force:
         print(f'[decode_runwise] output exists, skipping: {out}', flush=True)
         return
