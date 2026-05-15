@@ -8,7 +8,13 @@
 # same 8-GPU node init'ing CUDA simultaneously) is defused by the
 # 30s random stagger below. H100/H200 excluded — sm_90 needs CUDA 12,
 # we're on 11.8.
-#SBATCH --constraint="L4|V100|A100"
+#SBATCH --constraint="L4"
+# (Narrowed from L4|V100|A100 because V100 + A100 are 8-GPU nodes,
+# which hits the cuInit race when multiple jobs concentrate on one
+# host. L4 nodes have 1 GPU each — no concurrent cuInit on same
+# host possible, race structurally impossible. Throughput cost:
+# ~8 idle L4 GPUs on lowprio vs ~40 V100 + ~8 A100, but the race
+# fix is worth it.)
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
 # (Bumped from 24G after sub-05 / sub-08 m4 chunks OOM'd at host-RAM
