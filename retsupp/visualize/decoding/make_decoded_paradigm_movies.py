@@ -170,6 +170,105 @@ def render_decoded_movie(decoded: np.ndarray,
     return out_path
 
 
+def render_grid_movie(panels: list,
+                       extent: list[float],
+                       title: str = '',
+                       fps: int = 6,
+                       out_path: Path | str | None = None,
+                       vmax_quantile: float = 0.99,
+                       cmap: str = 'RdBu_r',
+                       tr: float = 1.6,
+                       t_offset_tr: int = 0):
+    """Tile multiple (T, R, R) tensors into one MP4.
+
+    Used for the §2F event-locked grid: 2 event types x 4 rotated-frame
+    locations, each rendered in the HP-at-top frame.
+
+    Parameters
+    ----------
+    panels : list of dicts with keys::
+        'decoded'  (T, R, R)
+        'label'    e.g. 'distractor @ HP'
+        'row'      (int)  row index in the tile grid
+        'col'      (int)  column index in the tile grid
+    extent : (4,) imshow extent (same for all panels)
+    """
+    if not panels:
+        raise ValueError('No panels to render.')
+
+    n_rows = max(p['row'] for p in panels) + 1
+    n_cols = max(p['col'] for p in panels) + 1
+    T = panels[0]['decoded'].shape[0]
+    for p in panels:
+        if p['decoded'].shape[0] != T:
+            raise ValueError(
+                f'All panels must share T; got {T} vs '
+                f'{p["decoded"].shape[0]}')
+
+    # Symmetric color scale across all panels (so HP capture vs HP
+    # suppression read on the same colorbar).
+    all_vals = np.concatenate([p['decoded'].ravel() for p in panels])
+    vmax = float(np.quantile(np.abs(all_vals), vmax_quantile))
+    vmin = -vmax
+
+    fig, axes = plt.subplots(n_rows, n_cols,
+                              figsize=(2.4 * n_cols + 0.8, 2.4 * n_rows + 0.6),
+                              sharex=True, sharey=True,
+                              squeeze=False)
+    ims = {}
+    for p in panels:
+        ax = axes[p['row'], p['col']]
+        im = ax.imshow(p['decoded'][0], extent=extent, origin='lower',
+                        cmap=cmap, vmin=vmin, vmax=vmax,
+                        interpolation='bilinear')
+        ax.set_title(p['label'], fontsize=8)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_aspect('equal')
+        # HP marker at the top of every rotated panel.
+        ax.plot(0.0, RING_LOCS['upper_right'][1], 'o',
+                mfc='none', mec='magenta', ms=8, mew=1.0)
+        ims[(p['row'], p['col'])] = (im, p['decoded'])
+
+    # Hide empty cells.
+    for r in range(n_rows):
+        for c in range(n_cols):
+            if (r, c) not in ims:
+                axes[r, c].axis('off')
+
+    fig.subplots_adjust(right=0.88, top=0.90, bottom=0.06,
+                         left=0.04, hspace=0.18, wspace=0.06)
+    cbar_ax = fig.add_axes([0.91, 0.15, 0.02, 0.7])
+    fig.colorbar(list(ims.values())[0][0], cax=cbar_ax, label='Decoded')
+
+    tr_text = fig.text(0.04, 0.95, '', fontsize=10,
+                        bbox=dict(boxstyle='round', facecolor='white',
+                                    edgecolor='none', alpha=0.7))
+    if title:
+        fig.suptitle(title, fontsize=11)
+
+    def update(t: int):
+        for (r, c), (im, arr) in ims.items():
+            im.set_array(arr[t])
+        rel_tr = t - t_offset_tr
+        tr_text.set_text(f't = {rel_tr * tr:+.1f} s (frame {rel_tr:+d})')
+        return [im for im, _ in ims.values()] + [tr_text]
+
+    anim = animation.FuncAnimation(fig, update, frames=T,
+                                    interval=1000 / fps, blit=False)
+
+    if out_path is None:
+        return anim, fig
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    writer = animation.FFMpegWriter(fps=fps, bitrate=2400,
+                                      codec='libx264',
+                                      extra_args=['-pix_fmt', 'yuv420p'])
+    anim.save(str(out_path), writer=writer, dpi=120)
+    plt.close(fig)
+    return out_path
+
+
 def _load_npz(npz_path: Path) -> dict:
     """Load decoded npz with flexible key set.
 
@@ -184,13 +283,52 @@ def _load_npz(npz_path: Path) -> dict:
     return out
 
 
+def _gather_event_panels(group_dir: Path, roi: str, model: int = 4) -> tuple:
+    """Find the 8 event-locked npzs for ROI and return (panels, extent, t_offset)."""
+    events = ('distractor', 'target')
+    locs = ('HP', 'right', 'bottom', 'left')
+    panels = []
+    extent = None
+    pre_tr = None
+    for r, et in enumerate(events):
+        for c, loc in enumerate(locs):
+            p = (group_dir / f'group_roi-{roi}_event-{et}_'
+                              f'loc-{loc}_desc-eventLocked.npz')
+            if not p.exists():
+                print(f'  missing: {p.name}')
+                continue
+            with np.load(p) as d:
+                dec = d['decoded'].astype(np.float32)
+                if 'pre_tr' in d.files:
+                    pre_tr = int(d['pre_tr'])
+            panels.append({'decoded': dec, 'label': f'{et} @ {loc}',
+                            'row': r, 'col': c})
+    if not panels:
+        raise FileNotFoundError(
+            f'No event-locked npzs found in {group_dir} for ROI {roi}.')
+    # Extent: reconstruct from grid size and a stim aperture default
+    # (the group npz does not save 'extent'). Assume the same grid as
+    # the decode (grid_radius=5.0 from get_extended_grid_coordinates).
+    extent = [-5.0, 5.0, -5.0, 5.0]
+    return panels, extent, (pre_tr if pre_tr is not None else 0)
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('--npz', required=True, type=Path,
+    p.add_argument('--npz', type=Path,
                    help='Decoded .npz (must contain key "decoded").')
-    p.add_argument('--out', required=True, type=Path,
+    p.add_argument('--out', type=Path,
                    help='Output MP4.')
+    p.add_argument('--grid-mode', choices=['single', 'event-grid'], default='single',
+                   help='single: render one (T, R, R) tensor. event-grid: '
+                        'tile 2 event types x 4 rotated-frame locations from '
+                        'group_roi-<ROI>_event-*_loc-*.npz files into one MP4.')
+    p.add_argument('--group-dir', type=Path,
+                   help='[event-grid] dir with the 8 event-locked npzs.')
+    p.add_argument('--roi',
+                   help='[event-grid] ROI name.')
+    p.add_argument('--model', type=int, default=4)
     p.add_argument('--fps', type=int, default=6)
     p.add_argument('--title', default=None,
                    help='Title; default constructed from npz metadata.')
@@ -204,6 +342,26 @@ def main():
                         'the npz lacks an hp_location field (older smoke '
                         'tests). Run-level decodes save it automatically.')
     args = p.parse_args()
+
+    if args.grid_mode == 'event-grid':
+        if not (args.group_dir and args.roi and args.out):
+            p.error('event-grid mode needs --group-dir, --roi, --out')
+        panels, extent, t_offset = _gather_event_panels(
+            args.group_dir, args.roi, model=args.model)
+        out_path = render_grid_movie(
+            panels=panels, extent=extent,
+            title=(args.title or f'{args.roi} decoded event-locked  '
+                                  f'(HP-at-top frame, {len(panels)}/8 panels)'),
+            fps=args.fps, out_path=args.out,
+            vmax_quantile=args.vmax_quantile,
+            cmap='RdBu_r',  # diverging because event-locked is around zero baseline
+            t_offset_tr=t_offset,
+        )
+        print(f'Wrote {out_path}')
+        return
+
+    if not (args.npz and args.out):
+        p.error('single mode needs --npz, --out')
 
     d = _load_npz(args.npz)
     decoded = d['decoded']
