@@ -65,6 +65,8 @@ EXTRA="--noise-dist $NOISE_DIST"
 [[ -n "${MAX_ITERS:-}" ]] && EXTRA="$EXTRA --max-n-iterations $MAX_ITERS"
 [[ -n "${L2_NORM:-}" ]]   && EXTRA="$EXTRA --l2-norm $L2_NORM"
 [[ -n "${LR:-}" ]]        && EXTRA="$EXTRA --learning-rate $LR"
+[[ -n "${VOXEL_FILTER:-}" ]] && EXTRA="$EXTRA --voxel-filter $VOXEL_FILTER"
+[[ -n "${PSIGNAL_POSTERIOR:-}" ]] && EXTRA="$EXTRA --psignal-posterior $PSIGNAL_POSTERIOR"
 
 # Output: rely on decode.py's default path
 # (<bids>/derivatives/decoded/model{M}/sub-{NN}/decoded_<tag>.npz)

@@ -69,19 +69,30 @@ def _make_model(model: int, *, grid_coordinates, paradigm, hrf_model,
 
 
 def _load_voxels_and_bold(sub: Subject, *, roi: str, model: int,
-                           max_voxels: int, resolution: int):
-    """Load per-V1-voxel PRF params + BOLD for this subject.
+                           max_voxels: int, resolution: int,
+                           voxel_filter: str = 'top_r2',
+                           psignal_posterior: float = 0.5):
+    """Load per-ROI-voxel PRF params + BOLD for this subject.
 
     Reads PRF parameters from the canonical m4 NIfTIs via
     :meth:`Subject.get_prf_roi_pars` and BOLD from the per-subject
     cleaned BOLD cache npz (same one the PRF fit consumed). No
     handoff NPZ involved.
+
+    ``voxel_filter``:
+      - ``'top_r2'`` (default): top ``max_voxels`` by r² (clusters
+        centrally → poor coverage of the 4° distractor corners).
+      - ``'p_signal'``: r² > p_signal mixture threshold for the
+        ROI (``posterior=psignal_posterior``), then optionally
+        capped at ``max_voxels`` (set ``max_voxels`` huge to keep
+        all signal voxels). Gives broader coverage including
+        peripheral voxels.
     """
-    # PRF parameters for the ROI (per-voxel, in V1-mask C-order).
+    # PRF parameters for the ROI (per-voxel, in ROI-mask C-order).
     prf_roi = sub.get_prf_roi_pars(roi=roi, model=model)
     finite = np.all(np.isfinite(prf_roi.values), axis=1) & (prf_roi['r2'] > 0)
     keep_v1_pos = np.where(finite.values)[0]
-    print(f'  V1 voxels with finite m{model} fit: {len(keep_v1_pos)} / {len(prf_roi)}',
+    print(f'  {roi} voxels with finite m{model} fit: {len(keep_v1_pos)} / {len(prf_roi)}',
           flush=True)
 
     # Map V1 voxels to brain-mask column indices used by the cache.
@@ -111,13 +122,33 @@ def _load_voxels_and_bold(sub: Subject, *, roi: str, model: int,
         bold_all = f['bold'][:, v1_cache_cols].astype(np.float32)
     print(f'  BOLD shape: {bold_all.shape}  (concat across runs)', flush=True)
 
-    # Top-N by r² within V1 ∩ finite.
     r2_in_v1 = prf_roi['r2'].to_numpy()
     finite_mask = finite.values
-    sel_within_v1 = np.argsort(-np.where(finite_mask, r2_in_v1, -np.inf))[:max_voxels]
-    sel_within_v1 = sel_within_v1[finite_mask[sel_within_v1]]   # safety: drop non-finite
-    print(f'  Selected voxels: {len(sel_within_v1)} / {len(prf_roi)}  '
-          f'(top-{max_voxels} by r²)', flush=True)
+
+    if voxel_filter == 'p_signal':
+        r2_thr = sub.get_r2_threshold(model=model, roi=roi,
+                                        posterior=psignal_posterior)
+        if not np.isfinite(r2_thr):
+            raise RuntimeError(
+                f'No p_signal threshold for sub-{sub.subject_id:02d} '
+                f'roi={roi} model={model}. Run compute_r2_mixture first.')
+        keep_mask = finite_mask & (r2_in_v1 > r2_thr)
+        sel_within_v1 = np.where(keep_mask)[0]
+        # If too many for compute budget, cap to top-max_voxels by r².
+        if len(sel_within_v1) > max_voxels:
+            order = np.argsort(-r2_in_v1[sel_within_v1])[:max_voxels]
+            sel_within_v1 = sel_within_v1[order]
+        print(f'  Selected voxels: {len(sel_within_v1)} / {len(prf_roi)}  '
+              f'(p_signal>{psignal_posterior} -> r2>{r2_thr:.4f}, '
+              f'capped at {max_voxels})', flush=True)
+    elif voxel_filter == 'top_r2':
+        sel_within_v1 = np.argsort(-np.where(finite_mask, r2_in_v1, -np.inf))[:max_voxels]
+        sel_within_v1 = sel_within_v1[finite_mask[sel_within_v1]]
+        print(f'  Selected voxels: {len(sel_within_v1)} / {len(prf_roi)}  '
+              f'(top-{max_voxels} by r²)', flush=True)
+    else:
+        raise ValueError(f'Unknown voxel_filter: {voxel_filter!r}')
+
     if len(sel_within_v1) < 20:
         raise RuntimeError(f'Too few voxels selected: {len(sel_within_v1)}')
 
@@ -149,7 +180,9 @@ def decode(*, subject: int, session: int, run: int, model: int,
            out_path: Path,
            resolution: int = 50,
            grid_radius: float = 5.0,
-           tr: float = 1.6):
+           tr: float = 1.6,
+           voxel_filter: str = 'top_r2',
+           psignal_posterior: float = 0.5):
     from braincoder.hrf import SPMHRFModel
     from braincoder.optimize import ResidualFitter, StimulusFitter
 
@@ -158,7 +191,8 @@ def decode(*, subject: int, session: int, run: int, model: int,
     sub = Subject(subject, bids_folder=bids_folder)
 
     pars_sel, bold_all, voxel_positions = _load_voxels_and_bold(
-        sub, roi=roi, model=model, max_voxels=max_voxels, resolution=resolution)
+        sub, roi=roi, model=model, max_voxels=max_voxels, resolution=resolution,
+        voxel_filter=voxel_filter, psignal_posterior=psignal_posterior)
 
     print(f'  PRF stats:', flush=True)
     print(f'    sd: median {pars_sel.sd.median():.3f}  q05/95 '
@@ -278,7 +312,21 @@ def main():
                         'omega/dof landscape is shallow so converge with '
                         'plenty of headroom — early-stops on plateau).')
     p.add_argument('--max-voxels', type=int, default=200,
-                   help='Number of top-r² voxels to include (default 200).')
+                   help='Cap on # of voxels (default 200). With '
+                        '--voxel-filter=top_r2 this is the top-N pool size; '
+                        'with --voxel-filter=p_signal this only caps if more '
+                        'than N voxels pass the p_signal threshold.')
+    p.add_argument('--voxel-filter', choices=['top_r2', 'p_signal'],
+                   default='top_r2',
+                   help='Voxel selection: "top_r2" (default) takes the top '
+                        '--max-voxels by r²; "p_signal" keeps every voxel with '
+                        'r² above the FDR p_signal threshold for this '
+                        '(subject, ROI). p_signal gives broader visual-field '
+                        'coverage (incl. peripheral voxels reaching the 4° '
+                        'corners) at the cost of more (noisier) voxels.')
+    p.add_argument('--psignal-posterior', type=float, default=0.5,
+                   help='posterior threshold for the p_signal mixture filter '
+                        '(default 0.5).')
     p.add_argument('--noise-dist', default='gauss', choices=['gauss', 't'],
                    help="Residual noise distribution (default 'gauss'). "
                         "'t' fits a Student-t and uses it in StimulusFitter "
@@ -291,6 +339,8 @@ def main():
 
     tag = (f'ses-{args.session}_run-{args.run}_roi-{args.roi}'
            f'_vox{args.max_voxels}')
+    if args.voxel_filter == 'p_signal':
+        tag = f'{tag}_psig{args.psignal_posterior:g}'
     if args.noise_dist == 't':
         tag = f'{tag}_t'
     out_path = args.out or (Path(args.bids_folder)
@@ -307,6 +357,8 @@ def main():
            min_n_iterations=args.min_n_iterations,
            resid_max_iter=args.resid_max_iter,
            max_voxels=args.max_voxels, noise_dist=args.noise_dist,
+           voxel_filter=args.voxel_filter,
+           psignal_posterior=args.psignal_posterior,
            out_path=out_path)
 
 
