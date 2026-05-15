@@ -76,6 +76,7 @@ $PYTHON -u -m retsupp.decode.decode \
     --subject "$SUB" \
     --session "$SES" \
     --run "$RUN" \
+    --roi "${ROI:-V1}" \
     --bids-folder /shares/zne.uzh/gdehol/ds-retsupp \
     --max-voxels "$MAX_VOXELS" \
     --out "$OUT" \

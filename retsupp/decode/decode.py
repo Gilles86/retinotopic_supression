@@ -1,18 +1,20 @@
 """Per-run stimulus decode from m4 PRF parameters (canonical entrypoint).
 
 Reads m4 (DoG + flex-HRF) PRF parameters for a single ROI (default V1)
-out of either the per-subject handoff NPZ at
-``derivatives/v1_decode_handoffs/sub-{NN}_m{M}_{ROI}.npz`` or directly
-from the volumetric NIfTIs at ``derivatives/prf/model{M}/sub-{NN}/``,
-selects the rows for one (session, run) from the cleaned BOLD, builds
-the matching bar-only paradigm via :meth:`Subject.get_bar_stimulus`,
-and decodes the per-TR stimulus with braincoder's StimulusFitter.
+directly from the volumetric NIfTIs at
+``derivatives/prf/model{M}/sub-{NN}/`` via :meth:`Subject.get_prf_roi_pars`,
+loads the cleaned BOLD for that subject from
+``derivatives/cleaned_bold_cache/sub-{NN}/sub-{NN}_kind-full_res-50.npz``
+(the canonical concat across all 12 runs that the PRF fit consumed),
+slices to the requested run, builds the matching bar-only paradigm
+via :meth:`Subject.get_bar_stimulus`, and decodes the per-TR stimulus
+with braincoder's StimulusFitter.
 
 Per-run decoding keeps trialwise structure available for later
 analyses (e.g. distractor-locked modulation); per-HP / per-session
 averages can be reconstructed post-hoc by averaging the per-run NPZs.
 
-Voxel filter is **top-N by r² only** — the m4 warmstart fits enforce
+Voxel filter is **top-N by r² only**. The m4 warmstart fits enforce
 ``sd_min=0.2`` at the model level, so phantom-like degenerate fits
 don't exist and FDR / mass-in-aperture / σ-bound guards are
 unnecessary.
@@ -26,7 +28,7 @@ Usage::
 
 Output::
 
-    notes/data/v1_decode/sub-{NN}/decoded_ses-{S}_run-{R}[_vox{N}].npz
+    <bids>/derivatives/decoded/model{M}/sub-{NN}/decoded_ses-{S}_run-{R}_roi-{ROI}_vox{N}[_t].npz
 """
 from __future__ import annotations
 
@@ -66,78 +68,111 @@ def _make_model(model: int, *, grid_coordinates, paradigm, hrf_model,
                flexible_hrf_parameters=True, sd_min=sd_min)
 
 
-def _run_index_in_concat(sub: Subject, session: int, run: int) -> int:
-    """Row index of (session, run) in the 12-run concatenated BOLD.
+def _load_voxels_and_bold(sub: Subject, *, roi: str, model: int,
+                           max_voxels: int, resolution: int):
+    """Load per-V1-voxel PRF params + BOLD for this subject.
 
-    Order: ses-1 run-1..n, ses-2 run-1..n (matches the handoff NPZ build).
+    Reads PRF parameters from the canonical m4 NIfTIs via
+    :meth:`Subject.get_prf_roi_pars` and BOLD from the per-subject
+    cleaned BOLD cache npz (same one the PRF fit consumed). No
+    handoff NPZ involved.
     """
-    idx = 0
-    for ses in (1, 2):
-        for r in sub.get_runs(ses):
-            if (ses, r) == (session, run):
-                return idx
-            idx += 1
+    # PRF parameters for the ROI (per-voxel, in V1-mask C-order).
+    prf_roi = sub.get_prf_roi_pars(roi=roi, model=model)
+    finite = np.all(np.isfinite(prf_roi.values), axis=1) & (prf_roi['r2'] > 0)
+    keep_v1_pos = np.where(finite.values)[0]
+    print(f'  V1 voxels with finite m{model} fit: {len(keep_v1_pos)} / {len(prf_roi)}',
+          flush=True)
+
+    # Map V1 voxels to brain-mask column indices used by the cache.
+    brain_mask = np.asarray(
+        sub.get_bold_mask().get_fdata(), dtype=bool).ravel()
+    v1_3d = np.asarray(
+        sub.get_retinotopic_roi(roi=roi, bold_space=True).get_fdata(),
+        dtype=bool).ravel()
+    v1_within_brain = v1_3d[brain_mask]
+    if int(v1_within_brain.sum()) != len(prf_roi):
+        raise RuntimeError(
+            f'V1 mask voxel count mismatch: cache pool has '
+            f'{int(v1_within_brain.sum())} V1 voxels but PRF cache has '
+            f'{len(prf_roi)}; check ROI / brain mask alignment.')
+    v1_cache_cols = np.where(v1_within_brain)[0]
+
+    # Cleaned BOLD cache (same one fit_prf consumed). Must exist.
+    cache_path = (sub.bids_folder / 'derivatives' / 'cleaned_bold_cache'
+                  / f'sub-{sub.subject_id:02d}'
+                  / f'sub-{sub.subject_id:02d}_kind-full_res-{resolution}.npz')
+    if not cache_path.exists():
+        raise FileNotFoundError(
+            f'Cleaned BOLD cache missing: {cache_path}\n'
+            f'Build with: sbatch retsupp/modeling/slurm_jobs/build_cleaned_bold_cache.sh')
+    print(f'  Loading {cache_path.name}...', flush=True)
+    with np.load(cache_path) as f:
+        bold_all = f['bold'][:, v1_cache_cols].astype(np.float32)
+    print(f'  BOLD shape: {bold_all.shape}  (concat across runs)', flush=True)
+
+    # Top-N by r² within V1 ∩ finite.
+    r2_in_v1 = prf_roi['r2'].to_numpy()
+    finite_mask = finite.values
+    sel_within_v1 = np.argsort(-np.where(finite_mask, r2_in_v1, -np.inf))[:max_voxels]
+    sel_within_v1 = sel_within_v1[finite_mask[sel_within_v1]]   # safety: drop non-finite
+    print(f'  Selected voxels: {len(sel_within_v1)} / {len(prf_roi)}  '
+          f'(top-{max_voxels} by r²)', flush=True)
+    if len(sel_within_v1) < 20:
+        raise RuntimeError(f'Too few voxels selected: {len(sel_within_v1)}')
+
+    pars_sel = prf_roi.iloc[sel_within_v1].reset_index(drop=True)
+    bold_sel_all_runs = bold_all[:, sel_within_v1]
+    return pars_sel, bold_sel_all_runs, sel_within_v1
+
+
+def _slice_run(bold_all: np.ndarray, sub: Subject,
+                session: int, run: int) -> np.ndarray:
+    """Slice the concat BOLD down to a single (session, run)."""
+    row = 0
+    for s in (1, 2):
+        for r in sub.get_runs(s):
+            if (s, r) == (session, run):
+                return bold_all[row * N_TR_PER_RUN:(row + 1) * N_TR_PER_RUN]
+            row += 1
     raise KeyError(f'(ses={session}, run={run}) not in concat order for '
-                    f'sub-{sub.subject_id:02d}')
+                   f'sub-{sub.subject_id:02d}')
 
 
 def decode(*, subject: int, session: int, run: int, model: int,
+           roi: str,
            bids_folder: str,
            l2_norm: float, learning_rate: float,
            max_n_iterations: int, min_n_iterations: int,
            resid_max_iter: int, max_voxels: int,
            noise_dist: str,
-           out_path: Path):
+           out_path: Path,
+           resolution: int = 50,
+           grid_radius: float = 5.0,
+           tr: float = 1.6):
     from braincoder.hrf import SPMHRFModel
     from braincoder.optimize import ResidualFitter, StimulusFitter
 
     pars_list = PARS_BY_MODEL[model]
     sd_min = SD_MIN_BY_MODEL[model]
-    npz_path = (Path(bids_folder) / 'derivatives' / 'v1_decode_handoffs'
-                / f'sub-{subject:02d}_m{model}_V1.npz')
-    print(f'Loading {npz_path}', flush=True)
-    with np.load(npz_path, allow_pickle=True) as f:
-        npz = {k: f[k] for k in f.keys()}
-
-    resolution = int(npz['resolution'])
-    grid_radius = float(npz['grid_radius'])
-    tr = float(npz['tr'])
-    bold = npz['bold'].astype(np.float32)
-    T_all, V = bold.shape
-    if T_all % N_TR_PER_RUN != 0:
-        raise RuntimeError(f'T={T_all} not divisible by {N_TR_PER_RUN}.')
-    n_runs = T_all // N_TR_PER_RUN
-    print(f'  V1 voxels: {V}  runs in concat: {n_runs}  TRs/run: {N_TR_PER_RUN}',
-          flush=True)
-
     sub = Subject(subject, bids_folder=bids_folder)
-    row = _run_index_in_concat(sub, session, run)
-    print(f'  ses-{session} run-{run}: concat row {row}', flush=True)
 
-    # Voxel filter: top-N by r² with finite parameters. No FDR / σ / mass
-    # guards — the m4 warmstart fits have sd_min=0.2 built in, no phantoms.
-    pars_all = pd.DataFrame({p: npz[p] for p in pars_list}).astype(np.float32)
-    pars_all['r2'] = npz['r2'].astype(np.float32)
-    finite = np.all(np.isfinite(pars_all.values), axis=1) & (pars_all.r2 > 0)
-    pars_all = pars_all[finite]
-    sel = pars_all.sort_values('r2', ascending=False).head(max_voxels)
-    npz_rows = sel.index.to_numpy()
-    sel = sel.reset_index(drop=True)
-    print(f'  Selected voxels: {len(sel)} / {V}  '
-          f'(top-{max_voxels} by r², no other filter)', flush=True)
-    print(f'    sd: median {sel.sd.median():.3f}  q05/95 '
-          f'{sel.sd.quantile(.05):.3f}/{sel.sd.quantile(.95):.3f}', flush=True)
-    print(f'    r²: min {sel.r2.min():.3f}  median {sel.r2.median():.3f}  '
-          f'max {sel.r2.max():.3f}', flush=True)
-    if len(sel) < 20:
-        raise RuntimeError(f'Too few voxels selected: {len(sel)}')
+    pars_sel, bold_all, voxel_positions = _load_voxels_and_bold(
+        sub, roi=roi, model=model, max_voxels=max_voxels, resolution=resolution)
 
-    pars_df = sel[pars_list].astype(np.float32)
+    print(f'  PRF stats:', flush=True)
+    print(f'    sd: median {pars_sel.sd.median():.3f}  q05/95 '
+          f'{pars_sel.sd.quantile(.05):.3f}/{pars_sel.sd.quantile(.95):.3f}',
+          flush=True)
+    print(f'    r²: min {pars_sel.r2.min():.3f}  median {pars_sel.r2.median():.3f}  '
+          f'max {pars_sel.r2.max():.3f}', flush=True)
+
+    pars_df = pars_sel[pars_list].astype(np.float32)
     validate_prf_parameters(pars_df, sd_min=sd_min, model_label=f'm{model}',
-                             source=str(npz_path))
+                             source=f'sub-{subject:02d} {roi} m{model} cache')
 
     # BOLD + paradigm for this single run.
-    bold_run = bold.reshape(n_runs, N_TR_PER_RUN, V)[row][:, npz_rows]
+    bold_run = _slice_run(bold_all, sub, session=session, run=run)
     paradigm = sub.get_bar_stimulus(
         session=session, run=run,
         resolution=resolution, grid_radius=grid_radius).astype(np.float32)
@@ -146,6 +181,11 @@ def decode(*, subject: int, session: int, run: int, model: int,
 
     gx, gy = sub.get_extended_grid_coordinates(
         resolution=resolution, session=session, run=run, grid_radius=grid_radius)
+    grid = np.stack([gx.ravel(), gy.ravel()], axis=1).astype(np.float32)
+
+    gx, gy = sub.get_extended_grid_coordinates(
+        resolution=resolution, session=session, run=run,
+        grid_radius=grid_radius)
     grid = np.stack([gx.ravel(), gy.ravel()], axis=1).astype(np.float32)
 
     paradigm_flat = paradigm.reshape(T, -1).astype(np.float32)
@@ -183,21 +223,26 @@ def decode(*, subject: int, session: int, run: int, model: int,
     print(f'  decoded: {decoded_arr.shape}  ({time.time() - t0:.0f}s)',
           flush=True)
 
+    hp_loc = sub.get_hpd_locations().get((session, run))
     out_path.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(
         out_path,
         decoded=decoded_arr,
         paradigm=paradigm,
         grid=grid,
-        voxel_idx=npz['voxel_idx'][npz_rows],
+        subject=np.int32(subject),
+        roi=np.array(roi),
         session=np.int32(session),
         run=np.int32(run),
+        model=np.int32(model),
         l2_norm=np.float32(l2_norm), learning_rate=np.float32(learning_rate),
         resolution=np.int32(resolution),
         grid_radius=np.float32(grid_radius),
         tr=np.float32(tr),
         noise_dist=np.array(noise_dist),
         dof=np.float32(dof) if dof is not None else np.float32(np.nan),
+        n_voxels=np.int32(len(pars_df)),
+        hp_location=np.array(str(hp_loc) if hp_loc is not None else 'unknown'),
     )
     print(f'Wrote: {out_path}', flush=True)
 
@@ -207,9 +252,18 @@ def main():
     p.add_argument('--subject', type=int, required=True)
     p.add_argument('--session', type=int, required=True)
     p.add_argument('--run', type=int, required=True)
+    p.add_argument('--roi', default='V1',
+                   help='Retinotopic ROI to decode from (default V1).')
     p.add_argument('--model', type=int, default=4, choices=sorted(PARS_BY_MODEL),
                    help='PRF model: 4 = DoG+HRF, 6 = Divisive Normalization+HRF.')
     p.add_argument('--bids-folder', default='/data/ds-retsupp')
+    p.add_argument('--resolution', type=int, default=50,
+                   help='Stimulus / cache grid resolution (default 50; must '
+                        'match the cleaned_bold_cache npz that was built '
+                        'for this subject).')
+    p.add_argument('--grid-radius', type=float, default=5.0,
+                   help='Extended grid radius in degrees (default 5.0).')
+    p.add_argument('--tr', type=float, default=1.6)
     p.add_argument('--l2-norm', type=float, default=1.0,
                    help='L2 penalty on decoded stimulus (default 1.0; '
                         'matches the binary 0/1 paradigm scale via the '
@@ -229,20 +283,25 @@ def main():
                    help="Residual noise distribution (default 'gauss'). "
                         "'t' fits a Student-t and uses it in StimulusFitter "
                         'to down-weight heavy-tailed (small-PRF) voxels.')
-    p.add_argument('--out', type=Path, default=None)
+    p.add_argument('--out', type=Path, default=None,
+                   help='Output npz path (default: derivatives/decoded/'
+                        'model{M}/sub-{NN}/decoded_ses-{S}_run-{R}_roi-{ROI}'
+                        '_vox{N}[_t].npz)')
     args = p.parse_args()
 
-    tag = f'ses-{args.session}_run-{args.run}_vox{args.max_voxels}'
-    if args.model != 4:
-        tag = f'm{args.model}_{tag}'
+    tag = (f'ses-{args.session}_run-{args.run}_roi-{args.roi}'
+           f'_vox{args.max_voxels}')
     if args.noise_dist == 't':
         tag = f'{tag}_t'
-    out_path = args.out or (Path(__file__).resolve().parents[2]
-                            / 'notes' / 'data' / 'v1_decode'
+    out_path = args.out or (Path(args.bids_folder)
+                            / 'derivatives' / 'decoded'
+                            / f'model{args.model}'
                             / f'sub-{args.subject:02d}'
                             / f'decoded_{tag}.npz')
     decode(subject=args.subject, session=args.session, run=args.run,
-           model=args.model, bids_folder=args.bids_folder,
+           model=args.model, roi=args.roi, bids_folder=args.bids_folder,
+           resolution=args.resolution, grid_radius=args.grid_radius,
+           tr=args.tr,
            l2_norm=args.l2_norm, learning_rate=args.learning_rate,
            max_n_iterations=args.max_n_iterations,
            min_n_iterations=args.min_n_iterations,
