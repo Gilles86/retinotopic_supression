@@ -3,7 +3,7 @@
 Two entry points:
 
 1. **Single-run smoke movie** -- render a ``(T, R, R)`` decoded tensor
-   from the smoke test (or any single ``decode_runwise`` output) with
+   from the smoke test (or any single ``decode`` output) with
    the true paradigm contour overlaid in cyan and the 4 ring positions
    marked. HP location, if known, gets a special marker.
 

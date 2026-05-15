@@ -81,9 +81,9 @@ The `Subject.get_bold(type='prf_regressed_out')` files are produced by `eccentri
 
 ### Stimulus decoding entrypoint (canonical)
 
-The validated decode pipeline is **`retsupp/decode/decode_v1_handoff.py`**, NOT `decode_runwise.py` (the latter was written from `notes/decoding_runwise_plan.md` and drifted from the working defaults — kept around but uses different paradigm/sd_min/lr).
+The validated decode pipeline is **`retsupp/decode/decode.py`** (one `(subject, session, run)` per call) + its SLURM wrapper `retsupp/decode/slurm_jobs/decode.sh`. An earlier `decode_runwise.py` written from `notes/decoding_runwise_plan.md` was removed (2026-05-15) after burning ~2h chasing the wrong defaults — don't recreate it.
 
-Calibrated defaults in `decode_v1_handoff.py` that took real work to tune — don't change without understanding why:
+Calibrated defaults in `decode.py` that took real work to tune — don't change without understanding why:
 
 - **`l2_norm=1.0`** — matches the binary 0/1 paradigm scale via the Gaussian-prior interpretation `σ_prior = 1/√(2·L2) ≈ 0.71`. Smaller L2 → noisy spikes; larger L2 → crushed amplitude.
 - **`learning_rate=0.5`** for `StimulusFitter.fit` (NOT 0.05 — that's too slow for this scale).
@@ -92,9 +92,9 @@ Calibrated defaults in `decode_v1_handoff.py` that took real work to tune — do
 - **`sd_min=0.2`** passed to the PRF *model* constructor (not just as a filter). Required because the m4 warmstart fits use the same floor; mismatched `sd_min` makes the softplus-inverse fail.
 - **Paradigm is bar-only** via `Subject.get_bar_stimulus(...)`, NOT bar+distractors. Distractors are not part of the PRF mapping stimulus from the decoder's perspective — including them gives the encoder extra structure at the 4 corners that pulls decoded mass to those locations.
 
-Input: per-subject handoff NPZ at `derivatives/v1_decode_handoffs/sub-NN_m4_V1.npz` (PRF params + cleaned BOLD concat across 12 runs + voxel metadata, all aligned). Built by `retsupp/modeling/slurm_jobs/build_v1_handoff.sh`.
+Input: per-subject handoff NPZ at `derivatives/v1_decode_handoffs/sub-NN_m4_V1.npz` (PRF params + cleaned BOLD concat across 12 runs + voxel metadata, all aligned), built by `retsupp/modeling/slurm_jobs/build_v1_handoff.sh`. The "handoff" name is historical (predates whole-brain m4 fits); the NPZ is just a convenient pre-packed bundle of what `decode.py` would otherwise reconstruct from regular m4 NIfTIs + `Subject` accessors.
 
-If you want a per-run decode without the handoff NPZ, replicate the pipeline using regular m4 NIfTIs + `sub.get_bar_stimulus(...)` + `sd_min=0.2` in the model. **Do not** invoke `decode_runwise.py` and expect the same results — it uses different paradigm and model floor.
+If you want a per-run decode without the handoff NPZ, replicate the pipeline using regular m4 NIfTIs + `sub.get_bar_stimulus(...)` + `sd_min=0.2` in the model. Whatever you do, don't reach for a `decode_runwise.py`-style implementation built from the plan — its bar+distractors paradigm and default sd_min give qualitatively different results.
 
 ### Data flow conventions
 
@@ -127,6 +127,59 @@ All SLURM scripts:
 - Hardcode `--bids_folder=/shares/zne.uzh/gdehol/ds-retsupp`.
 - Log to `~/logs/` (create if needed).
 - GPU jobs request `--gres=gpu:1` (some also `--constraint=A100`) and `module load gpu`.
+
+### Resource sizing — what was hard-won this sprint
+
+These are baked into the scripts already, but stating them here so future
+edits don't undo them:
+
+- **GPU PRF chunks (`fit_prf_l4_chunked.sh`)**: `--mem=32G`, not 24G.
+  24G was sufficient for typical (V≈300k voxels) subjects but OOM'd at
+  the stage-2 transition for large-mask subjects (sub-05: V=357k); the
+  failure mode is host-RAM SIGKILL (exit `0:125`), not GPU VRAM. Bumping
+  again or shrinking `--voxel-chunk-size` is fine if larger subjects
+  show up.
+- **GPU PRF walltime per chunk**: `T_CHUNK_M4=01:00:00` (and the same
+  for M5/M6). Was 35 min historically; sub-13 m4 chunks routinely
+  TIMEOUT at 35:08 because per-chunk iter speed varies ~10× across
+  runs on the same data (likely XLA recompile + GPU-type variance:
+  V100 32GB vs L4 24GB).
+- **`fit_prf_l4_chunked.sh` partition**: `lowprio` (NOT standard).
+  Same physical L4/V100/A100 hardware as standard, but jobs dispatch
+  in seconds instead of hours of fairshare wait. Preemption risk
+  exists but is rare; the canary + fail-fast sentinels make
+  recovery cheap. See `[[project_lowprio_partition]]` memory.
+- **`register_retinotopy.sh` (neuropythy)**: `--cpus-per-task=16`,
+  not 4. The registration calls into Noah Benson's Java mesh code
+  via JPype; the JVM side scales with threads — 16 CPUs cuts wall-
+  time from ~45-90 min to ~15-30 min on fsnative meshes. This
+  matters because the per-subject neuropythy is on the AF critical
+  path.
+- **GPU constraint**: `L4|V100|A100`. H100/H200 excluded (those need
+  CUDA 12; the `retsupp_cuda` env is on 11.8). Confirmed working on
+  all three included.
+- **`cuInit` race defense**: per-node `flock` warm-up in the SLURM
+  script body. The previous `sleep $((RANDOM % 30))` stagger was
+  insufficient when 8 jobs landed on the same V100/A100 node (math:
+  expected gap ~4s, need ~1s minimum, ~90% race rate empirically).
+  See sciencecluster skill §"cuInit race".
+
+### Reading SLURM failure modes
+
+`sacct ... --format=ExitCode` is your fastest forensic tool. The two
+exit-code patterns that come up most:
+
+- **`0:125`** — kernel SIGKILL on host memory. The cgroup that
+  enforces `--mem` killed the process. Either your job genuinely
+  needs more host RAM, or it's running on CPU (cuInit-race fallback)
+  when it expected GPU.
+- **`1:0`** — Python raised, exit 1. Could be a TF `ResourceExhausted`
+  (GPU VRAM OOM), an assertion, NaN/Inf in fit, etc. Read the log —
+  the traceback is right there. **Distinct from `0:125`** despite
+  both being "OOM" in casual speech.
+- **`TIMEOUT`** state (not an exit code) — walltime hit. Bump
+  `--time` or check whether the job's silently degraded (cuInit
+  fallback → 25× slower → walltime).
 
 ### SLURM job-name convention
 
@@ -269,6 +322,30 @@ from retsupp.utils.data import distractor_locations  # noqa
 ```
 
 ## Plotting conventions
+
+### VSS2026 talk illustration palette
+
+The talk slides (`notes/figures/talk/make_figures.py:38`) use a
+specific palette that data figures should match so the visuals
+have consistent color-language across illustration → data:
+
+```python
+BUILDUP_PALETTE = {
+    "fg":     "#1F2933",  # near-black: axes, text, axhline-zero
+    "muted":  "#9AA5B1",  # light gray: secondary marks
+    "stim":   "#3D5A80",  # deep blue: stimulus
+    "hp":     "#D62828",  # red:    sustained HP / static suppression
+    "target": "#F77F00",  # orange: target / capture
+    "af":     "#0077B6",  # blue:   dynamic distractor / AF
+    "prf":    "#2A9D8F",  # teal:   example PRF outlines / CoM arrows
+}
+```
+
+Each panel's color should encode what's being measured: HP→red,
+target→orange, dynamic-distractor→blue. The `plot_af_talk.py`
+talk figures already follow this; new talk figures should too.
+
+### Gaussian width on visual-field plots
 
 When illustrating the spatial extent of a Gaussian (PRF, AF, dynamic
 attention pulse, etc.) on a visual-field plot, draw the circle at

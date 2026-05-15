@@ -1,5 +1,5 @@
 #!/bin/bash
-# Per-run V1 decode from the m4 handoff NPZ (CPU job, one (ses,run) per task).
+# Per-run V1 decode from m4 PRF params (CPU job, one (ses,run) per task).
 #
 # Array task → (session, run): tasks 0..5 are session 1 runs 1..6,
 # tasks 6..11 are session 2 runs 1..6. Subjects with fewer runs
@@ -7,9 +7,9 @@
 #
 # Submit:
 #   sbatch --array=0-11 --export=ALL,SUB=15,MAX_VOXELS=100 \
-#       retsupp/decode/slurm_jobs/decode_v1_handoff.sh
+#       retsupp/decode/slurm_jobs/decode.sh
 #   sbatch --array=0-11 --export=ALL,SUB=15,MAX_VOXELS=200 \
-#       retsupp/decode/slurm_jobs/decode_v1_handoff.sh
+#       retsupp/decode/slurm_jobs/decode.sh
 #
 # Optional env overrides:
 #   MAX_VOXELS    # top-N by r² (default 200; required at submit time
@@ -72,7 +72,7 @@ out_tag="ses-${SES}_run-${RUN}_vox${MAX_VOXELS}"
 [[ -n "${SUFFIX:-}" ]]     && out_tag="${out_tag}_${SUFFIX}"
 OUT="${OUT_DIR}/decoded_${out_tag}.npz"
 
-$PYTHON -u -m retsupp.decode.decode_v1_handoff \
+$PYTHON -u -m retsupp.decode.decode \
     --subject "$SUB" \
     --session "$SES" \
     --run "$RUN" \

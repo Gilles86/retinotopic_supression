@@ -1,22 +1,28 @@
-"""V1 stimulus decode from the m4 handoff NPZ — one single run per call.
+"""Per-run stimulus decode from m4 PRF parameters (canonical entrypoint).
 
-Reads ``derivatives/v1_decode_handoffs/sub-{NN}_m4_V1.npz`` (m4 DoG +
-flex-HRF PRF params + cleaned BOLD across all 12 runs, voxel-aligned),
-selects the rows for one (session, run) from the concatenated BOLD,
-builds the matching bar-only paradigm via :meth:`Subject.get_bar_stimulus`,
+Reads m4 (DoG + flex-HRF) PRF parameters for a single ROI (default V1)
+out of either the per-subject handoff NPZ at
+``derivatives/v1_decode_handoffs/sub-{NN}_m{M}_{ROI}.npz`` or directly
+from the volumetric NIfTIs at ``derivatives/prf/model{M}/sub-{NN}/``,
+selects the rows for one (session, run) from the cleaned BOLD, builds
+the matching bar-only paradigm via :meth:`Subject.get_bar_stimulus`,
 and decodes the per-TR stimulus with braincoder's StimulusFitter.
 
-Per-run decoding keeps trialwise structure available for later analyses
-(e.g. distractor-locked modulation); per-HP / per-session averages can
-be reconstructed post-hoc by averaging the per-run NPZs.
+Per-run decoding keeps trialwise structure available for later
+analyses (e.g. distractor-locked modulation); per-HP / per-session
+averages can be reconstructed post-hoc by averaging the per-run NPZs.
 
-Voxel filter is **top-N by r² only** — the new warmstart m4 fits enforce
-``sd_min=0.2`` at the model level, so phantom-like degenerate fits don't
-exist and FDR / mass-in-aperture / σ-bound guards are unnecessary.
+Voxel filter is **top-N by r² only** — the m4 warmstart fits enforce
+``sd_min=0.2`` at the model level, so phantom-like degenerate fits
+don't exist and FDR / mass-in-aperture / σ-bound guards are
+unnecessary.
+
+Defaults are calibrated; do not change without reading the comment
+on ``--l2-norm`` below.
 
 Usage::
 
-    python -m retsupp.decode.decode_v1_handoff --subject 15 --session 1 --run 1
+    python -m retsupp.decode.decode --subject 23 --session 1 --run 1
 
 Output::
 

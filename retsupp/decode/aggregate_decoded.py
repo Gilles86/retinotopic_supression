@@ -1,7 +1,8 @@
 """Aggregate per-run decoded paradigms into group-level tensors.
 
 Reads the ``(T, R, R)`` decoded NPZs written by
-:mod:`retsupp.decode.decode_runwise` and produces:
+:mod:`retsupp.decode.decode` (or any per-run decoder writing the
+same ``(decoded, paradigm, grid)`` npz schema) and produces:
 
 * **§2E mean decoded paradigm per ROI** -- ``(T, R, R)`` group mean of
   the un-rotated decoded paradigm across all subjects × runs. One
