@@ -91,14 +91,10 @@ exec >"$LOGFILE" 2>&1
 scontrol update jobid="${SLURM_JOB_ID}" \
     name="prf_m${MODEL}_${KIND}_sub-${sub_pad}" 2>/dev/null || true
 
-# Random startup stagger (0-30s) to avoid two failure modes:
-#  1. cuInit dogpile on multi-GPU nodes (race when 8 jobs simultaneously
-#     init TF on the same node; defended at constraint level by L4-only,
-#     but kept for defense-in-depth in case future jobs allow A100/V100).
-#  2. NFS profile-read dogpile (the "user env retrieval failed" issue
-#     SLURM uses to mark tasks held when too many start at the same
-#     instant). 30s spread is much wider than either race window.
-sleep $(( RANDOM % 30 ))
+# NFS profile-read dogpile defense (a different race from cuInit —
+# many SLURM tasks reading $HOME/.bashrc at once cause "user env
+# retrieval failed" holds). Short random stagger spreads the reads.
+sleep $(( RANDOM % 15 ))
 
 echo "Host: $(hostname) | sub-${subject} | model ${MODEL} | kind ${KIND}"
 echo "  chunk ${chunk_idx}/${N_CHUNKS}  array_task=${SLURM_ARRAY_TASK_ID}"
@@ -115,6 +111,31 @@ source "$HOME/data/miniforge3/etc/profile.d/conda.sh"
 conda activate retsupp_cuda
 export PYTHONUNBUFFERED=1
 PYTHON="$HOME/data/conda/envs/retsupp_cuda/bin/python"
+
+# cuInit-race defense (replaces the old 30s random stagger which is
+# mathematically insufficient when 8 jobs land on the same V100/A100
+# node: with sleep RANDOM%30 the expected adjacent-start gap is ~4s,
+# below the ~1s needed for cuInit non-overlap → ~90% chance of
+# driver deadlock).
+#
+# Instead: per-node flock that serializes a minimal TF GPU-init across
+# all jobs landing on the same hostname. The FIRST job under the lock
+# warms the driver (forces a complete cuInit on its allocated GPU);
+# every subsequent job grabs the lock briefly, hits the now-warm
+# driver, and releases. Lock is on /tmp (node-local), not NFS, so
+# semantics are correct even at scale.
+LOCK="/tmp/cuinit_warm_$(hostname -s).flock"
+echo "cuInit warm-up under flock $LOCK ..."
+(
+    flock -x 200
+    "$PYTHON" -c "
+import os
+os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
+import tensorflow as tf
+gpus = tf.config.list_physical_devices('GPU')
+print(f'cuInit OK: {len(gpus)} GPU(s) visible to TF', flush=True)
+" || echo "cuInit warm-up call exited non-zero (continuing — main fit will retry)"
+) 200>"$LOCK"
 
 $PYTHON -u "$HOME/git/retsupp/retsupp/modeling/fit_prf.py" \
     "$subject" --model "$MODEL" \
