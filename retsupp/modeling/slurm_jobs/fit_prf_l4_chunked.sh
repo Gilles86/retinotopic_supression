@@ -124,10 +124,21 @@ PYTHON="$HOME/data/conda/envs/retsupp_cuda/bin/python"
 # every subsequent job grabs the lock briefly, hits the now-warm
 # driver, and releases. Lock is on /tmp (node-local), not NFS, so
 # semantics are correct even at scale.
+#
+# Crash safety: flock is released by the kernel when the holding
+# process dies (any reason). The subshell below only holds the lock
+# during its own execution; if the Python warm-up segfaults / hangs /
+# is OOM-killed, the subshell exits, FD closes, lock releases. -w 60
+# is belt-and-suspenders: even if some pathological state prevents
+# acquisition, the job proceeds after 60s rather than hanging until
+# SLURM walltime.
 LOCK="/tmp/cuinit_warm_$(hostname -s).flock"
 echo "cuInit warm-up under flock $LOCK ..."
 (
-    flock -x 200
+    flock -w 60 -x 200 || {
+        echo "WARN: couldn't acquire $LOCK in 60s; skipping warm-up";
+        exit 0;
+    }
     "$PYTHON" -c "
 import os
 os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
