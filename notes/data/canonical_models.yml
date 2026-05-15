@@ -58,9 +58,16 @@ af_dynamic_allSharedSigma:
     shared_target_sigma: true
     all_shared_sigma: true
     p_signal_thr: 0.5
+  pinned_commit: 6dc0755
   comment: |
     Stricter-tied variant: σ_AF := σ_dyn := σ_T_dyn (single AF width).
-    For ablation comparisons against the canonical sharedSigma.
+    For ablation comparisons against the canonical sharedSigma. Tests
+    whether tying all σs stabilises parameter estimates in regions
+    where σ_AF was collapsing to the floor (VO/IPS/SPL1 in the
+    free-σ_AF variant showed σ_AF ≈ 0.4 vs σ_dyn ≈ 3-5).
+    Re-fit 2026-05-15 from the current canonical pipeline; the legacy
+    May-14 fits are preserved at
+    `..._allSharedSigma_pSig0.5.bak.2026-05-15/` in case they're needed.
 
 af_dynamic_sharedDynGain:
   fits_dir: derivatives/af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_sharedDynGain_pSig0.5
