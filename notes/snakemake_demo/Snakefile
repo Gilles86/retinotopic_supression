@@ -110,16 +110,18 @@ rule prf_chunks:
     log:
         f"{REPO}/notes/snakemake_demo/logs/prf_chunks_sub-{SUB_PAD}_m{MODEL}_chunk-{{chunk}}.log",
     resources:
+        # SLURM resource specification. The snakemake-executor-plugin-slurm
+        # owns --gres/--constraint/--job-name/etc., so don't put them in
+        # slurm_extra — that triggers WorkflowError before sbatch is even
+        # called and the threadpool swallows it (silent fail seen on
+        # snakemake 9.20 / plugin 2.6.1, 2026-05-15).
         slurm_partition="lowprio",
         slurm_account="zne.uzh",
         runtime=20,              # 20 min wall (m1 ≈ 10 min on L4)
         mem_mb=32000,
         cpus_per_task=4,
-        slurm_extra=(
-            "--gres=gpu:1 "
-            "--constraint='L4|V100|A100' "
-            f"--job-name=snake_prf_m{MODEL}_sub-{SUB_PAD}"
-        ),
+        gres="gpu:1",
+        constraint="L4|V100|A100",
     shell:
         r"""
         set -eo pipefail
@@ -168,7 +170,6 @@ rule prf_merge:
         runtime=10,
         mem_mb=8000,
         cpus_per_task=2,
-        slurm_extra=f"--job-name=snake_merge_m{MODEL}_sub-{SUB_PAD}",
     shell:
         r"""
         set -eo pipefail
@@ -206,7 +207,6 @@ rule prf_surface:
         runtime=15,
         mem_mb=24000,
         cpus_per_task=4,
-        slurm_extra=f"--job-name=snake_surf_m{MODEL}_sub-{SUB_PAD}",
     shell:
         r"""
         set -eo pipefail
