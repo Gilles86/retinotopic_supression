@@ -103,10 +103,22 @@ def _load_voxels_and_bold(sub: Subject, *, roi: str, model: int,
         dtype=bool).ravel()
     v1_within_brain = v1_3d[brain_mask]
     if int(v1_within_brain.sum()) != len(prf_roi):
-        raise RuntimeError(
-            f'V1 mask voxel count mismatch: cache pool has '
-            f'{int(v1_within_brain.sum())} V1 voxels but PRF cache has '
-            f'{len(prf_roi)}; check ROI / brain mask alignment.')
+        # ROI extends slightly outside the BOLD brain mask. Filter the
+        # PRF table down to the ROI ∩ brain-mask voxels (preserves order).
+        roi_pos_flat = np.where(v1_3d)[0]
+        in_brain_within_roi = brain_mask[roi_pos_flat]
+        if int(in_brain_within_roi.sum()) != int(v1_within_brain.sum()):
+            raise RuntimeError(
+                f'{roi} mask alignment failure: cache pool has '
+                f'{int(v1_within_brain.sum())} {roi} voxels, PRF cache has '
+                f'{len(prf_roi)}, ROI∩brain-mask gives '
+                f'{int(in_brain_within_roi.sum())} — cannot reconcile.')
+        print(f'  ROI({len(prf_roi)}) extends beyond BOLD brain mask; '
+              f'keeping {int(in_brain_within_roi.sum())} voxels in '
+              f'ROI ∩ brain-mask intersection', flush=True)
+        prf_roi = prf_roi.loc[in_brain_within_roi].reset_index(drop=True)
+        finite = np.all(np.isfinite(prf_roi.values), axis=1) & (prf_roi['r2'] > 0)
+        keep_v1_pos = np.where(finite.values)[0]
     v1_cache_cols = np.where(v1_within_brain)[0]
 
     # Cleaned BOLD cache (same one fit_prf consumed). Must exist.
