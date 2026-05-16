@@ -1,0 +1,532 @@
+# retsupp PRF + AF pipeline — production Snakemake replacement for
+# retsupp/modeling/slurm_jobs/submit_prf_sweep_persub.sh.
+#
+# DAG per subject:
+#
+#   cleaned_bold_cache
+#         |
+#         v
+#   m1: prf_chunks (N_CHUNKS) -> prf_merge -> prf_surface -+
+#                                                          |
+#         (m2,m3 fan out after m1 merge)                   |
+#         v                                                v
+#   m2: prf_chunks -> prf_merge -> prf_surface --+   neuropythy_m1
+#   m3: prf_chunks -> prf_merge -> prf_surface --+         |
+#                                                |         v
+#                                                +-->  neuropythy_m2
+#         (m4,m5 fan out after m2 merge)                   |
+#         v                                                v
+#   m4: prf_chunks -> prf_merge -> prf_surface ---> neuropythy_m4 ---> r2_mixture_m4
+#                                                                              |
+#                                                                              v
+#                                                              af_fit_{roi} (x 11 ROIs)
+#   m5: prf_chunks -> prf_merge -> prf_surface ---> neuropythy_m5
+#         (m6 after m5 merge)
+#         v
+#   m6: prf_chunks -> prf_merge -> prf_surface ---> neuropythy_m6
+#
+# Why Snakemake (not the bash submitter): the per-subject afterok chains
+# from submit_prf_sweep_persub.sh are inferred from file inputs/outputs;
+# failure isolation is automatic ("snakemake -F <target>" reruns just
+# that branch). AF's silent dependency on r2_mixture's p_signal NIfTI
+# (which was NOT in the bash submitter — see CLAUDE.md memory
+# feedback_af_needs_r2_mixture.md) is now an explicit rule edge.
+#
+# Drive from cluster login node, inside ~/git/retsupp, under tmux:
+#
+#   tmux new-session -d -s prf_snake "cd ~/git/retsupp && \
+#       ~/data/conda/envs/retsupp_snake/bin/snakemake \
+#           --snakefile retsupp/snakemake/Snakefile \
+#           --workflow-profile retsupp/snakemake/profile \
+#           --configfile retsupp/snakemake/config.yaml \
+#           2>&1 | tee retsupp/snakemake/logs/run.log"
+#
+# Dry-run on the cluster (DAG inspection only, no sbatch):
+#
+#   ~/data/conda/envs/retsupp_snake/bin/snakemake \
+#       --snakefile retsupp/snakemake/Snakefile \
+#       --configfile retsupp/snakemake/config.yaml \
+#       -n -p --quiet rules
+#
+# Local dry-run on macOS (paths still cluster-resolved; just dry-runs
+# graph construction):
+#
+#   ~/mambaforge/envs/retsupp/bin/snakemake \
+#       --snakefile retsupp/snakemake/Snakefile \
+#       --configfile retsupp/snakemake/config.yaml -n
+
+from pathlib import Path
+
+
+# ---------------------------------------------------------------------------
+# Config + path helpers
+# ---------------------------------------------------------------------------
+configfile: "retsupp/snakemake/config.yaml"
+
+BIDS = config["bids"]
+REPO = config["repo"]
+PYTHON_CUDA = config["python_cuda"]
+PYTHON_NEURO = config["python_neuropythy"]
+SUBJECTS = [int(s) for s in config["subjects"]]
+MODELS = [int(m) for m in config["models"]]
+N_CHUNKS = int(config["n_chunks"])
+KIND = config["kind"]
+AF_ROIS = list(config["af_rois"])
+AF_PSIG = float(config["af_psignal_thr"])
+AF_APT = float(config["af_aperture_mass_thr"])
+AF_SUBDIR = config["af_output_subdir"]
+WITH_AF = bool(config["with_af"])
+WITH_R2_MIXTURE = bool(config["with_r2_mixture"])
+
+# Wildcards are integers / known strings; constrain to avoid greedy regex
+# eating "/" or wrong-shaped strings.
+wildcard_constraints:
+    sub=r"\d+",
+    sub_pad=r"\d{2}",
+    model=r"[1-6]",
+    chunk=r"\d{4}",
+    roi="|".join(AF_ROIS),
+
+CHUNK_IDS = [f"{i:04d}" for i in range(N_CHUNKS)]
+N_CHUNKS_STR = f"{N_CHUNKS:04d}"
+
+
+def sp(sub):
+    return f"{int(sub):02d}"
+
+
+# ---------------------------------------------------------------------------
+# Canonical output paths (mirror submit_prf_sweep_persub.sh exactly).
+# Snakemake "discovers" the DAG by matching these wildcarded patterns
+# against rule inputs/outputs.
+# ---------------------------------------------------------------------------
+CACHE = f"{BIDS}/derivatives/cleaned_bold_cache/sub-{{sub_pad}}/sub-{{sub_pad}}_kind-{KIND}_res-50.npz"
+
+PRF_DIR = f"{BIDS}/derivatives/prf/model{{model}}/sub-{{sub_pad}}"
+CHUNK = f"{PRF_DIR}/chunks/chunk-{{chunk}}-of-{N_CHUNKS_STR}.npz"
+MERGED_R2 = f"{PRF_DIR}/sub-{{sub_pad}}_desc-r2.nii.gz"
+# Surface sentinel: hemi-L .gii for the r2 param. The Python sampler
+# writes both hemis + fsaverage transforms in one go.
+SURF = (f"{PRF_DIR}/sub-{{sub_pad}}_desc-r2.optim.nilearn_"
+        f"space-fsnative_hemi-L.func.gii")
+# Per-model neuropythy sentinel: inferred_varea.mgz under freesurfer mri/.
+# This file's mtime is enough to gate downstream rules; the script also
+# writes inferred_{angle,eccen,sigma}.mgz.
+NEURO_SENTINEL = (f"{BIDS}/derivatives/fmriprep/sourcedata/freesurfer/"
+                  f"sub-{{sub_pad}}/mri/inferred_varea.mgz")
+
+# r2_mixture output: per-(subject, model) p_signal NIfTI in prf/modelN/.
+P_SIGNAL = f"{PRF_DIR}/sub-{{sub_pad}}_desc-p_signal.nii.gz"
+
+# AF per-(subject, ROI) output. Constructed by
+# fit_dog_dynamic_af_braincoder.py from the flag combination
+# --with-target --shared-target-sigma + mode=signed + model-version=v3:
+#     dyn_tag = "dog-dyn-v3-target-sharedSigma"
+AF_OUT = (f"{BIDS}/derivatives/{AF_SUBDIR}/sub-{{sub_pad}}/"
+          f"sub-{{sub_pad}}_roi-{{roi}}_mode-signed_"
+          f"dog-dyn-v3-target-sharedSigma-af-prf-pars.tsv")
+
+
+# ---------------------------------------------------------------------------
+# rule all: every requested target. Snakemake walks back from these to
+# build the DAG. Targets:
+#   - per-(sub, model): merged r2 NIfTI + neuropythy mgz (per model)
+#   - per-sub (if r2_mixture enabled): p_signal NIfTI for m4
+#   - per-(sub, roi) (if AF enabled): AF param TSV
+# ---------------------------------------------------------------------------
+def all_targets():
+    out = []
+    for sub in SUBJECTS:
+        pad = sp(sub)
+        for m in MODELS:
+            out.append(MERGED_R2.format(sub_pad=pad, model=m))
+            out.append(NEURO_SENTINEL.format(sub_pad=pad, model=m))
+        if WITH_R2_MIXTURE or WITH_AF:
+            out.append(P_SIGNAL.format(sub_pad=pad, model=4))
+        if WITH_AF:
+            for roi in AF_ROIS:
+                out.append(AF_OUT.format(sub_pad=pad, roi=roi))
+    return out
+
+
+rule all:
+    input:
+        all_targets(),
+
+
+# ---------------------------------------------------------------------------
+# cleaned_bold_cache: one task per subject. Builds the npz cache the
+# chunked PRF fits consume. Mirrors build_cleaned_bold_cache.sh.
+# ---------------------------------------------------------------------------
+rule cleaned_bold_cache:
+    output:
+        CACHE,
+    log:
+        f"{REPO}/retsupp/snakemake/logs/cache_sub-{{sub_pad}}.log",
+    resources:
+        slurm_partition="lowprio",
+        slurm_account="zne.uzh",
+        runtime=15,
+        mem_mb=20000,
+        cpus_per_task=4,
+    shell:
+        r"""
+        set -eo pipefail
+        echo "Host: $(hostname) sub-{wildcards.sub_pad} kind={KIND}"
+        echo "Started: $(date)"
+
+        source "$HOME/data/miniforge3/etc/profile.d/conda.sh"
+        conda activate retsupp_cuda
+        export PYTHONUNBUFFERED=1
+
+        {PYTHON_CUDA} -u "{REPO}/retsupp/modeling/build_cleaned_bold_cache.py" \
+            $(echo {wildcards.sub_pad} | sed 's/^0*//') \
+            --bids-folder {BIDS} \
+            --paradigm-kind {KIND}
+
+        echo "Finished: $(date)"
+        """
+
+
+# ---------------------------------------------------------------------------
+# prf_chunks: one SLURM task per (sub, model, chunk). GPU L4-only.
+# Mirrors fit_prf_l4_chunked.sh — same walltime per model, same memory,
+# same cuInit warm-up under per-node /dev/shm flock.
+#
+# Per-model walltime (minutes). Matches submit_prf_sweep_persub.sh
+# T_CHUNK_M{N} after the 2026-05-13 bumps.
+# ---------------------------------------------------------------------------
+CHUNK_RUNTIME = {1: 20, 2: 50, 3: 50, 4: 60, 5: 90, 6: 90}
+
+
+def chunk_runtime(wildcards):
+    return CHUNK_RUNTIME[int(wildcards.model)]
+
+
+rule prf_chunks:
+    input:
+        cache=CACHE,
+    output:
+        CHUNK,
+    log:
+        f"{REPO}/retsupp/snakemake/logs/prf_chunks_sub-{{sub_pad}}_m{{model}}_chunk-{{chunk}}.log",
+    resources:
+        slurm_partition="lowprio",
+        slurm_account="zne.uzh",
+        runtime=chunk_runtime,
+        mem_mb=32000,           # 32G — matches fit_prf_l4_chunked.sh after bump
+        cpus_per_task=4,
+        gres="gpu:1",
+        constraint="L4",        # cuInit-race-proof (1 GPU per L4 node)
+    shell:
+        r"""
+        set -eo pipefail
+        echo "Host: $(hostname) sub-{wildcards.sub_pad} m{wildcards.model} chunk={wildcards.chunk}/{N_CHUNKS_STR}"
+        echo "Started: $(date)"
+
+        # NFS dogpile stagger.
+        sleep $(( RANDOM % 15 ))
+
+        # CUDA runtime (TF 2.14 / cuDNN 8.7 ABI; CUDA 11.8 spack install).
+        source /etc/profile.d/lmod.sh 2>/dev/null || true
+        SYS_CUDA_GLOB=( /apps/u24/opt/x86_64_v3/cuda-11.8.0-* )
+        if [[ -d "${{SYS_CUDA_GLOB[0]}}/targets/x86_64-linux/lib" ]]; then
+            export LD_LIBRARY_PATH="${{SYS_CUDA_GLOB[0]}}/targets/x86_64-linux/lib${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}"
+        fi
+
+        source "$HOME/data/miniforge3/etc/profile.d/conda.sh"
+        conda activate retsupp_cuda
+        export PYTHONUNBUFFERED=1
+
+        # cuInit-race defense — flock on /dev/shm (node-local tmpfs,
+        # shared across SLURM jobs on the same physical host). Matches
+        # fit_prf_l4_chunked.sh's flock block. With --constraint=L4
+        # (1 GPU per node) this is belt-and-suspenders, but kept for
+        # defense-in-depth in case the constraint is ever loosened.
+        LOCK="/dev/shm/cuinit_warm_$(hostname -s).flock"
+        echo "cuInit warm-up under flock $LOCK ..."
+        (
+            flock -w 60 -x 200 || {{
+                echo "WARN: couldn't acquire $LOCK in 60s; skipping warm-up"
+                exit 0
+            }}
+            {PYTHON_CUDA} -c "
+import os, sys
+os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
+import tensorflow as tf
+gpus = tf.config.list_physical_devices('GPU')
+print(f'cuInit warm-up: {{len(gpus)}} GPU(s) visible to TF', flush=True)
+sys.exit(0 if gpus else 1)
+"
+        ) 200>"$LOCK"
+        WARMUP_RC=$?
+        if [[ $WARMUP_RC -ne 0 ]]; then
+            echo "FATAL: cuInit warm-up returned $WARMUP_RC (no GPU after lock-protected init)." >&2
+            exit 1
+        fi
+
+        # Strip leading zeros from sub_pad for the Python subject arg.
+        SUB_INT=$(echo {wildcards.sub_pad} | sed 's/^0*//')
+        # Same for chunk-index (4-digit zero-padded → integer 0..N-1).
+        CHUNK_INT=$(echo {wildcards.chunk} | sed 's/^0*//' )
+        [[ -z "$CHUNK_INT" ]] && CHUNK_INT=0
+
+        {PYTHON_CUDA} -u "{REPO}/retsupp/modeling/fit_prf.py" \
+            "$SUB_INT" --model {wildcards.model} \
+            --bids-folder {BIDS} \
+            --resolution 50 \
+            --voxel-chunk-size 100000 \
+            --paradigm-kind {KIND} \
+            --chunk-index "$CHUNK_INT" \
+            --n-chunks {N_CHUNKS}
+
+        echo "Finished: $(date)"
+        """
+
+
+# ---------------------------------------------------------------------------
+# prf_merge: assemble per-chunk NPZs into per-parameter NIfTIs. The r2
+# NIfTI is the canonical "block done" sentinel (matches
+# submit_prf_sweep_persub.sh::block_already_done).
+# ---------------------------------------------------------------------------
+rule prf_merge:
+    input:
+        chunks=expand(CHUNK, chunk=CHUNK_IDS, allow_missing=True),
+    output:
+        MERGED_R2,
+    log:
+        f"{REPO}/retsupp/snakemake/logs/prf_merge_sub-{{sub_pad}}_m{{model}}.log",
+    resources:
+        slurm_partition="lowprio",
+        slurm_account="zne.uzh",
+        runtime=10,
+        mem_mb=8000,
+        cpus_per_task=2,
+    shell:
+        r"""
+        set -eo pipefail
+        echo "Host: $(hostname) sub-{wildcards.sub_pad} m{wildcards.model}"
+        echo "Started: $(date)"
+
+        source "$HOME/data/miniforge3/etc/profile.d/conda.sh"
+        conda activate retsupp_cuda
+        export PYTHONUNBUFFERED=1
+
+        SUB_INT=$(echo {wildcards.sub_pad} | sed 's/^0*//')
+        {PYTHON_CUDA} -u "{REPO}/retsupp/modeling/merge_prf_chunks.py" \
+            "$SUB_INT" --model {wildcards.model} \
+            --bids-folder {BIDS} \
+            --paradigm-kind {KIND}
+
+        echo "Finished: $(date)"
+        """
+
+
+# ---------------------------------------------------------------------------
+# prf_surface: vol → fsnative + fsaverage .gii via mri_surf2surf. Writes
+# both hemis + all params in one job (per-sub, per-model).
+# ---------------------------------------------------------------------------
+rule prf_surface:
+    input:
+        MERGED_R2,
+    output:
+        SURF,
+    log:
+        f"{REPO}/retsupp/snakemake/logs/prf_surf_sub-{{sub_pad}}_m{{model}}.log",
+    resources:
+        slurm_partition="lowprio",
+        slurm_account="zne.uzh",
+        runtime=8,                 # actual ~2:30-3:00; tight wins backfill
+        mem_mb=24000,
+        cpus_per_task=4,
+    shell:
+        r"""
+        set -eo pipefail
+        echo "Host: $(hostname) sub-{wildcards.sub_pad} m{wildcards.model}"
+        echo "Started: $(date)"
+
+        source "$HOME/data/miniforge3/etc/profile.d/conda.sh"
+        conda activate retsupp_cuda
+        export PYTHONUNBUFFERED=1
+
+        export FREESURFER_HOME=/shares/zne.uzh/containers/fmriprep-25.2.5/opt/freesurfer
+        export PATH="$FREESURFER_HOME/bin:$PATH"
+        export FS_LICENSE=/shares/zne.uzh/containers/freesurfer/license.txt
+        [[ -f "$FREESURFER_HOME/SetUpFreeSurfer.sh" ]] && \
+            source "$FREESURFER_HOME/SetUpFreeSurfer.sh" >/dev/null 2>&1
+        export SUBJECTS_DIR={BIDS}/derivatives/fmriprep/sourcedata/freesurfer
+
+        SUB_INT=$(echo {wildcards.sub_pad} | sed 's/^0*//')
+        {PYTHON_CUDA} -u "{REPO}/retsupp/surface/sample_prf_to_surface_nilearn.py" \
+            "$SUB_INT" --model {wildcards.model} \
+            --bids_folder {BIDS}
+
+        echo "Finished: $(date)"
+        """
+
+
+# ---------------------------------------------------------------------------
+# neuropythy_register: per-(sub, model) neuropythy register_retinotopy.
+#
+# Neuropythy writes inferred_*.mgz into the freesurfer subject dir
+# (one location per subject). The bash submitter enforces serial
+# execution across models within a subject because they share that
+# scratch dir; we do the same here by chaining each model's neuropythy
+# input on the previous model's neuropythy output.
+#
+# Chain order (matches submit_prf_sweep_persub.sh):
+#   m1 → m2 → m3 → m4 → m5 → m6
+# ---------------------------------------------------------------------------
+NEURO_PREV_MODEL = {1: None, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5}
+
+
+def neuropythy_extra_inputs(wildcards):
+    """Per-subject serial chain: m{N} neuropythy depends on m{N-1}'s."""
+    prev = NEURO_PREV_MODEL[int(wildcards.model)]
+    if prev is None:
+        return []
+    return [NEURO_SENTINEL.format(sub_pad=wildcards.sub_pad, model=prev)]
+
+
+rule neuropythy_register:
+    input:
+        surface=SURF,
+        prev=neuropythy_extra_inputs,
+    output:
+        NEURO_SENTINEL,
+    log:
+        f"{REPO}/retsupp/snakemake/logs/neuropythy_sub-{{sub_pad}}_m{{model}}.log",
+    resources:
+        slurm_partition="lowprio",
+        slurm_account="zne.uzh",
+        runtime=60,
+        mem_mb=24000,
+        cpus_per_task=16,            # JVM scales with threads; see CLAUDE.md
+    shell:
+        r"""
+        set -eo pipefail
+        echo "Host: $(hostname) sub-{wildcards.sub_pad} m{wildcards.model}"
+        echo "Started: $(date)"
+
+        source "$HOME/data/miniforge3/etc/profile.d/conda.sh"
+        conda activate retsupp_neuropythy
+        export PYTHONUNBUFFERED=1
+
+        export FREESURFER_HOME=/shares/zne.uzh/containers/fmriprep-25.2.5/opt/freesurfer
+        export PATH="$FREESURFER_HOME/bin:$PATH"
+        export FS_LICENSE=/shares/zne.uzh/containers/freesurfer/license.txt
+        [[ -f "$FREESURFER_HOME/SetUpFreeSurfer.sh" ]] && \
+            source "$FREESURFER_HOME/SetUpFreeSurfer.sh" >/dev/null 2>&1
+        export SUBJECTS_DIR={BIDS}/derivatives/fmriprep/sourcedata/freesurfer
+
+        SUB_INT=$(echo {wildcards.sub_pad} | sed 's/^0*//')
+        {PYTHON_NEURO} -u "{REPO}/retsupp/neuropythy/register_retinotopy.py" \
+            "$SUB_INT" \
+            --bids_dir {BIDS}
+
+        echo "Finished: $(date)"
+        """
+
+
+# ---------------------------------------------------------------------------
+# r2_mixture: per-(subject, model) Beta-mixture FDR on R². Writes
+# desc-p_signal.nii.gz into the PRF model dir. NOT in the bash submitter
+# — folding it in here closes the gap noted in
+# CLAUDE.md memory feedback_af_needs_r2_mixture.md.
+#
+# Depends on the merged r2 NIfTI (needs r2 voxelwise) AND the neuropythy
+# atlas (the per-ROI fit reads neuropythy varea to define ROIs).
+# ---------------------------------------------------------------------------
+rule r2_mixture:
+    input:
+        r2=MERGED_R2,
+        neuro=NEURO_SENTINEL,
+    output:
+        P_SIGNAL,
+    log:
+        f"{REPO}/retsupp/snakemake/logs/r2_mixture_sub-{{sub_pad}}_m{{model}}.log",
+    resources:
+        slurm_partition="lowprio",
+        slurm_account="zne.uzh",
+        runtime=30,
+        mem_mb=8000,
+        cpus_per_task=2,
+    shell:
+        r"""
+        set -eo pipefail
+        echo "Host: $(hostname) sub-{wildcards.sub_pad} m{wildcards.model}"
+        echo "Started: $(date)"
+
+        sleep $(( RANDOM % 20 ))
+
+        source "$HOME/data/miniforge3/etc/profile.d/conda.sh"
+        conda activate retsupp_cuda
+        export PYTHONUNBUFFERED=1
+
+        SUB_INT=$(echo {wildcards.sub_pad} | sed 's/^0*//')
+        {PYTHON_CUDA} -u "{REPO}/retsupp/modeling/run_r2_mixture_all.py" \
+            --bids-folder {BIDS} \
+            --model {wildcards.model} \
+            --subjects "$SUB_INT" \
+            --rois V1 V2 V3 V3AB hV4 LO TO VO IPS SPL1 FEF
+
+        echo "Finished: $(date)"
+        """
+
+
+# ---------------------------------------------------------------------------
+# af_fit: per-(subject, ROI) AF + DoG-PRF braincoder fit. Mirrors
+# fit_dog_dyn_v3_target_sharedSigma.sh — same flags, same env, same
+# CPU-only (CUDA_VISIBLE_DEVICES=-1). 11 ROIs per subject.
+# ---------------------------------------------------------------------------
+rule af_fit:
+    input:
+        merged=MERGED_R2.replace("{model}", "4"),
+        neuro=NEURO_SENTINEL.replace("{model}", "4"),
+        p_signal=P_SIGNAL.replace("{model}", "4"),
+    output:
+        AF_OUT,
+    log:
+        f"{REPO}/retsupp/snakemake/logs/af_fit_sub-{{sub_pad}}_roi-{{roi}}.log",
+    resources:
+        slurm_partition="lowprio",
+        slurm_account="zne.uzh",
+        runtime=25,
+        mem_mb=24000,
+        cpus_per_task=8,
+    shell:
+        r"""
+        set -eo pipefail
+        echo "Host: $(hostname) sub-{wildcards.sub_pad} roi={wildcards.roi}"
+        echo "Started: $(date)"
+
+        sleep $(( RANDOM % 30 ))
+
+        source "$HOME/data/miniforge3/etc/profile.d/conda.sh"
+        conda activate retsupp_cuda
+        export CUDA_VISIBLE_DEVICES=-1
+        export PYTHONUNBUFFERED=1
+        export OMP_NUM_THREADS=${{SLURM_CPUS_PER_TASK:-8}}
+        export TF_NUM_INTRAOP_THREADS=${{SLURM_CPUS_PER_TASK:-8}}
+        export TF_NUM_INTEROP_THREADS=2
+
+        SUB_INT=$(echo {wildcards.sub_pad} | sed 's/^0*//')
+
+        {PYTHON_CUDA} -u "{REPO}/retsupp/modeling/fit_dog_dynamic_af_braincoder.py" \
+            "$SUB_INT" \
+            --bids-folder {BIDS} \
+            --roi {wildcards.roi} \
+            --resolution 50 \
+            --max-voxels 500 \
+            --model-version v3 \
+            --with-target \
+            --shared-target-sigma \
+            --sigma-af-init 2.0 \
+            --sigma-dyn-init 2.0 \
+            --sigma-t-dyn-init 2.0 \
+            --g-t-dyn-init 0.0 \
+            --p-signal-thr {AF_PSIG} \
+            --aperture-mass-thr {AF_APT}
+
+        echo "Finished: $(date)"
+        """

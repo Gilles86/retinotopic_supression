@@ -1,0 +1,52 @@
+# Snakemake workflow profile for the retsupp PRF + AF pipeline on
+# UZH sciencecluster. Loaded via `--workflow-profile retsupp/snakemake/profile`.
+#
+# Per-rule resources override these defaults; see the Snakefile.
+
+executor: slurm
+
+# Default SLURM resources. Per-rule `resources:` blocks override.
+default-resources:
+  slurm_partition: lowprio
+  slurm_account: zne.uzh
+  runtime: 30
+  mem_mb: 8000
+  cpus_per_task: 2
+
+# Cap concurrent SLURM jobs in flight at once. With 30 subjects × 6
+# models × 10 chunks = 1800 chunk tasks alone, capping prevents the
+# "user env retrieval failed" NFS dogpile (see retsupp/CLAUDE.md
+# §"Avoid the user env retrieval failed dogpile" — 150 is a known-safe
+# ceiling for our cluster).
+jobs: 150
+
+printshellcmds: True
+
+# Per-rule log: directives land under retsupp/snakemake/logs/ (relative
+# to the workflow root). The SLURM executor itself drops its sbatch
+# stdout under .snakemake/slurm_logs/<jobid>.log by default.
+slurm-logdir: ./retsupp/snakemake/logs/slurm
+
+# Retain incomplete files on rule failure so we can inspect; without
+# this snakemake helpfully deletes partial outputs.
+keep-incomplete: True
+
+# Re-run rule iff its declared inputs or input mtimes changed. NOT on
+# code/params changes (the Snakefile gets touched during dev — that
+# shouldn't invalidate finished fits).
+rerun-triggers:
+  - mtime
+  - input
+
+# Restart preempted lowprio jobs once before giving up.
+restart-times: 1
+
+# Snakemake's own latency tolerance for NFS — give file-existence checks
+# 30s grace so a just-written NIfTI on /shares doesn't trip the
+# "output missing" guard.
+latency-wait: 30
+
+# Stop scheduling new jobs after the first failure (default is to
+# continue with everything that doesn't depend on the failed job).
+# Set to True to let independent branches keep running.
+keep-going: True

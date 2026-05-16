@@ -1,0 +1,101 @@
+# Production Snakemake config for the retsupp PRF + AF pipeline.
+# Edit subjects / N_CHUNKS / kind here; defaults match the canonical
+# bash submitter (retsupp/modeling/slurm_jobs/submit_prf_sweep_persub.sh).
+
+# Path to BIDS dataset on the cluster filesystem.
+bids: /shares/zne.uzh/gdehol/ds-retsupp
+
+# Repo root on the cluster (used to locate Python scripts inside rules).
+repo: /home/gdehol/git/retsupp
+
+# Conda env Python binary that runs the actual fits / merges (TF 2.14 +
+# CUDA 11.8 ABI). The Snakemake driver runs in retsupp_snake; rules
+# delegate to this Python for the science work.
+python_cuda: /home/gdehol/data/conda/envs/retsupp_cuda/bin/python
+python_neuropythy: /home/gdehol/data/conda/envs/retsupp_neuropythy/bin/python
+
+# Subjects to run. Default = all 30 (matches retsupp/data/subjects.yml).
+# Override on the CLI via --config 'subjects=[1,5,10]' for a subset.
+subjects:
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 7
+  - 8
+  - 9
+  - 10
+  - 11
+  - 12
+  - 13
+  - 14
+  - 15
+  - 16
+  - 17
+  - 18
+  - 19
+  - 20
+  - 21
+  - 22
+  - 23
+  - 24
+  - 25
+  - 26
+  - 27
+  - 28
+  - 29
+  - 30
+
+# Number of voxel chunks per (subject, model) PRF fit. Matches
+# submit_prf_sweep_persub.sh default (N_CHUNKS=10).
+n_chunks: 10
+
+# Paradigm kind. 'full' = bar + distractors; 'bar' = bar only.
+kind: full
+
+# PRF models to fit. m1..m6; see CLAUDE.md table.
+models:
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+
+# ROIs the AF fit fans out over (must match ROIS in
+# fit_dog_dyn_v3_target_sharedSigma.sh). 11 ROIs total.
+af_rois:
+  - V1
+  - V2
+  - V3
+  - V3AB
+  - hV4
+  - LO
+  - TO
+  - VO
+  - IPS
+  - SPL1
+  - FEF
+
+# AF voxel-selection knobs. Matches the bash script's defaults.
+af_psignal_thr: 0.5
+af_aperture_mass_thr: 0
+
+# AF output subdirectory naming.
+# fit_dog_dynamic_af_braincoder.py constructs:
+#     af_prf_joint_dynamic_v3_dog_with_target[_sharedSigma][_allSharedSigma][_sharedDynGain]_pSig{thr}[_apt{thr}]
+# The bash script always passes --with-target --shared-target-sigma, and
+# the canonical run sets psignal=0.5 + aperture_mass=0, yielding:
+#     af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_pSig0.5
+af_output_subdir: af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_pSig0.5
+
+# Whether to run the AF chain (per-subject after m4 + r2_mixture).
+# Matches WITH_AF=1 on the bash submitter.
+with_af: true
+
+# Whether to run r2_mixture after m4 (always true if with_af is true;
+# you can also enable it standalone if you want the p_signal NIfTIs
+# without the downstream AF fits).
+with_r2_mixture: true
