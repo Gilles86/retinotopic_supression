@@ -109,11 +109,18 @@ MERGED_R2 = f"{PRF_DIR}/sub-{{sub_pad}}_desc-r2.nii.gz"
 # writes both hemis + fsaverage transforms in one go.
 SURF = (f"{PRF_DIR}/sub-{{sub_pad}}_desc-r2.optim.nilearn_"
         f"space-fsnative_hemi-L.func.gii")
-# Per-model neuropythy sentinel: inferred_varea.mgz under freesurfer mri/.
-# This file's mtime is enough to gate downstream rules; the script also
-# writes inferred_{angle,eccen,sigma}.mgz.
-NEURO_SENTINEL = (f"{BIDS}/derivatives/fmriprep/sourcedata/freesurfer/"
-                  f"sub-{{sub_pad}}/mri/inferred_varea.mgz")
+# Per-model neuropythy sentinel.
+#
+# Neuropythy overwrites inferred_{angle,eccen,sigma,varea}.mgz in the
+# subject's freesurfer mri/ folder every time it runs — there is no
+# per-model output file, only a shared scratch dir. We can't use the
+# .mgz files as rule outputs (they would collide across the 6 models
+# inside one subject and Snakemake would refuse the workflow with
+# "Not all output ... files of rule ... contain the same wildcards").
+# So we write our own per-(sub, model) marker file when neuropythy
+# completes; the marker also acts as the upstream-input handle for the
+# next model's neuropythy + for r2_mixture + AF.
+NEURO_SENTINEL = (f"{PRF_DIR}/sub-{{sub_pad}}_desc-neuropythy.done")
 
 # r2_mixture output: per-(subject, model) p_signal NIfTI in prf/modelN/.
 P_SIGNAL = f"{PRF_DIR}/sub-{{sub_pad}}_desc-p_signal.nii.gz"
@@ -423,6 +430,12 @@ rule neuropythy_register:
         {PYTHON_NEURO} -u "{REPO}/retsupp/neuropythy/register_retinotopy.py" \
             "$SUB_INT" \
             --bids_dir {BIDS}
+
+        # Per-(sub, model) marker file. The .mgz outputs themselves are
+        # shared across models inside the freesurfer subject dir; this
+        # marker isolates the per-model rule output.
+        mkdir -p "$(dirname '{output}')"
+        date -u +%Y-%m-%dT%H:%M:%SZ > '{output}'
 
         echo "Finished: $(date)"
         """
