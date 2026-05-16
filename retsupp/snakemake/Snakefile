@@ -74,9 +74,74 @@ KIND = config["kind"]
 AF_ROIS = list(config["af_rois"])
 AF_PSIG = float(config["af_psignal_thr"])
 AF_APT = float(config["af_aperture_mass_thr"])
-AF_SUBDIR = config["af_output_subdir"]
 WITH_AF = bool(config["with_af"])
 WITH_R2_MIXTURE = bool(config["with_r2_mixture"])
+
+
+def _af_variant_info(v):
+    """Resolve a config dict into the strings we need at rule build-time.
+
+    Mirrors the auto-derivation logic in
+    fit_dog_dynamic_af_braincoder.py (`output_subdir` + `dyn_tag`) so
+    Snakemake's rule outputs match the paths the Python script
+    actually writes — keeping the canonical BIDS-derivatives layout
+    intact across both the bash and Snakemake submitters.
+    """
+    name = v["name"]
+    model_label = int(v.get("model_label", 4))
+    shared_target_sigma = bool(v.get("shared_target_sigma", True))
+    all_shared_sigma = bool(v.get("all_shared_sigma", False))
+    shared_dyn_gain = bool(v.get("shared_dyn_gain", False))
+
+    base = "af_prf_joint_dynamic_v3_dog_with_target"
+    if shared_target_sigma:
+        base = f"{base}_sharedSigma"
+    if all_shared_sigma:
+        base = f"{base}_allSharedSigma"
+    if shared_dyn_gain:
+        base = f"{base}_sharedDynGain"
+    if AF_PSIG > 0:
+        tag = f"pSig{AF_PSIG:g}"
+        if AF_APT > 0:
+            tag = f"{tag}_apt{AF_APT:g}"
+        base = f"{base}_{tag}"
+    if model_label != 4:
+        base = f"{base}_base-m{model_label}"
+
+    dyn_tag = "dog-dyn-v3-target"
+    if shared_target_sigma:
+        dyn_tag = f"{dyn_tag}-sharedSigma"
+
+    flags = ["--with-target"]
+    if shared_target_sigma:
+        flags.append("--shared-target-sigma")
+    if all_shared_sigma:
+        flags.append("--all-shared-sigma")
+    if shared_dyn_gain:
+        flags.append("--shared-dyn-gain")
+
+    return {
+        "name": name,
+        "subdir": base,
+        "dyn_tag": dyn_tag,
+        "model_label": model_label,
+        "flags": " ".join(flags),
+    }
+
+
+AF_VARIANTS = [_af_variant_info(v) for v in config.get("af_variants", [])]
+
+# Base PRF models that AF variants depend on (drives the p_signal
+# fan-out in all_targets and what r2_mixture needs to produce).
+AF_BASE_MODELS = sorted({v["model_label"] for v in AF_VARIANTS}) or [4]
+
+
+def af_out_path(variant_info):
+    """Concrete output path for one AF variant; sub_pad + roi remain wildcards."""
+    return (f"{BIDS}/derivatives/{variant_info['subdir']}/sub-{{sub_pad}}/"
+            f"sub-{{sub_pad}}_roi-{{roi}}_mode-signed_"
+            f"{variant_info['dyn_tag']}-af-prf-pars.tsv")
+
 
 # Wildcards are integers / known strings; constrain to avoid greedy regex
 # eating "/" or wrong-shaped strings.
@@ -125,21 +190,12 @@ NEURO_SENTINEL = (f"{PRF_DIR}/sub-{{sub_pad}}_desc-neuropythy.done")
 # r2_mixture output: per-(subject, model) p_signal NIfTI in prf/modelN/.
 P_SIGNAL = f"{PRF_DIR}/sub-{{sub_pad}}_desc-p_signal.nii.gz"
 
-# AF per-(subject, ROI) output. Constructed by
-# fit_dog_dynamic_af_braincoder.py from the flag combination
-# --with-target --shared-target-sigma + mode=signed + model-version=v3:
-#     dyn_tag = "dog-dyn-v3-target-sharedSigma"
-AF_OUT = (f"{BIDS}/derivatives/{AF_SUBDIR}/sub-{{sub_pad}}/"
-          f"sub-{{sub_pad}}_roi-{{roi}}_mode-signed_"
-          f"dog-dyn-v3-target-sharedSigma-af-prf-pars.tsv")
-
-
 # ---------------------------------------------------------------------------
 # rule all: every requested target. Snakemake walks back from these to
 # build the DAG. Targets:
-#   - per-(sub, model): merged r2 NIfTI + neuropythy mgz (per model)
-#   - per-sub (if r2_mixture enabled): p_signal NIfTI for m4
-#   - per-(sub, roi) (if AF enabled): AF param TSV
+#   - per-(sub, model): merged r2 NIfTI + neuropythy sentinel (per model)
+#   - per-(sub, base_model) (if r2_mixture or AF): p_signal NIfTI
+#   - per-(sub, roi, variant) (if AF): AF param TSV
 # ---------------------------------------------------------------------------
 def all_targets():
     out = []
@@ -149,10 +205,12 @@ def all_targets():
             out.append(MERGED_R2.format(sub_pad=pad, model=m))
             out.append(NEURO_SENTINEL.format(sub_pad=pad, model=m))
         if WITH_R2_MIXTURE or WITH_AF:
-            out.append(P_SIGNAL.format(sub_pad=pad, model=4))
+            for m in AF_BASE_MODELS:
+                out.append(P_SIGNAL.format(sub_pad=pad, model=m))
         if WITH_AF:
-            for roi in AF_ROIS:
-                out.append(AF_OUT.format(sub_pad=pad, roi=roi))
+            for info in AF_VARIANTS:
+                for roi in AF_ROIS:
+                    out.append(af_out_path(info).format(sub_pad=pad, roi=roi))
     return out
 
 
@@ -488,58 +546,74 @@ rule r2_mixture:
 
 
 # ---------------------------------------------------------------------------
-# af_fit: per-(subject, ROI) AF + DoG-PRF braincoder fit. Mirrors
-# fit_dog_dyn_v3_target_sharedSigma.sh — same flags, same env, same
-# CPU-only (CUDA_VISIBLE_DEVICES=-1). 11 ROIs per subject.
+# af_fit_<variant>: one rule per AF variant in config.yaml's
+# `af_variants`. Each fans out over (subject × ROI). Mirrors
+# fit_dog_dyn_v3_target_sharedSigma.sh — same env, same CPU-only
+# (CUDA_VISIBLE_DEVICES=-1). Variant-specific flags and base PRF model
+# come from `_af_variant_info`.
+#
+# Why per-variant rules (not one rule with a {variant} wildcard): the
+# output PATH depends on multiple correlated wildcards (subdir +
+# dyn_tag), which Snakemake can't pair into a single wildcard. Looping
+# at parse-time gives each variant its own self-consistent rule.
 # ---------------------------------------------------------------------------
-rule af_fit:
-    input:
-        merged=MERGED_R2.replace("{model}", "4"),
-        neuro=NEURO_SENTINEL.replace("{model}", "4"),
-        p_signal=P_SIGNAL.replace("{model}", "4"),
-    output:
-        AF_OUT,
-    log:
-        f"{REPO}/retsupp/snakemake/logs/af_fit_sub-{{sub_pad}}_roi-{{roi}}.log",
-    resources:
-        slurm_partition="lowprio",
-        slurm_account="zne.uzh",
-        runtime=25,
-        mem_mb=24000,
-        cpus_per_task=8,
-    shell:
-        r"""
-        set -eo pipefail
-        echo "Host: $(hostname) sub-{wildcards.sub_pad} roi={wildcards.roi}"
-        echo "Started: $(date)"
+for _info in AF_VARIANTS:
+    _rule_name = f"af_fit_{_info['name']}"
+    _model = _info["model_label"]
 
-        sleep $(( RANDOM % 30 ))
+    rule:
+        name: _rule_name
+        input:
+            merged=MERGED_R2.replace("{model}", str(_model)),
+            neuro=NEURO_SENTINEL.replace("{model}", str(_model)),
+            p_signal=P_SIGNAL.replace("{model}", str(_model)),
+        output:
+            af_out_path(_info),
+        log:
+            f"{REPO}/retsupp/snakemake/logs/{_rule_name}_sub-{{sub_pad}}_roi-{{roi}}.log",
+        params:
+            flags=_info["flags"],
+            model_label=_model,
+        resources:
+            slurm_partition="lowprio",
+            slurm_account="zne.uzh",
+            runtime=25,
+            mem_mb=24000,
+            cpus_per_task=8,
+        shell:
+            r"""
+            set -eo pipefail
+            echo "Host: $(hostname) sub-{wildcards.sub_pad} roi={wildcards.roi}"
+            echo "Variant: {params.flags} (model {params.model_label})"
+            echo "Started: $(date)"
 
-        source "$HOME/data/miniforge3/etc/profile.d/conda.sh"
-        conda activate retsupp_cuda
-        export CUDA_VISIBLE_DEVICES=-1
-        export PYTHONUNBUFFERED=1
-        export OMP_NUM_THREADS=${{SLURM_CPUS_PER_TASK:-8}}
-        export TF_NUM_INTRAOP_THREADS=${{SLURM_CPUS_PER_TASK:-8}}
-        export TF_NUM_INTEROP_THREADS=2
+            sleep $(( RANDOM % 30 ))
 
-        SUB_INT=$(echo {wildcards.sub_pad} | sed 's/^0*//')
+            source "$HOME/data/miniforge3/etc/profile.d/conda.sh"
+            conda activate retsupp_cuda
+            export CUDA_VISIBLE_DEVICES=-1
+            export PYTHONUNBUFFERED=1
+            export OMP_NUM_THREADS=${{SLURM_CPUS_PER_TASK:-8}}
+            export TF_NUM_INTRAOP_THREADS=${{SLURM_CPUS_PER_TASK:-8}}
+            export TF_NUM_INTEROP_THREADS=2
 
-        {PYTHON_CUDA} -u "{REPO}/retsupp/modeling/fit_dog_dynamic_af_braincoder.py" \
-            "$SUB_INT" \
-            --bids-folder {BIDS} \
-            --roi {wildcards.roi} \
-            --resolution 50 \
-            --max-voxels 500 \
-            --model-version v3 \
-            --with-target \
-            --shared-target-sigma \
-            --sigma-af-init 2.0 \
-            --sigma-dyn-init 2.0 \
-            --sigma-t-dyn-init 2.0 \
-            --g-t-dyn-init 0.0 \
-            --p-signal-thr {AF_PSIG} \
-            --aperture-mass-thr {AF_APT}
+            SUB_INT=$(echo {wildcards.sub_pad} | sed 's/^0*//')
 
-        echo "Finished: $(date)"
-        """
+            {PYTHON_CUDA} -u "{REPO}/retsupp/modeling/fit_dog_dynamic_af_braincoder.py" \
+                "$SUB_INT" \
+                --bids-folder {BIDS} \
+                --roi {wildcards.roi} \
+                --resolution 50 \
+                --max-voxels 500 \
+                --model-version v3 \
+                --model-label {params.model_label} \
+                {params.flags} \
+                --sigma-af-init 2.0 \
+                --sigma-dyn-init 2.0 \
+                --sigma-t-dyn-init 2.0 \
+                --g-t-dyn-init 0.0 \
+                --p-signal-thr {AF_PSIG} \
+                --aperture-mass-thr {AF_APT}
+
+            echo "Finished: $(date)"
+            """

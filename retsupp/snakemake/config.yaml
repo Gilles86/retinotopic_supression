@@ -83,13 +83,32 @@ af_rois:
 af_psignal_thr: 0.5
 af_aperture_mass_thr: 0
 
-# AF output subdirectory naming.
-# fit_dog_dynamic_af_braincoder.py constructs:
-#     af_prf_joint_dynamic_v3_dog_with_target[_sharedSigma][_allSharedSigma][_sharedDynGain]_pSig{thr}[_apt{thr}]
-# The bash script always passes --with-target --shared-target-sigma, and
-# the canonical run sets psignal=0.5 + aperture_mass=0, yielding:
-#     af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_pSig0.5
-af_output_subdir: af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_pSig0.5
+# AF variants to fit. Each entry generates one rule (`af_fit_<name>`)
+# that fans out over (subject × ROI). Output subdirs are derived from
+# the flags via the same logic as fit_dog_dynamic_af_braincoder.py,
+# so paths land in canonical locations matching the bash submitter.
+#
+# Fields per variant (all optional except `name`):
+#   name                 short label used in the rule name + dry-run
+#                        output. Free text; doesn't appear in the path.
+#   model_label          PRF base model. Default 4 (DoG+HRF). Use 6 for
+#                        DN+HRF base; path auto-suffixes `_base-m{N}`
+#                        for N != 4.
+#   shared_target_sigma  Tie σ_T_dyn := σ_dyn. Default true.
+#   all_shared_sigma     Additionally tie σ_AF := σ_dyn. Default false.
+#   shared_dyn_gain      Additionally tie g_LP_dyn := g_HP_dyn.
+#                        Default false.
+#
+# Output subdirs for the variants below:
+#   sharedSigma:         af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_pSig0.5
+#   allSharedSigma:      ..._sharedSigma_allSharedSigma_pSig0.5
+#   sharedSigma_baseM6:  ..._sharedSigma_pSig0.5_base-m6
+af_variants:
+  - name: sharedSigma
+  - name: allSharedSigma
+    all_shared_sigma: true
+  - name: sharedSigma_baseM6
+    model_label: 6
 
 # Whether to run the AF chain (per-subject after m4 + r2_mixture).
 # Matches WITH_AF=1 on the bash submitter.
