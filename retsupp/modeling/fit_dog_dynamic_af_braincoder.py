@@ -618,12 +618,12 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
             # overwrite the canonical circle baseline.
             base = f'{base}_rect'
         if p_signal_thr > 0:
-            # Posterior-based voxel selection — segregate from legacy
-            # R²-FDR runs so the two can be compared.
             tag = f'pSig{p_signal_thr:g}'
             if aperture_mass_thr > 0:
                 tag = f'{tag}_apt{aperture_mass_thr:g}'
             base = f'{base}_{tag}'
+        if model_label != 4:
+            base = f'{base}_base-m{model_label}'
         output_subdir = base
     analysis_dir = bids_folder / 'derivatives' / output_subdir
     out_dir = analysis_dir / f'sub-{subject:02d}'

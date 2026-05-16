@@ -97,6 +97,11 @@ MODEL_FLAGS=""
 [[ "${SHARED_DYN_GAIN:-0}" == "1" ]] && MODEL_FLAGS="$MODEL_FLAGS --shared-dyn-gain"
 [[ "${ALL_SHARED_SIGMA:-0}" == "1" ]] && MODEL_FLAGS="$MODEL_FLAGS --all-shared-sigma"
 
+# Base PRF model. Default 4 (DoG+HRF, canonical). Set MODEL_LABEL=6
+# (DN+HRF) to fit AF on a different base; output_subdir auto-suffixes
+# with `_base-mN` so variants don't clobber each other.
+MODEL_LABEL="${MODEL_LABEL:-4}"
+
 "$PYTHON" -u "$SCRIPT" \
     "$subject" \
     --bids-folder "$bids_folder" \
@@ -104,6 +109,7 @@ MODEL_FLAGS=""
     --resolution 50 \
     --max-voxels 500 \
     --model-version v3 \
+    --model-label "$MODEL_LABEL" \
     --with-target \
     --shared-target-sigma \
     $MODEL_FLAGS \
