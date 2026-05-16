@@ -31,11 +31,13 @@ slurm-logdir: ./retsupp/snakemake/logs/slurm
 # this snakemake helpfully deletes partial outputs.
 keep-incomplete: True
 
-# Re-run rule iff its declared inputs or input mtimes changed. NOT on
-# code/params changes (the Snakefile gets touched during dev — that
-# shouldn't invalidate finished fits).
+# Re-run rule only if its declared input SET changes (file added/removed
+# from inputs), not when input mtimes drift. With `mtime` included,
+# refitting one model's neuropythy cascades reruns through all later
+# models in the chain — every m{N+1} sees m{N}'s freshly-written
+# archive as "newer" and reruns even though its own archive is on disk.
+# Existence check already prevents redoing completed outputs.
 rerun-triggers:
-  - mtime
   - input
 
 # Restart preempted lowprio jobs once before giving up.
