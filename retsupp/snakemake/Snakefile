@@ -135,6 +135,15 @@ AF_VARIANTS = [_af_variant_info(v) for v in config.get("af_variants", [])]
 # fan-out in all_targets and what r2_mixture needs to produce).
 AF_BASE_MODELS = sorted({v["model_label"] for v in AF_VARIANTS}) or [4]
 
+# Which models to run neuropythy_register for. Defaults to the AF base
+# models — that's the minimum needed for the AF + r2_mixture chain.
+# Override via config `neuropythy_models: [1,2,3,4,5,6]` for the
+# "compare ROIs across models" curiosity run. Each (sub × model) is
+# ~30min × 16 CPUs, so the default is the cheap option.
+NEUROPYTHY_MODELS = sorted({int(m) for m in
+                            config.get("neuropythy_models",
+                                       AF_BASE_MODELS)})
+
 
 def af_out_path(variant_info):
     """Concrete output path for one AF variant; sub_pad + roi remain wildcards."""
@@ -199,6 +208,10 @@ def all_targets():
         pad = sp(sub)
         for m in MODELS:
             out.append(MERGED_R2.format(sub_pad=pad, model=m))
+        # neuropythy only for the requested subset (default = AF base
+        # models). Decoupled from MODELS so PRF fits for "completionist"
+        # models don't drag the expensive neuropythy chain along.
+        for m in NEUROPYTHY_MODELS:
             out.append(NEURO_ARCHIVE.format(sub_pad=pad, model=m))
         if WITH_R2_MIXTURE or WITH_AF:
             for m in AF_BASE_MODELS:
@@ -438,14 +451,19 @@ rule prf_surface:
 # Chain order (matches submit_prf_sweep_persub.sh):
 #   m1 → m2 → m3 → m4 → m5 → m6
 # ---------------------------------------------------------------------------
-NEURO_PREV_MODEL = {1: None, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5}
-
-
 def neuropythy_extra_inputs(wildcards):
-    """Per-subject serial chain: m{N} neuropythy depends on m{N-1}'s."""
-    prev = NEURO_PREV_MODEL[int(wildcards.model)]
-    if prev is None:
+    """Per-subject serial chain across NEUROPYTHY_MODELS.
+
+    Previous-model = largest in-scope model strictly smaller than this
+    one (or None for the first). Serialisation is required because
+    neuropythy writes into the shared freesurfer scratch dir per
+    subject; concurrent writes within a subject would race.
+    """
+    m = int(wildcards.model)
+    smaller = [k for k in NEUROPYTHY_MODELS if k < m]
+    if not smaller:
         return []
+    prev = max(smaller)
     return [NEURO_ARCHIVE.format(sub_pad=wildcards.sub_pad, model=prev)]
 
 
