@@ -13,12 +13,18 @@ default-resources:
   mem_mb: 8000
   cpus_per_task: 2
 
-# Cap concurrent SLURM jobs in flight at once. With 30 subjects × 6
-# models × 10 chunks = 1800 chunk tasks alone, capping prevents the
-# "user env retrieval failed" NFS dogpile (see retsupp/CLAUDE.md
-# §"Avoid the user env retrieval failed dogpile" — 150 is a known-safe
-# ceiling for our cluster).
-jobs: 150
+# Cap concurrent SLURM jobs in flight. 150 is a known-safe NFS-dogpile
+# ceiling, but Snakemake spawns a Timer thread per in-flight job for
+# status polling, and at 150+ in-flight jobs the driver hits the
+# login-node ulimit (`RuntimeError: can't start new thread`). 80 keeps
+# threads + concurrency comfortably in budget.
+jobs: 80
+
+# Throttle status polling — Snakemake's default re-polls every job
+# every 10s, which spins up enough Timer threads to OOM the driver's
+# thread budget on long-running runs.
+seconds-between-status-checks: 30
+max-status-checks-per-second: 1
 
 printshellcmds: True
 
