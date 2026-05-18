@@ -1062,15 +1062,18 @@ class Subject(object):
             df.columns.name = 'parameter'
             return df
         elif type == 'conditionwise':
-            # Four conditions: upper_left, upper_right, lower_left, lower_right
+            # Four conditions: upper_left, upper_right, lower_left, lower_right.
+            # Layout is nested:
+            #   prf_conditionfit/model{N}/sub-XX/condition-<cond>/sub-XX_desc-<par>.nii.gz
             conditions = ['upper_left', 'upper_right', 'lower_left', 'lower_right']
             base_dir = self.bids_folder / 'derivatives' / 'prf_conditionfit' / f'model{model}' / f'sub-{self.subject_id:02d}'
             data = []
             index = []
             for cond in conditions:
+                cond_dir = base_dir / f'condition-{cond}'
                 row = {}
                 for par in param_labels:
-                    img_path = base_dir / f'sub-{self.subject_id:02d}_cond-{cond}_desc-{par}.nii.gz'
+                    img_path = cond_dir / f'sub-{self.subject_id:02d}_desc-{par}.nii.gz'
                     row[par] = nib.load(str(img_path))
                 data.append(row)
                 index.append(cond)
@@ -1498,6 +1501,16 @@ class Subject(object):
         cond = ' | '.join(f'(img == {i})' for i in indices)
         roi_mask = image.math_img(cond, img=atlas)
 
+        # Wang ROIs (IPS0..FEF) can border Benson territory — empirically
+        # only Wang IPS0 overlaps Benson V3B by ~5-15% across subjects,
+        # but the guard is cheap and makes the per-ROI fits provably
+        # non-overlapping with Benson-sourced fits.
+        if use_wang:
+            benson_atlas = self.get_retinotopic_atlas(
+                bold_space=bold_space, model=model)
+            roi_mask = image.math_img("roi * (benson == 0)",
+                                       roi=roi_mask, benson=benson_atlas)
+
         if hemi is not None:
             hemi_mask = self.get_hemisphere_mask(hemi, bold_space=bold_space)
             # Convert boolean array to image with same affine/shape as roi_mask
@@ -1578,6 +1591,56 @@ class Subject(object):
         results['varea'] = results['varea'].replace(0, np.nan)
 
         return results
+
+    def get_wang_labels_surf(self, prob_thresh=None):
+        """Wang 2015 atlas, sampled on the fsnative surface.
+
+        With ``prob_thresh=None`` (default), uses the discrete max-prob
+        labels from ``surf/{lh,rh}.wang15_mplbl.mgz`` — same as Wang's
+        published max-prob atlas.
+
+        With ``prob_thresh`` ∈ [0, 1], instead reads the full per-area
+        probability maps (``wang15_fplbl.mgz``, shape ``(25, n_vertices)``),
+        takes argmax across all 25 areas, and labels the vertex only if
+        that winning probability exceeds ``prob_thresh``. Lower threshold
+        → more vertices labeled. Useful for the small frontal/parietal
+        areas (FEF, SPL1, IPS5) where mplbl is conservative — at
+        ``prob_thresh=0.3`` FEF grows ~8×, SPL1 ~2×, while IPS0..IPS3
+        barely change.
+
+        Returns a DataFrame indexed by ``(hemi, vertex)`` with integer
+        label in ``varea`` (1..25, 0 → NaN) and the named area in ``roi``.
+        """
+        import numpy as np
+        import pandas as pd
+
+        fs_hemi = {'L': 'lh', 'R': 'rh'}
+        fs_dir = (self.bids_folder / 'derivatives' / 'fmriprep'
+                  / 'sourcedata' / 'freesurfer'
+                  / f'sub-{self.subject_id:02d}' / 'surf')
+
+        dfs = []
+        for hemi in ['L', 'R']:
+            if prob_thresh is None:
+                arr = nib.load(str(fs_dir / f'{fs_hemi[hemi]}.wang15_mplbl.mgz')
+                               ).get_fdata().squeeze().astype(np.float32)
+            else:
+                # fplbl: (1, 1, 25, n_vertices) → (25, n_vertices) after squeeze
+                fp = nib.load(str(fs_dir / f'{fs_hemi[hemi]}.wang15_fplbl.mgz')
+                              ).get_fdata().squeeze()
+                winner = fp.argmax(axis=0)
+                max_prob = fp[winner, np.arange(fp.shape[1])]
+                arr = (winner + 1).astype(np.float32)
+                arr[max_prob < prob_thresh] = 0.0
+
+            df = pd.DataFrame({'varea': arr})
+            df.index = pd.MultiIndex.from_product(
+                [[hemi], range(len(df))], names=['hemi', 'vertex'])
+            dfs.append(df)
+        out = pd.concat(dfs, axis=0)
+        out['roi'] = out['varea'].map(self.get_wang_labels()).fillna('None')
+        out['varea'] = out['varea'].replace(0, np.nan)
+        return out
 
     def get_eccentric_roi(self, roi, quadrant, bold_space=True, return_masker=True):
         """
