@@ -724,10 +724,22 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
 
     bold_sub = bold_df.loc[:, voxel_mask].copy()
 
-    # 3) Initialize from model 4 (DoG + flexible HRF). KEEP the
-    # srf_amplitude/srf_size + hrf_delay/hrf_dispersion columns —
-    # the per-voxel HRF is fixed during AF (see fitter.fit fixed_pars
-    # below) but its m4-estimated values are preserved per voxel.
+    # 3) Initialize from the base PRF model (default m4 DoG+HRF). KEEP
+    # srf_amplitude/srf_size + hrf_delay/hrf_dispersion — the per-voxel
+    # HRF is fixed during AF but its base-model-estimated values are
+    # preserved per voxel.
+    #
+    # m5/m6 (Divisive Normalization) output equivalent spatial params
+    # under different names — `bold_baseline`/`rf_amplitude` instead of
+    # `baseline`/`amplitude`. Rename so the AF init logic doesn't care
+    # which mean model was used. m5/m6's extra DN-specific params
+    # (`neural_baseline`, `surround_baseline`) aren't used by the AF
+    # refit and are dropped by the init_cols subset below.
+    DN_PARAM_RENAME = {'bold_baseline': 'baseline',
+                       'rf_amplitude': 'amplitude'}
+    if any(c in prf_pars.columns for c in DN_PARAM_RENAME):
+        prf_pars = prf_pars.rename(columns=DN_PARAM_RENAME)
+
     init_cols = ['x', 'y', 'sd', 'baseline', 'amplitude',
                  'srf_amplitude', 'srf_size',
                  'hrf_delay', 'hrf_dispersion']
@@ -735,7 +747,9 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     if missing:
         raise RuntimeError(
             f'Mean model {model_label} is missing DoG/HRF params {missing}. '
-            f'Use model 4 (DoG + flexible HRF) for the init.')
+            f'Available: {list(prf_pars.columns)}. '
+            f'Only DoG (m2, m4) and DN+HRF (m5, m6) base models are '
+            f'supported — Gaussian-only models lack srf_*.')
     init_pars = prf_pars.loc[voxel_mask, init_cols].copy()
 
     # AF inits.
