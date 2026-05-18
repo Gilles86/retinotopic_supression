@@ -1,14 +1,18 @@
 #!/bin/bash
 #SBATCH --job-name=prf_snake_driver
 #SBATCH --account=zne.uzh
-#SBATCH --partition=lowprio
+#SBATCH --partition=standard
+#SBATCH --qos=medium
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=8G
-#SBATCH --time=1-00:00:00
-# lowprio + the only QoS it allows (`normal`) caps at 24h. If the run
-# doesn't finish, resubmit — Snakemake's persistence picks up where it
-# left off. (For runs that genuinely need > 24h, switch partition to
-# `standard` and --qos=medium for 2-day walltime.)
+#SBATCH --time=2-00:00:00
+# `standard` + `medium` qos = 2-day walltime + different priority
+# bucket than lowprio. Was on lowprio earlier but lowprio fairshare
+# gets wrecked when child jobs (PRF chunks, AF) saturate it; the
+# driver itself then sits PD on `Priority` indefinitely. Driver is
+# small (2 CPU, 8G), so standard is a fine fit.
+# If 48h isn't enough, resubmit — Snakemake's .snakemake/ persistence
+# picks up where it left off.
 #SBATCH --output=/home/gdehol/git/retsupp/retsupp/snakemake/logs/driver_%j.log
 
 # Snakemake driver for the retsupp PRF + AF pipeline. Runs as a SLURM
