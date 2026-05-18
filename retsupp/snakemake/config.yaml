@@ -107,8 +107,14 @@ af_variants:
   - name: sharedSigma
   - name: allSharedSigma
     all_shared_sigma: true
-  - name: sharedSigma_baseM6
-    model_label: 6
+# sharedSigma_baseM6 was tried (2026-05-18) and fails by construction:
+# the AF fitter is a DoG-AF model and expects DoG-shaped warm-start
+# params (srf_amplitude, srf_size, amplitude, baseline). m6 is
+# Divisive Normalization — different schema, no srf_amplitude/srf_size.
+# fit_dog_dynamic_af_braincoder.py:736 detects the mismatch and raises.
+# Supporting baseM6 would need a DN-AF model class; not on the
+# critical path. CV (retsupp/modeling/cv/) gives an independent answer
+# on whether m6 fits BOLD better than m4.
 
 # Whether to run the AF chain (per-subject after m4 + r2_mixture).
 # Matches WITH_AF=1 on the bash submitter.
