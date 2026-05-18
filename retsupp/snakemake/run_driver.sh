@@ -4,7 +4,11 @@
 #SBATCH --partition=lowprio
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=8G
-#SBATCH --time=2-00:00:00
+#SBATCH --time=1-00:00:00
+# lowprio + the only QoS it allows (`normal`) caps at 24h. If the run
+# doesn't finish, resubmit — Snakemake's persistence picks up where it
+# left off. (For runs that genuinely need > 24h, switch partition to
+# `standard` and --qos=medium for 2-day walltime.)
 #SBATCH --output=/home/gdehol/git/retsupp/retsupp/snakemake/logs/driver_%j.log
 
 # Snakemake driver for the retsupp PRF + AF pipeline. Runs as a SLURM
@@ -39,4 +43,5 @@ conda activate retsupp_snake
 exec snakemake \
     --snakefile retsupp/snakemake/Snakefile \
     --workflow-profile retsupp/snakemake/profile \
-    --configfile retsupp/snakemake/config.yaml
+    --configfile retsupp/snakemake/config.yaml \
+    --rerun-incomplete
