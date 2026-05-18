@@ -3587,10 +3587,57 @@ class DivisiveNormalizationDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSig
         srf_amp = parameters[:, :, 4, tf.newaxis]      # > 0
         neural_bl = parameters[:, :, 6, tf.newaxis]    # > 0
         surround_bl = parameters[:, :, 7, tf.newaxis]  # > 0
-        bold_bl = parameters[:, :, 8, tf.newaxis]      # free
 
         neural = rf_amp * conv_c + neural_bl                          # (B,V,T)
         suppress = tf.abs(rf_amp) * srf_amp * conv_s + surround_bl
-        response = neural / suppress + bold_bl
+        response = neural / suppress
+
+        # NOTE: bold_baseline is NOT added here. It's added post-HRF in
+        # `_predict` (see below), matching the DN parent's structure.
 
         return tf.transpose(response, perm=[0, 2, 1])   # (B, T, V)
+
+    # ----------------------------------------------------------------
+    # Override _predict: pass the FULL parameter vector to
+    # _basis_predictions (the DN parent's _predict slices [..., :8],
+    # which is wrong for our 17-encoding-param layout); handle DC
+    # offset removal + HRF convolution + bold_baseline ourselves.
+    # Mirrors DivisiveNormalizationGaussianPRF2DWithHRF._predict but
+    # with the extra AF params left intact.
+    # ----------------------------------------------------------------
+
+    @tf.function
+    def _predict(self, paradigm, parameters, weights):
+        # Encoding pars only (strip HRF off the tail before forward
+        # math — we re-attach via the HRF model below).
+        if self.flexible_hrf_parameters:
+            n_hrf = len(self.hrf_model.parameter_labels)
+            enc_pars = parameters[:, :, :-n_hrf]
+        else:
+            enc_pars = parameters
+
+        # AF-modulated DN response (B, T, V), without bold_baseline.
+        pre_convolve = self._basis_predictions(paradigm, enc_pars)
+
+        # Subtract DN's irreducible DC offset (neural_baseline /
+        # surround_baseline) so the HRF convolution sees a zero-mean
+        # signal at "no stim" timepoints. Matches the DN parent's
+        # _predict.
+        neural_bl = enc_pars[:, :, 6]                    # (B, V)
+        surround_bl = enc_pars[:, :, 7]                  # (B, V)
+        dc = (neural_bl / surround_bl)[:, tf.newaxis, :] # (B, 1, V)
+        pre_convolve = pre_convolve - dc
+
+        kwargs = {}
+        if self.flexible_hrf_parameters:
+            for ix, label in enumerate(self.hrf_model.parameter_labels):
+                kwargs[label] = parameters[:, :, -n_hrf + ix]
+
+        # HRF convolve.
+        pred_convolved = self.hrf_model.convolve(pre_convolve, **kwargs)
+
+        # bold_baseline is an additive constant at the BOLD level.
+        bold_bl = enc_pars[:, tf.newaxis, :, 8]   # (B, 1, V)
+        pred_convolved = pred_convolved + bold_bl
+
+        return pred_convolved
