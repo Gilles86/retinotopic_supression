@@ -108,7 +108,11 @@ def _af_variant_info(v):
     if model_label != 4:
         base = f"{base}_base-m{model_label}"
 
-    dyn_tag = "dog-dyn-v3-target"
+    # Filename family — DN base models use a `dn-dyn-*` prefix so DoG
+    # and DN AF outputs are self-describing even when both land under
+    # paths that differ only by the `_base-mN` subdir suffix.
+    backbone = "dn" if model_label in (5, 6) else "dog"
+    dyn_tag = f"{backbone}-dyn-v3-target"
     if shared_target_sigma:
         dyn_tag = f"{dyn_tag}-sharedSigma"
 

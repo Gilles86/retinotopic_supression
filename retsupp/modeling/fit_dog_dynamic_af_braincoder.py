@@ -62,6 +62,7 @@ from braincoder.models import (
 )
 from braincoder.optimize import ParameterFitter
 from retsupp.modeling.local_models import (
+    DivisiveNormalizationDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma,
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target,
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_oversampled,
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma,
@@ -724,29 +725,31 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
 
     bold_sub = bold_df.loc[:, voxel_mask].copy()
 
-    # 3) Initialize from the base PRF model (default m4 DoG+HRF). KEEP
-    # srf_amplitude/srf_size + hrf_delay/hrf_dispersion — the per-voxel
-    # HRF is fixed during AF but its base-model-estimated values are
-    # preserved per voxel.
+    # 3) Initialize from the base PRF model. The AF refit takes per-voxel
+    # spatial estimates (x, y, sd, surround params) and the HRF estimate
+    # from the base model; AF gains / σ_AF are added below with sane
+    # defaults.
     #
-    # m5/m6 (Divisive Normalization) output equivalent spatial params
-    # under different names — `bold_baseline`/`rf_amplitude` instead of
-    # `baseline`/`amplitude`. Rename so the AF init logic doesn't care
-    # which mean model was used. m5/m6's extra DN-specific params
-    # (`neural_baseline`, `surround_baseline`) aren't used by the AF
-    # refit and are dropped by the init_cols subset below.
-    DN_PARAM_RENAME = {'bold_baseline': 'baseline',
-                       'rf_amplitude': 'amplitude'}
-    if any(c in prf_pars.columns for c in DN_PARAM_RENAME):
-        prf_pars = prf_pars.rename(columns=DN_PARAM_RENAME)
-
-    init_cols = ['x', 'y', 'sd', 'baseline', 'amplitude',
-                 'srf_amplitude', 'srf_size',
-                 'hrf_delay', 'hrf_dispersion']
+    # We support two base-model families:
+    # - DoG (m2, m4): rf is `Difference-of-Gaussians`. Uses the canonical
+    #   DoG-AF model class. init_cols include baseline + amplitude.
+    # - DN  (m5, m6): rf is `Divisive Normalization`. Uses the DN-AF
+    #   model class; init_cols include rf_amplitude + neural_baseline +
+    #   surround_baseline + bold_baseline.
+    is_dn_base = model_label in (5, 6)
+    if is_dn_base:
+        init_cols = ['x', 'y', 'sd',
+                     'rf_amplitude', 'srf_amplitude', 'srf_size',
+                     'neural_baseline', 'surround_baseline', 'bold_baseline',
+                     'hrf_delay', 'hrf_dispersion']
+    else:
+        init_cols = ['x', 'y', 'sd', 'baseline', 'amplitude',
+                     'srf_amplitude', 'srf_size',
+                     'hrf_delay', 'hrf_dispersion']
     missing = [c for c in init_cols if c not in prf_pars.columns]
     if missing:
         raise RuntimeError(
-            f'Mean model {model_label} is missing DoG/HRF params {missing}. '
+            f'Mean model {model_label} is missing required params {missing}. '
             f'Available: {list(prf_pars.columns)}. '
             f'Only DoG (m2, m4) and DN+HRF (m5, m6) base models are '
             f'supported — Gaussian-only models lack srf_*.')
@@ -858,6 +861,12 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
                 ModelCls = DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_allSharedSigma
             elif shared_dyn_gain:
                 ModelCls = DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_sharedDynGain
+            elif is_dn_base:
+                # Divisive-Normalization counterpart of the canonical
+                # DoG sharedSigma model. Used when the base PRF mean
+                # fit is m5/m6 — same AF + dynamic + target + sharedSigma
+                # modulation, but DN response math on the modulated drive.
+                ModelCls = DivisiveNormalizationDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma
             else:
                 ModelCls = DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma
         else:
@@ -889,7 +898,17 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     fitter = ParameterFitter(model, bold_sub, paradigm)
 
     # 5) Refine baseline/amplitude given current AF params.
-    refined_pars = fitter.refine_baseline_and_amplitude(init_pars, l2_alpha=1e-3)
+    #
+    # `refine_baseline_and_amplitude` is hardcoded to use the column
+    # names 'baseline' and 'amplitude' (DoG convention). DN base
+    # models have 'bold_baseline' and 'rf_amplitude' instead; the DN
+    # response isn't linear in either of them so the closed-form least-
+    # squares trick doesn't apply. Skip the pre-refine for DN base —
+    # the joint GD fit handles initialisation on its own.
+    if is_dn_base:
+        refined_pars = init_pars
+    else:
+        refined_pars = fitter.refine_baseline_and_amplitude(init_pars, l2_alpha=1e-3)
 
     # 6) Joint fit. Shared pars depend on model version. HRF params
     #    are held fixed at m4's per-voxel estimates (we want AF to
@@ -910,11 +929,16 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
 
     fit_pars['r2'] = r2.values if hasattr(r2, 'values') else r2
 
-    # 7) Save outputs.
+    # 7) Save outputs. Filename family flips from `dog-dyn-*` to
+    # `dn-dyn-*` for DN-base fits so DoG and DN AF outputs don't share
+    # filenames (paths already segregate by `_base-m{N}` subdir, but
+    # the filename should be self-describing too).
+    backbone = 'dn' if is_dn_base else 'dog'
     if with_target:
-        dyn_tag = 'dog-dyn-v3-target'
+        dyn_tag = f'{backbone}-dyn-v3-target'
     else:
-        dyn_tag = {'v2': 'dog-dyn-v2', 'v3': 'dog-dyn-v3'}[model_version]
+        dyn_tag = {'v2': f'{backbone}-dyn-v2',
+                   'v3': f'{backbone}-dyn-v3'}[model_version]
     if shared_target_sigma:
         dyn_tag = f'{dyn_tag}-sharedSigma'
     if per_run_position_gains:

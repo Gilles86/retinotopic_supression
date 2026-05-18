@@ -89,6 +89,8 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 
 from braincoder.models import (
+    DivisiveNormalizationGaussianPRF2D,
+    DivisiveNormalizationGaussianPRF2DWithHRF,
     DoGDynamicAttentionFieldPRF2D_v3,
     DoGDynamicAttentionFieldPRF2DWithHRF_v3,
     DynamicAttentionFieldPRF2D_v3,
@@ -3237,3 +3239,358 @@ class GaussianDynamicAttentionFieldPRF2DWithHRF_v3_target_allSharedSigma_sharedD
         before = out[:, :10]
         after = out[:, 11:]
         return tf.concat([before, raw_g_hp_dyn_col, after], axis=1)
+
+
+# ===========================================================================
+# Divisive-Normalization counterpart of the canonical DoG-AF model.
+# Lets us fit AF on top of m6 (DN+HRF) PRFs instead of m4 (DoG+HRF).
+# ===========================================================================
+
+class DivisiveNormalizationDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma(
+    DivisiveNormalizationGaussianPRF2DWithHRF,
+):
+    """AF + dynamic distractor + target + sharedSigma, on a DN PRF base.
+
+    Same modulation logic as the DoG counterpart
+    (:class:`DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma`):
+
+    - Sustained per-condition AF (σ_AF, g_HP, g_LP) — modulates the
+      stimulus drive within each (HP, condition) block.
+    - Dynamic per-TR distractor (σ_dyn, g_HP_dyn, g_LP_dyn) — additive,
+      sign-aware (suppression by default).
+    - Per-TR target (g_T_dyn, σ_T_dyn) — additive at target-on TRs.
+    - σ_T_dyn := σ_dyn enforced post-softplus (sharedSigma).
+
+    Where DoG and DN differ is the **response function**. After
+    computing the AF-modulated stimulus
+    ``stim_mod(t, g) = stim(t, g) · M(t, g)`` (with M including all
+    three modulation terms), we apply Divisive Normalization rather
+    than a Difference-of-Gaussians difference::
+
+        neural    = rf_amp · ⟨stim_mod, G_c⟩ + neural_baseline
+        suppress  = |rf_amp| · srf_amp · ⟨stim_mod, G_s⟩ + surround_baseline
+        response  = neural / suppress + bold_baseline
+
+    Both center G_c and surround G_s see the SAME modulated stimulus,
+    so attention shrinks/grows BOTH the drive and the normalisation
+    pool — the conceptually clean "AF on top of DN" that the DoG-AF
+    model can't express.
+
+    Parameter layout (17 encoding + HRF)
+    ------------------------------------
+    Per-voxel (9):
+        0 x, 1 y, 2 sd,
+        3 rf_amplitude, 4 srf_amplitude, 5 srf_size,
+        6 neural_baseline, 7 surround_baseline, 8 bold_baseline.
+    Shared (8):
+        9 sigma_AF, 10 g_HP, 11 g_LP,
+        12 sigma_dyn, 13 g_HP_dyn, 14 g_LP_dyn,
+        15 g_T_dyn, 16 sigma_T_dyn  (tied := sigma_dyn).
+
+    Slot indices shift by +2 vs the DoG counterpart because the DN
+    parameter vector inserts ``neural_baseline`` and
+    ``surround_baseline`` ahead of the AF block.
+    """
+
+    parameter_labels = [
+        'x', 'y', 'sd',
+        'rf_amplitude', 'srf_amplitude', 'srf_size',
+        'neural_baseline', 'surround_baseline', 'bold_baseline',
+        'sigma_AF', 'g_HP', 'g_LP',
+        'sigma_dyn', 'g_HP_dyn', 'g_LP_dyn',
+        'g_T_dyn', 'sigma_T_dyn',
+    ]
+
+    def __init__(self, grid_coordinates=None, paradigm=None, data=None,
+                 parameters=None,
+                 condition_indicator=None, dynamic_indicator=None,
+                 target_indicator=None, ring_positions=None,
+                 mode='suppression',
+                 weights=None, omega=None,
+                 positive_image_values_only=True,
+                 hrf_model=None, flexible_hrf_parameters=False,
+                 verbosity=logging.INFO, **kwargs):
+        if condition_indicator is None:
+            raise ValueError(
+                "DN-AF model requires `condition_indicator` of shape "
+                "(n_timepoints, n_ring_positions).")
+        if dynamic_indicator is None:
+            raise ValueError(
+                "DN-AF model requires `dynamic_indicator` of shape "
+                "(n_timepoints, n_ring_positions).")
+        if target_indicator is None:
+            raise ValueError(
+                "DN-AF model requires `target_indicator` of shape "
+                "(n_timepoints, n_ring_positions).")
+        if ring_positions is None:
+            raise ValueError(
+                "DN-AF model requires `ring_positions` of shape "
+                "(n_conditions, 2).")
+        if mode not in ('suppression', 'attraction', 'signed'):
+            raise ValueError(
+                f"mode must be 'suppression', 'attraction', or 'signed', "
+                f"got {mode!r}")
+
+        self.mode = mode
+        self._sign = -1.0 if mode == 'suppression' else +1.0
+        self._signed_gains = (mode == 'signed')
+
+        self.condition_indicator = np.asarray(condition_indicator,
+                                              dtype=np.float32)
+        self.dynamic_indicator = np.asarray(dynamic_indicator,
+                                            dtype=np.float32)
+        self.target_indicator = np.asarray(target_indicator,
+                                           dtype=np.float32)
+        self.ring_positions = np.asarray(ring_positions, dtype=np.float32)
+        self.n_conditions = self.ring_positions.shape[0]
+        # is_hp[c, ℓ] == 1 iff ring ℓ is the HP for condition c.
+        self._is_hp = np.eye(self.n_conditions, dtype=np.float32)
+
+        super().__init__(
+            grid_coordinates=grid_coordinates,
+            paradigm=paradigm, data=data, parameters=parameters,
+            weights=weights,
+            hrf_model=hrf_model,
+            flexible_hrf_parameters=flexible_hrf_parameters,
+            positive_image_values_only=positive_image_values_only,
+            verbosity=verbosity, **kwargs)
+
+        # Cache TF constants for speed.
+        self._tf_condition_indicator = tf.constant(self.condition_indicator,
+                                                   dtype=tf.float32)
+        self._tf_dynamic_indicator = tf.constant(self.dynamic_indicator,
+                                                  dtype=tf.float32)
+        self._tf_target_indicator = tf.constant(self.target_indicator,
+                                                 dtype=tf.float32)
+        self._tf_ring_positions = tf.constant(self.ring_positions,
+                                              dtype=tf.float32)
+        self._tf_is_hp = tf.constant(self._is_hp, dtype=tf.float32)
+        self._tf_sign = tf.constant(self._sign, dtype=tf.float32)
+
+    # ----------------------------------------------------------------
+    # AF modulation methods. All slots shifted by +2 vs the DoG
+    # counterpart because DN inserts neural_baseline + surround_baseline
+    # before the AF block.
+    # ----------------------------------------------------------------
+
+    @tf.function
+    def _attention_modulation_sustained(self, parameters):
+        """Per-condition sustained AF on the grid. Slots 9, 10, 11."""
+        gx = self._grid_coordinates[:, 0][tf.newaxis, tf.newaxis, tf.newaxis, :]
+        gy = self._grid_coordinates[:, 1][tf.newaxis, tf.newaxis, tf.newaxis, :]
+
+        sigma_AF = parameters[:, :, 9, tf.newaxis, tf.newaxis]    # (B,V,1,1)
+        g_HP = parameters[:, :, 10, tf.newaxis, tf.newaxis]
+        g_LP = parameters[:, :, 11, tf.newaxis, tf.newaxis]
+
+        rx = self._tf_ring_positions[:, 0][tf.newaxis, tf.newaxis, :, tf.newaxis]
+        ry = self._tf_ring_positions[:, 1][tf.newaxis, tf.newaxis, :, tf.newaxis]
+
+        diff_sq = (gx - rx) ** 2 + (gy - ry) ** 2
+        A = tf.exp(-diff_sq / (2.0 * sigma_AF ** 2))   # (B,V,n_C_ring,G)
+
+        is_hp = self._tf_is_hp[tf.newaxis, tf.newaxis, :, :]
+        w = is_hp * g_HP + (1.0 - is_hp) * g_LP
+
+        modulation_sum = tf.einsum('bvcl,bvlg->bvcg', w, A)
+        mod = 1.0 + self._tf_sign * modulation_sum   # (B,V,n_C,G)
+        return tf.maximum(mod, 0.0)
+
+    @tf.function
+    def _attention_modulation_dynamic(self, parameters):
+        """Per-TR phasic distractor field on the grid. Slots 12, 13, 14."""
+        sigma_dyn = parameters[0, 0, 12]
+        g_HP_dyn = parameters[0, 0, 13]
+        g_LP_dyn = parameters[0, 0, 14]
+
+        gx = self._grid_coordinates[:, 0][tf.newaxis, :]
+        gy = self._grid_coordinates[:, 1][tf.newaxis, :]
+        rx = self._tf_ring_positions[:, 0][:, tf.newaxis]
+        ry = self._tf_ring_positions[:, 1][:, tf.newaxis]
+
+        diff_sq = (gx - rx) ** 2 + (gy - ry) ** 2
+        A_dyn = tf.exp(-diff_sq / (2.0 * sigma_dyn ** 2))   # (n_C, G)
+
+        is_hp_per_tr = self._tf_condition_indicator   # (T, n_C)
+        d = self._tf_dynamic_indicator                # (T, n_C)
+        w_hp = d * is_hp_per_tr
+        w_lp = d * (1.0 - is_hp_per_tr)
+
+        field_hp = tf.einsum('tl,lg->tg', w_hp, A_dyn)
+        field_lp = tf.einsum('tl,lg->tg', w_lp, A_dyn)
+        return g_HP_dyn * field_hp + g_LP_dyn * field_lp   # (T, G)
+
+    @tf.function
+    def _attention_modulation_target(self, parameters):
+        """Per-TR target field on the grid. Slots 15, 16."""
+        g_T_dyn = parameters[0, 0, 15]
+        sigma_T_dyn = parameters[0, 0, 16]
+
+        gx = self._grid_coordinates[:, 0][tf.newaxis, :]
+        gy = self._grid_coordinates[:, 1][tf.newaxis, :]
+        rx = self._tf_ring_positions[:, 0][:, tf.newaxis]
+        ry = self._tf_ring_positions[:, 1][:, tf.newaxis]
+
+        diff_sq = (gx - rx) ** 2 + (gy - ry) ** 2
+        A_tgt = tf.exp(-diff_sq / (2.0 * sigma_T_dyn ** 2))   # (n_C, G)
+
+        tgt = self._tf_target_indicator   # (T, n_C)
+        field_tgt = tf.einsum('tl,lg->tg', tgt, A_tgt)
+        return g_T_dyn * field_tgt   # (T, G)
+
+    # ----------------------------------------------------------------
+    # Forward / backward parameter transforms.
+    # DN PRF block (0..8) — delegate slots 0..7 to DN parent, slot 8
+    # (bold_baseline) is identity. AF block (9..16) — direct transforms.
+    # sharedSigma tying: sigma_T_dyn (slot 16) := sigma_dyn (slot 12).
+    # ----------------------------------------------------------------
+
+    @tf.function
+    def _transform_parameters_forward(self, parameters):
+        if self.flexible_hrf_parameters:
+            n_hrf = len(self.hrf_model.parameter_labels)
+            enc = parameters[:, :-n_hrf]
+            hrf_raw = parameters[:, -n_hrf:]
+            hrf_out = self.hrf_model._transform_parameters_forward(hrf_raw)
+        else:
+            enc = parameters
+            hrf_out = None
+
+        dn = DivisiveNormalizationGaussianPRF2D._transform_parameters_forward(
+            self, enc[:, :8])
+        bold_bl = enc[:, 8:9]   # identity (free param)
+        prf_out = tf.concat([dn, bold_bl], axis=1)   # (V, 9)
+
+        sigma_AF = _sd_softplus_forward(enc[:, 9:10], self.sd_min)
+        if self._signed_gains:
+            g_HP = enc[:, 10:11]
+            g_LP = enc[:, 11:12]
+        else:
+            g_HP = tf.math.softplus(enc[:, 10:11])
+            g_LP = tf.math.softplus(enc[:, 11:12])
+
+        sigma_dyn = _sd_softplus_forward(enc[:, 12:13], self.sd_min)
+        if self._signed_gains:
+            g_HP_dyn = enc[:, 13:14]
+            g_LP_dyn = enc[:, 14:15]
+            g_T_dyn = enc[:, 15:16]
+        else:
+            g_HP_dyn = tf.math.softplus(enc[:, 13:14])
+            g_LP_dyn = tf.math.softplus(enc[:, 14:15])
+            g_T_dyn = tf.math.softplus(enc[:, 15:16])
+
+        # sharedSigma: σ_T_dyn := σ_dyn post-softplus.
+        sigma_T_dyn = sigma_dyn
+
+        enc_out = tf.concat(
+            [prf_out, sigma_AF, g_HP, g_LP,
+             sigma_dyn, g_HP_dyn, g_LP_dyn, g_T_dyn, sigma_T_dyn], axis=1)
+
+        if hrf_out is not None:
+            return tf.concat([enc_out, hrf_out], axis=1)
+        return enc_out
+
+    @tf.function
+    def _transform_parameters_backward(self, parameters):
+        if self.flexible_hrf_parameters:
+            n_hrf = len(self.hrf_model.parameter_labels)
+            enc = parameters[:, :-n_hrf]
+            hrf_post = parameters[:, -n_hrf:]
+            hrf_raw = self.hrf_model._transform_parameters_backward(hrf_post)
+        else:
+            enc = parameters
+            hrf_raw = None
+
+        dn_raw = DivisiveNormalizationGaussianPRF2D._transform_parameters_backward(
+            self, enc[:, :8])
+        bold_bl = enc[:, 8:9]
+        prf_raw = tf.concat([dn_raw, bold_bl], axis=1)
+
+        sigma_AF_raw = _sd_softplus_inverse(enc[:, 9:10], self.sd_min)
+        if self._signed_gains:
+            g_HP_raw = enc[:, 10:11]
+            g_LP_raw = enc[:, 11:12]
+        else:
+            g_HP_raw = tfp.math.softplus_inverse(enc[:, 10:11])
+            g_LP_raw = tfp.math.softplus_inverse(enc[:, 11:12])
+
+        sigma_dyn_raw = _sd_softplus_inverse(enc[:, 12:13], self.sd_min)
+        if self._signed_gains:
+            g_HP_dyn_raw = enc[:, 13:14]
+            g_LP_dyn_raw = enc[:, 14:15]
+            g_T_dyn_raw = enc[:, 15:16]
+        else:
+            g_HP_dyn_raw = tfp.math.softplus_inverse(enc[:, 13:14])
+            g_LP_dyn_raw = tfp.math.softplus_inverse(enc[:, 14:15])
+            g_T_dyn_raw = tfp.math.softplus_inverse(enc[:, 15:16])
+
+        sigma_T_dyn_raw = sigma_dyn_raw   # raw-side tying for symmetry
+
+        enc_raw = tf.concat(
+            [prf_raw, sigma_AF_raw, g_HP_raw, g_LP_raw,
+             sigma_dyn_raw, g_HP_dyn_raw, g_LP_dyn_raw,
+             g_T_dyn_raw, sigma_T_dyn_raw], axis=1)
+
+        if hrf_raw is not None:
+            return tf.concat([enc_raw, hrf_raw], axis=1)
+        return enc_raw
+
+    # ----------------------------------------------------------------
+    # Basis predictions: DN response on AF-modulated stimulus drive.
+    # ----------------------------------------------------------------
+
+    @tf.function
+    def _basis_predictions(self, paradigm, parameters):
+        # paradigm: (B, T, G). parameters: (B, V, 17).
+
+        mod_sustained_per_cond = self._attention_modulation_sustained(parameters)
+        ci = self._tf_condition_indicator                              # (T, n_C)
+        mod_sustained_per_tr = tf.einsum('tc,bvcg->bvtg',
+                                          ci, mod_sustained_per_cond)  # (B,V,T,G)
+
+        mod_dyn = self._attention_modulation_dynamic(parameters)       # (T, G)
+        mod_tgt = self._attention_modulation_target(parameters)        # (T, G)
+
+        # `mod_sustained` already contains (1 + sign * sum). The
+        # phasic terms add additional sign·field on top.
+        sign = self._tf_sign
+        full_mod = mod_sustained_per_tr + sign * (
+            mod_dyn[tf.newaxis, tf.newaxis, :, :]
+            + mod_tgt[tf.newaxis, tf.newaxis, :, :]
+        )
+        full_mod = tf.maximum(full_mod, 0.0)   # (B, V, T, G)
+
+        eff_paradigm = paradigm[:, tf.newaxis, :, :] * full_mod
+
+        # Build unit-amplitude center + surround Gaussians via `_get_rf`
+        # (inherited from GaussianPRF2D). Pass dummy baseline=0,
+        # amplitude=1 — same trick as DivisiveNormalizationGaussianPRF2D.
+        mu_x = parameters[:, :, 0, tf.newaxis]
+        mu_y = parameters[:, :, 1, tf.newaxis]
+        sd = parameters[:, :, 2, tf.newaxis]
+        srf_size = parameters[:, :, 5, tf.newaxis]
+
+        rf_c_params = tf.concat(
+            [mu_x, mu_y, sd, tf.zeros_like(mu_x), tf.ones_like(mu_x)], axis=2)
+        rf_c = self._get_rf(self.grid_coordinates, rf_c_params)        # (B,V,G)
+
+        rf_s_params = tf.concat(
+            [mu_x, mu_y, sd * srf_size,
+             tf.zeros_like(mu_x), tf.ones_like(mu_x)], axis=2)
+        rf_s = self._get_rf(self.grid_coordinates, rf_s_params)        # (B,V,G)
+
+        # eff_paradigm: (B,V,T,G), rf_*: (B,V,G) → (B,V,T)
+        conv_c = tf.einsum('bvtg,bvg->bvt', eff_paradigm, rf_c)
+        conv_s = tf.einsum('bvtg,bvg->bvt', eff_paradigm, rf_s)
+
+        rf_amp = parameters[:, :, 3, tf.newaxis]       # (B,V,1), signed
+        srf_amp = parameters[:, :, 4, tf.newaxis]      # > 0
+        neural_bl = parameters[:, :, 6, tf.newaxis]    # > 0
+        surround_bl = parameters[:, :, 7, tf.newaxis]  # > 0
+        bold_bl = parameters[:, :, 8, tf.newaxis]      # free
+
+        neural = rf_amp * conv_c + neural_bl                          # (B,V,T)
+        suppress = tf.abs(rf_amp) * srf_amp * conv_s + surround_bl
+        response = neural / suppress + bold_bl
+
+        return tf.transpose(response, perm=[0, 2, 1])   # (B, T, V)
