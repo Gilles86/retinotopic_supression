@@ -122,6 +122,35 @@ def load_runs(sub: Subject, masker, resolution: int, kind: str,
             grid_coords)
 
 
+def _save_r2(r2, vox_idx, n_vox, masker,
+             derivs, subject, model_label, fold,
+             chunked_mode, chunk_index, n_chunks, output_suffix):
+    """Write either a chunk NPZ (chunked mode) or a full r2_test NIfTI."""
+    out_dir = (derivs / 'prf_cv' / f'model{model_label}'
+               / f'fold-{fold}' / f'sub-{subject:02d}')
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    if chunked_mode:
+        chunk_dir = out_dir / 'chunks'
+        chunk_dir.mkdir(exist_ok=True)
+        chunk_path = (chunk_dir
+                      / f'chunk-{chunk_index:04d}-of-{n_chunks:04d}.npz')
+        np.savez_compressed(chunk_path,
+                            r2=r2, vox_idx=vox_idx, n_total_vox=n_vox)
+        print(f"wrote {chunk_path}")
+    else:
+        full_r2 = np.zeros(n_vox, dtype=np.float32)
+        full_r2[vox_idx] = r2
+        out_path = (out_dir
+                    / f'sub-{subject:02d}_fold-{fold}_'
+                      f'desc-r2_test{output_suffix}.nii.gz')
+        img = masker.inverse_transform(full_r2)
+        img.set_data_dtype(np.float32)
+        img.header.set_slope_inter(slope=1, inter=0)
+        img.to_filename(out_path)
+        print(f"wrote {out_path}")
+
+
 def per_voxel_r2(observed, predicted):
     """Per-voxel R² across timepoints.
 
@@ -201,6 +230,24 @@ def main(subject: int, model_label: int, fold: int,
     fit_train = train_bold[:, vox_idx]
     fit_test = test_bold[:, vox_idx]
 
+    # --- Model 0: predict per-voxel training mean. Trivial null baseline. ---
+    # Test R² < 0 iff the train mean doesn't capture even the constant
+    # structure of the test data (drift, scanner-drift between sessions,
+    # etc.). Useful for classifying "null voxels" where any model with
+    # R² > m0 has done at least *something* worth modelling.
+    if model_label == 0:
+        print("  model 0 (training-mean baseline) — no fit, just predict")
+        train_mean = fit_train.mean(axis=0, keepdims=True)  # (1, V)
+        pred = np.broadcast_to(train_mean, fit_test.shape)
+        r2 = per_voxel_r2(fit_test, pred)
+        _save_r2(r2, vox_idx, n_vox, masker,
+                 derivs, subject, model_label, fold,
+                 chunked_mode, chunk_index, n_chunks, output_suffix)
+        print(f"  test R² stats: median={np.median(r2):.3f} "
+              f"p10={np.quantile(r2, 0.1):.3f}")
+        print(f"total elapsed: {time.time() - fit_t0:.1f}s")
+        return
+
     factory = build_model_factory(cfg, grid_coords, sd_min)
     print(f"  sd_min={sd_min}")
 
@@ -236,32 +283,9 @@ def main(subject: int, model_label: int, fold: int,
           f"p90={np.quantile(r2, 0.9):.3f} "
           f"frac>0.1={np.mean(r2 > 0.1):.3f}")
 
-    # --- Save. ---
-    out_dir = (derivs / 'prf_cv' / f'model{model_label}'
-               / f'fold-{fold}' / f'sub-{subject:02d}')
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    if chunked_mode:
-        chunk_dir = out_dir / 'chunks'
-        chunk_dir.mkdir(exist_ok=True)
-        chunk_path = (chunk_dir
-                      / f'chunk-{chunk_index:04d}-of-{n_chunks:04d}.npz')
-        np.savez_compressed(chunk_path,
-                            r2=r2, vox_idx=vox_idx,
-                            n_total_vox=n_vox)
-        print(f"wrote {chunk_path}")
-    else:
-        full_r2 = np.zeros(n_vox, dtype=np.float32)
-        full_r2[vox_idx] = r2
-        out_path = (out_dir
-                    / f'sub-{subject:02d}_fold-{fold}_'
-                      f'desc-r2_test{output_suffix}.nii.gz')
-        img = masker.inverse_transform(full_r2)
-        img.set_data_dtype(np.float32)
-        img.header.set_slope_inter(slope=1, inter=0)
-        img.to_filename(out_path)
-        print(f"wrote {out_path}")
-
+    _save_r2(r2, vox_idx, n_vox, masker,
+             derivs, subject, model_label, fold,
+             chunked_mode, chunk_index, n_chunks, output_suffix)
     print(f"total elapsed: {time.time() - fit_t0:.1f}s")
 
 

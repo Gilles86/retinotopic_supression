@@ -25,7 +25,7 @@
 set -eo pipefail
 
 SUBJECTS="${SUBJECTS:-$(seq 1 30)}"
-MODELS="${MODELS:-1 2 3 4 5 6}"
+MODELS="${MODELS:-0 1 2 3 4 5 6}"
 N_FOLDS="${N_FOLDS:-3}"
 FOLDS="${FOLDS:-$(seq 0 $((N_FOLDS - 1)))}"
 N_CHUNKS="${N_CHUNKS:-10}"

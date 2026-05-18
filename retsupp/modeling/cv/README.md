@@ -1,9 +1,15 @@
 # Cross-validated PRF fits — model comparison
 
 Separate from the canonical fitting pipeline (`retsupp/modeling/fit_prf.py`).
-Post-hoc 3-fold CV to compare m1 .. m6 on a parameter-penalty-free
-score, instead of training-set R² (which always rewards the most
-flexible model).
+Post-hoc 3-fold CV to compare **m0 .. m6** on a parameter-penalty-free score,
+instead of training-set R² (which always rewards the most flexible
+model).
+
+**m0** is the trivial null baseline: predict each test timepoint as
+the per-voxel **training mean**. Test R² captures whether *any*
+non-constant structure has been learned. A voxel where any m1..m6
+beats m0 has signal worth modelling; a voxel where m0 wins is a
+null voxel (no PRF, or test/train drift dominates).
 
 ## What's in here
 
