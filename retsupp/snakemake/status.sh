@@ -67,47 +67,68 @@ echo "  --- last 3 driver lines ---"
 tail -3 "$LATEST_LOG" | sed 's/^/  /'
 
 # ---------------------------------------------------------------------
-# 3. In-flight breakdown by rule + scope
+# 3. In-flight breakdown — snakemake-tracked jobs first
 #
-# Comment format from the SLURM plugin: rule_<name>_wildcards_<vals>
-# where <vals> is the wildcard values joined by underscore in
-# Snakefile-declaration order. We extract rule and the leading
-# wildcard (almost always sub_pad) and bucket.
+# Comment format from the SLURM plugin: rule_<name>_wildcards_<vals>.
+# Jobs submitted outside of snakemake (bash `sbatch` directly) have
+# no comment — bucketed at the end as "other (non-snake)".
 # ---------------------------------------------------------------------
 echo
-echo "=== in-flight by rule (running / pending) ==="
+echo "=== in-flight: snakemake-tracked ==="
 squeue -u "$USER" -h -O "State:14,Comment:80" 2>/dev/null \
-    | awk '
-{
-    state=$1
-    full=$2
-    sub(/^rule_/, "", full)
-    n = split(full, parts, "_wildcards_")
-    rule = parts[1]
-    wild = (n >= 2 ? parts[2] : "")
-    if (full == $2) { rule = "(no-comment)"; wild = "" }
-    # First wildcard is usually sub_pad — track unique subs per rule
-    n2 = split(wild, w, "_")
-    sub_id = (n2 >= 1 ? w[1] : "")
-    key = state "|" rule
-    counts[key]++
-    if (sub_id != "") {
-        if (!(key SUBSEP sub_id in seen_sub)) {
-            seen_sub[key SUBSEP sub_id] = 1
-            sub_count[key]++
+    | awk '/^[A-Z]+ +rule_/ {
+        state=$1
+        full=$2
+        sub(/^rule_/, "", full)
+        n = split(full, parts, "_wildcards_")
+        rule = parts[1]
+        wild = (n >= 2 ? parts[2] : "")
+        n2 = split(wild, w, "_")
+        sub_id = (n2 >= 1 ? w[1] : "")
+        key = state "|" rule
+        counts[key]++
+        if (sub_id != "") {
+            if (!(key SUBSEP sub_id in seen_sub)) {
+                seen_sub[key SUBSEP sub_id] = 1
+                sub_count[key]++
+            }
         }
     }
-}
-END {
-    for (k in counts) printf "%d\t%s\t%d\n", counts[k], k, (sub_count[k] ? sub_count[k] : 0)
-}' \
+    END {
+        for (k in counts) printf "%d\t%s\t%d\n", counts[k], k, (sub_count[k] ? sub_count[k] : 0)
+    }' \
     | sort -rn \
-    | awk -F'\t' -v OFS='' '{
+    | awk -F'\t' '{
         split($2, sk, "|"); state=sk[1]; rule=sk[2]
         sub_summary = ($3 > 0 ? "  (" $3 " distinct subs)" : "")
         printf "  %-32s %-10s  n=%d%s\n", rule, state, $1, sub_summary
     }' \
-    | head -25
+    | head -20
+
+# Non-snakemake jobs (CV, decode, other bash-submitted) — summarised.
+echo
+echo "=== in-flight: other (bash-submitted) ==="
+squeue -u "$USER" -h --format="%j %T" 2>/dev/null \
+    | awk '$1 !~ /^[a-f0-9]{8}-[a-f0-9]{4}-/ && $1 !~ /^rule_/' \
+    | awk '{
+        # Strip array suffix and per-rule per-subject decoration to
+        # find the job-name family.
+        name = $1
+        sub(/_[0-9]+$/, "", name)
+        gsub(/sub-[0-9]+/, "sub-XX", name)
+        gsub(/_f[0-9]+_/, "_f?_", name)
+        gsub(/_m[0-9]+_/, "_m?_", name)
+        counts[name "|" $2]++
+    }
+    END {
+        for (k in counts) printf "%d\t%s\n", counts[k], k
+    }' \
+    | sort -rn \
+    | awk -F'\t' '{
+        split($2, sk, "|")
+        printf "  %-40s %-10s  n=%d\n", sk[1], sk[2], $1
+    }' \
+    | head -10
 
 # ---------------------------------------------------------------------
 # 4. Completed in the last hour, broken down by rule + which subs landed
