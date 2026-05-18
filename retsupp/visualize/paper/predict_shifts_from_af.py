@@ -280,7 +280,7 @@ def process_one_fit(fit_pkl: Path, sub_id: int, roi: str, mode: str,
     shared: dict = d['shared_pars']
     voxel_indices: np.ndarray = d['voxel_mask_indices']
 
-    pred, base, sd = predict_centers(fit_pars, shared, mode)
+    pred, base, _sd = predict_centers(fit_pars, shared, mode)
     sub = Subject(sub_id, bids_folder)
     obs, obs_r2 = load_observed_centers(sub, voxel_indices,
                                           model=conditionfit_model)
@@ -296,7 +296,6 @@ def process_one_fit(fit_pkl: Path, sub_id: int, roi: str, mode: str,
                 subject=sub_id, roi=roi, mode=mode, condition=cond,
                 voxel_idx=int(voxel_indices[vi]),
                 base_x=float(base[vi, 0]), base_y=float(base[vi, 1]),
-                base_sd=float(sd[vi]),
                 pred_x=float(pred[vi, ci, 0]), pred_y=float(pred[vi, ci, 1]),
                 obs_x=float(obs[vi, ci, 0]), obs_y=float(obs[vi, ci, 1]),
                 obs_r2=float(obs_r2[vi, ci]),

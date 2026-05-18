@@ -1,26 +1,25 @@
-"""Fit a Klein-style 4-AF static-shift model on observed conditionwise CoM shifts.
+"""Fit a Klein-style 4-AF static-shift model on observed conditionwise PRF shifts.
 
-Per (subject, ROI):
+Self-contained: reads m4 conditionwise PRFs directly via Subject. Does
+NOT use any AF-fit output — Klein is the "no-AF" comparison model, so
+all inputs come from AF-free PRF fits.
 
-    M_C(g) = 1 + sign·( A_HP(g; σ_HP) + Σ_{ℓ ≠ HP} A_LP(g; σ_LP) )
+For each (subject, ROI):
 
-Four unit-amplitude AF Gaussians at the 4 ring positions, but with
-two σ values: σ_HP (the per-condition HP location) and σ_LP (the 3
-LP locations, shared). No gain — HP-vs-LP differences come purely
-from the AF size.
+  - Baseline per voxel: mean of (x, y, sd) across the 4 conditionwise fits.
+  - Observed shift per (voxel, condition): cond_xy - mean_xy.
+  - Klein 4-AF model:
+        M_C(g) = 1 + sign * ( A_HP(g; σ_HP) + Σ_{ℓ ≠ HP} A_LP(g; σ_LP) )
+    where A_ℓ are unit-amplitude Gaussians at the 4 ring positions, σ
+    differs HP vs LP (no gain). sign = -1 for retsupp (suppression).
+  - Numerical CoM of (baseline-Gaussian-PRF × M_C) per (voxel, condition).
+  - Fit (σ_HP, σ_LP) by minimising Σ ||klein_predicted_shift - obs_shift||².
 
-Companion to ``predict_shifts_from_af.py`` for the talk-figure
-comparison between our gain-based AF model (already fitted on BOLD)
-and the size-based Klein-style parameterisation. Fitted on the OBSERVED
-shifts (not BOLD) since that's what's analytically tractable and
-already loaded by ``predict_shifts_from_af.py``.
+Outputs a long-format TSV: one row per (subject, ROI, voxel, condition)
+with columns matching plot_rotated_shift_fields.py's expected shape +
+Klein-specific columns.
 
-Reads the long-format TSV ``predict_shifts_*.tsv`` (which contains
-base_x/y, obs_x/y per (sub, ROI, voxel, condition)) and writes a new
-TSV with the same rows + columns ``pred_klein_x``, ``pred_klein_y``,
-``klein_sigma_HP``, ``klein_sigma_LP`` per (sub, ROI).
-
-Run locally — small per-ROI 2-parameter fit, no cluster needed.
+Run locally (no cluster). ~few seconds per (sub, ROI), single CPU.
 """
 from __future__ import annotations
 
@@ -29,12 +28,17 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from nilearn import maskers, masking
+import yaml
 from scipy.optimize import minimize
 
-from retsupp.utils.data import distractor_locations
+from retsupp.utils.data import Subject, distractor_locations
+
 
 CONDITIONS = ['upper_right', 'upper_left', 'lower_left', 'lower_right']
 RING_KEYS = ['upper right', 'upper left', 'lower left', 'lower right']
+ROI_DEFAULT = ['V1', 'V2', 'V3', 'V3AB', 'hV4', 'LO', 'TO', 'VO',
+               'IPS', 'SPL1', 'FEF']
 
 
 def get_ring_positions():
@@ -42,34 +46,22 @@ def get_ring_positions():
                     dtype=np.float32)
 
 
+# ---------------------------------------------------------------------
+# Numerical CoM under Klein modulation
+# ---------------------------------------------------------------------
+
 def klein_predict_centers(base_xy: np.ndarray, sd_v: np.ndarray,
-                           sigma_HP: float, sigma_LP: float,
-                           sign: int = -1,
-                           resolution: int = 81,
-                           grid_radius: float = 5.0):
-    """Numerical CoM of PRF × Klein modulation for each (voxel, condition).
-
-    Parameters
-    ----------
-    base_xy   : (V, 2) base PRF (x, y)
-    sd_v      : (V,)   PRF σ
-    sigma_HP  : Klein σ at HP ring (HP for each condition)
-    sigma_LP  : Klein σ at the 3 LP rings (shared)
-    sign      : -1 suppression, +1 attraction. Matches the AF formulation.
-
-    Returns
-    -------
-    pred : (V, C, 2) — predicted (x, y) per voxel × condition
-    """
+                          sigma_HP: float, sigma_LP: float,
+                          sign: int = -1,
+                          resolution: int = 81,
+                          grid_radius: float = 5.0):
     g1d = np.linspace(-grid_radius, grid_radius, resolution).astype(np.float32)
     GX, GY = np.meshgrid(g1d, g1d)
-    G = np.stack([GX.ravel(), GY.ravel()], axis=1)            # (R^2, 2)
+    G = np.stack([GX.ravel(), GY.ravel()], axis=1)        # (R^2, 2)
 
-    ring = get_ring_positions()                                # (4, 2)
-    # Per-ring distance squared on the grid.
+    ring = get_ring_positions()                            # (4, 2)
     d2 = np.sum((G[:, None, :] - ring[None, :, :]) ** 2, axis=-1)  # (R^2, 4)
 
-    # Per-condition modulation: HP ring uses σ_HP, others use σ_LP.
     M = np.empty((G.shape[0], len(CONDITIONS)), dtype=np.float32)
     for ci in range(len(CONDITIONS)):
         a_hp = np.exp(-d2[:, ci] / (2.0 * sigma_HP ** 2))
@@ -88,7 +80,7 @@ def klein_predict_centers(base_xy: np.ndarray, sd_v: np.ndarray,
         (G[:, 0:1] - x[None, :]) ** 2
         + (G[:, 1:2] - y[None, :]) ** 2
     )
-    S = np.exp(-dprf2 / (2.0 * sd[None, :] ** 2))                # (R^2, V)
+    S = np.exp(-dprf2 / (2.0 * sd[None, :] ** 2))           # (R^2, V)
 
     pred = np.empty((V, len(CONDITIONS), 2), dtype=np.float32)
     for ci in range(len(CONDITIONS)):
@@ -97,97 +89,133 @@ def klein_predict_centers(base_xy: np.ndarray, sd_v: np.ndarray,
         Z = rho.sum(axis=0) + 1e-12
         pred[:, ci, 0] = (G[:, 0:1] * rho).sum(axis=0) / Z
         pred[:, ci, 1] = (G[:, 1:2] * rho).sum(axis=0) / Z
-
     return pred
 
 
-def fit_klein_one_roi(df_roi: pd.DataFrame, sign: int = -1,
-                       initial=(1.0, 2.0), bounds=((0.3, 5.0), (0.3, 5.0))):
-    """Fit (σ_HP, σ_LP) by minimizing per-voxel ||obs_shift - pred_shift||²."""
-    voxel_ids = df_roi['voxel_idx'].unique()
-    n_v = len(voxel_ids)
-    base_df = (df_roi.groupby('voxel_idx')[['base_x', 'base_y', 'base_sd']]
-                      .first().loc[voxel_ids])
-    base = base_df[['base_x', 'base_y']].values
-    sd_v = base_df['base_sd'].values.astype(np.float32)
+# ---------------------------------------------------------------------
+# Load m4 conditionwise PRFs per (subject, ROI)
+# ---------------------------------------------------------------------
 
-    # Build observed shifts: (V, C, 2)
-    obs = np.full((n_v, len(CONDITIONS), 2), np.nan, dtype=np.float32)
+def load_cond_prfs(sub: Subject, roi: str, conditionfit_model: int = 4):
+    """Returns (voxel_indices, base_xy (V,2), base_sd (V,), cond_xy (V,4,2)).
+
+    Baseline = MEAN over the 4 conditionwise PRFs per voxel
+    (no AF involvement). Only inside-ROI voxels with finite values
+    across all 4 conditions are returned.
+    """
+    bold_mask = sub.get_bold_mask()
+    masker = maskers.NiftiMasker(mask_img=bold_mask)
+    masker.fit()
+
+    df = sub.get_prf_parameters_volume(model=conditionfit_model,
+                                        type='conditionwise')
+
+    # Build (V_total, C, 3) array: x, y, sd per voxel per condition.
+    n_v_total = int(np.prod(bold_mask.get_fdata().shape))
+    n_v_mask = int(bold_mask.get_fdata().astype(bool).sum())
+
+    pars = np.empty((n_v_mask, len(CONDITIONS), 3), dtype=np.float32)
     for ci, cond in enumerate(CONDITIONS):
-        d_cond = (df_roi[df_roi['condition'] == cond]
-                  .set_index('voxel_idx')
-                  .loc[voxel_ids, ['obs_x', 'obs_y']]
-                  .values)
-        obs[:, ci, :] = d_cond
-    obs_shift = obs - base[:, None, :]   # (V, C, 2)
+        for pi, par in enumerate(['x', 'y', 'sd']):
+            img = df.loc[cond, par]
+            arr = masking.apply_mask(img, bold_mask, ensure_finite=False)
+            pars[:, ci, pi] = arr
 
+    # ROI mask
+    roi_img = sub.get_retinotopic_roi(roi, bold_space=True)
+    roi_mask_1d = masking.apply_mask(roi_img, bold_mask).astype(bool)
+
+    # Drop voxels with any NaN in any condition × parameter
+    valid = np.all(np.isfinite(pars).all(axis=-1), axis=-1)
+    keep = valid & roi_mask_1d
+
+    voxel_indices = np.where(keep)[0]
+    cond_xy = pars[keep, :, :2]    # (V, 4, 2)
+    cond_sd = pars[keep, :, 2]     # (V, 4)
+    base_xy = cond_xy.mean(axis=1)     # (V, 2)  — mean of 4 conds
+    base_sd = cond_sd.mean(axis=1)     # (V,)    — mean σ across conds
+    return voxel_indices, base_xy, base_sd, cond_xy
+
+
+def fit_klein_one_roi(base_xy, base_sd, cond_xy,
+                      sign: int = -1,
+                      initial=(1.0, 2.0),
+                      bounds=((0.3, 5.0), (0.3, 5.0))):
+    obs_shift = cond_xy - base_xy[:, None, :]   # (V, C, 2)
     def loss(params):
         sH, sL = params
         if sH <= 0 or sL <= 0:
             return 1e9
-        pred = klein_predict_centers(base, sd_v, sH, sL, sign=sign)
-        pred_shift = pred - base[:, None, :]
+        pred = klein_predict_centers(base_xy, base_sd, sH, sL, sign=sign)
+        pred_shift = pred - base_xy[:, None, :]
         diff = pred_shift - obs_shift
-        valid = np.isfinite(diff)
-        return float(np.sum(diff[valid] ** 2))
-
+        return float(np.sum(diff ** 2))
     res = minimize(loss, x0=list(initial), method='L-BFGS-B', bounds=bounds)
     return res.x[0], res.x[1], float(res.fun), res.success
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument('--in-tsv', default=Path(
-        '/Users/gdehol/git/retsupp/notes/data/predict_shifts_sharedSigma_8subs.tsv'))
-    ap.add_argument('--out-tsv', default=Path(
-        '/Users/gdehol/git/retsupp/notes/data/predict_shifts_with_klein_8subs.tsv'))
-    ap.add_argument('--sign', type=int, default=-1,
-                    help='-1 for suppression (default, matches retsupp), +1 attraction')
-    args = ap.parse_args()
+    p = argparse.ArgumentParser()
+    p.add_argument('--subjects', nargs='+', type=int, required=True,
+                   help='Subject ids, e.g. --subjects 3 5 11 13 17 18 28 30')
+    p.add_argument('--rois', nargs='+', default=ROI_DEFAULT)
+    p.add_argument('--bids-folder', default='/data/ds-retsupp')
+    p.add_argument('--sign', type=int, default=-1,
+                   help='-1 suppression (retsupp default), +1 attraction')
+    p.add_argument('--out-tsv', type=Path,
+                   default=Path('notes/data/klein_shifts.tsv'))
+    args = p.parse_args()
 
-    print(f'loading {args.in_tsv}...')
-    df = pd.read_csv(args.in_tsv, sep='\t')
-
-    fits = []   # rows: subject, roi, sigma_HP, sigma_LP, sse
-    pred_rows = []
-    for (sub, roi), df_roi in df.groupby(['subject', 'roi']):
-        if len(df_roi) < 50:
+    all_rows = []
+    fits = []
+    for sub_id in args.subjects:
+        try:
+            sub = Subject(sub_id, args.bids_folder)
+        except Exception as e:
+            print(f'  sub-{sub_id:02d}: skip ({e})')
             continue
-        sH, sL, sse, ok = fit_klein_one_roi(df_roi, sign=args.sign)
-        fits.append(dict(subject=sub, roi=roi,
-                         klein_sigma_HP=sH, klein_sigma_LP=sL,
-                         klein_sse=sse, ok=ok))
-        print(f'  sub-{sub:02d} {roi:5s}: σ_HP={sH:.2f}° σ_LP={sL:.2f}° '
-              f'sse={sse:.2f}')
+        for roi in args.rois:
+            try:
+                vox, base_xy, base_sd, cond_xy = load_cond_prfs(sub, roi)
+            except Exception as e:
+                print(f'  sub-{sub_id:02d} {roi}: skip ({e})')
+                continue
+            if len(vox) < 20:
+                print(f'  sub-{sub_id:02d} {roi}: only {len(vox)} voxels, skip')
+                continue
+            sH, sL, sse, ok = fit_klein_one_roi(base_xy, base_sd, cond_xy,
+                                                sign=args.sign)
+            fits.append(dict(subject=sub_id, roi=roi,
+                             klein_sigma_HP=sH, klein_sigma_LP=sL,
+                             klein_sse=sse, n_voxels=len(vox)))
+            print(f'  sub-{sub_id:02d} {roi:5s}: σ_HP={sH:.2f}° '
+                  f'σ_LP={sL:.2f}° sse={sse:.2f} n={len(vox)}')
 
-        # Predict centers with fitted params and write per-voxel rows.
-        voxel_ids = df_roi['voxel_idx'].unique()
-        n_v = len(voxel_ids)
-        base_df = (df_roi.groupby('voxel_idx')[['base_x', 'base_y', 'base_sd']]
-                          .first().loc[voxel_ids])
-        base = base_df[['base_x', 'base_y']].values
-        sd_v = base_df['base_sd'].values.astype(np.float32)
-        pred = klein_predict_centers(base, sd_v, sH, sL, sign=args.sign)
-        for ci, cond in enumerate(CONDITIONS):
-            for vi, vid in enumerate(voxel_ids):
-                pred_rows.append(dict(
-                    subject=sub, roi=roi, condition=cond,
-                    voxel_idx=int(vid),
-                    pred_klein_x=float(pred[vi, ci, 0]),
-                    pred_klein_y=float(pred[vi, ci, 1]),
-                ))
+            pred = klein_predict_centers(base_xy, base_sd, sH, sL,
+                                          sign=args.sign)
+            for ci, cond in enumerate(CONDITIONS):
+                for vi, voxidx in enumerate(vox):
+                    all_rows.append(dict(
+                        subject=sub_id, roi=roi, condition=cond,
+                        voxel_idx=int(voxidx),
+                        base_x=float(base_xy[vi, 0]),
+                        base_y=float(base_xy[vi, 1]),
+                        base_sd=float(base_sd[vi]),
+                        obs_x=float(cond_xy[vi, ci, 0]),
+                        obs_y=float(cond_xy[vi, ci, 1]),
+                        pred_klein_x=float(pred[vi, ci, 0]),
+                        pred_klein_y=float(pred[vi, ci, 1]),
+                        klein_sigma_HP=sH,
+                        klein_sigma_LP=sL,
+                    ))
 
-    pred_df = pd.DataFrame(pred_rows)
-    fits_df = pd.DataFrame(fits)
-
-    # Merge Klein predictions into the original long-format TSV.
-    merged = df.merge(pred_df, on=['subject', 'roi', 'condition',
-                                    'voxel_idx'], how='left')
     args.out_tsv.parent.mkdir(parents=True, exist_ok=True)
-    merged.to_csv(args.out_tsv, sep='\t', index=False)
-    fits_df.to_csv(args.out_tsv.with_suffix('.fits.tsv'), sep='\t', index=False)
-    print(f'wrote {args.out_tsv}  ({len(merged):,} rows)')
-    print(f'wrote {args.out_tsv.with_suffix(".fits.tsv")}  ({len(fits_df)} fits)')
+    df = pd.DataFrame(all_rows)
+    df.to_csv(args.out_tsv, sep='\t', index=False)
+    pd.DataFrame(fits).to_csv(
+        args.out_tsv.with_suffix('.fits.tsv'), sep='\t', index=False)
+    print(f'wrote {args.out_tsv}  ({len(df):,} rows)')
+    print(f'wrote {args.out_tsv.with_suffix(".fits.tsv")}  ({len(fits)} fits)')
 
 
 if __name__ == '__main__':
