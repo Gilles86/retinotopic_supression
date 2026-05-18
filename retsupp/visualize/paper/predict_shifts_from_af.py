@@ -69,21 +69,14 @@ def predict_centers(fit_pars: pd.DataFrame, shared: dict, mode: str,
                      resolution: int = 81, grid_radius: float = 5.0):
     """Compute predicted observed PRF centers for each (voxel, condition).
 
-    Computes TWO predictions:
-    - ``pred``      : matches the fitted ``mode`` (signed / suppression /
-                      attraction). This is the canonical AF model.
-    - ``pred_af1``  : Sumiya-style AF+ attraction with the SAME fitted
-                      magnitudes. Forces ``sign=+1`` (attraction) on
-                      ``|g_HP|``, ``|g_LP|``. Predicts shifts TOWARD the
-                      HP location — the contrast against suppression.
-
     Returns
     -------
-    pred     : ndarray (V, C, 2)  — canonical AF prediction
-    pred_af1 : ndarray (V, C, 2)  — AF+ attraction prediction
-    base     : ndarray (V, 2)     — base PRF (x, y) from fit_pars
+    pred  : ndarray (V, C, 2)  — predicted (x, y) per voxel × condition
+    base  : ndarray (V, 2)     — base PRF (x, y) from fit_pars
+    sd    : ndarray (V,)       — per-voxel PRF σ (needed by downstream
+                                  shift-comparison fits like Klein)
     """
-    sign_main = +1 if mode == 'attraction' else -1   # canonical fit sign
+    sign = +1 if mode == 'attraction' else -1
     sigma_AF = float(shared['sigma_AF'])
     g_HP = float(shared['g_HP'])
     g_LP = float(shared['g_LP'])
@@ -98,7 +91,13 @@ def predict_centers(fit_pars: pd.DataFrame, shared: dict, mode: str,
         / (2.0 * sigma_AF ** 2)
     )                                                          # (R^2, 4)
 
-    # Per-voxel PRFs once.
+    # M_C(g) = 1 + sign * ( g_HP * A_HP + g_LP * sum_{ell!=HP} A_ell )
+    M = np.empty((G.shape[0], len(CONDITIONS)), dtype=np.float32)
+    for ci in range(len(CONDITIONS)):
+        a_hp = A[:, ci]
+        a_lp = A.sum(axis=1) - a_hp
+        M[:, ci] = 1.0 + sign * (g_HP * a_hp + g_LP * a_lp)
+
     x = fit_pars['x'].values.astype(np.float32)
     y = fit_pars['y'].values.astype(np.float32)
     sd = fit_pars['sd'].values.astype(np.float32)
@@ -109,29 +108,16 @@ def predict_centers(fit_pars: pd.DataFrame, shared: dict, mode: str,
     )
     S = np.exp(-d2 / (2.0 * sd[None, :] ** 2))                  # (R^2, V)
 
-    def _com_with_sign(sign, g_HP_use, g_LP_use):
-        M = np.empty((G.shape[0], len(CONDITIONS)), dtype=np.float32)
-        for ci in range(len(CONDITIONS)):
-            a_hp = A[:, ci]
-            a_lp = A.sum(axis=1) - a_hp
-            M[:, ci] = 1.0 + sign * (g_HP_use * a_hp + g_LP_use * a_lp)
-        out = np.empty((V, len(CONDITIONS), 2), dtype=np.float32)
-        for ci in range(len(CONDITIONS)):
-            rho = S * M[:, ci:ci + 1]
-            rho = np.clip(rho, 0.0, None)
-            Z = rho.sum(axis=0) + 1e-12
-            out[:, ci, 0] = (G[:, 0:1] * rho).sum(axis=0) / Z
-            out[:, ci, 1] = (G[:, 1:2] * rho).sum(axis=0) / Z
-        return out
-
-    # 1. Canonical (fitted-sign) prediction.
-    pred = _com_with_sign(sign_main, g_HP, g_LP)
-
-    # 2. AF+ attraction-only baseline: same magnitude, sign forced +1.
-    pred_af1 = _com_with_sign(+1, abs(g_HP), abs(g_LP))
+    pred = np.empty((V, len(CONDITIONS), 2), dtype=np.float32)
+    for ci in range(len(CONDITIONS)):
+        rho = S * M[:, ci:ci + 1]
+        rho = np.clip(rho, 0.0, None)
+        Z = rho.sum(axis=0) + 1e-12
+        pred[:, ci, 0] = (G[:, 0:1] * rho).sum(axis=0) / Z
+        pred[:, ci, 1] = (G[:, 1:2] * rho).sum(axis=0) / Z
 
     base = np.stack([x, y], axis=1)
-    return pred, pred_af1, base
+    return pred, base, sd
 
 
 def project_onto_hp(shift_xy, hp_xy):
@@ -294,7 +280,7 @@ def process_one_fit(fit_pkl: Path, sub_id: int, roi: str, mode: str,
     shared: dict = d['shared_pars']
     voxel_indices: np.ndarray = d['voxel_mask_indices']
 
-    pred, pred_af1, base = predict_centers(fit_pars, shared, mode)
+    pred, base, sd = predict_centers(fit_pars, shared, mode)
     sub = Subject(sub_id, bids_folder)
     obs, obs_r2 = load_observed_centers(sub, voxel_indices,
                                           model=conditionfit_model)
@@ -310,9 +296,8 @@ def process_one_fit(fit_pkl: Path, sub_id: int, roi: str, mode: str,
                 subject=sub_id, roi=roi, mode=mode, condition=cond,
                 voxel_idx=int(voxel_indices[vi]),
                 base_x=float(base[vi, 0]), base_y=float(base[vi, 1]),
+                base_sd=float(sd[vi]),
                 pred_x=float(pred[vi, ci, 0]), pred_y=float(pred[vi, ci, 1]),
-                pred_af1_x=float(pred_af1[vi, ci, 0]),
-                pred_af1_y=float(pred_af1[vi, ci, 1]),
                 obs_x=float(obs[vi, ci, 0]), obs_y=float(obs[vi, ci, 1]),
                 obs_r2=float(obs_r2[vi, ci]),
                 proj_pred=float(proj_pred[vi]),
