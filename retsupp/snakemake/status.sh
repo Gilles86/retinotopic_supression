@@ -7,7 +7,10 @@
 #   bash retsupp/snakemake/status.sh
 #   ssh sciencecluster 'bash ~/git/retsupp/retsupp/snakemake/status.sh'
 
-set -eo pipefail
+# Diagnostic script — let individual sections fail (e.g., empty grep
+# match, missing log) without killing the rest. `set -e` would
+# regularly bail out partway through, which is the opposite of useful
+# in a status snapshot.
 
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 SNAKE_DIR="$REPO/retsupp/snakemake"
@@ -33,8 +36,10 @@ if [ -f "$CONFIG" ]; then
     af_variant_names=$(awk '/^af_variants:/{flag=1;next} /^[a-z_]+:/{flag=0} flag && /^  *- *name:/{sub(/.*name: */, ""); print}' "$CONFIG" | xargs | tr ' ' ',')
     with_af=$(awk -F': *' '/^with_af:/{print $2; exit}' "$CONFIG")
 
+    neuro_display=$([ "$n_neuro_models" -gt 0 ] && echo "$n_neuro_models" \
+                                                || echo "(default = AF base models)")
     echo "  subjects=$n_subjects, n_chunks=$n_chunks, kind=$kind, models=$n_models, with_af=$with_af"
-    echo "  neuropythy_models=$n_neuro_models, af_variants=[$af_variant_names]"
+    echo "  neuropythy_models=$neuro_display, af_variants=[$af_variant_names]"
 fi
 
 # ---------------------------------------------------------------------
@@ -143,8 +148,10 @@ sacct -u "$USER" -X -S "$SINCE" --format=Comment%80,State -P -n 2>/dev/null \
 # ---------------------------------------------------------------------
 echo
 echo "=== recent driver errors (last 100 lines of log) ==="
-n_err=$(tail -100 "$LATEST_LOG" | grep -cE "Error|Failed|error in" || true)
+# grep -c returns 1 when no matches; allow it under set -e.
+n_err=$(tail -100 "$LATEST_LOG" | { grep -cE "Error|Failed|error in" || true; })
 echo "  $n_err error/failure mentions in tail"
 if [ "$n_err" -gt 0 ]; then
-    tail -100 "$LATEST_LOG" | grep -E "Error|Failed|error in" | tail -3 | sed 's/^/    /'
+    tail -100 "$LATEST_LOG" | { grep -E "Error|Failed|error in" || true; } \
+        | tail -3 | sed 's/^/    /'
 fi
