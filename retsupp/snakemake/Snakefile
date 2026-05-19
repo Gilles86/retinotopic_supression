@@ -590,9 +590,11 @@ for _info in AF_VARIANTS:
         resources:
             slurm_partition="lowprio",
             slurm_account="zne.uzh",
-            runtime=25,
-            mem_mb=40000,
-            cpus_per_task=8,
+            runtime=120,
+            mem_mb=24000,
+            cpus_per_task=4,
+            gres="gpu:1",
+            constraint="L4|V100|A100",
         shell:
             r"""
             set -eo pipefail
@@ -600,15 +602,39 @@ for _info in AF_VARIANTS:
             echo "Variant: {params.flags} (model {params.model_label})"
             echo "Started: $(date)"
 
-            sleep $(( RANDOM % 30 ))
+            sleep $(( RANDOM % 15 ))
+
+            source /etc/profile.d/lmod.sh 2>/dev/null || true
+            SYS_CUDA_GLOB=( /apps/u24/opt/x86_64_v3/cuda-11.8.0-* )
+            if [[ -d "${{SYS_CUDA_GLOB[0]}}/targets/x86_64-linux/lib" ]]; then
+                export LD_LIBRARY_PATH="${{SYS_CUDA_GLOB[0]}}/targets/x86_64-linux/lib${{LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}}"
+            fi
 
             source "$HOME/data/miniforge3/etc/profile.d/conda.sh"
             conda activate retsupp_cuda
-            export CUDA_VISIBLE_DEVICES=-1
             export PYTHONUNBUFFERED=1
-            export OMP_NUM_THREADS=${{SLURM_CPUS_PER_TASK:-8}}
-            export TF_NUM_INTRAOP_THREADS=${{SLURM_CPUS_PER_TASK:-8}}
-            export TF_NUM_INTEROP_THREADS=2
+
+            LOCK="/dev/shm/cuinit_warm_$(hostname -s).flock"
+            echo "cuInit warm-up under flock $LOCK ..."
+            (
+                flock -w 60 -x 200 || {{
+                    echo "WARN: couldn't acquire $LOCK in 60s; skipping warm-up"
+                    exit 0
+                }}
+                {PYTHON_CUDA} -c "
+import os, sys
+os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
+import tensorflow as tf
+gpus = tf.config.list_physical_devices('GPU')
+print(f'cuInit warm-up: {{len(gpus)}} GPU(s) visible to TF', flush=True)
+sys.exit(0 if gpus else 1)
+"
+            ) 200>"$LOCK"
+            WARMUP_RC=$?
+            if [[ $WARMUP_RC -ne 0 ]]; then
+                echo "FATAL: cuInit warm-up returned $WARMUP_RC (no GPU after lock-protected init)." >&2
+                exit 1
+            fi
 
             SUB_INT=$(echo {wildcards.sub_pad} | sed 's/^0*//')
 

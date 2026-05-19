@@ -46,8 +46,13 @@ keep-incomplete: True
 rerun-triggers:
   - input
 
-# Restart preempted lowprio jobs once before giving up.
-restart-times: 1
+# Don't auto-retry failures. Lowprio preemption was the rationale for
+# restart-times: 1, but in practice it hid resource-sizing diagnoses by
+# silently doubling submissions of jobs guaranteed to fail again. With
+# 0, every failure lands once and surfaces in the log; we investigate
+# and resubmit deliberately. Re-enable only when failures are demonstrably
+# transient (preemption, NFS hiccup) and not deterministic (OOM, walltime).
+restart-times: 0
 
 # Snakemake's own latency tolerance for NFS — give file-existence checks
 # 30s grace so a just-written NIfTI on /shares doesn't trip the
