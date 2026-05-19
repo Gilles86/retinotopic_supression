@@ -594,7 +594,7 @@ for _info in AF_VARIANTS:
             mem_mb=64000,
             cpus_per_task=4,
             gres="gpu:1",
-            constraint="L4|V100|A100",
+            constraint="A100",
         shell:
             r"""
             set -eo pipefail
