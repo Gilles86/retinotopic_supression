@@ -3641,3 +3641,245 @@ class DivisiveNormalizationDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSig
         pred_convolved = pred_convolved + bold_bl
 
         return pred_convolved
+
+
+# ---------------------------------------------------------------------------
+# Klein-style ANALYTICAL SHIFT on a DoG backbone — 6-σ split, no gains.
+# ---------------------------------------------------------------------------
+
+class DoGKleinShift_v3_target_6sigma(
+    DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma,
+):
+    """DoG + analytical Klein-shift, 6 σ split (HP/LP for sus / dyn / target),
+    no gain parameters.
+
+    The forward model has NO multiplicative modulation of the stimulus
+    drive. Instead, at each TR ``t`` and voxel ``v`` we shift the DoG
+    center AND surround Gaussians' positions and sizes via Klein's
+    Gaussian-product precision-weighted-mean formula, applied
+    separately to center (σ_C = sd_v) and surround (σ_S = sd_v · srf_size_v).
+
+    Per-TR precision contribution from each ring ℓ::
+
+        c_ℓ(t) = ci_ℓ(t) · [ 1/σ_HP_sus²  +  d_ℓ(t)/σ_HP_dyn²
+                            + tgt_ℓ(t)/σ_HP_T² ]
+               + (1-ci_ℓ(t)) · [ 1/σ_LP_sus²  +  d_ℓ(t)/σ_LP_dyn²
+                                + tgt_ℓ(t)/σ_LP_T² ]
+
+    where ``ci_ℓ(t) ∈ {0, 1}`` says whether ring ℓ is the HP-of-the-
+    current-condition at TR ``t``, ``d_ℓ(t) ∈ [0, 1]`` is the per-TR
+    distractor-overlap fraction at ring ℓ, ``tgt_ℓ(t)`` is the per-TR
+    target-overlap fraction.
+
+    Then per voxel × TR (separately for center and surround)::
+
+        τ_total_C(t, v) = 1/sd_v²                + Σ_ℓ c_ℓ(t)
+        τ_total_S(t, v) = 1/(sd_v·srf_size_v)²    + Σ_ℓ c_ℓ(t)
+
+        μ_C_eff(t, v)   = (μ_v/sd_v² + Σ_ℓ c_ℓ(t)·r_ℓ) / τ_total_C(t, v)
+        μ_S_eff(t, v)   = (μ_v/(sd_v·srf_size_v)² + Σ_ℓ c_ℓ(t)·r_ℓ) /
+                          τ_total_S(t, v)
+        σ_C_eff(t, v)   = 1 / sqrt(τ_total_C(t, v))    # strict Klein
+        σ_S_eff(t, v)   = 1 / sqrt(τ_total_S(t, v))
+
+    BOLD response::
+
+        DoG_eff(t, v, p) = G(p; μ_C_eff, σ_C_eff)
+                         − srf_amp_v · G(p; μ_S_eff, σ_S_eff)
+        response(t, v)   = amplitude_v · ∫ stim(t, p) · DoG_eff(t, v, p) dp
+                         + baseline_v
+        (then HRF convolve)
+
+    Parameter layout (13 encoding + HRF)
+    -------------------------------------
+    Per-voxel (7):
+        0 x, 1 y, 2 sd, 3 baseline, 4 amplitude,
+        5 srf_amplitude, 6 srf_size.
+    Shared (6):
+        7 sigma_HP_sus, 8 sigma_LP_sus,
+        9 sigma_HP_dyn, 10 sigma_LP_dyn,
+        11 sigma_HP_T,  12 sigma_LP_T.
+
+    No gain parameters anywhere; all per-ring "strength" is encoded by
+    the σ values (smaller σ → larger precision contribution → bigger
+    shift toward that ring).
+
+    `mode` is ignored — pure Klein product has no sign; attraction is
+    structural.
+    """
+
+    parameter_labels = [
+        'x', 'y', 'sd', 'baseline', 'amplitude',
+        'srf_amplitude', 'srf_size',
+        'sigma_HP_sus', 'sigma_LP_sus',
+        'sigma_HP_dyn', 'sigma_LP_dyn',
+        'sigma_HP_T',   'sigma_LP_T',
+    ]
+
+    # Floor on total precision to avoid divisions by ~0.
+    _TAU_FLOOR = 1e-6
+
+    @tf.function
+    def _per_tr_precision_centers(self, parameters):
+        """Per-TR precision contribution & moment from the 6 σ's.
+
+        Returns
+        -------
+        c_sum_t : (T,)   Σ_ℓ c_ℓ(t)
+        c_x_t   : (T,)   Σ_ℓ c_ℓ(t) · r_ℓ_x
+        c_y_t   : (T,)   Σ_ℓ c_ℓ(t) · r_ℓ_y
+        """
+        sigma_HP_sus = parameters[0, 0, 7]
+        sigma_LP_sus = parameters[0, 0, 8]
+        sigma_HP_dyn = parameters[0, 0, 9]
+        sigma_LP_dyn = parameters[0, 0, 10]
+        sigma_HP_T   = parameters[0, 0, 11]
+        sigma_LP_T   = parameters[0, 0, 12]
+
+        ci  = self._tf_condition_indicator   # (T, n_C) ∈ {0, 1}
+        d   = self._tf_dynamic_indicator     # (T, n_C) ∈ [0, 1]
+        tgt = self._tf_target_indicator      # (T, n_C) ∈ [0, 1]
+
+        # Per-(t, ℓ) precision contribution.
+        c_sus = ci         / (sigma_HP_sus ** 2) + (1.0 - ci) / (sigma_LP_sus ** 2)
+        c_dyn = d * (ci    / (sigma_HP_dyn ** 2) + (1.0 - ci) / (sigma_LP_dyn ** 2))
+        c_tgt = tgt * (ci  / (sigma_HP_T   ** 2) + (1.0 - ci) / (sigma_LP_T   ** 2))
+        c_tl = c_sus + c_dyn + c_tgt          # (T, n_C)
+
+        rx = self._tf_ring_positions[:, 0]   # (n_C,)
+        ry = self._tf_ring_positions[:, 1]
+        c_sum_t = tf.reduce_sum(c_tl, axis=1)             # (T,)
+        c_x_t   = tf.einsum('tl,l->t', c_tl, rx)          # (T,)
+        c_y_t   = tf.einsum('tl,l->t', c_tl, ry)          # (T,)
+        return c_sum_t, c_x_t, c_y_t
+
+    @tf.function
+    def _basis_predictions(self, paradigm, parameters):
+        # paradigm:   (B, T, G)
+        # parameters: (B, V, 13[+n_hrf])
+        T = tf.shape(paradigm)[1]
+
+        mu_x_v = parameters[:, :, 0]         # (B, V)
+        mu_y_v = parameters[:, :, 1]
+        sd_v   = parameters[:, :, 2]
+        baseline_v  = parameters[:, :, 3]
+        amplitude_v = parameters[:, :, 4]
+        srf_amp_v   = parameters[:, :, 5]
+        srf_size_v  = parameters[:, :, 6]
+
+        # Per-voxel center & surround precisions.
+        tau_v_C = 1.0 / (sd_v ** 2)                                 # (B, V)
+        sd_S_v  = sd_v * srf_size_v
+        tau_v_S = 1.0 / (sd_S_v ** 2)                               # (B, V)
+
+        # Per-TR shared precision contribution (depends on t, not v).
+        c_sum_t, c_x_t, c_y_t = self._per_tr_precision_centers(parameters)
+
+        # Per (B, V, T) total precision.
+        tau_total_C = tau_v_C[:, :, tf.newaxis] + c_sum_t[tf.newaxis, tf.newaxis, :]
+        tau_total_S = tau_v_S[:, :, tf.newaxis] + c_sum_t[tf.newaxis, tf.newaxis, :]
+        tau_total_C_safe = tf.maximum(tau_total_C, self._TAU_FLOOR)
+        tau_total_S_safe = tf.maximum(tau_total_S, self._TAU_FLOOR)
+
+        # Per (B, V, T) shifted center & surround means.
+        num_x_C = tau_v_C[:, :, tf.newaxis] * mu_x_v[:, :, tf.newaxis] \
+                  + c_x_t[tf.newaxis, tf.newaxis, :]
+        num_y_C = tau_v_C[:, :, tf.newaxis] * mu_y_v[:, :, tf.newaxis] \
+                  + c_y_t[tf.newaxis, tf.newaxis, :]
+        num_x_S = tau_v_S[:, :, tf.newaxis] * mu_x_v[:, :, tf.newaxis] \
+                  + c_x_t[tf.newaxis, tf.newaxis, :]
+        num_y_S = tau_v_S[:, :, tf.newaxis] * mu_y_v[:, :, tf.newaxis] \
+                  + c_y_t[tf.newaxis, tf.newaxis, :]
+
+        mu_C_x = num_x_C / tau_total_C_safe                         # (B, V, T)
+        mu_C_y = num_y_C / tau_total_C_safe
+        mu_S_x = num_x_S / tau_total_S_safe
+        mu_S_y = num_y_S / tau_total_S_safe
+
+        sigma_C_eff = 1.0 / tf.sqrt(tau_total_C_safe)               # (B, V, T)
+        sigma_S_eff = 1.0 / tf.sqrt(tau_total_S_safe)
+
+        # Per-TR loop accumulating (T, B, V) of stim-integrated response.
+        gx = self._grid_coordinates[:, 0]                           # (G,)
+        gy = self._grid_coordinates[:, 1]
+
+        def _per_t_step(t_idx):
+            mu_C_x_t = mu_C_x[:, :, t_idx]                          # (B, V)
+            mu_C_y_t = mu_C_y[:, :, t_idx]
+            mu_S_x_t = mu_S_x[:, :, t_idx]
+            mu_S_y_t = mu_S_y[:, :, t_idx]
+            sC_t = sigma_C_eff[:, :, t_idx]                         # (B, V)
+            sS_t = sigma_S_eff[:, :, t_idx]
+
+            dx_C = gx[tf.newaxis, tf.newaxis, :] - mu_C_x_t[:, :, tf.newaxis]
+            dy_C = gy[tf.newaxis, tf.newaxis, :] - mu_C_y_t[:, :, tf.newaxis]
+            G_C = tf.exp(-(dx_C * dx_C + dy_C * dy_C)
+                         / (2.0 * sC_t[:, :, tf.newaxis] ** 2))     # (B, V, G)
+
+            dx_S = gx[tf.newaxis, tf.newaxis, :] - mu_S_x_t[:, :, tf.newaxis]
+            dy_S = gy[tf.newaxis, tf.newaxis, :] - mu_S_y_t[:, :, tf.newaxis]
+            G_S = tf.exp(-(dx_S * dx_S + dy_S * dy_S)
+                         / (2.0 * sS_t[:, :, tf.newaxis] ** 2))
+
+            dog = G_C - srf_amp_v[:, :, tf.newaxis] * G_S            # (B, V, G)
+            dog = dog * amplitude_v[:, :, tf.newaxis]
+
+            par_t = paradigm[:, t_idx, :]                            # (B, G)
+            return tf.einsum('bg,bvg->bv', par_t, dog)
+
+        pred_t = tf.map_fn(
+            _per_t_step, tf.range(T),
+            fn_output_signature=tf.TensorSpec(shape=[None, None],
+                                              dtype=tf.float32),
+        )                                                           # (T, B, V)
+        pred = tf.transpose(pred_t, perm=[1, 0, 2])                 # (B, T, V)
+        return pred + baseline_v[:, tf.newaxis, :]
+
+    # ----- Parameter transforms (6 σ's, all softplus, no gain params) ------
+
+    @tf.function
+    def _transform_parameters_forward(self, parameters):
+        # Per-voxel slots 0..6 — same as DoG parent's encoding (no transform
+        # except sd which needs softplus with sd_min). srf_amplitude and
+        # srf_size also need positivity (softplus). amplitude is signed.
+        # We use _sd_softplus_forward for σ-like values; identity for x, y;
+        # softplus for srf_amplitude, srf_size; identity for amplitude.
+        x = parameters[:, 0:1]
+        y = parameters[:, 1:2]
+        sd = _sd_softplus_forward(parameters[:, 2:3], self.sd_min)
+        baseline = parameters[:, 3:4]
+        amplitude = parameters[:, 4:5]
+        srf_amplitude = tf.math.softplus(parameters[:, 5:6])
+        srf_size = tf.math.softplus(parameters[:, 6:7]) + 1.0
+        # 6 σ's, all softplus with sd_min floor.
+        sigmas_raw = parameters[:, 7:13]
+        sigmas = _sd_softplus_forward(sigmas_raw, self.sd_min)
+
+        enc = tf.concat([x, y, sd, baseline, amplitude,
+                          srf_amplitude, srf_size, sigmas], axis=1)
+
+        if self.flexible_hrf_parameters:
+            n_hrf = len(self.hrf_model.parameter_labels)
+            hrf_pars = self.hrf_model._transform_parameters_forward(
+                parameters[:, -n_hrf:])
+            return tf.concat([enc, hrf_pars], axis=1)
+        return enc
+
+    @tf.function
+    def _transform_parameters_backward(self, parameters):
+        x = parameters[:, 0:1]
+        y = parameters[:, 1:2]
+        sd = _sd_softplus_inverse(parameters[:, 2:3], self.sd_min)
+        baseline = parameters[:, 3:4]
+        amplitude = parameters[:, 4:5]
+        srf_amplitude = tfp.math.softplus_inverse(parameters[:, 5:6])
+        srf_size = tfp.math.softplus_inverse(parameters[:, 6:7] - 1.0)
+        sigmas_raw = _sd_softplus_inverse(parameters[:, 7:13], self.sd_min)
+        enc = tf.concat([x, y, sd, baseline, amplitude,
+                          srf_amplitude, srf_size, sigmas_raw], axis=1)
+        if self.flexible_hrf_parameters:
+            n_hrf = len(self.hrf_model.parameter_labels)
+            hrf_pars = self.hrf_model._transform_parameters_backward(
+                parameters[:, -n_hrf:])
+            return tf.concat([enc, hrf_pars], axis=1)
+        return enc
