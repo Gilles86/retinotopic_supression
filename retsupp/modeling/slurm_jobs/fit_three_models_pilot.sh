@@ -4,7 +4,7 @@
 #SBATCH --partition=lowprio
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=24G
+#SBATCH --mem=64G
 #SBATCH --time=04:00:00
 
 # Pilot run of three-models AF sweep on sub-3, sub-17, sub-23 only.
