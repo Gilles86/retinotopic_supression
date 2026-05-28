@@ -2182,6 +2182,229 @@ class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_repeat(
                 + g_LP_dyn_repeat * field_lp_rp)
 
 
+class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_targetRepeat(
+    DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_factorial,
+):
+    """sharedSigma + factorial with split repeat/switch TARGET gain.
+
+    Mirror of :class:`...sharedSigma_repeat` but for the TARGET channel
+    instead of the dynamic-distractor channel. The dynamic-distractor
+    gains (g_HP_dyn, g_LP_dyn) remain a single HP/LP pair — only the
+    target gain is split:
+
+    - ``target_switch_indicator(t, ℓ) = target_indicator(t, ℓ)
+                                       − target_repeat_indicator(t, ℓ)``
+        — phasic target-on fraction at ring ℓ for trials whose target
+        was *not* at the same ring as the immediately preceding trial.
+    - ``target_repeat_indicator(t, ℓ)``
+        — phasic target-on fraction at ring ℓ for trials whose target
+        WAS at the same ring as the previous trial. Provided by the
+        caller via :meth:`Subject.get_repeat_target_indicator`.
+
+    The target-modulation field becomes::
+
+        field_tgt(t, g) =
+            g_T_dyn_switch · Σ_ℓ tgt_switch[t,ℓ] · A_ℓ^{tgt}(g)
+          + g_T_dyn_repeat · Σ_ℓ tgt_repeat[t,ℓ] · A_ℓ^{tgt}(g)
+
+    where ``A_ℓ^{tgt}`` uses ``sigma_T_dyn`` (slot 14, tied to σ_dyn).
+
+    Parameter slot indices: the ORIGINAL ``g_T_dyn`` (slot 13) is
+    reinterpreted as the **switch** gain; a new **repeat** gain lives
+    at slot 15.
+
+    Encoding parameter vector (16 slots before optional HRF tail)::
+
+        [parent's 15 slots ...]   (slot 13 is g_T_dyn_switch)
+        15  g_T_dyn_repeat        (signed-free)
+
+    The parent's σ_T_dyn := σ_dyn tying is preserved. The factorial
+    sign-pattern still applies to ``g_HP``, ``g_LP``, ``g_HP_dyn``,
+    ``g_LP_dyn``, ``g_T_dyn`` (= switch); the new repeat gain is
+    always signed-free.
+    """
+
+    parameter_labels = [
+        'x', 'y', 'sd', 'baseline', 'amplitude',
+        'srf_amplitude', 'srf_size',
+        'sigma_AF', 'g_HP', 'g_LP',
+        'sigma_dyn', 'g_HP_dyn', 'g_LP_dyn',
+        'g_T_dyn_switch', 'sigma_T_dyn',
+        'g_T_dyn_repeat',
+    ]
+
+    _N_PARENT_ENC_PARS = 15
+    _N_TGT_REPEAT_PARS = 1
+
+    def __init__(self, *, target_repeat_indicator, sign_pattern=None, **kwargs):
+        if sign_pattern is None:
+            sign_pattern = {
+                'g_HP': 'free', 'g_LP': 'free',
+                'g_HP_dyn': 'free', 'g_LP_dyn': 'free',
+                'g_T_dyn': 'free',
+            }
+        super().__init__(sign_pattern=sign_pattern, **kwargs)
+
+        tr = np.asarray(target_repeat_indicator, dtype=np.float32)
+        if tr.ndim != 2:
+            raise ValueError(
+                f"target_repeat_indicator must be 2-D (T, n_ring_positions); "
+                f"got shape {tr.shape}.")
+        if tr.shape[1] != int(self._tf_target_indicator.shape[1]):
+            raise ValueError(
+                f"target_repeat_indicator has {tr.shape[1]} ring channels "
+                f"but target_indicator has "
+                f"{int(self._tf_target_indicator.shape[1])}.")
+        T_expected = int(self._tf_target_indicator.shape[0])
+        if tr.shape[0] != T_expected:
+            raise ValueError(
+                f"target_repeat_indicator has {tr.shape[0]} timepoints "
+                f"but target_indicator has {T_expected}.")
+        self.target_repeat_indicator = tr
+        self._tf_target_repeat_indicator = tf.constant(tr, dtype=tf.float32)
+        # Target switch indicator = target - target_repeat.
+        self._tf_target_switch_indicator = (self._tf_target_indicator
+                                             - self._tf_target_repeat_indicator)
+
+    # ----- Parameter transforms -------------------------------------------
+
+    @tf.function
+    def _transform_parameters_forward(self, parameters):
+        if self.flexible_hrf_parameters:
+            n_hrf = len(self.hrf_model.parameter_labels)
+            enc = parameters[:, :self._N_PARENT_ENC_PARS]
+            tail_extra = parameters[
+                :, self._N_PARENT_ENC_PARS:
+                self._N_PARENT_ENC_PARS + self._N_TGT_REPEAT_PARS]
+            hrf_tail = parameters[:, -n_hrf:]
+        else:
+            enc = parameters[:, :self._N_PARENT_ENC_PARS]
+            tail_extra = parameters[
+                :, self._N_PARENT_ENC_PARS:
+                self._N_PARENT_ENC_PARS + self._N_TGT_REPEAT_PARS]
+            hrf_tail = None
+
+        # Replicate parent's encoding-side transform inline.
+        x = enc[:, 0:1]
+        y = enc[:, 1:2]
+        sd = _sd_softplus_forward(enc[:, 2:3], self.sd_min)
+        baseline = enc[:, 3:4]
+        amplitude = enc[:, 4:5]
+        srf_amp = tf.math.softplus(enc[:, 5:6])
+        srf_size = _sd_softplus_forward(enc[:, 6:7], self.sd_min)
+        sigma_AF = _sd_softplus_forward(enc[:, 7:8], self.sd_min)
+        g_HP = _gain_forward_factorial(enc[:, 8:9],
+                                       self._sign_pattern['g_HP'])
+        g_LP = _gain_forward_factorial(enc[:, 9:10],
+                                       self._sign_pattern['g_LP'])
+        sigma_dyn = _sd_softplus_forward(enc[:, 10:11], self.sd_min)
+        g_HP_dyn = _gain_forward_factorial(enc[:, 11:12],
+                                           self._sign_pattern['g_HP_dyn'])
+        g_LP_dyn = _gain_forward_factorial(enc[:, 12:13],
+                                           self._sign_pattern['g_LP_dyn'])
+        g_T_dyn_switch = _gain_forward_factorial(
+            enc[:, 13:14], self._sign_pattern['g_T_dyn'])
+        sigma_T_dyn = sigma_dyn
+
+        out_enc = tf.concat([
+            x, y, sd, baseline, amplitude, srf_amp, srf_size,
+            sigma_AF, g_HP, g_LP,
+            sigma_dyn, g_HP_dyn, g_LP_dyn,
+            g_T_dyn_switch, sigma_T_dyn,
+            tail_extra,  # 1 new gain: g_T_dyn_repeat, signed-free pass-through.
+        ], axis=1)
+
+        if hrf_tail is not None:
+            hrf_pars = self.hrf_model._transform_parameters_forward(hrf_tail)
+            return tf.concat([out_enc, hrf_pars], axis=1)
+        return out_enc
+
+    @tf.function
+    def _transform_parameters_backward(self, parameters):
+        if self.flexible_hrf_parameters:
+            n_hrf = len(self.hrf_model.parameter_labels)
+            enc = parameters[:, :self._N_PARENT_ENC_PARS]
+            tail_extra = parameters[
+                :, self._N_PARENT_ENC_PARS:
+                self._N_PARENT_ENC_PARS + self._N_TGT_REPEAT_PARS]
+            hrf_tail = parameters[:, -n_hrf:]
+        else:
+            enc = parameters[:, :self._N_PARENT_ENC_PARS]
+            tail_extra = parameters[
+                :, self._N_PARENT_ENC_PARS:
+                self._N_PARENT_ENC_PARS + self._N_TGT_REPEAT_PARS]
+            hrf_tail = None
+
+        x = enc[:, 0:1]
+        y = enc[:, 1:2]
+        sd = _sd_softplus_inverse(enc[:, 2:3], self.sd_min)
+        baseline = enc[:, 3:4]
+        amplitude = enc[:, 4:5]
+        srf_amp = tfp.math.softplus_inverse(enc[:, 5:6])
+        srf_size = _sd_softplus_inverse(enc[:, 6:7], self.sd_min)
+        sigma_AF = _sd_softplus_inverse(enc[:, 7:8], self.sd_min)
+        g_HP = _gain_backward_factorial(enc[:, 8:9],
+                                        self._sign_pattern['g_HP'])
+        g_LP = _gain_backward_factorial(enc[:, 9:10],
+                                        self._sign_pattern['g_LP'])
+        sigma_dyn = _sd_softplus_inverse(enc[:, 10:11], self.sd_min)
+        g_HP_dyn = _gain_backward_factorial(enc[:, 11:12],
+                                            self._sign_pattern['g_HP_dyn'])
+        g_LP_dyn = _gain_backward_factorial(enc[:, 12:13],
+                                            self._sign_pattern['g_LP_dyn'])
+        g_T_dyn_switch = _gain_backward_factorial(
+            enc[:, 13:14], self._sign_pattern['g_T_dyn'])
+        sigma_T_dyn = sigma_dyn
+
+        out_enc = tf.concat([
+            x, y, sd, baseline, amplitude, srf_amp, srf_size,
+            sigma_AF, g_HP, g_LP,
+            sigma_dyn, g_HP_dyn, g_LP_dyn,
+            g_T_dyn_switch, sigma_T_dyn,
+            tail_extra,
+        ], axis=1)
+
+        if hrf_tail is not None:
+            hrf_pars = self.hrf_model._transform_parameters_backward(hrf_tail)
+            return tf.concat([out_enc, hrf_pars], axis=1)
+        return out_enc
+
+    # ----- Target modulation override -------------------------------------
+
+    @tf.function
+    def _attention_modulation_target(self, parameters):
+        """Per-TR phasic-target field, split by repeat vs switch trials.
+
+        Returns
+        -------
+        field : tf.Tensor, shape ``(T, G)``
+
+            g_T_dyn_switch · Σ_ℓ tgt_switch[t,ℓ] · A_ℓ^{tgt}(g)
+          + g_T_dyn_repeat · Σ_ℓ tgt_repeat[t,ℓ] · A_ℓ^{tgt}(g)
+
+        σ_T_dyn at slot 14 (tied to σ_dyn). Switch gain at slot 13
+        (parent's g_T_dyn renamed); repeat gain at slot 15.
+        """
+        g_T_dyn_switch = parameters[0, 0, 13]
+        sigma_T_dyn    = parameters[0, 0, 14]
+        g_T_dyn_repeat = parameters[0, 0, 15]
+
+        gx = self._grid_coordinates[:, 0][tf.newaxis, :]
+        gy = self._grid_coordinates[:, 1][tf.newaxis, :]
+        rx = self._tf_ring_positions[:, 0][:, tf.newaxis]
+        ry = self._tf_ring_positions[:, 1][:, tf.newaxis]
+        diff_sq = (gx - rx) ** 2 + (gy - ry) ** 2
+        A_tgt = tf.exp(-diff_sq / (2.0 * sigma_T_dyn ** 2))   # (n_C, G)
+
+        tgt_sw = self._tf_target_switch_indicator             # (T, n_C)
+        tgt_rp = self._tf_target_repeat_indicator             # (T, n_C)
+
+        field_sw = tf.einsum('tl,lg->tg', tgt_sw, A_tgt)
+        field_rp = tf.einsum('tl,lg->tg', tgt_rp, A_tgt)
+
+        return g_T_dyn_switch * field_sw + g_T_dyn_repeat * field_rp
+
+
 # ---------------------------------------------------------------------------
 # Per-run-position dyn-HP variant of the run-position model. Extends the
 # runPosition class by ALSO splitting g_HP_dyn into 3 per-position gains.

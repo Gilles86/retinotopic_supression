@@ -801,6 +801,28 @@ class Subject(object):
             max_duration=max_target_duration,
             oversampling=oversampling)
 
+    def get_repeat_target_indicator(self, session=1, run=1,
+                                    max_target_duration=1.5,
+                                    oversampling=1):
+        """Per-TR target-on indicator restricted to REPEAT trials.
+
+        A trial counts as a "repeat" iff its TARGET is at the SAME ring
+        location as the immediately preceding trial's target (both
+        must have a target in {1,3,5,7}). The first trial of a run is
+        never a repeat. Subtracting this from
+        :meth:`get_target_indicator` gives the SWITCH-target indicator.
+        Mirror of :meth:`get_repeat_distractor_indicator` for the
+        target-side analysis.
+        """
+        def is_repeat(prev_loc, this_loc):
+            return this_loc is not None and this_loc == prev_loc
+        return self._per_bin_indicator(
+            session, run,
+            location_col="target_location",
+            max_duration=max_target_duration,
+            oversampling=oversampling,
+            trial_filter=is_repeat)
+
     def get_confounds(self, session=1, run=1, filter_confounds=True,
                        n_acompcorr=10):
         """fmriprep confounds for one (session, run).
@@ -1062,19 +1084,29 @@ class Subject(object):
             df.columns.name = 'parameter'
             return df
         elif type == 'conditionwise':
-            # Four conditions: upper_left, upper_right, lower_left, lower_right.
-            # Layout is nested:
-            #   prf_conditionfit/model{N}/sub-XX/condition-<cond>/sub-XX_desc-<par>.nii.gz
+            # Four conditions. Two on-disk layouts seen in the wild:
+            #   nested (cluster): prf_conditionfit/model{N}/sub-XX/condition-<cond>/sub-XX_desc-<par>.nii.gz
+            #   flat (local):     prf_conditionfit/model{N}/sub-XX/sub-XX_cond-<cond>_desc-<par>.nii.gz
+            # Try nested first, fall back to flat.
             conditions = ['upper_left', 'upper_right', 'lower_left', 'lower_right']
             base_dir = self.bids_folder / 'derivatives' / 'prf_conditionfit' / f'model{model}' / f'sub-{self.subject_id:02d}'
             data = []
             index = []
             for cond in conditions:
-                cond_dir = base_dir / f'condition-{cond}'
+                nested = base_dir / f'condition-{cond}' / f'sub-{self.subject_id:02d}_desc-{param_labels[0]}.nii.gz'
+                flat = base_dir / f'sub-{self.subject_id:02d}_cond-{cond}_desc-{param_labels[0]}.nii.gz'
+                if nested.exists():
+                    cond_dir = base_dir / f'condition-{cond}'
+                    pattern = lambda par: cond_dir / f'sub-{self.subject_id:02d}_desc-{par}.nii.gz'
+                elif flat.exists():
+                    pattern = lambda par: base_dir / f'sub-{self.subject_id:02d}_cond-{cond}_desc-{par}.nii.gz'
+                else:
+                    raise FileNotFoundError(
+                        f'Conditionwise PRF data missing for sub-{self.subject_id:02d} '
+                        f'condition-{cond}; checked {nested} and {flat}.')
                 row = {}
                 for par in param_labels:
-                    img_path = cond_dir / f'sub-{self.subject_id:02d}_desc-{par}.nii.gz'
-                    row[par] = nib.load(str(img_path))
+                    row[par] = nib.load(str(pattern(par)))
                 data.append(row)
                 index.append(cond)
             df = pd.DataFrame(data, index=pd.Index(index, name='condition'))
