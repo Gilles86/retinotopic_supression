@@ -3682,10 +3682,19 @@ class DoGKleinShift_v3_target_6sigma(
         σ_C_eff(t, v)   = 1 / sqrt(τ_total_C(t, v))    # strict Klein
         σ_S_eff(t, v)   = 1 / sqrt(τ_total_S(t, v))
 
-    BOLD response::
+    BOLD response (area-preserving)::
 
-        DoG_eff(t, v, p) = G(p; μ_C_eff, σ_C_eff)
-                         − srf_amp_v · G(p; μ_S_eff, σ_S_eff)
+        # Compensation factor preserves each unnormalized Gaussian's
+        # integral (2π·σ²) at its at-rest value, so σ-shrinkage becomes a
+        # *pure* shape change (narrower peak, taller peak) without
+        # implicitly down-scaling the integrated PRF response. Without
+        # this, σ_eff < sd_v would silently couple Klein-shifts to an
+        # ~σ²-amplitude reduction at the attended location — the wrong
+        # sign for retsupp's HP-attraction effect from AF+1.
+        G̃_C(t, v, p)    = (sd_v² / σ_C_eff(t,v)²) · G(p; μ_C_eff, σ_C_eff)
+        G̃_S(t, v, p)    = ((sd_v·srf_size_v)² / σ_S_eff(t,v)²)
+                           · G(p; μ_S_eff, σ_S_eff)
+        DoG_eff(t, v, p) = G̃_C(t, v, p) − srf_amp_v · G̃_S(t, v, p)
         response(t, v)   = amplitude_v · ∫ stim(t, p) · DoG_eff(t, v, p) dp
                          + baseline_v
         (then HRF convolve)
@@ -3799,40 +3808,82 @@ class DoGKleinShift_v3_target_6sigma(
         sigma_C_eff = 1.0 / tf.sqrt(tau_total_C_safe)               # (B, V, T)
         sigma_S_eff = 1.0 / tf.sqrt(tau_total_S_safe)
 
-        # Per-TR loop accumulating (T, B, V) of stim-integrated response.
+        # Vectorized inner loop: chunk over T (Python for-loop unrolled at
+        # trace time) and materialize the full (B, V, Tc, G) Gaussian tensor
+        # per chunk. Wrap the per-chunk forward in tf.recompute_grad so the
+        # gradient tape doesn't retain the (B, V, Tc, G) intermediates —
+        # they are recomputed during the backward pass. This is what makes
+        # V=500 + T=3096 + G=4096 fit in ~10 GB instead of >150 GB, and
+        # replaces tf.map_fn's per-TR Python dispatch (~8 s/iter at V=43)
+        # with a single tensor op per chunk (target ~1 s/iter at V=500).
         gx = self._grid_coordinates[:, 0]                           # (G,)
         gy = self._grid_coordinates[:, 1]
+        gx_b = gx[tf.newaxis, tf.newaxis, tf.newaxis, :]            # (1,1,1,G)
+        gy_b = gy[tf.newaxis, tf.newaxis, tf.newaxis, :]
+        srf_amp_b = srf_amp_v[:, :, tf.newaxis, tf.newaxis]         # (B,V,1,1)
+        amp_b     = amplitude_v[:, :, tf.newaxis, tf.newaxis]
+        # Area-preserving compensation: each unnormalized Gaussian's
+        # integral is 2π·σ². Under Klein, σ_C_eff < sd_v (and σ_S_eff <
+        # sd_v·srf_size_v), so without this scaling the σ-shrinkage would
+        # *implicitly* shrink the integrated PRF response (~σ²) and act as
+        # an unintended amplitude modulation. Multiplying by sd_v²/σ_eff²
+        # holds each Gaussian's area fixed at its at-rest value, so Klein
+        # becomes a pure position+dispersion modulation. At rest
+        # (σ_eff = sd_v) the factor is 1 → behavior matches the parent
+        # DoG forward exactly, preserving compatibility with m4-initialized
+        # amplitude_v / srf_amplitude calibration.
+        sd_v_b = sd_v[:, :, tf.newaxis, tf.newaxis]                 # (B,V,1,1)
+        sd_S_v_b = sd_S_v[:, :, tf.newaxis, tf.newaxis]
+        area_C0 = sd_v_b * sd_v_b                                   # (B,V,1,1)
+        area_S0 = sd_S_v_b * sd_S_v_b
 
-        def _per_t_step(t_idx):
-            mu_C_x_t = mu_C_x[:, :, t_idx]                          # (B, V)
-            mu_C_y_t = mu_C_y[:, :, t_idx]
-            mu_S_x_t = mu_S_x[:, :, t_idx]
-            mu_S_y_t = mu_S_y[:, :, t_idx]
-            sC_t = sigma_C_eff[:, :, t_idx]                         # (B, V)
-            sS_t = sigma_S_eff[:, :, t_idx]
+        @tf.recompute_grad
+        def _chunk_forward(par_c, mu_Cx_c, mu_Cy_c, sC_c,
+                            mu_Sx_c, mu_Sy_c, sS_c):
+            # par_c:   (B, Tc, G)
+            # mu_*_c:  (B, V, Tc, 1) ; sC_c, sS_c: (B, V, Tc, 1)
+            dx_C = gx_b - mu_Cx_c                                   # (B,V,Tc,G)
+            dy_C = gy_b - mu_Cy_c
+            G_C  = (area_C0 / (sC_c * sC_c)) \
+                   * tf.exp(-(dx_C * dx_C + dy_C * dy_C)
+                            / (2.0 * sC_c * sC_c))
 
-            dx_C = gx[tf.newaxis, tf.newaxis, :] - mu_C_x_t[:, :, tf.newaxis]
-            dy_C = gy[tf.newaxis, tf.newaxis, :] - mu_C_y_t[:, :, tf.newaxis]
-            G_C = tf.exp(-(dx_C * dx_C + dy_C * dy_C)
-                         / (2.0 * sC_t[:, :, tf.newaxis] ** 2))     # (B, V, G)
+            dx_S = gx_b - mu_Sx_c
+            dy_S = gy_b - mu_Sy_c
+            G_S  = (area_S0 / (sS_c * sS_c)) \
+                   * tf.exp(-(dx_S * dx_S + dy_S * dy_S)
+                            / (2.0 * sS_c * sS_c))
 
-            dx_S = gx[tf.newaxis, tf.newaxis, :] - mu_S_x_t[:, :, tf.newaxis]
-            dy_S = gy[tf.newaxis, tf.newaxis, :] - mu_S_y_t[:, :, tf.newaxis]
-            G_S = tf.exp(-(dx_S * dx_S + dy_S * dy_S)
-                         / (2.0 * sS_t[:, :, tf.newaxis] ** 2))
+            dog = (G_C - srf_amp_b * G_S) * amp_b                   # (B,V,Tc,G)
+            # pred[b, v, tc] = sum_g paradigm[b, tc, g] · dog[b, v, tc, g]
+            return tf.einsum('btg,bvtg->bvt', par_c, dog)           # (B,V,Tc)
 
-            dog = G_C - srf_amp_v[:, :, tf.newaxis] * G_S            # (B, V, G)
-            dog = dog * amplitude_v[:, :, tf.newaxis]
+        T_static = paradigm.shape[1]
+        T_CHUNK = 64
+        if T_static is None:
+            # Fallback if T is dynamic at trace time; one chunk = whole T.
+            t_starts = [0]
+            chunk_sizes = [T]
+        else:
+            t_starts = list(range(0, T_static, T_CHUNK))
+            chunk_sizes = [min(T_CHUNK, T_static - s) for s in t_starts]
 
-            par_t = paradigm[:, t_idx, :]                            # (B, G)
-            return tf.einsum('bg,bvg->bv', par_t, dog)
+        pred_chunks = []
+        for t0, tc in zip(t_starts, chunk_sizes):
+            par_c   = paradigm[:, t0:t0 + tc, :]                    # (B,Tc,G)
+            mu_Cx_c = mu_C_x[:, :, t0:t0 + tc, tf.newaxis]          # (B,V,Tc,1)
+            mu_Cy_c = mu_C_y[:, :, t0:t0 + tc, tf.newaxis]
+            sC_c    = sigma_C_eff[:, :, t0:t0 + tc, tf.newaxis]
+            mu_Sx_c = mu_S_x[:, :, t0:t0 + tc, tf.newaxis]
+            mu_Sy_c = mu_S_y[:, :, t0:t0 + tc, tf.newaxis]
+            sS_c    = sigma_S_eff[:, :, t0:t0 + tc, tf.newaxis]
+            pred_chunks.append(
+                _chunk_forward(par_c, mu_Cx_c, mu_Cy_c, sC_c,
+                                mu_Sx_c, mu_Sy_c, sS_c)
+            )
 
-        pred_t = tf.map_fn(
-            _per_t_step, tf.range(T),
-            fn_output_signature=tf.TensorSpec(shape=[None, None],
-                                              dtype=tf.float32),
-        )                                                           # (T, B, V)
-        pred = tf.transpose(pred_t, perm=[1, 0, 2])                 # (B, T, V)
+        pred = tf.concat(pred_chunks, axis=2)                       # (B,V,T)
+        pred = tf.transpose(pred, perm=[0, 2, 1])                   # (B,T,V)
         return pred + baseline_v[:, tf.newaxis, :]
 
     # ----- Parameter transforms (6 σ's, all softplus, no gain params) ------
