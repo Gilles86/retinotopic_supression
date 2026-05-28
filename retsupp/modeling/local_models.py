@@ -4043,48 +4043,49 @@ class DoGKleinShift_v3_target_6sigma(
         gy = self._grid_coordinates[:, 1]
         gx_b = gx[tf.newaxis, tf.newaxis, tf.newaxis, :]            # (1,1,1,G)
         gy_b = gy[tf.newaxis, tf.newaxis, tf.newaxis, :]
-        srf_amp_b = srf_amp_v[:, :, tf.newaxis, tf.newaxis]         # (B,V,1,1)
-        amp_b     = amplitude_v[:, :, tf.newaxis, tf.newaxis]
-        # Area-preserving compensation: each unnormalized Gaussian's
-        # integral is 2π·σ². Under Klein, σ_C_eff < sd_v (and σ_S_eff <
-        # sd_v·srf_size_v), so without this scaling the σ-shrinkage would
-        # *implicitly* shrink the integrated PRF response (~σ²) and act as
-        # an unintended amplitude modulation. Multiplying by sd_v²/σ_eff²
-        # holds each Gaussian's area fixed at its at-rest value, so Klein
-        # becomes a pure position+dispersion modulation. At rest
-        # (σ_eff = sd_v) the factor is 1 → behavior matches the parent
-        # DoG forward exactly, preserving compatibility with m4-initialized
-        # amplitude_v / srf_amplitude calibration.
+        # Area-preserving compensation factor — keeps each Gaussian's
+        # integral at its at-rest value (2π·sd²) so Klein-σ shrinkage
+        # is pure shape modulation, no implicit amplitude effect.
+        # area_C0 = sd_v²; at rest σ_C_eff = sd_v → factor = 1.
         sd_v_b = sd_v[:, :, tf.newaxis, tf.newaxis]                 # (B,V,1,1)
         sd_S_v_b = sd_S_v[:, :, tf.newaxis, tf.newaxis]
         area_C0 = sd_v_b * sd_v_b                                   # (B,V,1,1)
         area_S0 = sd_S_v_b * sd_S_v_b
+        amp_eff_b = amplitude_v[:, :, tf.newaxis, tf.newaxis]              # (B,V,1,1)
+        amp_S_eff_b = srf_amp_v[:, :, tf.newaxis, tf.newaxis] * amp_eff_b
 
-        @tf.recompute_grad
+        # Inner chunk forward. Fused — avoids materializing dx, dy, dog
+        # as separate buffers. XLA fuses the elementwise pipeline into a
+        # single pass over memory, which is the actual bottleneck at
+        # V=500 / T=3096 / G=2500 (compute is light; reads of (B,V,Tc,G)
+        # buffers dominate).
+        @tf.function(jit_compile=True)
         def _chunk_forward(par_c, mu_Cx_c, mu_Cy_c, sC_c,
                             mu_Sx_c, mu_Sy_c, sS_c):
             # par_c:   (B, Tc, G)
-            # mu_*_c:  (B, V, Tc, 1) ; sC_c, sS_c: (B, V, Tc, 1)
-            dx_C = gx_b - mu_Cx_c                                   # (B,V,Tc,G)
-            dy_C = gy_b - mu_Cy_c
-            G_C  = (area_C0 / (sC_c * sC_c)) \
-                   * tf.exp(-(dx_C * dx_C + dy_C * dy_C)
-                            / (2.0 * sC_c * sC_c))
+            # mu_*_c, sC_c, sS_c: (B, V, Tc, 1)
+            inv2sC2 = 0.5 / (sC_c * sC_c)                           # (B,V,Tc,1)
+            inv2sS2 = 0.5 / (sS_c * sS_c)
+            scale_C = area_C0 * (2.0 * inv2sC2) * amp_eff_b         # (B,V,Tc,1)
+            scale_S = area_S0 * (2.0 * inv2sS2) * amp_S_eff_b
 
-            dx_S = gx_b - mu_Sx_c
-            dy_S = gy_b - mu_Sy_c
-            G_S  = (area_S0 / (sS_c * sS_c)) \
-                   * tf.exp(-(dx_S * dx_S + dy_S * dy_S)
-                            / (2.0 * sS_c * sS_c))
+            # sq_C, sq_S built one-shot (no separate dx/dy tensors).
+            sq_C = (gx_b - mu_Cx_c) ** 2 + (gy_b - mu_Cy_c) ** 2    # (B,V,Tc,G)
+            G_C  = scale_C * tf.exp(-sq_C * inv2sC2)
 
-            dog = (G_C - srf_amp_b * G_S) * amp_b                   # (B,V,Tc,G)
-            # pred[b, v, tc] = sum_g paradigm[b, tc, g] · dog[b, v, tc, g]
-            return tf.einsum('btg,bvtg->bvt', par_c, dog)           # (B,V,Tc)
+            sq_S = (gx_b - mu_Sx_c) ** 2 + (gy_b - mu_Sy_c) ** 2
+            G_S  = scale_S * tf.exp(-sq_S * inv2sS2)
+
+            # Integrate against paradigm separately for center and
+            # surround — avoids materializing (G_C - srf·G_S) as an extra
+            # (B,V,Tc,G) tensor on the tape.
+            pred_c_c = tf.einsum('btg,bvtg->bvt', par_c, G_C)
+            pred_c_s = tf.einsum('btg,bvtg->bvt', par_c, G_S)
+            return pred_c_c - pred_c_s                              # (B,V,Tc)
 
         T_static = paradigm.shape[1]
-        T_CHUNK = 64
+        T_CHUNK = 128
         if T_static is None:
-            # Fallback if T is dynamic at trace time; one chunk = whole T.
             t_starts = [0]
             chunk_sizes = [T]
         else:
