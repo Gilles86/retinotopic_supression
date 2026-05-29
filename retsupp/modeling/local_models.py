@@ -4031,45 +4031,50 @@ class DoGKleinShift_v3_target_6sigma(
         sigma_C_eff = 1.0 / tf.sqrt(tau_total_C_safe)               # (B, V, T)
         sigma_S_eff = 1.0 / tf.sqrt(tau_total_S_safe)
 
-        # Separable-Gaussian contraction. The grid is a regular R×R lattice
-        # (g = row*R + col, C-order, from np.meshgrid(indexing='xy') + ravel):
-        # gx varies along the fast/column axis, gy along the slow/row axis,
-        # matched by paradigm.reshape((T, R, R)) -> [t, row=gy, col=gx]. The
+        # Separable-Gaussian contraction. The grid is a regular RECTANGULAR
+        # Nx×Ny lattice — a full Cartesian product of an x-axis and a y-axis
+        # (np.meshgrid + C-order ravel: g = row*Nx + col, so gx is the
+        # fast/column axis and gy the slow/row axis), matched by
+        # paradigm.reshape((T, Ny, Nx)) -> [t, row=gy, col=gx]. Nx and Ny need
+        # NOT be equal — only rectangular (every x paired with every y). The
         # isotropic Gaussian factorizes
         #   exp(-((gx-µx)² + (gy-µy)²)·c) = exp(-(gx-µx)²·c) · exp(-(gy-µy)²·c)
-        # so we build two (B,V,Tc,R) 1-D factors instead of one (B,V,Tc,G)
-        # buffer — a ~G/R = 50× smaller hot tensor. The whole 33-chunk tape
-        # then fits in ~1.5 GB at V=500, so the model runs on a 24 GB L4 /
-        # 40 GB A100 GPU with no gradient checkpointing. The dense
-        # (B,V,Tc,G) form needed ~128 GB host RAM (CPU-only) and OOM'd every
-        # GPU. Exact up to float32 round-off (reordering Σ_g into Σ_i Σ_j and
-        # factoring exp): verified float64 5e-13, float32 rel 7e-7 against the
-        # dense einsum at production size V=500/Tc=128/G=2500.
-        # --- Guard: the separable factorization is valid ONLY for a square,
-        # axis-aligned R×R lattice ravelled in C-order (g = row*R + col) with
-        # the SAME 1-D axis on x and y. This is what every retsupp grid is
-        # (np.meshgrid(g1d, g1d) + ravel), but a future rectangular or
-        # differently-ordered grid would be silently mis-reshaped. Validate
-        # the static numpy grid once at trace time (zero hot-loop cost) and
-        # fail loudly otherwise. R*R==G alone is insufficient (a 4×9 grid has
-        # G=36=6²), so reconstruct and compare the actual coordinates. ---
+        # so we build two 1-D factors (lengths Nx and Ny) instead of one
+        # (B,V,Tc,G=Nx·Ny) buffer — a ~G/(Nx+Ny) ≈ 25-50× smaller hot tensor.
+        # The whole tape then fits well under 1 GB at V=500, so the model runs
+        # on a 24 GB L4 / 40 GB A100 GPU with no gradient checkpointing. The
+        # dense (B,V,Tc,G) form needed ~128 GB host RAM (CPU-only) and OOM'd
+        # every GPU. Exact up to float32 round-off (reordering Σ_g into Σ_i Σ_j
+        # and factoring exp): verified r=1-5e-14, trace R²=1.0, ~13× faster
+        # than the dense einsum at production size V=500/G=2500.
+        # --- Guard: only a rectangular, axis-aligned lattice ravelled C-order
+        # (x fast) factorizes this way. Detect Nx/Ny from the static numpy grid
+        # and reconstruct it (tile/repeat) once at trace time (zero hot-loop
+        # cost); fail loudly rather than silently mis-reshaping if a future
+        # grid is polar/irregular or ordered differently. ---
         gc_np = np.asarray(self._grid_coordinates)
         G_ = gc_np.shape[0]
-        R = int(round(G_ ** 0.5))
-        g1d_np = gc_np[:R, 0]
-        if R * R != G_ or not (
-                np.allclose(gc_np[:, 0], np.tile(g1d_np, R))
-                and np.allclose(gc_np[:, 1], np.repeat(g1d_np, R))):
+        gx_np, gy_np = gc_np[:, 0], gc_np[:, 1]
+        # Each y-value recurs once per column → #points sharing the first
+        # row's y == Nx; symmetrically Ny. No squareness assumed (Nx may ≠ Ny).
+        Nx = int(np.sum(gy_np == gy_np[0]))
+        Ny = int(np.sum(gx_np == gx_np[0]))
+        x1d_np = gx_np[:Nx]            # first row spans the full x-axis
+        y1d_np = gy_np[::Nx]           # one entry per row spans the full y-axis
+        if Nx * Ny != G_ or not (
+                np.allclose(gx_np, np.tile(x1d_np, Ny))
+                and np.allclose(gy_np, np.repeat(y1d_np, Nx))):
             raise ValueError(
-                "DoGKleinShift separable forward requires a square, "
-                "axis-aligned R×R grid ravelled C-order as g=row*R+col with a "
-                f"shared 1-D axis (np.meshgrid(g1d, g1d)); got G={G_} that does "
-                "not reconstruct as such. Use a square lattice, or generalize "
-                "the forward to separate n_x/n_y axes and g1d_x/g1d_y.")
-        # 1-D axis = the unique grid coordinate (same for x and y on the
-        # square symmetric grid), taken from the fast/column axis of gx.
-        g1d = self._grid_coordinates[:R, 0]                         # (R,)
-        g1d_b = g1d[tf.newaxis, tf.newaxis, tf.newaxis, :]          # (1,1,1,R)
+                "DoGKleinShift separable forward requires a rectangular, "
+                "axis-aligned Nx×Ny grid ravelled C-order as g=row*Nx+col "
+                f"(x fast); got G={G_} (detected Nx={Nx}, Ny={Ny}) that does "
+                "not reconstruct as a Cartesian product. A polar/irregular or "
+                "differently-ordered grid is not separable this way.")
+        # The two 1-D axes (x = fast/column, y = slow/row); not assumed equal.
+        g1d_x = self._grid_coordinates[:Nx, 0]                      # (Nx,)
+        g1d_y = self._grid_coordinates[::Nx, 1]                     # (Ny,)
+        g1d_x_b = g1d_x[tf.newaxis, tf.newaxis, tf.newaxis, :]      # (1,1,1,Nx)
+        g1d_y_b = g1d_y[tf.newaxis, tf.newaxis, tf.newaxis, :]      # (1,1,1,Ny)
         # Area-preserving compensation factor — keeps each Gaussian's
         # integral at its at-rest value (2π·sd²) so Klein-σ shrinkage
         # is pure shape modulation, no implicit amplitude effect.
@@ -4084,11 +4089,11 @@ class DoGKleinShift_v3_target_6sigma(
         @tf.function(jit_compile=True)
         def _chunk_forward(par_c, mu_Cx_c, mu_Cy_c, sC_c,
                             mu_Sx_c, mu_Sy_c, sS_c):
-            # par_c: (B,Tc,G) → reshaped to (B,Tc,R[row=gy], R[col=gx]).
+            # par_c: (B,Tc,G) → (B,Tc, Ny[row=gy], Nx[col=gx]).
             # mu_*_c, sC_c, sS_c: (B,V,Tc,1).
             b = tf.shape(par_c)[0]
             tc = tf.shape(par_c)[1]
-            par_img = tf.reshape(par_c, (b, tc, R, R))
+            par_img = tf.reshape(par_c, (b, tc, Ny, Nx))
 
             inv2sC2 = 0.5 / (sC_c * sC_c)                           # (B,V,Tc,1)
             inv2sS2 = 0.5 / (sS_c * sS_c)
@@ -4096,14 +4101,14 @@ class DoGKleinShift_v3_target_6sigma(
             scale_S = area_S0 * (2.0 * inv2sS2) * amp_S_eff_b
 
             # 1-D factors. Amplitude/area scale folded into the x-factor ONLY
-            # (folding into both would square it). i=row=gy, j=col=gx.
-            fxC = scale_C * tf.exp(-((g1d_b - mu_Cx_c) ** 2) * inv2sC2)  # (B,V,Tc,R) col j
-            fyC =           tf.exp(-((g1d_b - mu_Cy_c) ** 2) * inv2sC2)  # (B,V,Tc,R) row i
-            fxS = scale_S * tf.exp(-((g1d_b - mu_Sx_c) ** 2) * inv2sS2)
-            fyS =           tf.exp(-((g1d_b - mu_Sy_c) ** 2) * inv2sS2)
+            # (folding into both would square it). i=row=gy (Ny), j=col=gx (Nx).
+            fxC = scale_C * tf.exp(-((g1d_x_b - mu_Cx_c) ** 2) * inv2sC2)  # (B,V,Tc,Nx)
+            fyC =           tf.exp(-((g1d_y_b - mu_Cy_c) ** 2) * inv2sC2)  # (B,V,Tc,Ny)
+            fxS = scale_S * tf.exp(-((g1d_x_b - mu_Sx_c) ** 2) * inv2sS2)
+            fyS =           tf.exp(-((g1d_y_b - mu_Sy_c) ** 2) * inv2sS2)
 
-            # Contract gx (fast/col=j) first, then gy (slow/row=i).
-            tmp_C = tf.einsum('btij,bvtj->bvti', par_img, fxC)     # (B,V,Tc,R) over row i
+            # Contract gx (fast/col=j, Nx) first, then gy (slow/row=i, Ny).
+            tmp_C = tf.einsum('btij,bvtj->bvti', par_img, fxC)     # (B,V,Tc,Ny) over row i
             pred_c_c = tf.einsum('bvti,bvti->bvt', tmp_C, fyC)     # (B,V,Tc)
             tmp_S = tf.einsum('btij,bvtj->bvti', par_img, fxS)
             pred_c_s = tf.einsum('bvti,bvti->bvt', tmp_S, fyS)
