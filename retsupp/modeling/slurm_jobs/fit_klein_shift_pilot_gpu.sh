@@ -5,28 +5,19 @@
 #SBATCH --output=/dev/null
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
-#SBATCH --time=02:00:00
-# GPU type and host RAM are set at submit time via --constraint / --mem
-# so the same script probes both A100 and L4:
-#
-#   A100 (safe default): 40/80 GB VRAM. The Klein-shift forward chunks a
-#   (B,V,Tc,G) buffer over T; the c600c97 commit dropped recompute_grad,
-#   so peak tape residency is ~64 GB at V=500 *if* it sits on the tape.
-#   But that buffer lives inside the jit_compile=True XLA region, so XLA
-#   may rematerialise it in backward instead of parking it in VRAM — in
-#   which case L4 fits too. Only way to know is to try both.
-#     sbatch --constraint=A100 --mem=64G --array=1-33  fit_klein_shift_pilot_gpu.sh
-#
-#   L4 probe: 24 GB VRAM, 1-GPU nodes (cuInit race structurally
-#   impossible). If the tape really holds ~64 GB this OOMs with
-#   ResourceExhausted (1:0); if XLA remats, it runs. Probe a few tasks
-#   before committing the full array:
-#     sbatch --constraint=L4 --mem=32G --array=1-3   fit_klein_shift_pilot_gpu.sh
-#
+#SBATCH --time=00:30:00
+# L4 is the verified default. After the separable-Gaussian forward rewrite
+# (local_models.py: DoGKleinShift), measured peak VRAM at V=500 is 642 MB and
+# a fit step is ~13x faster than the old dense forward — so a 24 GB L4 has
+# huge headroom and the previous A100/recompute-grad concerns are moot. L4
+# nodes are single-GPU, so the cuInit race is structurally impossible, and
+# they dispatch fastest on lowprio. The fit is small/fast now; 30 min walltime
+# is generous (XLA compile + warmstart load + ~1500 iters). Override at submit
+# time for a bigger GPU if ever needed:
+#     sbatch --constraint=A100 --mem=32G --array=1-33  fit_klein_shift_pilot_gpu.sh
 # H100/H200 are excluded by the env (sm_90 needs CUDA 12; we're on 11.8).
-# Defaults below apply if neither flag is given at submit time.
-#SBATCH --constraint="A100"
-#SBATCH --mem=64G
+#SBATCH --constraint="L4"
+#SBATCH --mem=16G
 
 # GPU pilot for DoGKleinShift_v3_target_6sigma — sub-3, sub-17, sub-23,
 # all 11 ROIs (33 array tasks). GPU twin of fit_klein_shift_pilot.sh.
