@@ -4031,18 +4031,45 @@ class DoGKleinShift_v3_target_6sigma(
         sigma_C_eff = 1.0 / tf.sqrt(tau_total_C_safe)               # (B, V, T)
         sigma_S_eff = 1.0 / tf.sqrt(tau_total_S_safe)
 
-        # Vectorized inner loop: chunk over T (Python for-loop unrolled at
-        # trace time) and materialize the full (B, V, Tc, G) Gaussian tensor
-        # per chunk. Wrap the per-chunk forward in tf.recompute_grad so the
-        # gradient tape doesn't retain the (B, V, Tc, G) intermediates —
-        # they are recomputed during the backward pass. This is what makes
-        # V=500 + T=3096 + G=4096 fit in ~10 GB instead of >150 GB, and
-        # replaces tf.map_fn's per-TR Python dispatch (~8 s/iter at V=43)
-        # with a single tensor op per chunk (target ~1 s/iter at V=500).
-        gx = self._grid_coordinates[:, 0]                           # (G,)
-        gy = self._grid_coordinates[:, 1]
-        gx_b = gx[tf.newaxis, tf.newaxis, tf.newaxis, :]            # (1,1,1,G)
-        gy_b = gy[tf.newaxis, tf.newaxis, tf.newaxis, :]
+        # Separable-Gaussian contraction. The grid is a regular R×R lattice
+        # (g = row*R + col, C-order, from np.meshgrid(indexing='xy') + ravel):
+        # gx varies along the fast/column axis, gy along the slow/row axis,
+        # matched by paradigm.reshape((T, R, R)) -> [t, row=gy, col=gx]. The
+        # isotropic Gaussian factorizes
+        #   exp(-((gx-µx)² + (gy-µy)²)·c) = exp(-(gx-µx)²·c) · exp(-(gy-µy)²·c)
+        # so we build two (B,V,Tc,R) 1-D factors instead of one (B,V,Tc,G)
+        # buffer — a ~G/R = 50× smaller hot tensor. The whole 33-chunk tape
+        # then fits in ~1.5 GB at V=500, so the model runs on a 24 GB L4 /
+        # 40 GB A100 GPU with no gradient checkpointing. The dense
+        # (B,V,Tc,G) form needed ~128 GB host RAM (CPU-only) and OOM'd every
+        # GPU. Exact up to float32 round-off (reordering Σ_g into Σ_i Σ_j and
+        # factoring exp): verified float64 5e-13, float32 rel 7e-7 against the
+        # dense einsum at production size V=500/Tc=128/G=2500.
+        # --- Guard: the separable factorization is valid ONLY for a square,
+        # axis-aligned R×R lattice ravelled in C-order (g = row*R + col) with
+        # the SAME 1-D axis on x and y. This is what every retsupp grid is
+        # (np.meshgrid(g1d, g1d) + ravel), but a future rectangular or
+        # differently-ordered grid would be silently mis-reshaped. Validate
+        # the static numpy grid once at trace time (zero hot-loop cost) and
+        # fail loudly otherwise. R*R==G alone is insufficient (a 4×9 grid has
+        # G=36=6²), so reconstruct and compare the actual coordinates. ---
+        gc_np = np.asarray(self._grid_coordinates)
+        G_ = gc_np.shape[0]
+        R = int(round(G_ ** 0.5))
+        g1d_np = gc_np[:R, 0]
+        if R * R != G_ or not (
+                np.allclose(gc_np[:, 0], np.tile(g1d_np, R))
+                and np.allclose(gc_np[:, 1], np.repeat(g1d_np, R))):
+            raise ValueError(
+                "DoGKleinShift separable forward requires a square, "
+                "axis-aligned R×R grid ravelled C-order as g=row*R+col with a "
+                f"shared 1-D axis (np.meshgrid(g1d, g1d)); got G={G_} that does "
+                "not reconstruct as such. Use a square lattice, or generalize "
+                "the forward to separate n_x/n_y axes and g1d_x/g1d_y.")
+        # 1-D axis = the unique grid coordinate (same for x and y on the
+        # square symmetric grid), taken from the fast/column axis of gx.
+        g1d = self._grid_coordinates[:R, 0]                         # (R,)
+        g1d_b = g1d[tf.newaxis, tf.newaxis, tf.newaxis, :]          # (1,1,1,R)
         # Area-preserving compensation factor — keeps each Gaussian's
         # integral at its at-rest value (2π·sd²) so Klein-σ shrinkage
         # is pure shape modulation, no implicit amplitude effect.
@@ -4054,33 +4081,32 @@ class DoGKleinShift_v3_target_6sigma(
         amp_eff_b = amplitude_v[:, :, tf.newaxis, tf.newaxis]              # (B,V,1,1)
         amp_S_eff_b = srf_amp_v[:, :, tf.newaxis, tf.newaxis] * amp_eff_b
 
-        # Inner chunk forward. Fused — avoids materializing dx, dy, dog
-        # as separate buffers. XLA fuses the elementwise pipeline into a
-        # single pass over memory, which is the actual bottleneck at
-        # V=500 / T=3096 / G=2500 (compute is light; reads of (B,V,Tc,G)
-        # buffers dominate).
         @tf.function(jit_compile=True)
         def _chunk_forward(par_c, mu_Cx_c, mu_Cy_c, sC_c,
                             mu_Sx_c, mu_Sy_c, sS_c):
-            # par_c:   (B, Tc, G)
-            # mu_*_c, sC_c, sS_c: (B, V, Tc, 1)
+            # par_c: (B,Tc,G) → reshaped to (B,Tc,R[row=gy], R[col=gx]).
+            # mu_*_c, sC_c, sS_c: (B,V,Tc,1).
+            b = tf.shape(par_c)[0]
+            tc = tf.shape(par_c)[1]
+            par_img = tf.reshape(par_c, (b, tc, R, R))
+
             inv2sC2 = 0.5 / (sC_c * sC_c)                           # (B,V,Tc,1)
             inv2sS2 = 0.5 / (sS_c * sS_c)
             scale_C = area_C0 * (2.0 * inv2sC2) * amp_eff_b         # (B,V,Tc,1)
             scale_S = area_S0 * (2.0 * inv2sS2) * amp_S_eff_b
 
-            # sq_C, sq_S built one-shot (no separate dx/dy tensors).
-            sq_C = (gx_b - mu_Cx_c) ** 2 + (gy_b - mu_Cy_c) ** 2    # (B,V,Tc,G)
-            G_C  = scale_C * tf.exp(-sq_C * inv2sC2)
+            # 1-D factors. Amplitude/area scale folded into the x-factor ONLY
+            # (folding into both would square it). i=row=gy, j=col=gx.
+            fxC = scale_C * tf.exp(-((g1d_b - mu_Cx_c) ** 2) * inv2sC2)  # (B,V,Tc,R) col j
+            fyC =           tf.exp(-((g1d_b - mu_Cy_c) ** 2) * inv2sC2)  # (B,V,Tc,R) row i
+            fxS = scale_S * tf.exp(-((g1d_b - mu_Sx_c) ** 2) * inv2sS2)
+            fyS =           tf.exp(-((g1d_b - mu_Sy_c) ** 2) * inv2sS2)
 
-            sq_S = (gx_b - mu_Sx_c) ** 2 + (gy_b - mu_Sy_c) ** 2
-            G_S  = scale_S * tf.exp(-sq_S * inv2sS2)
-
-            # Integrate against paradigm separately for center and
-            # surround — avoids materializing (G_C - srf·G_S) as an extra
-            # (B,V,Tc,G) tensor on the tape.
-            pred_c_c = tf.einsum('btg,bvtg->bvt', par_c, G_C)
-            pred_c_s = tf.einsum('btg,bvtg->bvt', par_c, G_S)
+            # Contract gx (fast/col=j) first, then gy (slow/row=i).
+            tmp_C = tf.einsum('btij,bvtj->bvti', par_img, fxC)     # (B,V,Tc,R) over row i
+            pred_c_c = tf.einsum('bvti,bvti->bvt', tmp_C, fyC)     # (B,V,Tc)
+            tmp_S = tf.einsum('btij,bvtj->bvti', par_img, fxS)
+            pred_c_s = tf.einsum('bvti,bvti->bvt', tmp_S, fyS)
             return pred_c_c - pred_c_s                              # (B,V,Tc)
 
         T_static = paradigm.shape[1]
