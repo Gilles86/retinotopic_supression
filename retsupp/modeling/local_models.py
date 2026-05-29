@@ -4045,7 +4045,27 @@ class DoGKleinShift_v3_target_6sigma(
         # GPU. Exact up to float32 round-off (reordering Σ_g into Σ_i Σ_j and
         # factoring exp): verified float64 5e-13, float32 rel 7e-7 against the
         # dense einsum at production size V=500/Tc=128/G=2500.
-        R = int(round(float(self._grid_coordinates.shape[0]) ** 0.5))
+        # --- Guard: the separable factorization is valid ONLY for a square,
+        # axis-aligned R×R lattice ravelled in C-order (g = row*R + col) with
+        # the SAME 1-D axis on x and y. This is what every retsupp grid is
+        # (np.meshgrid(g1d, g1d) + ravel), but a future rectangular or
+        # differently-ordered grid would be silently mis-reshaped. Validate
+        # the static numpy grid once at trace time (zero hot-loop cost) and
+        # fail loudly otherwise. R*R==G alone is insufficient (a 4×9 grid has
+        # G=36=6²), so reconstruct and compare the actual coordinates. ---
+        gc_np = np.asarray(self._grid_coordinates)
+        G_ = gc_np.shape[0]
+        R = int(round(G_ ** 0.5))
+        g1d_np = gc_np[:R, 0]
+        if R * R != G_ or not (
+                np.allclose(gc_np[:, 0], np.tile(g1d_np, R))
+                and np.allclose(gc_np[:, 1], np.repeat(g1d_np, R))):
+            raise ValueError(
+                "DoGKleinShift separable forward requires a square, "
+                "axis-aligned R×R grid ravelled C-order as g=row*R+col with a "
+                f"shared 1-D axis (np.meshgrid(g1d, g1d)); got G={G_} that does "
+                "not reconstruct as such. Use a square lattice, or generalize "
+                "the forward to separate n_x/n_y axes and g1d_x/g1d_y.")
         # 1-D axis = the unique grid coordinate (same for x and y on the
         # square symmetric grid), taken from the fast/column axis of gx.
         g1d = self._grid_coordinates[:R, 0]                         # (R,)
