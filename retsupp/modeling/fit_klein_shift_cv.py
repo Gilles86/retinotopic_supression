@@ -17,9 +17,10 @@ the forward model:
 Fairness constraints (must match the GAIN arm exactly)
 ------------------------------------------------------
 1. **Identical voxel selection.**  We import and call CV-v2's
-   :func:`select_roi_voxels` (legacy ``r2_thr`` ROI selector) plus the
-   same ``--max-voxels 500`` top-by-r² ranking, so both arms fit the
-   IDENTICAL voxel set per (subject, ROI).
+   :func:`choose_voxel_mask`, which defaults to the GMM ``p_signal``
+   selector (``--p-signal-thr 0.5``, matching the non-CV klein best-fit
+   voxels) plus the same ``--max-voxels 500`` top-by-r² ranking, so both
+   arms fit the IDENTICAL voxel set per (subject, ROI).
 2. **Identical (fixed canonical) HRF.**  Both arms build a single fixed
    ``SPMHRFModel(tr=..., delay=4.5, dispersion=0.75)`` and do NOT fit the
    HRF.  The klein class is constructed with
@@ -40,7 +41,10 @@ Output
     sub-XX_roi-{ROI}_cv-fits.pkl``
 
 Same payload schema as CV-v2 (so ``aggregate_shiftvsgain_cv.py`` reads
-both trees with one loader), minus the gain/sign bookkeeping.
+both trees with one loader), minus the gain/sign bookkeeping.  Canonical
+output is the TSV/JSON triple written by ``cv_helpers.write_cv_tsvs``
+(``sub-XX_roi-{ROI}_cv-r2.tsv`` / ``_cv-params.tsv`` / ``_meta.json``);
+the pickle is kept as a convenience side-product.
 
 Usage
 -----
@@ -65,8 +69,8 @@ from braincoder.optimize import ParameterFitter
 # fold geometry.
 from retsupp.modeling.fit_af_prf_cv_v2 import (
     build_data_and_paradigm,
+    choose_voxel_mask,
     get_ring_positions,
-    select_roi_voxels,
     split_by_condition_with_target,
 )
 from retsupp.modeling.cv_helpers import (
@@ -74,6 +78,7 @@ from retsupp.modeling.cv_helpers import (
     held_out_condition,
     per_voxel_r2,
     summarize_split,
+    write_cv_tsvs,
 )
 from retsupp.modeling.local_models import DoGKleinShift_v3_target_6sigma
 from retsupp.utils.data import Subject
@@ -140,6 +145,8 @@ def main(subject: int,
          learning_rate: float = 0.01,
          grid_radius: float = 5.0,
          sigma_init: float = 2.0,
+         use_psignal: bool = True,
+         p_signal_thr: float = 0.5,
          output_subdir: str | None = None):
 
     bids_folder = Path(bids_folder)
@@ -161,23 +168,17 @@ def main(subject: int,
         sub, resolution=resolution, grid_radius=grid_radius,
     )
 
-    # 2) Restrict to ROI voxels — IDENTICAL selector + ranking as GAIN arm.
+    # 2) Restrict to ROI voxels — IDENTICAL selector + ranking as GAIN arm
+    #    (choose_voxel_mask is shared, so both arms select the same voxels).
     prf_pars = sub.get_prf_parameters_volume(model=model_label,
                                              return_images=False)
     if not isinstance(prf_pars, pd.DataFrame):
         prf_pars = pd.DataFrame(prf_pars)
-    voxel_mask = select_roi_voxels(sub, roi, prf_pars, r2_thr=r2_thr)
-    print(f'ROI {roi} | r2>{r2_thr}: {voxel_mask.sum()} voxels')
-    if voxel_mask.sum() == 0:
-        raise RuntimeError(f'No voxels survive: ROI={roi}, r2>{r2_thr}.')
-
-    if max_voxels is not None and voxel_mask.sum() > max_voxels:
-        order = np.argsort(prf_pars['r2'].values)[::-1]
-        keep = np.zeros_like(voxel_mask)
-        ranked = [v for v in order if voxel_mask[v]][:max_voxels]
-        keep[ranked] = True
-        voxel_mask = keep
-        print(f'  -> top {max_voxels} voxels by r2')
+    voxel_mask, descr = choose_voxel_mask(
+        sub, roi, prf_pars,
+        use_psignal=use_psignal, p_signal_thr=p_signal_thr,
+        r2_thr=r2_thr, model_label=model_label, max_voxels=max_voxels)
+    print(f'{descr}: {voxel_mask.sum()} voxels')
 
     init_pars_template = make_init_pars(prf_pars, voxel_mask,
                                         sigma_init=sigma_init)
@@ -311,6 +312,32 @@ def main(subject: int,
         pickle.dump(payload, f)
     print(f'Saved: {out_pkl}')
 
+    # 5) Canonical TSV output (read by aggregate_shiftvsgain_cv).
+    voxel_ids = np.where(voxel_mask)[0]
+    per_voxel_par_cols = INIT_COLS  # x, y, sd, baseline, amplitude, srf_*
+    tsv_paths = write_cv_tsvs(
+        out_dir,
+        subject=subject, roi=roi, model='shift',
+        voxel_ids=voxel_ids,
+        cv_r2_per_fold=cv_r2_per_fold,
+        train_r2_per_fold=train_r2_per_fold,
+        fit_pars_per_fold=fit_pars_per_fold,
+        shared_pars_per_fold=shared_pars_per_fold,
+        shared_par_labels=SHARED_PARS,
+        per_voxel_par_cols=per_voxel_par_cols,
+        train_run_meta_per_fold=train_run_meta_per_fold,
+        held_run_meta_per_fold=held_run_meta_per_fold,
+        selector='psignal' if use_psignal else 'r2',
+        p_signal_thr=p_signal_thr if use_psignal else -1.0,
+        extra_meta=dict(
+            model_name='dog-klein-shift-6sigma',
+            sigma_init=sigma_init,
+            max_voxels=max_voxels,
+        ),
+    )
+    print(f'Saved TSVs: {tsv_paths["r2"]}, {tsv_paths["params"]}, '
+          f'{tsv_paths["meta"]}')
+
     return payload
 
 
@@ -329,6 +356,15 @@ if __name__ == '__main__':
     parser.add_argument('--grid-radius', type=float, default=5.0)
     parser.add_argument('--sigma-init', type=float, default=2.0,
                         help='Initial value for all 6 sigmas (default 2.0).')
+    parser.add_argument('--use-psignal', dest='use_psignal',
+                        action='store_true', default=True,
+                        help='Use the GMM p_signal voxel selector '
+                             '(default ON; matches the non-CV klein fit).')
+    parser.add_argument('--no-psignal', dest='use_psignal',
+                        action='store_false',
+                        help='Fall back to the legacy r²-threshold selector.')
+    parser.add_argument('--p-signal-thr', type=float, default=0.5,
+                        help='p_signal posterior threshold (default 0.5).')
     parser.add_argument('--output-subdir', default=None)
     args = parser.parse_args()
     main(
@@ -343,5 +379,7 @@ if __name__ == '__main__':
         learning_rate=args.learning_rate,
         grid_radius=args.grid_radius,
         sigma_init=args.sigma_init,
+        use_psignal=args.use_psignal,
+        p_signal_thr=args.p_signal_thr,
         output_subdir=args.output_subdir,
     )

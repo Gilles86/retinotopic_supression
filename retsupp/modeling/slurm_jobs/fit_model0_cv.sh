@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=klein_shift_cv
+#SBATCH --job-name=model0_cv
 #SBATCH --account=zne.uzh
 #SBATCH --partition=lowprio
 #SBATCH --output=/dev/null
@@ -9,32 +9,32 @@
 #SBATCH --constraint="L4"
 #SBATCH --mem=16G
 
-# SHIFT arm of the cross-validated shift-vs-gain comparison.
-# Runs retsupp.modeling.fit_klein_shift_cv (DoGKleinShift_v3_target_6sigma),
-# leave-one-condition-out CV, all 4 folds inside one job.
+# MODEL0 arm (fixed PRF, NO attention) of the cross-validated 4-level
+# shift-vs-gain comparison. Runs retsupp.modeling.fit_af_prf_cv_v2 with
+# ALL FIVE gains ZERO — i.e. the gain harness's all-zero-gains cell. This
+# is the SAME fitter and HRF as the GAIN arm, differing only in mechanism
+# (no attention modulation): the common baseline that gain & shift are
+# each tested against per voxel. Leave-one-condition-out CV, all 4 folds
+# inside one job.
 #
-# GPU twin of fit_klein_shift_pilot_gpu.sh (same L4/16G, cuInit flock
-# warm-up, CUDA libs, retsupp_cuda env). The forward model is the fast
-# separable-Gaussian klein forward, so 45 min walltime is generous.
+# IDENTICAL array geometry / ROI list / --max-voxels / voxel selector
+# (p_signal>0.5) / compute to the GAIN and SHIFT arms so all four levels
+# (null/model0/gain/shift) score the same voxels & folds.
 #
 # (subject, ROI) decode from SLURM_ARRAY_TASK_ID:
 #   idx0 = SLURM_ARRAY_TASK_ID - 1
 #   sub_idx = idx0 // N_ROIS ;  roi_idx = idx0 % N_ROIS
 #   subject = SUB_IDS[sub_idx]
 #
-# PILOT (3 subjects x 11 ROIs = 33 tasks; the default SUB_IDS below):
-#   sbatch --array=1-33 fit_klein_shift_cv.sh
+# PILOT (3 subjects x 11 ROIs = 33 tasks; default SUB_IDS below):
+#   sbatch --array=1-33 fit_model0_cv.sh
 #
-# FULL (30 subjects x 11 ROIs = 330 tasks). Throttle to avoid the NFS
-# env-read dogpile on large arrays:
-#   PILOT=0 sbatch --array=1-330%150 fit_klein_shift_cv.sh
-#
-# Override GPU type / host RAM at submit time if a bigger GPU is needed:
-#   sbatch --constraint=A100 --mem=32G --array=1-33 fit_klein_shift_cv.sh
+# FULL (30 subjects x 11 ROIs = 330 tasks):
+#   PILOT=0 sbatch --array=1-330%150 fit_model0_cv.sh
 
 set -eo pipefail
 
-LOGFILE="$HOME/logs/klein_shift_cv_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID:-0}.txt"
+LOGFILE="$HOME/logs/gain_cv_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID:-0}.txt"
 mkdir -p "$(dirname "$LOGFILE")"
 exec >"$LOGFILE" 2>&1
 
@@ -73,11 +73,9 @@ roi="${ROIS[$roi_idx]}"
 echo "Subject:        ${subject}"
 echo "ROI:            ${roi}"
 
-# SLURM Name field is array-shared; encode only sub (roi is recoverable
-# from the _N array suffix).
 sub_pad=$(printf "%02d" "$subject")
 scontrol update jobid="${SLURM_JOB_ID}" \
-    name="klein_cv_sub-${sub_pad}" 2>/dev/null || true
+    name="model0_cv_sub-${sub_pad}" 2>/dev/null || true
 
 # NFS profile-read dogpile defense.
 sleep $(( RANDOM % 15 ))
@@ -121,15 +119,21 @@ fi
 
 bids_folder="/shares/zne.uzh/gdehol/ds-retsupp"
 
-echo "Running fit_klein_shift_cv (SHIFT arm, all 4 folds) for sub-${subject}, roi=${roi}"
+echo "Running fit_af_prf_cv_v2 (MODEL0 arm, all gains zero, all 4 folds) for sub-${subject}, roi=${roi}"
 
-"$PYTHON" -u -m retsupp.modeling.fit_klein_shift_cv \
+"$PYTHON" -u -m retsupp.modeling.fit_af_prf_cv_v2 \
     "$subject" \
     --roi "$roi" \
     --bids-folder "$bids_folder" \
+    --sus-hp-sign zero \
+    --sus-lp-sign zero \
+    --dyn-hp-sign zero \
+    --dyn-lp-sign zero \
+    --target-gain zero \
+    --resolution 50 \
     --max-voxels 500 \
     --p-signal-thr 0.5 \
     --max-n-iterations 1500 \
-    --output-subdir af_prf_cv_shiftvsgain/shift
+    --output-subdir af_prf_cv_shiftvsgain/model0
 
 echo "Finished:       $(date)"

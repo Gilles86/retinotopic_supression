@@ -134,6 +134,7 @@ echo "Running fit_af_prf_cv_v2 (GAIN arm, all gains free, all 4 folds) for sub-$
     --target-gain free \
     --resolution 50 \
     --max-voxels 500 \
+    --p-signal-thr 0.5 \
     --max-n-iterations 1500 \
     --output-subdir af_prf_cv_shiftvsgain/gain
 

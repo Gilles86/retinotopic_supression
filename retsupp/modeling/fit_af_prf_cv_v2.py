@@ -60,6 +60,27 @@ The pickle contains, per fold:
     train_r2_per_fold    : list[ndarray]
     fit_pars_per_fold    : list[DataFrame]
 
+In addition (canonical output, read by ``aggregate_shiftvsgain_cv``) the
+script writes three tidy TSV/JSON files via ``cv_helpers.write_cv_tsvs``::
+
+    sub-XX_roi-{ROI}_cv-r2.tsv      [subject, roi, model, fold, voxel_id,
+                                     cv_r2, train_r2]
+    sub-XX_roi-{ROI}_cv-params.tsv  [.., voxel_id, <per-voxel params>,
+                                     <shared params broadcast>]
+    sub-XX_roi-{ROI}_meta.json      train/held runs per fold, n_vox,
+                                     selector, p_signal_thr
+
+``voxel_id`` is the BOLD-masker flat index so every arm
+(null/model0/gain/shift) aligns exactly.
+
+Voxel selection
+---------------
+Defaults to the GMM ``select_roi_voxels_psignal`` (``--p-signal-thr 0.5``),
+matching the non-CV klein best-fit voxels in
+``af_prf_klein_shift_6sigma_sharedSigma_pSig0.5/``.  Pass ``--no-psignal``
+to fall back to the legacy r²-threshold selector.  The ``--max-voxels``
+top-by-r² ranking is applied identically in both branches.
+
 Usage
 -----
 ``python -m retsupp.modeling.fit_af_prf_cv_v2 2 --roi V3AB \\
@@ -70,6 +91,7 @@ Usage
 from __future__ import annotations
 
 import argparse
+import json
 import pickle
 from pathlib import Path
 
@@ -86,6 +108,7 @@ from retsupp.modeling.cv_helpers import (
     held_out_condition,
     per_voxel_r2,
     summarize_split,
+    write_cv_tsvs,
 )
 from retsupp.modeling.local_models import (
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_factorial,
@@ -275,6 +298,51 @@ def select_roi_voxels(sub: Subject, roi: str, prf_pars: pd.DataFrame,
         roi_img = sub.get_retinotopic_roi(roi=r, bold_space=True)
         roi_arr |= masker_full.transform(roi_img).astype(bool).flatten()
     return (prf_pars['r2'].values > r2_thr) & roi_arr
+
+
+def choose_voxel_mask(sub: Subject, roi: str, prf_pars: pd.DataFrame,
+                      *, use_psignal: bool, p_signal_thr: float,
+                      r2_thr: float, model_label: int,
+                      max_voxels: int | None):
+    """Build the (ROI ∧ selector) voxel mask, then top-N-by-r² rank.
+
+    When ``use_psignal`` is True this calls the GMM ``p_signal`` selector
+    from :mod:`fit_dog_dynamic_af_braincoder` — IDENTICAL to the non-CV
+    best-fit klein selection (so the CV voxels equal the non-CV voxels
+    in ``af_prf_klein_shift_6sigma_sharedSigma_pSig0.5/``).  Otherwise it
+    falls back to the legacy r²-threshold ROI selector.
+
+    The top-``max_voxels`` ranking (argsort r² descending) is applied
+    identically in both branches, matching the non-CV fitter.
+
+    Returns ``(voxel_mask, descr)``.
+    """
+    if use_psignal:
+        # Imported lazily so the legacy r²-path doesn't require the
+        # p_signal NIfTI / scipy import at module load.
+        from retsupp.modeling.fit_dog_dynamic_af_braincoder import (
+            select_roi_voxels_psignal,
+        )
+        voxel_mask = select_roi_voxels_psignal(
+            sub, roi, prf_pars,
+            model_label=model_label,
+            p_signal_thr=p_signal_thr)
+        descr = f'ROI {roi} | p_signal > {p_signal_thr}'
+    else:
+        voxel_mask = select_roi_voxels(sub, roi, prf_pars, r2_thr=r2_thr)
+        descr = f'ROI {roi} | r2 > {r2_thr}'
+
+    if voxel_mask.sum() == 0:
+        raise RuntimeError(f'No voxels survive: {descr}.')
+
+    if max_voxels is not None and voxel_mask.sum() > max_voxels:
+        order = np.argsort(prf_pars['r2'].values)[::-1]
+        keep = np.zeros_like(voxel_mask)
+        ranked = [v for v in order if voxel_mask[v]][:max_voxels]
+        keep[ranked] = True
+        voxel_mask = keep
+        descr = f'{descr} -> top {max_voxels} by r²'
+    return voxel_mask, descr
 
 
 # ---------------------------------------------------------------------------
@@ -470,6 +538,8 @@ def main(subject: int,
          grid_radius: float = 5.0,
          sigma_af_init: float = 2.0,
          sigma_dyn_init: float = 2.0,
+         use_psignal: bool = True,
+         p_signal_thr: float = 0.5,
          output_subdir: str | None = None):
 
     for s in (sus_hp_sign, sus_lp_sign, dyn_hp_sign, dyn_lp_sign):
@@ -512,23 +582,18 @@ def main(subject: int,
         sub, resolution=resolution, grid_radius=grid_radius,
     )
 
-    # 2) Restrict to ROI voxels with decent mean-model PRF R².
+    # 2) Restrict to ROI voxels. By default use the GMM p_signal selector
+    #    (matching the non-CV klein best-fit voxels); fall back to the
+    #    legacy r²-threshold selector if --no-psignal.
     prf_pars = sub.get_prf_parameters_volume(model=model_label,
                                              return_images=False)
     if not isinstance(prf_pars, pd.DataFrame):
         prf_pars = pd.DataFrame(prf_pars)
-    voxel_mask = select_roi_voxels(sub, roi, prf_pars, r2_thr=r2_thr)
-    print(f'ROI {roi} | r2>{r2_thr}: {voxel_mask.sum()} voxels')
-    if voxel_mask.sum() == 0:
-        raise RuntimeError(f'No voxels survive: ROI={roi}, r2>{r2_thr}.')
-
-    if max_voxels is not None and voxel_mask.sum() > max_voxels:
-        order = np.argsort(prf_pars['r2'].values)[::-1]
-        keep = np.zeros_like(voxel_mask)
-        ranked = [v for v in order if voxel_mask[v]][:max_voxels]
-        keep[ranked] = True
-        voxel_mask = keep
-        print(f'  -> top {max_voxels} voxels by r²')
+    voxel_mask, descr = choose_voxel_mask(
+        sub, roi, prf_pars,
+        use_psignal=use_psignal, p_signal_thr=p_signal_thr,
+        r2_thr=r2_thr, model_label=model_label, max_voxels=max_voxels)
+    print(f'{descr}: {voxel_mask.sum()} voxels')
 
     init_pars_template = make_init_pars(
         prf_pars, voxel_mask, sign_pattern,
@@ -678,6 +743,47 @@ def main(subject: int,
         pickle.dump(payload, f)
     print(f'Saved: {out_pkl}')
 
+    # 5) Canonical TSV output (read by aggregate_shiftvsgain_cv).
+    #    The 'model' column is the arm label: the trailing component of
+    #    output_subdir (.../gain or .../model0) when it is canonical,
+    #    else derived from the sign pattern, else the class dirname.
+    voxel_ids = np.where(voxel_mask)[0]
+    per_voxel_par_cols = ['x', 'y', 'sd', 'baseline', 'amplitude',
+                          'srf_amplitude', 'srf_size']
+    tail = Path(output_subdir).name
+    if tail in ('gain', 'model0', 'shift'):
+        model_label_str = tail
+    elif all(s == 'free' for s in sign_pattern.values()):
+        model_label_str = 'gain'
+    elif all(s == 'zero' for s in sign_pattern.values()):
+        model_label_str = 'model0'
+    else:
+        model_label_str = cls_dir
+    tsv_paths = write_cv_tsvs(
+        out_dir,
+        subject=subject, roi=roi,
+        model=model_label_str,
+        voxel_ids=voxel_ids,
+        cv_r2_per_fold=cv_r2_per_fold,
+        train_r2_per_fold=train_r2_per_fold,
+        fit_pars_per_fold=fit_pars_per_fold,
+        shared_pars_per_fold=shared_pars_per_fold,
+        shared_par_labels=ALL_SHARED_PARS,
+        per_voxel_par_cols=per_voxel_par_cols,
+        train_run_meta_per_fold=train_run_meta_per_fold,
+        held_run_meta_per_fold=held_run_meta_per_fold,
+        selector='psignal' if use_psignal else 'r2',
+        p_signal_thr=p_signal_thr if use_psignal else -1.0,
+        extra_meta=dict(
+            class_dirname=cls_dir,
+            sign_pattern=sign_pattern,
+            model_name='dog-dyn-v3-target-sharedSigma-factorial',
+            max_voxels=max_voxels,
+        ),
+    )
+    print(f'Saved TSVs: {tsv_paths["r2"]}, {tsv_paths["params"]}, '
+          f'{tsv_paths["meta"]}')
+
     return payload
 
 
@@ -715,6 +821,15 @@ if __name__ == '__main__':
                         help='Initial σ_AF (default 5.0; CV-v2 default).')
     parser.add_argument("--sigma-dyn-init", type=float, default=2.0,
                         help='Initial σ_dyn (default 5.0; CV-v2 default).')
+    parser.add_argument('--use-psignal', dest='use_psignal',
+                        action='store_true', default=True,
+                        help='Use the GMM p_signal voxel selector '
+                             '(default ON; matches the non-CV klein fit).')
+    parser.add_argument('--no-psignal', dest='use_psignal',
+                        action='store_false',
+                        help='Fall back to the legacy r²-threshold selector.')
+    parser.add_argument('--p-signal-thr', type=float, default=0.5,
+                        help='p_signal posterior threshold (default 0.5).')
     parser.add_argument('--output-subdir', default=None)
     args = parser.parse_args()
     main(
@@ -735,5 +850,7 @@ if __name__ == '__main__':
         grid_radius=args.grid_radius,
         sigma_af_init=args.sigma_af_init,
         sigma_dyn_init=args.sigma_dyn_init,
+        use_psignal=args.use_psignal,
+        p_signal_thr=args.p_signal_thr,
         output_subdir=args.output_subdir,
     )
