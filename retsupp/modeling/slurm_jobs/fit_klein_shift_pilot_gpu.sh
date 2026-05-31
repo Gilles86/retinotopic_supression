@@ -19,8 +19,13 @@
 #SBATCH --constraint="L4"
 #SBATCH --mem=16G
 
-# GPU pilot for DoGKleinShift_v3_target_6sigma — sub-3, sub-17, sub-23,
-# all 11 ROIs (33 array tasks). GPU twin of fit_klein_shift_pilot.sh.
+# GPU non-CV (full-data) fit for DoGKleinShift_v3_target_6sigma.
+# Subject set is configurable via the KLEIN_SUBS env var; default = ALL 30.
+#   Full run (30 subs × 11 ROIs = 330 tasks):
+#     sbatch --array=1-330 retsupp/modeling/slurm_jobs/fit_klein_shift_pilot_gpu.sh
+#   3-subject pilot (03/17/23 × 11 = 33 tasks):
+#     sbatch --array=1-33 --export=ALL,KLEIN_SUBS="3 17 23" \
+#            retsupp/modeling/slurm_jobs/fit_klein_shift_pilot_gpu.sh
 # GPU type / host RAM are submit-time flags (see the SBATCH block above).
 
 set -eo pipefail
@@ -33,7 +38,8 @@ echo "Host:           $(hostname)"
 echo "Job:            ${SLURM_JOB_ID} (array task ${SLURM_ARRAY_TASK_ID:-0})"
 echo "Started:        $(date)"
 
-SUB_IDS=(3 17 23)
+# Default to all 30 subjects; override with KLEIN_SUBS="3 17 23" for a pilot.
+SUB_IDS=(${KLEIN_SUBS:-1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30})
 ROIS=(V1 V2 V3 V3AB hV4 LO TO VO IPS SPL1 FEF)
 N_ROIS=${#ROIS[@]}
 N_SUBS=${#SUB_IDS[@]}
