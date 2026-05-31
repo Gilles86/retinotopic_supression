@@ -29,7 +29,9 @@ share a single reference implementation.
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
@@ -205,6 +207,135 @@ def restrict_to_train_condition(
         held_out_cond=held_out_cond,
         dynamic_indicator=dynamic_indicator,
     )
+
+
+def write_cv_tsvs(
+    out_dir: Path,
+    *,
+    subject: int,
+    roi: str,
+    model: str,
+    voxel_ids: np.ndarray,
+    cv_r2_per_fold: list,
+    train_r2_per_fold: list,
+    fit_pars_per_fold: list,
+    shared_pars_per_fold: list,
+    shared_par_labels: list[str],
+    per_voxel_par_cols: list[str],
+    train_run_meta_per_fold: list,
+    held_run_meta_per_fold: list,
+    selector: str,
+    p_signal_thr: float,
+    extra_meta: Optional[dict] = None,
+) -> dict[str, Path]:
+    """Write the canonical 3-file CV output for one (subject, ROI, model).
+
+    Produces, under ``out_dir``::
+
+        sub-XX_roi-{ROI}_cv-r2.tsv      tidy long, one row per (fold, voxel)
+        sub-XX_roi-{ROI}_cv-params.tsv  tidy long, per-voxel + broadcast shared
+        sub-XX_roi-{ROI}_meta.json      fold run assignments, n_vox, selector
+
+    ``voxel_ids`` are the BOLD-masker flat indices (so every CV arm —
+    null/model0/gain/shift — aligns exactly by voxel_id).  ``cv_r2_per_fold``
+    and ``train_r2_per_fold`` are length-4 lists of per-voxel arrays
+    (folds where the held-out condition was absent may be ``None`` or a
+    NaN array; both are handled).  ``fit_pars_per_fold`` is a length-4 list
+    of per-fold DataFrames (rows aligned to ``voxel_ids``) or ``None`` for
+    skipped folds.  Shared parameters are broadcast onto every voxel row of
+    the params table (a single fit produces one shared value per fold).
+
+    Returns a dict mapping ``{'r2', 'params', 'meta'}`` -> written paths.
+    """
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    voxel_ids = np.asarray(voxel_ids)
+    n_vox = voxel_ids.size
+    prefix = f'sub-{subject:02d}_roi-{roi}'
+
+    # --- cv-r2.tsv : [subject, roi, model, fold, voxel_id, cv_r2, train_r2]
+    r2_rows = []
+    n_folds = len(cv_r2_per_fold)
+    for fold in range(n_folds):
+        cv = cv_r2_per_fold[fold]
+        tr = train_r2_per_fold[fold]
+        cv = (np.full(n_vox, np.nan) if cv is None
+              else np.asarray(cv, dtype=np.float64).ravel())
+        tr = (np.full(n_vox, np.nan) if tr is None
+              else np.asarray(tr, dtype=np.float64).ravel())
+        r2_rows.append(pd.DataFrame(dict(
+            subject=subject, roi=roi, model=model, fold=fold,
+            voxel_id=voxel_ids, cv_r2=cv, train_r2=tr,
+        )))
+    r2_df = pd.concat(r2_rows, ignore_index=True)
+    r2_path = out_dir / f'{prefix}_cv-r2.tsv'
+    r2_df.to_csv(r2_path, sep='\t', index=False)
+
+    # --- cv-params.tsv : per-voxel params + broadcast shared params.
+    par_rows = []
+    for fold in range(n_folds):
+        fit_pars = fit_pars_per_fold[fold]
+        shared = shared_pars_per_fold[fold]
+        if fit_pars is None:
+            block = pd.DataFrame({
+                'subject': subject, 'roi': roi, 'model': model,
+                'fold': fold, 'voxel_id': voxel_ids,
+            })
+            for c in per_voxel_par_cols:
+                block[c] = np.nan
+            for c in shared_par_labels:
+                block[c] = np.nan
+        else:
+            fp = fit_pars.reset_index(drop=True)
+            block = pd.DataFrame({
+                'subject': subject, 'roi': roi, 'model': model,
+                'fold': fold, 'voxel_id': voxel_ids,
+            })
+            for c in per_voxel_par_cols:
+                block[c] = (fp[c].to_numpy() if c in fp.columns
+                            else np.nan)
+            for c in shared_par_labels:
+                if shared is not None and c in shared:
+                    block[c] = shared[c]
+                elif c in fp.columns:
+                    block[c] = fp[c].iloc[0]
+                else:
+                    block[c] = np.nan
+        par_rows.append(block)
+    par_df = pd.concat(par_rows, ignore_index=True)
+    par_path = out_dir / f'{prefix}_cv-params.tsv'
+    par_df.to_csv(par_path, sep='\t', index=False)
+
+    # --- meta.json
+    meta = dict(
+        subject=subject, roi=roi, model=model,
+        n_vox=int(n_vox),
+        selector=selector,
+        p_signal_thr=p_signal_thr,
+        per_voxel_par_cols=list(per_voxel_par_cols),
+        shared_par_labels=list(shared_par_labels),
+        cv_folds=list(range(n_folds)),
+        cv_held_out_conditions=list(CONDITIONS[:n_folds]),
+        train_run_meta_per_fold=train_run_meta_per_fold,
+        held_run_meta_per_fold=held_run_meta_per_fold,
+    )
+    if extra_meta:
+        meta.update(extra_meta)
+    meta_path = out_dir / f'{prefix}_meta.json'
+    with open(meta_path, 'w') as f:
+        json.dump(meta, f, indent=2, default=_json_default)
+
+    return {'r2': r2_path, 'params': par_path, 'meta': meta_path}
+
+
+def _json_default(o):
+    if isinstance(o, (np.integer,)):
+        return int(o)
+    if isinstance(o, (np.floating,)):
+        return float(o)
+    if isinstance(o, np.ndarray):
+        return o.tolist()
+    return str(o)
 
 
 def summarize_split(run_meta: list[RunMeta], held_out_cond: str) -> str:
