@@ -93,32 +93,24 @@ def _arm_per_voxel_cv_r2(tsv: Path) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 def compute_null_cv_r2(
-    sub: Subject, voxel_ids: np.ndarray, *,
-    resolution: int = 50, grid_radius: float = 5.0,
+    bold_sel: np.ndarray, paradigm, condition_indicator,
+    dynamic_indicator, target_indicator, run_meta,
 ) -> np.ndarray:
     """Per-voxel null CV-R² (mean over folds), MODEL-FREE.
 
-    For each leave-one-condition-out fold: prediction = mean over TRAINING
-    runs' BOLD timeseries (per voxel), broadcast across the held-out run's
-    timepoints. Scored with the same ``per_voxel_r2`` on the held-out BOLD.
+    For each leave-one-condition-out fold the prediction for a held-out run
+    is the **across-TRAINING-RUNS mean RESPONSE** — i.e. the BOLD averaged
+    over the training runs at each *within-run* timepoint. This is the
+    reproducible, condition-blind evoked response (the bar protocol is a
+    fixed sequence across runs), NOT a scalar per-voxel mean. Scored with
+    the same ``per_voxel_r2`` on the held-out BOLD.
 
-    The bar sweep is a fixed protocol across runs, so the cross-run mean is
-    time-aligned (after the standard 258-TR crop already done by
-    ``build_data_and_paradigm``), making this a valid condition-blind
-    noise ceiling.
-
-    ``voxel_ids`` are the BOLD-masker flat indices the fitted arms used;
-    we slice the loaded BOLD to those columns so the null aligns by
-    voxel_id.
+    ``bold_sel`` is the subject's BOLD already sliced to the arms' voxel_ids
+    (loaded once per subject by the caller). All other args are the
+    subject-level paradigm / indicators / run_meta from
+    ``build_data_and_paradigm``.
     """
-    (bold, paradigm, condition_indicator,
-     dynamic_indicator, target_indicator,
-     _grid, _masker, run_meta) = build_data_and_paradigm(
-        sub, resolution=resolution, grid_radius=grid_radius)
-
-    voxel_ids = np.asarray(voxel_ids)
-    bold_sel = bold[:, voxel_ids]   # (T_total, n_vox)
-    n_vox = voxel_ids.size
+    n_vox = bold_sel.shape[1]
 
     fold_r2 = []
     for cv_fold in range(4):
@@ -134,13 +126,25 @@ def compute_null_cv_r2(
             fold_r2.append(np.full(n_vox, np.nan, dtype=np.float64))
             continue
 
-        train_bold = split['train']['bold']     # (T_train, n_vox)
-        held_bold = split['held']['bold']        # (T_held, n_vox)
+        train_bold = split['train']['bold']     # (n_tr*T_run, n_vox)
+        held_bold = split['held']['bold']        # (n_he*T_run, n_vox)
+        n_tr = len(split['train']['run_meta'])
+        n_he = len(split['held']['run_meta'])
+        # Reshape concatenated runs -> (n_runs, T_run, n_vox); needs equal
+        # run length (258 within a subject). Guard and skip the fold if not.
+        if (n_tr == 0 or n_he == 0
+                or train_bold.shape[0] % n_tr or held_bold.shape[0] % n_he):
+            fold_r2.append(np.full(n_vox, np.nan, dtype=np.float64))
+            continue
+        T_run = train_bold.shape[0] // n_tr
+        if held_bold.shape[0] // n_he != T_run:
+            fold_r2.append(np.full(n_vox, np.nan, dtype=np.float64))
+            continue
 
-        # MODEL-FREE prediction: per-voxel mean over ALL training timepoints
-        # (= the cross-run mean response of the bar protocol), broadcast.
-        train_mean = train_bold.mean(axis=0, keepdims=True)   # (1, n_vox)
-        pred = np.repeat(train_mean, held_bold.shape[0], axis=0)
+        # Across-training-runs mean response (per within-run timepoint).
+        mean_resp = train_bold.reshape(n_tr, T_run, n_vox).mean(axis=0)
+        # Predict every held run with that same mean response.
+        pred = np.tile(mean_resp, (n_he, 1))     # (n_he*T_run, n_vox)
         fold_r2.append(per_voxel_r2(held_bold, pred).astype(np.float64))
 
     stack = np.vstack(fold_r2)        # (4, n_vox)
@@ -160,64 +164,79 @@ def collect(bids_folder: Path) -> pd.DataFrame:
     shift_tsvs = sorted(shift_root.glob('sub-*/sub-*_roi-*_cv-r2.tsv'))
     print(f'Found {len(shift_tsvs)} shift cv-r2 TSVs under {shift_root}')
 
-    rows = []
+    # Group (subject, ROI) cells by subject so BOLD is loaded ONCE per
+    # subject (it was being reloaded per ROI -> 11x redundant full-brain
+    # loads, which timed the aggregator out).
+    by_sub: dict[int, list] = {}
     for shift_tsv in shift_tsvs:
-        rel = shift_tsv.relative_to(shift_root)
-        # Parse subject + roi from the filename.
-        name = shift_tsv.name  # sub-XX_roi-{ROI}_cv-r2.tsv
-        subject = int(name.split('_')[0].split('-')[1])
-        roi = name.split('roi-')[1].split('_cv-r2')[0]
+        subject = int(shift_tsv.name.split('_')[0].split('-')[1])
+        by_sub.setdefault(subject, []).append(shift_tsv)
 
-        arm_tsvs = {arm: (root / arm / rel) for arm in ARMS}
-        missing = [arm for arm, p in arm_tsvs.items() if not p.exists()]
-        if missing:
-            print(f'  -> sub-{subject:02d} {roi}: missing arms {missing}, '
-                  'skipping')
-            continue
-
-        arm_r2 = {arm: _arm_per_voxel_cv_r2(arm_tsvs[arm]) for arm in ARMS}
-
-        # ASSERT identical voxel_ids across all three fitted arms.
-        ref_ids = arm_r2['shift'].index.to_numpy()
-        ok = True
-        for arm in ARMS:
-            ids = arm_r2[arm].index.to_numpy()
-            if ids.shape != ref_ids.shape or not np.array_equal(ids, ref_ids):
-                print(f'  !! VOXEL-ID MISMATCH sub-{subject:02d} {roi}: '
-                      f"arm '{arm}' n={ids.size} vs shift n={ref_ids.size}. "
-                      'SKIPPING — arms NOT comparable.')
-                ok = False
-                break
-        if not ok:
-            continue
-
-        voxel_ids = ref_ids
-
-        # Null level: model-free, from BOLD (slices to these voxel_ids).
+    rows = []
+    for subject in sorted(by_sub):
         sub = Subject(subject, bids_folder)
         try:
-            null_r2 = compute_null_cv_r2(sub, voxel_ids)
+            (bold, paradigm, condition_indicator, dynamic_indicator,
+             target_indicator, _grid, _masker, run_meta) = \
+                build_data_and_paradigm(sub, resolution=50, grid_radius=5.0)
         except Exception as e:                       # noqa: BLE001
-            print(f'  !! null computation failed sub-{subject:02d} {roi}: '
-                  f'{e}. Skipping.')
+            print(f'  !! BOLD load failed sub-{subject:02d}: {e}. Skipping subject.')
             continue
 
-        block = pd.DataFrame({
-            'subject': subject,
-            'roi': roi,
-            'voxel_id': voxel_ids,
-            'cv_r2_null': null_r2,
-            'cv_r2_model0': arm_r2['model0']['cv_r2'].to_numpy(),
-            'cv_r2_gain': arm_r2['gain']['cv_r2'].to_numpy(),
-            'cv_r2_shift': arm_r2['shift']['cv_r2'].to_numpy(),
-        })
-        # Signal voxel = null mean-over-folds > 0 (continuous null also
-        # emitted so a stricter cutoff can be swept downstream).
-        block['is_signal'] = block['cv_r2_null'] > 0.0
-        rows.append(block)
-        print(f'  sub-{subject:02d} {roi}: n_vox={voxel_ids.size}, '
-              f'n_signal={int(block["is_signal"].sum())}, '
-              f'null_med={np.nanmedian(null_r2):.4f}')
+        for shift_tsv in by_sub[subject]:
+            rel = shift_tsv.relative_to(shift_root)
+            roi = shift_tsv.name.split('roi-')[1].split('_cv-r2')[0]
+
+            arm_tsvs = {arm: (root / arm / rel) for arm in ARMS}
+            missing = [arm for arm, p in arm_tsvs.items() if not p.exists()]
+            if missing:
+                print(f'  -> sub-{subject:02d} {roi}: missing arms {missing}, '
+                      'skipping')
+                continue
+
+            arm_r2 = {arm: _arm_per_voxel_cv_r2(arm_tsvs[arm]) for arm in ARMS}
+
+            # ASSERT identical voxel_ids across all three fitted arms.
+            ref_ids = arm_r2['shift'].index.to_numpy()
+            ok = True
+            for arm in ARMS:
+                ids = arm_r2[arm].index.to_numpy()
+                if ids.shape != ref_ids.shape or not np.array_equal(ids, ref_ids):
+                    print(f'  !! VOXEL-ID MISMATCH sub-{subject:02d} {roi}: '
+                          f"arm '{arm}' n={ids.size} vs shift n={ref_ids.size}. "
+                          'SKIPPING — arms NOT comparable.')
+                    ok = False
+                    break
+            if not ok:
+                continue
+            voxel_ids = ref_ids
+
+            # Null level: model-free, from the already-loaded BOLD.
+            try:
+                null_r2 = compute_null_cv_r2(
+                    bold[:, voxel_ids], paradigm, condition_indicator,
+                    dynamic_indicator, target_indicator, run_meta)
+            except Exception as e:                   # noqa: BLE001
+                print(f'  !! null computation failed sub-{subject:02d} {roi}: '
+                      f'{e}. Skipping.')
+                continue
+
+            block = pd.DataFrame({
+                'subject': subject,
+                'roi': roi,
+                'voxel_id': voxel_ids,
+                'cv_r2_null': null_r2,
+                'cv_r2_model0': arm_r2['model0']['cv_r2'].to_numpy(),
+                'cv_r2_gain': arm_r2['gain']['cv_r2'].to_numpy(),
+                'cv_r2_shift': arm_r2['shift']['cv_r2'].to_numpy(),
+            })
+            # Signal voxel = null mean-over-folds > 0 (continuous null also
+            # emitted so a stricter cutoff can be swept downstream).
+            block['is_signal'] = block['cv_r2_null'] > 0.0
+            rows.append(block)
+            print(f'  sub-{subject:02d} {roi}: n_vox={voxel_ids.size}, '
+                  f'n_signal={int(block["is_signal"].sum())}, '
+                  f'null_med={np.nanmedian(null_r2):.4f}')
 
     if not rows:
         return pd.DataFrame()
