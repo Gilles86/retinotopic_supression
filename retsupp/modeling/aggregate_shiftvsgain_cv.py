@@ -156,7 +156,7 @@ def compute_null_cv_r2(
 # Collect per-voxel table.
 # ---------------------------------------------------------------------------
 
-def collect(bids_folder: Path) -> pd.DataFrame:
+def collect(bids_folder: Path, only_subjects=None) -> pd.DataFrame:
     root = bids_folder / 'derivatives' / 'af_prf_cv_shiftvsgain'
 
     # Drive iteration off the SHIFT arm (one cv-r2.tsv per (subject, ROI)).
@@ -171,6 +171,10 @@ def collect(bids_folder: Path) -> pd.DataFrame:
     for shift_tsv in shift_tsvs:
         subject = int(shift_tsv.name.split('_')[0].split('-')[1])
         by_sub.setdefault(subject, []).append(shift_tsv)
+
+    if only_subjects:
+        by_sub = {s: v for s, v in by_sub.items() if s in set(only_subjects)}
+        print(f'  --only-subjects: restricting to {sorted(by_sub)}')
 
     rows = []
     for subject in sorted(by_sub):
@@ -368,18 +372,26 @@ def threshold_sweep(df: pd.DataFrame) -> pd.DataFrame:
 # Main.
 # ---------------------------------------------------------------------------
 
-def main(bids_folder: str):
+def main(bids_folder: str, only_subjects=None):
     bids_folder = Path(bids_folder)
     out_root = bids_folder / 'derivatives' / 'af_prf_cv_shiftvsgain'
     out_root.mkdir(parents=True, exist_ok=True)
+    per_vox_tsv = out_root / 'cv4_per_voxel.tsv'
 
-    df = collect(bids_folder)
+    df = collect(bids_folder, only_subjects=only_subjects)
+    if only_subjects and per_vox_tsv.exists():
+        # MERGE: keep existing rows for the other subjects, replace the
+        # re-run subjects' rows, then recompute summaries on the full table.
+        old = pd.read_csv(per_vox_tsv, sep='\t')
+        old = old[~old['subject'].isin(set(only_subjects))]
+        df = pd.concat([old, df], ignore_index=True)
+        print(f'Merged: {old["subject"].nunique()} kept + re-run '
+              f'{sorted(set(only_subjects))} -> {df["subject"].nunique()} subjects total')
     if df.empty:
         print('No matched (model0, gain, shift) cells found — nothing to '
               'aggregate.')
         return
 
-    per_vox_tsv = out_root / 'cv4_per_voxel.tsv'
     df = df.sort_values(['roi', 'subject', 'voxel_id']).reset_index(drop=True)
     df.to_csv(per_vox_tsv, sep='\t', index=False)
     print(f'\nWrote per-voxel table: {per_vox_tsv}  ({df.shape[0]} rows)')
@@ -408,5 +420,9 @@ def main(bids_folder: str):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--bids-folder', default='/data/ds-retsupp')
+    parser.add_argument('--only-subjects', type=int, nargs='+', default=None,
+                        help='Re-aggregate only these subjects and merge into '
+                             'the existing cv4_per_voxel.tsv (avoids reloading '
+                             'BOLD for all 30).')
     args = parser.parse_args()
-    main(bids_folder=args.bids_folder)
+    main(bids_folder=args.bids_folder, only_subjects=args.only_subjects)
