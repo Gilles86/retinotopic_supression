@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --time=00:45:00
 #SBATCH --constraint="L4"
-#SBATCH --mem=16G
+#SBATCH --mem=48G  # 48G: large-brain subjects (e.g. sub-08) OOM at 16G loading full BOLD
 
 # MODEL0 arm (fixed PRF, NO attention) of the cross-validated 4-level
 # shift-vs-gain comparison. Runs retsupp.modeling.fit_af_prf_cv_v2 with
