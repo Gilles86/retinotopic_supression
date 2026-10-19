@@ -25,7 +25,7 @@ TSVs:
   concatenations of the per-(subject, ROI) files.
 
 ``plot`` (local): group statistics (FDR across ROIs per measure) and
-three figures: per-trial, RT bins, run-level.
+four figures: per-trial, RT bins, run-level, inter-trial history.
 
 Usage
 -----
@@ -175,7 +175,9 @@ def _within_corr(df, x, y, by):
 
 def _pointplot(ax, df, y, hue, order, palette, hue_order=None):
     sns.pointplot(df, x='roi', y=y, hue=hue, order=order, hue_order=hue_order,
-                  palette=palette, dodge=0.5, linestyle='none',
+                  palette=palette,
+                  dodge=0.5 if df[hue].nunique() > 1 else False,
+                  linestyle='none',
                   errorbar=('ci', 95), markersize=3, ax=ax)
     ax.axhline(0, color='#1F2933', lw=0.8)
     ax.tick_params(axis='x', rotation=90)
@@ -333,12 +335,63 @@ def plot(prefix: Path, fig_dir: Path):
         _print(f'Run-level {test} (global regressor in; FDR across ROIs):',
                d, ['roi', 'mean', 't', 'p', 'q'])
 
+    # ------------------------------------------------------------------
+    # Figure 4: inter-trial history → gains
+    # ------------------------------------------------------------------
+    def contrasts(scheme, kinds, pairs):
+        d = bins[(bins['scheme'] == scheme) & bins['kind'].isin(kinds)]
+        w = d.pivot_table(index=['subject', 'roi', 'with_global', 'kind'],
+                          columns='bin', values='g').reset_index()
+        out = []
+        for a, b_ in pairs:
+            out.append(w.assign(contrast=f'{a} − {b_}', value=w[a] - w[b_])
+                       [['subject', 'roi', 'with_global', 'kind', 'contrast',
+                         'value']])
+        return pd.concat(out)
+
+    hist = pd.concat([
+        contrasts('dprime', ['D_HP', 'D_LP'], [('repeat', 'switch')]),
+        contrasts('tprime', ['T'], [('at_prev_dist', 'other'),
+                                    ('repeat', 'other')]),
+        bins[(bins['scheme'] == 'all') & (bins['kind'] == 'P')]
+        .assign(contrast='vs 0', value=lambda d: d['g'])
+        [['subject', 'roi', 'with_global', 'kind', 'contrast', 'value']],
+    ])
+    hist['measure'] = hist['kind'] + ': ' + hist['contrast']
+    measures = ['D_HP: repeat − switch', 'D_LP: repeat − switch',
+                'T: at_prev_dist − other', 'T: repeat − other', 'P: vs 0']
+    titles = ['HP distractor gain:\nrepeat − switch location',
+              'LP distractor gain:\nrepeat − switch location',
+              'Target gain: at previous\ndistractor loc. − other',
+              'Target gain:\nrepeat − other',
+              'Gain at previous distractor\nlocation (now neutral)']
+    colors = [KIND_PALETTE['D_HP'], KIND_PALETTE['D_LP'], KIND_PALETTE['T'],
+              KIND_PALETTE['T'], '#2A9D8F']
+    fig, axes = plt.subplots(1, len(measures), figsize=(15, 3.2), sharey=False)
+    hg = hist[hist['with_global']]
+    for ax, m, title, c in zip(axes, measures, titles, colors):
+        _pointplot(ax, hg[hg['measure'] == m].assign(k='c'), 'value', 'k',
+                   rois, {'c': c})
+        ax.get_legend().remove()
+        ax.set(title=title, ylabel='Gain difference' if m != 'P: vs 0'
+               else 'Gain')
+    sns.despine(fig)
+    fig.tight_layout()
+    fig.savefig(fig_dir / 'trialwise_af_gains_intertrial.pdf')
+    st_h = group_t(hist, 'value', ['with_global', 'measure', 'roi'])
+    for m in measures:
+        _print(f'Inter-trial {m} (global regressor in; FDR across ROIs):',
+               st_h[st_h['with_global'] & (st_h['measure'] == m)],
+               ['roi', 'mean', 't', 'p', 'q'])
+    st_h.to_csv(f'{prefix}_intertrial_stats.tsv', sep='\t', index=False)
+
     st.to_csv(f'{prefix}_rt_betas_stats.tsv', sep='\t', index=False)
     st_c.to_csv(f'{prefix}_lp_hp_slope_stats.tsv', sep='\t', index=False)
     st_cov.to_csv(f'{prefix}_priming_stats.tsv', sep='\t', index=False)
     st_b.to_csv(f'{prefix}_bins_stats.tsv', sep='\t', index=False)
     run_stats.to_csv(f'{prefix}_runlevel_stats.tsv', sep='\t', index=False)
-    print(f'\nFigures in {fig_dir}/trialwise_af_gains_{{rt,rt_bins,runlevel}}.pdf')
+    print(f'\nFigures in {fig_dir}/trialwise_af_gains_'
+          '{rt,rt_bins,runlevel,intertrial}.pdf')
 
 
 if __name__ == '__main__':

@@ -35,7 +35,15 @@ and the bin gains estimated by weighted OLS. Bins are formed within
 (session, run, trial type) on correct trials with valid RT; error /
 miss / invalid-RT trials go to their own ``other`` bin. The same OLS
 also runs with one bin per run (``run`` scheme, all trials) for
-run-level brain–behaviour analyses.
+run-level brain–behaviour analyses, and with inter-trial history bins:
+``dprime`` (distractor at the previous trial's distractor location:
+``repeat`` / ``switch``) and ``tprime`` (target ``repeat`` /
+``at_prev_dist`` / ``other``).
+
+A fourth regressor kind, ``P``, is the gain at the PREVIOUS trial's
+distractor location when it holds a neutral item on the current trial
+(prior 0; no canonical counterpart) — intertrial inhibition at a
+location that is empty of singletons now.
 
 Trial pulses are the AF fit's (target onset → feedback, capped at
 1.5 s). Feedback arrives at a fixed 1.5 s after target onset, so the
@@ -171,6 +179,17 @@ def add_rt_bins(trials: pd.DataFrame) -> pd.DataFrame:
     trials['bin_all'] = 'all'
     trials['bin_run'] = ('ses-' + trials['session'].astype(str)
                          + '_run-' + trials['run'].astype(str))
+
+    # Inter-trial history (previous trial in the same run).
+    prev = trials.groupby(['session', 'run'])[['dist_ch', 'target_ch']].shift(1)
+    trials['prev_dist_ch'] = prev['dist_ch'].fillna(-1).astype(int)
+    trials['prev_target_ch'] = prev['target_ch'].fillna(-1).astype(int)
+    d, t, pd_ = trials['dist_ch'], trials['target_ch'], trials['prev_dist_ch']
+    trials['bin_dprime'] = np.where(
+        (d >= 0) & (pd_ >= 0), np.where(d == pd_, 'repeat', 'switch'), 'na')
+    trials['bin_tprime'] = np.where(
+        (t >= 0) & (t == trials['prev_target_ch']), 'repeat',
+        np.where((t >= 0) & (t == pd_), 'at_prev_dist', 'other'))
     return trials
 
 
@@ -255,6 +274,11 @@ def trial_regressors(trials, u, D, D_glob, kern, amp):
         if row['dist_ch'] >= 0:
             specs.append(('D_' + row['trial_type'], D[row['dist_ch']]))
         specs.append(('G', D_glob))
+        # Previous trial's distractor location, when it holds a neutral
+        # item now (not this trial's target or distractor).
+        p_ch = row['prev_dist_ch']
+        if p_ch >= 0 and p_ch not in (row['target_ch'], row['dist_ch']):
+            specs.append(('P', D[p_ch]))
         for kind, drive in specs:
             z = u[t0:t1, k][:, np.newaxis] * drive[t0:t1]           # (P, V)
             win = np.zeros((W, D.shape[2]), dtype=np.float32)
@@ -377,7 +401,7 @@ def fit_roi(sub, roi, data, trials, u, out_dir, seed=0):
     trial_rows, cv_rows, bin_rows = [], [], []
     regs, meta = trial_regressors(trials, u, D, D_glob, kern, amp)
     g0 = meta['kind'].map({'T': g_T, 'D_HP': g_HP, 'D_LP': g_LP,
-                           'G': 0.0}).values.astype(np.float64)
+                           'G': 0.0, 'P': 0.0}).values.astype(np.float64)
     (M, b, c), (MA, bA, cA), (MB, bB, cB) = normal_equations(
         regs, resid0, w, sets)
 
@@ -389,7 +413,7 @@ def fit_roi(sub, roi, data, trials, u, out_dir, seed=0):
         row = dict(alpha=alpha,
                    heldout_gain=0.5 * ((sse_A0 - sse(gA, MB, bB, cB)) / sse_A0
                                        + (sse_B0 - sse(gB, MA, bA, cA)) / sse_B0))
-        for kind in ('T', 'D_HP', 'D_LP', 'G'):
+        for kind in ('T', 'D_HP', 'D_LP', 'G', 'P'):
             sel = (meta['kind'] == kind).values
             dA, dB = gA[sel] - g0[sel], gB[sel] - g0[sel]
             row[f'splithalf_r_{kind}'] = (float(np.corrcoef(dA, dB)[0, 1])
@@ -400,9 +424,9 @@ def fit_roi(sub, roi, data, trials, u, out_dir, seed=0):
 
     # ---- RT-binned OLS ----
     meta_b = meta.merge(trials[['trial_idx', 'bin_all', 'bin_rt2', 'bin_rt3',
-                                'bin_run']],
+                                'bin_run', 'bin_dprime', 'bin_tprime']],
                         on='trial_idx')
-    for scheme in ('all', 'rt2', 'rt3', 'run'):
+    for scheme in ('all', 'rt2', 'rt3', 'run', 'dprime', 'tprime'):
         for with_global in (False, True):
             keep = (meta_b['kind'] != 'G').values | with_global
             groups = (meta_b['kind'] + '|' + meta_b[f'bin_{scheme}'])[keep]
