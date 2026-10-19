@@ -24,8 +24,10 @@ TSVs:
 - ``<prefix>_cv.tsv``, ``<prefix>_bins.tsv``, ``<prefix>_check.tsv`` —
   concatenations of the per-(subject, ROI) files.
 
-``plot`` (local): group statistics (FDR across ROIs per measure) and
-four figures: per-trial, RT bins, run-level, inter-trial history.
+``plot`` (local): group statistics (FDR across ROIs per measure), ROI-group
+and hierarchy-trend tests, minimum detectable effects, between-subject
+correlations of the canonical components with behaviour (needs
+``rt_summary.tsv`` next to the prefix), and one figure per analysis.
 
 Usage
 -----
@@ -55,6 +57,13 @@ KIND_LABEL = {'T': 'Target', 'D_HP': 'HP distractor', 'D_LP': 'LP distractor',
 COVARIATES = ['dist_repeat', 'target_repeat', 'target_at_prev_dist']
 TRANSFORMS = {'log': np.log, 'inv': lambda x: -1.0 / x,
               'rank': lambda x: x.rank()}
+ROI_GROUP = {'V1': 'early', 'V2': 'early', 'V3': 'early',
+             'hV4': 'ventral/lateral', 'VO': 'ventral/lateral',
+             'LO': 'ventral/lateral', 'TO': 'ventral/lateral',
+             'V3AB': 'dorsal', 'IPS': 'dorsal', 'SPL1': 'dorsal',
+             'FEF': 'dorsal'}
+ROI_LEVEL = {'V1': 1, 'V2': 2, 'V3': 3, 'hV4': 4, 'V3AB': 4, 'LO': 5,
+             'VO': 5, 'TO': 5, 'IPS': 6, 'SPL1': 7, 'FEF': 8}
 MAIN_ALPHA = 1.0
 CELL = ['session', 'run', 'trial_type']
 
@@ -126,7 +135,7 @@ def run_behavior(trials: pd.DataFrame) -> pd.DataFrame:
 def collect(bids_folder: Path, prefix: Path):
     root = bids_folder / 'derivatives' / 'af_trialwise_gains'
     prefix.parent.mkdir(parents=True, exist_ok=True)
-    for name in ('cv', 'bins', 'check'):
+    for name in ('cv', 'bins', 'check', 'parametric', 'runfit'):
         files = sorted(root.glob(f'sub-*/sub-*_roi-*_{name}.tsv'))
         df = pd.concat([pd.read_csv(f, sep='\t') for f in files])
         df.to_csv(f'{prefix}_{name}.tsv', sep='\t', index=False)
@@ -288,26 +297,30 @@ def plot(prefix: Path, fig_dir: Path):
     # ------------------------------------------------------------------
     # Figure 3: run-level brain–behaviour
     # ------------------------------------------------------------------
-    rg = bins[bins['scheme'] == 'run'].copy()
-    rg['session'] = rg['bin'].str.extract(r'ses-(\d)').astype(int)
-    rg['run'] = rg['bin'].str.extract(r'run-(\d)').astype(int)
-    rg = rg.pivot_table(index=['subject', 'roi', 'with_global', 'session', 'run'],
-                        columns='kind', values='g').reset_index()
-    rg['supp_index'] = rg['D_LP'] - rg['D_HP']
+    runfit = pd.read_csv(f'{prefix}_runfit.tsv', sep='\t')
+    rg = runfit.pivot_table(index=['subject', 'roi', 'with_global', 'session',
+                                   'run'], columns='kind', values='g').reset_index()
+    rg['sus_index'] = rg['S_LP'] - rg['S_HP']
+    rg['dyn_index'] = rg['D_LP'] - rg['D_HP']
     rg['D_mean'] = rg[['D_HP', 'D_LP']].mean(axis=1)
     run = rg.merge(behav, on=['subject', 'session', 'run'])
     # Remove session means so scan-day offsets can't drive correlations.
-    for c in ['supp_index', 'D_mean', 'D_HP', 'D_LP', 'T', 'G',
-              'benefit', 'capture', 'block_pos']:
+    for c in ['sus_index', 'dyn_index', 'D_mean', 'benefit', 'capture',
+              'block_pos']:
         run[c] = run[c] - run.groupby(
             ['subject', 'roi', 'with_global', 'session'])[c].transform('mean')
 
-    tests = [('supp_index', 'benefit', 'Suppression index (LP−HP gain)\n'
+    tests = [('sus_index', 'benefit', 'Sustained suppression (LP−HP)\n'
               '× RT benefit (LP−HP)'),
-             ('D_mean', 'capture', 'Distractor gain\n× capture cost'),
-             ('supp_index', 'block_pos', 'Suppression index\n× block position'),
+             ('sus_index', 'block_pos', 'Sustained suppression\n'
+              '× block position'),
+             ('dyn_index', 'benefit', 'Phasic suppression (LP−HP)\n'
+              '× RT benefit'),
+             ('dyn_index', 'block_pos', 'Phasic suppression\n× block position'),
+             ('D_mean', 'capture', 'Phasic distractor gain\n× capture cost'),
              ('benefit', 'block_pos', 'RT benefit\n× block position')]
-    fig, axes = plt.subplots(2, len(tests), figsize=(13, 5.5), sharey='row')
+    fig, axes = plt.subplots(2, len(tests), figsize=(18, 5.5), sharey='row',
+                             gridspec_kw=dict(width_ratios=[3] * 5 + [1]))
     run_stats = []
     for row, wg in enumerate([True, False]):
         sub = run[run['with_global'] == wg]
@@ -320,7 +333,8 @@ def plot(prefix: Path, fig_dir: Path):
                 zz = _within_corr(sub, x, y, ['roi'])
                 order = rois
             ax = axes[row, col]
-            _pointplot(ax, zz.assign(k='c'), 'z', 'k', order, {'c': '#D62828'})
+            color = '#D62828' if x.startswith('sus') else '#0077B6'
+            _pointplot(ax, zz.assign(k='c'), 'z', 'k', order, {'c': color})
             ax.get_legend().remove()
             ax.set(title=title if row == 0 else '',
                    ylabel=(f'Within-subject Fisher z\n(global regressor: {wg})'
@@ -385,13 +399,157 @@ def plot(prefix: Path, fig_dir: Path):
                ['roi', 'mean', 't', 'p', 'q'])
     st_h.to_csv(f'{prefix}_intertrial_stats.tsv', sep='\t', index=False)
 
+    # ------------------------------------------------------------------
+    # Figure 5: parametric modulation (all trials, continuous modulators)
+    # ------------------------------------------------------------------
+    par = pd.read_csv(f'{prefix}_parametric.tsv', sep='\t')
+    par = par[par['modulator'] != 'main']
+    st_p = group_t(par, 'g', ['with_global', 'modulator', 'kind', 'roi'])
+    mods = ['rt', 'dist_repeat', 'target_repeat', 'target_at_prev_dist']
+    mod_title = {'rt': 'Gain change per SD of log RT',
+                 'dist_repeat': 'Distractor repeats location',
+                 'target_repeat': 'Target repeats location',
+                 'target_at_prev_dist': 'Target at previous distractor location'}
+    pg = par[par['with_global']]
+    fig, axes = plt.subplots(len(mods), 1, figsize=(8, 11), sharex=True)
+    for ax, m in zip(axes, mods):
+        d = pg[pg['modulator'] == m]
+        _pointplot(ax, d, 'g', 'kind', rois, {**KIND_PALETTE, 'P': '#2A9D8F'},
+                   hue_order=[k for k in [*KIND_PALETTE, 'P']
+                              if k in set(d['kind'])])
+        ax.set(title=mod_title[m], ylabel='Modulation of gain')
+        if m != mods[0]:
+            ax.get_legend().remove()
+        else:
+            ax.legend(frameon=False, fontsize=7, ncol=5, loc='upper left')
+    sns.despine(fig)
+    fig.tight_layout()
+    fig.savefig(fig_dir / 'trialwise_af_gains_parametric.pdf')
+    for m in mods:
+        _print(f'Parametric modulator {m} (global in; FDR across ROIs per gain):',
+               st_p[st_p['with_global'] & (st_p['modulator'] == m)], cols)
+
+    # ------------------------------------------------------------------
+    # ROI groups + hierarchy trend (fewer, larger tests)
+    # ------------------------------------------------------------------
+    measures = pd.concat([
+        pg.assign(measure='param:' + pg['modulator'] + ':' + pg['kind'],
+                  value=pg['g'])[['subject', 'roi', 'measure', 'value']],
+        gains[gains['transform'] == 'log'].assign(
+            measure='rtbeta:' + gains['kind'], value=lambda d: d['beta'])
+        [['subject', 'roi', 'measure', 'value']],
+    ])
+    measures['group'] = measures['roi'].map(ROI_GROUP)
+    measures['level'] = measures['roi'].map(ROI_LEVEL)
+    grp = (measures.groupby(['subject', 'measure', 'group'])['value'].mean()
+           .reset_index().rename(columns={'group': 'roi'}))
+    st_grp = group_t(grp, 'value', ['measure', 'roi'])
+    slopes = []
+    for (subj, m), d in measures.groupby(['subject', 'measure']):
+        if d['level'].nunique() > 2:
+            slopes.append(dict(subject=subj, measure=m, roi='hierarchy',
+                               slope=np.polyfit(d['level'], d['value'], 1)[0]))
+    st_slope = group_t(pd.DataFrame(slopes), 'slope', ['measure', 'roi'],
+                       fdr_within=[])
+    _print('ROI-group means (FDR across the 3 groups per measure):',
+           st_grp, ['measure', 'roi', 'mean', 't', 'p', 'q'])
+    _print('Hierarchy slope (value ~ ROI level; FDR across measures):',
+           st_slope, ['measure', 'mean', 't', 'p', 'q'])
+
+    # ------------------------------------------------------------------
+    # Figure 6: sensitivity — minimum detectable effects per ROI
+    # ------------------------------------------------------------------
+    def mde(x):
+        x = x.dropna()
+        n = len(x)
+        return ((stats.t.ppf(0.975, n - 1) + stats.t.ppf(0.8, n - 1))
+                * x.std() / np.sqrt(n))
+
+    canon = check.assign(
+        sus_HP_minus_LP=check['g_HP'] - check['g_LP'],
+        dyn_HP_minus_LP=check['g_HP_dyn'] - check['g_LP_dyn'],
+        target_dyn=check['g_T_dyn'])
+    rows = []
+    for roi in rois:
+        c = canon[canon['roi'] == roi]
+        for m in ['sus_HP_minus_LP', 'dyn_HP_minus_LP', 'target_dyn']:
+            rows.append(dict(roi=roi, measure=m, mean=c[m].mean(),
+                             mde=mde(c[m])))
+        for kind, gcol in [('T', 'g_T_dyn'), ('D_HP', 'g_HP_dyn'),
+                           ('D_LP', 'g_LP_dyn')]:
+            x = pg[(pg['roi'] == roi) & (pg['modulator'] == 'rt')
+                   & (pg['kind'] == kind)]['g']
+            rows.append(dict(roi=roi, measure=f'rt_slope_{kind}',
+                             mean=x.mean(), mde=mde(x),
+                             scale=np.abs(c[gcol].mean())))
+    sens = pd.DataFrame(rows)
+    sens['mean_over_mde'] = sens['mean'] / sens['mde']
+    sens['mde_pct_of_gain'] = 100 * sens['mde'] / sens['scale']
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+    a = sens[sens['measure'].isin(['sus_HP_minus_LP', 'dyn_HP_minus_LP',
+                                   'target_dyn'])].pivot(
+        index='measure', columns='roi', values='mean_over_mde')[rois]
+    sns.heatmap(a, ax=axes[0], cmap='RdBu_r', center=0, vmin=-2, vmax=2,
+                annot=True, fmt='.1f', annot_kws=dict(fontsize=6), cbar=False)
+    axes[0].set(title='Canonical components: group mean / MDE\n'
+                '(|value| ≥ 1 ≈ detectable at 80% power)', xlabel='', ylabel='')
+    b_ = sens[sens['measure'].str.startswith('rt_slope')].pivot(
+        index='measure', columns='roi', values='mde_pct_of_gain')[rois]
+    sns.heatmap(b_, ax=axes[1], cmap='viridis_r', vmin=0, vmax=100,
+                annot=True, fmt='.0f', annot_kws=dict(fontsize=6), cbar=False)
+    axes[1].set(title='Smallest detectable RT modulation\n'
+                '(% of canonical gain per SD log RT)', xlabel='', ylabel='')
+    fig.tight_layout()
+    fig.savefig(fig_dir / 'trialwise_af_gains_sensitivity.pdf')
+    print('\nSensitivity (MDE at 80% power, two-sided α=.05, N=30):')
+    print(sens.round(3).to_string(index=False))
+
+    # ------------------------------------------------------------------
+    # Figure 7: between-subject, canonical components × behaviour
+    # ------------------------------------------------------------------
+    rt = pd.read_csv(Path(prefix).parent / 'rt_summary.tsv', sep='\t')
+    rt['benefit'] = rt['RT_LP'] - rt['RT_HP']
+    bs = canon.assign(
+        sus_supp=check['g_LP'] - check['g_HP'],
+        dyn_supp=check['g_LP_dyn'] - check['g_HP_dyn'],
+        dyn_D=check[['g_HP_dyn', 'g_LP_dyn']].mean(axis=1)).merge(
+        rt, on='subject')
+    bs_tests = [('sus_supp', 'benefit', 'Sustained suppression × RT benefit'),
+                ('dyn_supp', 'benefit', 'Phasic suppression × RT benefit'),
+                ('dyn_D', 'RT_dist_minus_no', 'Phasic distractor gain × capture'),
+                ('g_T_dyn', 'RT_no_dist', 'Target gain × RT (no distractor)')]
+    rows = []
+    for x, y, title in bs_tests:
+        for roi in rois:
+            d = bs[bs['roi'] == roi][[x, y]].dropna()
+            rho, p = stats.spearmanr(d[x], d[y])
+            rows.append(dict(test=title, roi=roi, rho=rho, p=p, n=len(d)))
+    bst = pd.DataFrame(rows)
+    bst['q'] = bst.groupby('test')['p'].transform(
+        lambda p: multipletests(p, method='fdr_bh')[1])
+    g = sns.catplot(bst, x='roi', y='rho', col='test', col_wrap=2, kind='bar',
+                    order=rois, color='#9AA5B1', height=2.4, aspect=1.8)
+    for ax in g.axes.flat:
+        ax.axhline(0, color='#1F2933', lw=0.8)
+        ax.tick_params(axis='x', rotation=90)
+    g.set_titles('{col_name}')
+    g.set_axis_labels('', 'Spearman ρ (N=30)')
+    g.savefig(fig_dir / 'trialwise_af_gains_between_subject.pdf')
+    _print('Between-subject Spearman (FDR across ROIs per test):',
+           bst, ['test', 'roi', 'rho', 'p', 'q'])
+
+    st_p.to_csv(f'{prefix}_parametric_stats.tsv', sep='\t', index=False)
+    st_grp.to_csv(f'{prefix}_roigroup_stats.tsv', sep='\t', index=False)
+    st_slope.to_csv(f'{prefix}_hierarchy_stats.tsv', sep='\t', index=False)
+    sens.to_csv(f'{prefix}_sensitivity.tsv', sep='\t', index=False)
+    bst.to_csv(f'{prefix}_between_subject_stats.tsv', sep='\t', index=False)
     st.to_csv(f'{prefix}_rt_betas_stats.tsv', sep='\t', index=False)
     st_c.to_csv(f'{prefix}_lp_hp_slope_stats.tsv', sep='\t', index=False)
     st_cov.to_csv(f'{prefix}_priming_stats.tsv', sep='\t', index=False)
     st_b.to_csv(f'{prefix}_bins_stats.tsv', sep='\t', index=False)
     run_stats.to_csv(f'{prefix}_runlevel_stats.tsv', sep='\t', index=False)
-    print(f'\nFigures in {fig_dir}/trialwise_af_gains_'
-          '{rt,rt_bins,runlevel,intertrial}.pdf')
+    print(f'\nFigures in {fig_dir}/trialwise_af_gains_{{rt,rt_bins,runlevel,'
+          'intertrial,parametric,sensitivity,between_subject}.pdf')
 
 
 if __name__ == '__main__':
