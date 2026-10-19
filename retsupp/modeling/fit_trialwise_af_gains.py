@@ -33,7 +33,9 @@ the canonical scalar model.
 RT bins: the per-trial regressors are summed within (kind × RT bin)
 and the bin gains estimated by weighted OLS. Bins are formed within
 (session, run, trial type) on correct trials with valid RT; error /
-miss / invalid-RT trials go to their own ``other`` bin.
+miss / invalid-RT trials go to their own ``other`` bin. The same OLS
+also runs with one bin per run (``run`` scheme, all trials) for
+run-level brain–behaviour analyses.
 
 Trial pulses are the AF fit's (target onset → feedback, capped at
 1.5 s). Feedback arrives at a fixed 1.5 s after target onset, so the
@@ -167,6 +169,8 @@ def add_rt_bins(trials: pd.DataFrame) -> pd.DataFrame:
                                          labels=labels).astype(str)
         trials[f'bin_{scheme}'] = col
     trials['bin_all'] = 'all'
+    trials['bin_run'] = ('ses-' + trials['session'].astype(str)
+                         + '_run-' + trials['run'].astype(str))
     return trials
 
 
@@ -395,9 +399,10 @@ def fit_roi(sub, roi, data, trials, u, out_dir, seed=0):
         trial_rows.append(est)
 
     # ---- RT-binned OLS ----
-    meta_b = meta.merge(trials[['trial_idx', 'bin_all', 'bin_rt2', 'bin_rt3']],
+    meta_b = meta.merge(trials[['trial_idx', 'bin_all', 'bin_rt2', 'bin_rt3',
+                                'bin_run']],
                         on='trial_idx')
-    for scheme in ('all', 'rt2', 'rt3'):
+    for scheme in ('all', 'rt2', 'rt3', 'run'):
         for with_global in (False, True):
             keep = (meta_b['kind'] != 'G').values | with_global
             groups = (meta_b['kind'] + '|' + meta_b[f'bin_{scheme}'])[keep]
