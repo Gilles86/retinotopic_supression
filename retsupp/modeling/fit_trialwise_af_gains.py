@@ -422,8 +422,9 @@ def fit_roi(sub, roi, data, trials, u, out_dir, seed=0):
     per_trial = per_trial.reset_index().merge(trials, on='trial_idx')
     for df, name in [(per_trial, 'trials'), (pd.DataFrame(cv_rows), 'cv'),
                      (pd.DataFrame(bin_rows), 'bins'), (check, 'check')]:
-        df.insert(0, 'roi', roi)
-        df.insert(0, 'subject', sub.subject_id)
+        if 'roi' not in df:
+            df.insert(0, 'roi', roi)
+            df.insert(0, 'subject', sub.subject_id)
         df.to_csv(out_dir / f'{stem}_{name}.tsv', sep='\t', index=False)
     print(pd.DataFrame(cv_rows).to_string())
     print(f'Saved {out_dir}/{stem}_*.tsv')
