@@ -49,10 +49,24 @@ Trial pulses are the AF fit's (target onset → feedback, capped at
 1.5 s). Feedback arrives at a fixed 1.5 s after target onset, so the
 pulse width does not depend on RT.
 
+Parametric model: instead of bins, each kind's gain is
+``g + Σ_m β_m · m_k`` with trial modulators z(log RT) (within session ×
+run × trial type; 0 for error / invalid trials) and inter-trial priming
+flags (distractor repeat, target repeat, target at the previous
+distractor location), all centred within kind. Uses every trial.
+
+Run-wise joint model: the sustained AF term is also linear in
+(g_HP, g_LP), so per run we estimate sustained HP / LP gains together
+with that run's phasic T / D_HP / D_LP (/ G) gains, by weighted OLS on
+the residual from the model with ALL AF gains zeroed. The sustained
+reconstruction is validated against the model (``sustained_recon_rel_err``;
+non-zero only if the model's ``max(mod, 0)`` clamp is active).
+
 Outputs under ``derivatives/af_trialwise_gains/sub-XX/``:
 ``sub-XX_roi-R_trials.tsv`` (per-trial gains per α),
 ``sub-XX_roi-R_cv.tsv`` (held-out SSE + split-half reliability per α),
-``sub-XX_roi-R_bins.tsv`` (binned gains) and
+``sub-XX_roi-R_bins.tsv`` (binned gains),
+``sub-XX_roi-R_parametric.tsv``, ``sub-XX_roi-R_runfit.tsv`` and
 ``sub-XX_roi-R_check.tsv`` (reconstruction sanity checks).
 
 Usage
@@ -190,6 +204,17 @@ def add_rt_bins(trials: pd.DataFrame) -> pd.DataFrame:
     trials['bin_tprime'] = np.where(
         (t >= 0) & (t == trials['prev_target_ch']), 'repeat',
         np.where((t >= 0) & (t == pd_), 'at_prev_dist', 'other'))
+
+    # Continuous modulators for the parametric model.
+    logrt = np.log(trials['rt'].where(trials['valid_rt']))
+    z = logrt.groupby([trials['session'], trials['run'],
+                       trials['trial_type']]).transform(
+        lambda x: (x - x.mean()) / x.std() if x.std() > 0 else x * 0.0)
+    trials['mod_rt'] = z.fillna(0.0)
+    trials['mod_dist_repeat'] = ((d >= 0) & (d == pd_)).astype(float)
+    trials['mod_target_repeat'] = (
+        (t >= 0) & (t == trials['prev_target_ch'])).astype(float)
+    trials['mod_target_at_prev_dist'] = ((t >= 0) & (t == pd_)).astype(float)
     return trials
 
 
@@ -243,6 +268,11 @@ def ring_drives(model, pars: pd.DataFrame, paradigm, grid, sigma_dyn):
     D = np.stack([sign * (paradigm * A[l]) @ rf.T for l in range(4)])
     D_glob = paradigm @ rf.T
     return D.astype(np.float32), D_glob.astype(np.float32)
+
+
+def sustained_drives(model, pars, paradigm, grid, sigma_af):
+    """S[ℓ] (T, V) = sign · Σ_g paradigm·A^AF_ℓ·rf (sustained AF, σ_AF)."""
+    return ring_drives(model, pars, paradigm, grid, sigma_af)[0]
 
 
 def convolve_cols(x, kern, amp):
@@ -373,6 +403,29 @@ def fit_roi(sub, roi, data, trials, u, out_dir, seed=0):
     pulse_err = max(np.abs(dyn_rebuilt - dyn_ind).max(),
                     np.abs(tgt_rebuilt - tgt_ind).max())
 
+    # Sustained term: linear in (g_HP, g_LP) unless the mod clamp at 0 bites.
+    g_HP_s, g_LP_s, sigma_af = (float(pars[c].iloc[0]) for c in
+                                ('g_HP', 'g_LP', 'sigma_AF'))
+    pars_ns = pars.copy()
+    pars_ns[['g_HP', 'g_LP']] = 0.0
+    pred_nosus = model.predict(parameters=pars_ns).values
+    S = sustained_drives(model, pars, paradigm, grid, sigma_af)
+    runs = trials[['session', 'run', 'hp_location']].drop_duplicates()
+    n_vol = sub.get_n_volumes(1, 1)
+    sus_hp = np.zeros_like(Y)
+    sus_lp = np.zeros_like(Y)
+    run_masks = []
+    for i, (_, rr) in enumerate(runs.iterrows()):
+        h = CONDITIONS.index(rr['hp_location'])
+        sl = slice(i * n_vol, (i + 1) * n_vol)
+        run_masks.append((rr['session'], rr['run'], sl, h))
+        sus_hp[sl] = S[h][sl]
+        sus_lp[sl] = S.sum(0)[sl] - S[h][sl]
+    sus = convolve_cols(g_HP_s * sus_hp + g_LP_s * sus_lp, kern, amp)
+    sus_target = pred_full - pred_nosus
+    sus_err = (np.abs(sus - sus_target).max()
+               / max(np.abs(sus_target).max(), 1e-12))
+
     check = pd.DataFrame([dict(
         subject=sub.subject_id, roi=roi, n_voxels=len(vox),
         n_trials=len(trials),
@@ -382,6 +435,8 @@ def fit_roi(sub, roi, data, trials, u, out_dir, seed=0):
         phasic_recon_rel_err=float(recon_err),
         pulse_rebuild_max_err=float(pulse_err),
         g_HP_dyn=g_HP, g_LP_dyn=g_LP, g_T_dyn=g_T, sigma_dyn=sigma_dyn,
+        g_HP=g_HP_s, g_LP=g_LP_s, sigma_AF=sigma_af,
+        sustained_recon_rel_err=float(sus_err),
     )])
     print(check.T.to_string())
     if recon_err > 1e-2 or pulse_err > 1e-4:
@@ -442,6 +497,66 @@ def fit_roi(sub, roi, data, trials, u, out_dir, seed=0):
                                      with_global=with_global, kind=kind,
                                      bin=bin_, g=val, n_trials=int(n[lab])))
 
+    # ---- Parametric modulation: gain_k = g + Σ_m β_m · m_k ----
+    mods = ['mod_rt', 'mod_dist_repeat', 'mod_target_repeat',
+            'mod_target_at_prev_dist']
+    meta_m = meta.merge(trials[['trial_idx', *mods]], on='trial_idx')
+    param_rows = []
+    for with_global in (False, True):
+        cols, names = [], []
+        for kind in sorted(meta_m['kind'].unique()):
+            if kind == 'G' and not with_global:
+                continue
+            sel = (meta_m['kind'] == kind).values
+            cols.append(sel.astype(float))
+            names.append((kind, 'main'))
+            for m in mods:
+                v = meta_m[m].values * sel
+                v = np.where(sel, v - v[sel].mean(), 0.0)
+                if v[sel].std() > 1e-6:
+                    cols.append(v)
+                    names.append((kind, m.replace('mod_', '')))
+        Mp = np.column_stack(cols)
+        est = np.linalg.solve(Mp.T @ M @ Mp, Mp.T @ b)
+        for (kind, m), val in zip(names, est):
+            param_rows.append(dict(with_global=with_global, kind=kind,
+                                   modulator=m, g=val))
+
+    # ---- Run-wise joint model: sustained HP/LP + phasic gains per run ----
+    resid00 = (Y - model.predict(parameters=pars0.assign(
+        g_HP=0.0, g_LP=0.0)).values).astype(np.float64)
+    meta_r = meta.merge(trials[['trial_idx', 'session', 'run']], on='trial_idx')
+    run_rows = []
+    for with_global in (False, True):
+        names, dense = [], []
+        for ses, run, sl, h in run_masks:
+            for kind, x in (('S_HP', sus_hp), ('S_LP', sus_lp)):
+                xr = np.zeros_like(Y)
+                xr[sl] = x[sl]
+                dense.append(convolve_cols(xr, kern, amp))
+                names.append((ses, run, kind))
+            for kind in ('T', 'D_HP', 'D_LP', 'G'):
+                if kind == 'G' and not with_global:
+                    continue
+                idx = np.nonzero(((meta_r['session'] == ses)
+                                  & (meta_r['run'] == run)
+                                  & (meta_r['kind'] == kind)).values)[0]
+                if len(idx) == 0:
+                    continue
+                xr = np.zeros_like(Y)
+                for i in idx:
+                    st, win = regs[i]
+                    xr[st:st + len(win)] += win
+                dense.append(xr)
+                names.append((ses, run, kind))
+        X = np.stack(dense).reshape(len(dense), -1)
+        Xw = X * np.tile(w, Y.shape[0])
+        est = np.linalg.solve(Xw @ X.T, Xw @ resid00.ravel())
+        del X, Xw, dense
+        for (ses, run, kind), val in zip(names, est):
+            run_rows.append(dict(with_global=with_global, session=ses,
+                                 run=run, kind=kind, g=val))
+
     stem = f'sub-{sub.subject_id:02d}_roi-{roi}'
     per_trial = (pd.concat(trial_rows)
                  .pivot_table(index=['alpha', 'trial_idx'],
@@ -450,7 +565,9 @@ def fit_roi(sub, roi, data, trials, u, out_dir, seed=0):
     per_trial.columns = [f'{a}_{k}' for a, k in per_trial.columns]
     per_trial = per_trial.reset_index().merge(trials, on='trial_idx')
     for df, name in [(per_trial, 'trials'), (pd.DataFrame(cv_rows), 'cv'),
-                     (pd.DataFrame(bin_rows), 'bins'), (check, 'check')]:
+                     (pd.DataFrame(bin_rows), 'bins'), (check, 'check'),
+                     (pd.DataFrame(param_rows), 'parametric'),
+                     (pd.DataFrame(run_rows), 'runfit')]:
         if 'roi' not in df:
             df.insert(0, 'roi', roi)
             df.insert(0, 'subject', sub.subject_id)
