@@ -66,15 +66,15 @@ def _z(x):
 
 def add_priming(trials: pd.DataFrame) -> pd.DataFrame:
     """Inter-trial priming covariates, from the previous trial in the run."""
-    trials = trials.sort_values(['session', 'run', 'onset']).copy()
-    prev = trials.groupby(['session', 'run'])[
-        ['dist_ch', 'target_ch']].shift(1)
-    d, t = trials['dist_ch'], trials['target_ch']
-    trials['dist_repeat'] = ((d >= 0) & (d == prev['dist_ch'])).astype(float)
-    trials['target_repeat'] = ((t >= 0) & (t == prev['target_ch'])).astype(float)
-    trials['target_at_prev_dist'] = ((t >= 0)
-                                     & (t == prev['dist_ch'])).astype(float)
-    return trials
+    # One row per trial (the trials file repeats each trial per α).
+    u = (trials.drop_duplicates('trial_idx')
+         .sort_values(['session', 'run', 'onset']).copy())
+    prev = u.groupby(['session', 'run'])[['dist_ch', 'target_ch']].shift(1)
+    d, t = u['dist_ch'], u['target_ch']
+    u['dist_repeat'] = ((d >= 0) & (d == prev['dist_ch'])).astype(float)
+    u['target_repeat'] = ((t >= 0) & (t == prev['target_ch'])).astype(float)
+    u['target_at_prev_dist'] = ((t >= 0) & (t == prev['dist_ch'])).astype(float)
+    return trials.merge(u[['trial_idx', *COVARIATES]], on='trial_idx')
 
 
 def rt_betas(trials: pd.DataFrame) -> pd.DataFrame:
