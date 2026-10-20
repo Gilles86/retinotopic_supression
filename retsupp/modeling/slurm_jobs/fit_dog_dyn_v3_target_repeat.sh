@@ -4,7 +4,8 @@
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=24G
-#SBATCH --time=06:00:00
+#SBATCH --partition=lowprio
+#SBATCH --time=02:00:00
 
 # Model 2: v3 + target + sharedSigma + repeat-distractor split. The
 # dynamic HP/LP gains are split into:
@@ -14,12 +15,12 @@
 # location as the immediately preceding trial. g_T_dyn unchanged.
 #
 # Output:
-#   derivatives/af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_repeat/sub-XX/...
+#   derivatives/af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_repeat_pSig0.5/sub-XX/...
 #
 # Submission: 30 subjects x 11 ROIs = 330 array tasks.
 #   sbatch --array=1-330 retsupp/modeling/slurm_jobs/fit_dog_dyn_v3_target_repeat.sh
 
-set -euo pipefail
+set -eo pipefail
 
 LOGFILE="$HOME/logs/dog_dyn_v3_target_repeat_${SLURM_JOB_NAME:-repeat}_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID:-0}.txt"
 mkdir -p "$(dirname "$LOGFILE")"
@@ -53,9 +54,8 @@ roi="${ROIS[$roi_idx]}"
 echo "Subject:     ${subject}"
 echo "ROI:         ${roi}"
 
-source "$HOME/data/miniforge3/etc/profile.d/conda.sh"
-conda activate retsupp_cuda
-
+export TMPDIR="/scratch/$USER/tmp/${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
+mkdir -p "$TMPDIR"
 export CUDA_VISIBLE_DEVICES=-1
 export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-4}"
