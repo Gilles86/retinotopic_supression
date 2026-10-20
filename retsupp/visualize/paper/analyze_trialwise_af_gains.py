@@ -139,7 +139,8 @@ def trial_table(trials: pd.DataFrame) -> pd.DataFrame:
     covariates."""
     trials = add_priming(trials[trials['alpha'] == MAIN_ALPHA])
     df = trials[trials['valid_rt']].copy()
-    out = df[['subject', 'roi', 'trial_idx', 'session', 'run', 'trial_type']].copy()
+    out = df[['subject', 'roi', 'trial_idx', 'session', 'run', 'trial_type',
+               'rt']].copy()
     out['logrt'] = df.groupby(CELL)['rt'].transform(lambda x: _z(np.log(x)))
     for kind in ('T', 'G'):
         out[kind] = df.groupby(CELL)[f'g_{kind}'].transform(_z)
