@@ -132,6 +132,25 @@ def run_behavior(trials: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def trial_table(trials: pd.DataFrame) -> pd.DataFrame:
+    """Trial-level rows for the mixed models (main α only): z(log RT) and
+    z(gains) within (session, run, trial type), one distractor column ``D``
+    holding the HP or LP distractor gain, and cell-demeaned priming
+    covariates."""
+    trials = add_priming(trials[trials['alpha'] == MAIN_ALPHA])
+    df = trials[trials['valid_rt']].copy()
+    out = df[['subject', 'roi', 'trial_idx', 'session', 'run', 'trial_type']].copy()
+    out['logrt'] = df.groupby(CELL)['rt'].transform(lambda x: _z(np.log(x)))
+    for kind in ('T', 'G'):
+        out[kind] = df.groupby(CELL)[f'g_{kind}'].transform(_z)
+    d = df['g_D_HP'].where(df['trial_type'] == 'HP', df['g_D_LP'])
+    out['D'] = d.groupby([df[c] for c in CELL]).transform(_z).fillna(0.0)
+    out['HP'] = (df['trial_type'] == 'HP').astype(float)
+    for cov in COVARIATES:
+        out[cov] = df[cov] - df.groupby(CELL)[cov].transform('mean')
+    return out
+
+
 def collect(bids_folder: Path, prefix: Path):
     root = bids_folder / 'derivatives' / 'af_trialwise_gains'
     prefix.parent.mkdir(parents=True, exist_ok=True)
@@ -140,15 +159,18 @@ def collect(bids_folder: Path, prefix: Path):
         df = pd.concat([pd.read_csv(f, sep='\t') for f in files])
         df.to_csv(f'{prefix}_{name}.tsv', sep='\t', index=False)
         print(f'{name}: {len(files)} files -> {prefix}_{name}.tsv')
-    betas, behav = [], []
+    betas, behav, tt = [], [], []
     for f in sorted(root.glob('sub-*/sub-*_roi-*_trials.tsv')):
         trials = pd.read_csv(f, sep='\t')
         betas.append(rt_betas(trials))
+        tt.append(trial_table(trials))
         if '_roi-V1_' in f.name:
             behav.append(run_behavior(trials))
         print(f.name, flush=True)
     pd.concat(betas).to_csv(f'{prefix}_rt_betas.tsv', sep='\t', index=False)
     pd.concat(behav).to_csv(f'{prefix}_run_behavior.tsv', sep='\t', index=False)
+    pd.concat(tt).to_csv(f'{prefix}_trial_table.tsv.gz', sep='\t', index=False,
+                         float_format='%.4g')
     print(f'-> {prefix}_rt_betas.tsv, {prefix}_run_behavior.tsv')
 
 
