@@ -552,14 +552,98 @@ def plot(prefix: Path, fig_dir: Path):
           'intertrial,parametric,sensitivity,between_subject}.pdf')
 
 
+def _stars(ax, st, order, hue_order, dodge=0.5):
+    """Mark FDR-significant cells (q < .05: *, q < .01: **) above the CIs."""
+    n = len(hue_order)
+    offs = np.linspace(-dodge / 2, dodge / 2, n) if n > 1 else [0.0]
+    top = ax.get_ylim()[1]
+    for i, x in enumerate(order):
+        for off, h in zip(offs, hue_order):
+            q = st[(st['roi'] == x) & (st['kind'] == h)]['q']
+            if len(q) and q.iloc[0] < 0.05:
+                ax.text(i + off, top, '**' if q.iloc[0] < 0.01 else '*',
+                        ha='center', va='bottom', fontsize=11,
+                        fontweight='bold', color='#1F2933')
+
+
+def plot_rt_summary(prefix: Path, fig_dir: Path):
+    """One-page summary of the trial-by-trial gain → RT results."""
+    sns.set_theme(style='ticks', context='paper')
+    betas = pd.read_csv(f'{prefix}_rt_betas.tsv', sep='\t')
+    b = betas[(betas['alpha'] == MAIN_ALPHA) & (betas['transform'] == 'log')
+              & betas['kind'].isin(list(KIND_PALETTE))]
+    rois = [r for r in ROI_ORDER if r in set(b['roi'])]
+    kinds = list(KIND_PALETTE)
+    st = group_t(b, 'beta', ['roi', 'kind'])
+
+    grp_order = ['early', 'ventral/lateral', 'dorsal']
+    grp = (b.assign(roi=b['roi'].map(ROI_GROUP))
+           .groupby(['subject', 'roi', 'kind'])['beta'].mean().reset_index())
+    st_grp = group_t(grp, 'beta', ['roi', 'kind'])
+
+    par = pd.read_csv(f'{prefix}_parametric.tsv', sep='\t')
+    par = par[par['modulator'] == 'rt']
+    st_par = group_t(par, 'g', ['with_global', 'kind', 'roi'])
+    st_par = st_par[st_par['roi'] == 'IPS'].assign(
+        model=lambda d: np.where(d['with_global'], 'With global regressor',
+                                 'Without global regressor'))
+
+    fig = plt.figure(figsize=(11, 6.4))
+    gs = fig.add_gridspec(2, 2, width_ratios=[1.5, 1], hspace=0.55, wspace=0.3)
+
+    ax = fig.add_subplot(gs[0, :])
+    _pointplot(ax, b, 'beta', 'kind', rois, KIND_PALETTE, hue_order=kinds)
+    _stars(ax, st, rois, kinds)
+    ax.set(ylabel='β: z(log RT) ~ z(trial gain)',
+           title='A. Trial-by-trial gain → RT, per ROI '
+                 '(* q < .05, ** q < .01, FDR across ROIs)')
+    ax.set_title(ax.get_title(), pad=16)
+    h, l = ax.get_legend_handles_labels()
+    ax.legend(h, [KIND_LABEL[x] for x in l], frameon=False, fontsize=7,
+              ncol=4, loc='lower left')
+    ax.tick_params(axis='x', rotation=0)
+
+    ax = fig.add_subplot(gs[1, 0])
+    _pointplot(ax, grp, 'beta', 'kind', grp_order, KIND_PALETTE,
+               hue_order=kinds)
+    _stars(ax, st_grp, grp_order, kinds)
+    ax.get_legend().remove()
+    ax.tick_params(axis='x', rotation=0)
+    ax.set_xticks(range(3), ['Early (V1–V3)', 'Ventral/lateral',
+                             'Dorsal (V3AB, IPS,\nSPL1, FEF)'])
+    ax.set(ylabel='β: z(log RT) ~ z(trial gain)',
+           title='B. Pooled over ROI groups (FDR across groups)')
+    ax.set_title(ax.get_title(), pad=16)
+
+    ax = fig.add_subplot(gs[1, 1])
+    sns.barplot(st_par, x='kind', y='t', hue='model', order=kinds,
+                hue_order=['Without global regressor', 'With global regressor'],
+                palette=['#9AA5B1', '#1F2933'], errorbar=None, ax=ax)
+    tcrit = stats.t.ppf(0.975, 29)
+    for y in (tcrit, -tcrit):
+        ax.axhline(y, color='#9AA5B1', lw=0.8, ls='--')
+    ax.axhline(0, color='#1F2933', lw=0.8)
+    ax.set_xticks(range(len(kinds)), [KIND_LABEL[k] for k in kinds])
+    ax.set(xlabel='', ylabel='Group t, gain change per SD log RT',
+           title='C. IPS: the RT effect is non-spatial\n'
+                 '(continuous-modulator model; dashed: p = .05)')
+    ax.legend(frameon=False, fontsize=7, loc='upper right')
+    sns.despine(fig)
+    fig.savefig(fig_dir / 'trialwise_af_gains_rt_summary.pdf',
+                bbox_inches='tight')
+    print(f'-> {fig_dir}/trialwise_af_gains_rt_summary.pdf')
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('step', choices=['collect', 'plot'])
+    parser.add_argument('step', choices=['collect', 'plot', 'summary'])
     parser.add_argument('--bids-folder', type=Path, default=Path('/data/ds-retsupp'))
     parser.add_argument('--prefix', type=Path, default=Path('notes/data/trialwise_af'))
     parser.add_argument('--fig-dir', type=Path, default=Path('notes/figures'))
     args = parser.parse_args()
     if args.step == 'collect':
         collect(args.bids_folder, args.prefix)
-    else:
+    elif args.step == 'plot':
         plot(args.prefix, args.fig_dir)
+    else:
+        plot_rt_summary(args.prefix, args.fig_dir)
