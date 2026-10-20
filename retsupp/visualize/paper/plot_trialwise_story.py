@@ -210,6 +210,46 @@ def flatmap(ax, flat, values, cmap, norm, title=None):
         ax.set_title(title, fontsize=7, loc='left')
 
 
+def prf_cartoon(ax):
+    """Why components collinate: small early PRFs each see one search item,
+    large dorsal PRFs pool target, distractor and the rest."""
+    ax.set_xlim(-0.6, 5.8)
+    ax.set_ylim(-2.2, 13.2)
+    ax.set_aspect('equal')
+    ax.set_axis_off()
+    for cy, big, lab in [(10.0, False, 'Early: small PRFs\nsee items separately'),
+                         (2.6, True, 'Dorsal: large PRFs\npool all items')]:
+        cx = 2.6
+        ax.add_patch(Circle((cx, cy), 2.45, facecolor='#F0F0F0',
+                            edgecolor='none', zorder=0))
+        for i in range(8):
+            ang = np.deg2rad(i * 45)
+            x, y = cx + 1.7 * np.cos(ang), cy + 1.7 * np.sin(ang)
+            col = (PAL['target'] if i == 3 else PAL['dist'] if i == 6
+                   else '#C9CED6')
+            ax.add_patch(Circle((x, y), 0.28, color=col, zorder=2))
+        if big:
+            ax.add_patch(Circle((cx, cy), 2.25, fill=False, ec=PAL['fg'],
+                                lw=0.9, ls=(0, (3, 2)), zorder=3))
+        else:
+            for i in (3, 6):
+                ang = np.deg2rad(i * 45)
+                ax.add_patch(Circle((cx + 1.7 * np.cos(ang),
+                                     cy + 1.7 * np.sin(ang)), 0.6,
+                                    fill=False, ec=PAL['fg'], lw=0.9,
+                                    ls=(0, (3, 2)), zorder=3))
+        ax.text(cx, cy - 2.65, lab, ha='center', va='top', fontsize=6,
+                color=PAL['fg'], linespacing=1.1)
+
+
+def row_title(sf, title, sub):
+    sf.text(0.012, 0.975, title, fontsize=8, fontweight='bold', va='top',
+            color=PAL['fg'])
+    if sub:
+        sf.text(0.012, 0.915, sub, fontsize=6.2, va='top', color='#52606D',
+                linespacing=1.3)
+
+
 def colorbar(fig, ax, cmap, norm, label, ticks):
     cax = ax.inset_axes([0.62, 0.06, 0.34, 0.035])
     cb = fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap), cax=cax,
@@ -237,16 +277,47 @@ def main(data: Path, out: Path):
     amp['ci'] = stats.t.ppf(0.975, amp['df']) * amp['se']
     corr = cross_roi_corr(tt)
 
-    fig = plt.figure(figsize=(7.25, 6.9))
-    outer = fig.add_gridspec(3, 1, height_ratios=[1, 0.95, 1.12], hspace=0.5,
-                             left=0.075, right=0.94, top=0.965, bottom=0.075)
-    row1 = outer[0].subgridspec(1, 4, width_ratios=[1.35, 0.75, 1.75, 1.15],
-                                wspace=0.55)
-    row2 = outer[1].subgridspec(1, 2, width_ratios=[1.15, 2.1], wspace=0.22)
-    row3 = outer[2].subgridspec(1, 2, width_ratios=[1.15, 1.6], wspace=0.35)
+    comp = (mixed[(mixed['level'] == 'roi') & (mixed['model'] == 'specific')]
+            .rename(columns={'unit': 'roi', 'beta': 'mean'}))
+    comp['ci'] = stats.t.ppf(0.975, comp['df']) * comp['se']
+
+    fig = plt.figure(figsize=(7.25, 9.9))
+    sf1, sf2, sf3, sf4 = fig.subfigures(
+        4, 1, height_ratios=[1.2, 1.12, 0.92, 1.08])
+    margins = dict(left=0.075, right=0.94, bottom=0.12)
+    row1 = sf1.add_gridspec(1, 4, width_ratios=[1.35, 0.75, 1.75, 1.15],
+                            wspace=0.55, top=0.74, **margins)
+    row2 = sf2.add_gridspec(1, 2, width_ratios=[1.15, 2.1], wspace=0.22,
+                            top=0.74, **margins)
+    row3 = sf3.add_gridspec(1, 1, top=0.78, **{**margins, 'left': 0.095})
+    row4 = sf4.add_gridspec(1, 3, width_ratios=[1.15, 1.45, 0.42], wspace=0.3,
+                            top=0.84, **{**margins, 'bottom': 0.17})
+    row_title(sf1, 'Trial history: repeating the target location lowers the '
+              'target’s attention-field gain',
+              'Joint PRF + attention-field model fitted to each ROI’s BOLD '
+              '(all 12 runs), with separate target gains for target-repeat '
+              'and switch trials. A second fit splits the distractor\n'
+              'gains into distractor-repeat and switch trials. c, d: fitted '
+              'gain on repeat minus switch trials, N = 30. Behaviour (b) '
+              'from the same trials.')
+    row_title(sf2, 'Trial by trial: response strength predicts RT, with '
+              'opposite signs in early visual and dorsal cortex',
+              'Per-trial gains re-estimated with PRFs, HRFs and field widths '
+              'fixed at the full-model fit (ridge toward the fitted gains), '
+              'in each ROI’s PRF-responsive voxels (P(signal) > .5,\n'
+              '≤ 500 per ROI). Single-trial response = mean of the trial’s '
+              'target, distractor and global (non-spatial) gains, z-scored '
+              'within run × trial type. Linear mixed model on log RT per '
+              'ROI.')
+    row_title(sf3, 'Which component carries the RT link? Separable in early '
+              'and ventral areas, not in dorsal areas',
+              'Same mixed models with the target, distractor (HP and LP '
+              'pooled) and global gains as separate predictors of log RT.')
+    row_title(sf4, 'Single-trial fluctuations are shared across ROIs, and '
+              'collinear between components in dorsal ROIs', None)
 
     # a — task + definition of a repeat -----------------------------------
-    ax = fig.add_subplot(row1[0])
+    ax = sf1.add_subplot(row1[0])
     ax.set_xlim(0, 10.4)
     ax.set_ylim(0, 10)
     ax.set_aspect('equal')
@@ -270,7 +341,7 @@ def main(data: Path, out: Path):
     panel_letter(ax, 'a', x=0.0, y=0.98)
 
     # b — behaviour ---------------------------------------------------------
-    ax = fig.add_subplot(row1[1])
+    ax = sf1.add_subplot(row1[1])
     order = ['Target', 'Distractor']
     cols = {'Target': PAL['target'], 'Distractor': PAL['dist']}
     sns.stripplot(beh, x='kind', y='d', order=order, ax=ax, size=2,
@@ -290,7 +361,7 @@ def main(data: Path, out: Path):
     panel_letter(ax, 'b', x=-0.55)
 
     # c — target / distractor gain, repeat − switch -----------------------
-    ax = fig.add_subplot(row1[2])
+    ax = sf1.add_subplot(row1[2])
     roi_points(ax, st_T, PAL['target'], offset=-0.17)
     roi_points(ax, st_D, PAL['dist'], offset=0.17, ms=3)
     ax.set(ylabel='Gain, repeat − switch', ylim=(-1.9, 1.0),
@@ -306,7 +377,7 @@ def main(data: Path, out: Path):
     panel_letter(ax, 'c', x=-0.2)
 
     # d — cortex map of the target-repeat effect ---------------------------
-    ax = fig.add_subplot(row1[3])
+    ax = sf1.add_subplot(row1[3])
     norm_rep = TwoSlopeNorm(vmin=-4, vcenter=0, vmax=4)
     flatmap(ax, flat, st_T.set_index('roi')['t'].to_dict(), REPEAT_CMAP,
             norm_rep)
@@ -316,13 +387,13 @@ def main(data: Path, out: Path):
 
     # e — cortex map of the RT link -----------------------------------------
     norm_rt = TwoSlopeNorm(vmin=-7, vcenter=0, vmax=7)
-    ax = fig.add_subplot(row2[0])
+    ax = sf2.add_subplot(row2[0])
     flatmap(ax, flat, amp.set_index('roi')['t'].to_dict(), RT_CMAP, norm_rt)
     colorbar(fig, ax, RT_CMAP, norm_rt, 'Response–RT link (t)', [-7, 0, 7])
     panel_letter(ax, 'e', x=0.02, y=0.98)
 
     # f — RT link per ROI ---------------------------------------------------
-    ax = fig.add_subplot(row2[1])
+    ax = sf2.add_subplot(row2[1])
 
     def rt_color(r):
         if r.q >= 0.05:
@@ -340,8 +411,27 @@ def main(data: Path, out: Path):
             ha='center', va='top', fontsize=6.5, color=PAL['slow'])
     panel_letter(ax, 'f', x=-0.1)
 
-    # g — cross-ROI correlation of single-trial responses ------------------
-    ax = fig.add_subplot(row3[0])
+    # g — components ---------------------------------------------------------
+    ax = sf3.add_subplot(row3[0])
+    terms = [('T', 'Target gain', PAL['target'], -0.22),
+             ('D', 'Distractor gain (HP + LP)', PAL['dist'], 0.0),
+             ('G', 'Global gain (non-spatial)', PAL['muted'], 0.22)]
+    for term, lab, colr, off in terms:
+        roi_points(ax, comp[comp['term'] == term], colr, offset=off, ms=3.5)
+    for k, (term, lab, colr, off) in enumerate(terms):
+        ax.text(0.01, 0.97 - 0.1 * k, lab, transform=ax.transAxes,
+                color=colr, fontsize=6.5, va='top')
+    ax.axvspan(7.5, 10.5, facecolor=PAL['muted'], alpha=0.18, lw=0,
+               zorder=0)
+    ax.text(9, -0.075, 'Not separable per trial\n(gains r > .9, panel i)',
+            ha='center', va='bottom', fontsize=6.2, color=PAL['fg'])
+    ax.set_xticks(range(len(ROI_ORDER)), ROI_ORDER, rotation=0)
+    ax.set(ylabel='RT per SD of\nsingle-trial gain (β)', ylim=(-0.075, 0.17),
+           yticks=[-0.05, 0, 0.05, 0.1, 0.15])
+    panel_letter(ax, 'g', x=-0.05, y=1.0)
+
+    # h — cross-ROI correlation of single-trial responses ------------------
+    ax = sf4.add_subplot(row4[0])
     m = corr.values.copy()
     m[np.triu_indices_from(m)] = np.nan
     im = ax.imshow(m, cmap='mako_r', vmin=0, vmax=0.8)
@@ -362,10 +452,10 @@ def main(data: Path, out: Path):
     cb.set_label('Single-trial response r', fontsize=6, labelpad=1)
     ax.text(0.55, 0.56, 'Shared most with\nneighbouring areas', fontsize=6.5,
             transform=ax.transAxes, color=PAL['fg'])
-    panel_letter(ax, 'g', x=-0.18, y=1.0)
+    panel_letter(ax, 'h', x=-0.18, y=1.0)
 
-    # h — within-ROI separability of the components ------------------------
-    ax = fig.add_subplot(row3[1])
+    # i — within-ROI separability of the components ------------------------
+    ax = sf4.add_subplot(row4[1])
     c = coll.set_index('roi').loc[ROI_ORDER]
     lines = [('r_TG', 'Target – global', PAL['target']),
              ('r_GD', 'Global – distractor', PAL['muted']),
@@ -373,7 +463,7 @@ def main(data: Path, out: Path):
     for col, lab, colr in lines:
         ax.plot(range(11), c[col], 'o-', color=colr, ms=3, lw=1)
     for k, (col, lab, colr) in enumerate(lines):
-        ax.text(0.02, 0.36 - 0.09 * k, lab, transform=ax.transAxes,
+        ax.text(0.02, 0.2 - 0.075 * k, lab, transform=ax.transAxes,
                 color=colr, fontsize=6.5)
     ax.axhspan(0.9, 1.0, color=PAL['muted'], alpha=0.25, lw=0, zorder=0)
     ax.text(3.5, 0.95, 'Components not separable per trial', fontsize=6.5,
@@ -381,7 +471,8 @@ def main(data: Path, out: Path):
     ax.set_xticks(range(11), ROI_ORDER, rotation=90)
     ax.set(ylim=(0, 1.0), xlim=(-0.4, 10.4), yticks=[0, .25, .5, .75, 1],
            ylabel='Within-ROI r between\nsingle-trial gains')
-    panel_letter(ax, 'h', x=-0.13, y=1.0)
+    prf_cartoon(sf4.add_subplot(row4[2]))
+    panel_letter(ax, 'i', x=-0.2, y=1.0)
 
     for a in fig.axes:
         if a.axison and a.get_label() != '<colorbar>' and not a.images \
