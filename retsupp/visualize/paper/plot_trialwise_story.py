@@ -307,7 +307,7 @@ def main(data: Path, out: Path):
               'fixed at the full-model fit (ridge toward the fitted gains), '
               'in each ROI’s PRF-responsive voxels (P(signal) > .5,\n'
               '≤ 500 per ROI). Single-trial response = mean of the trial’s '
-              'target, distractor and global (non-spatial) gains, z-scored '
+              'target, distractor and global (whole-display) gains, z-scored '
               'within run × trial type. Linear mixed model on log RT per '
               'ROI.')
     row_title(sf3, 'Which component carries the RT link? Separable in early '
@@ -440,7 +440,7 @@ def main(data: Path, out: Path):
     ax = sf3.add_subplot(row3[0])
     terms = [('T', 'Target gain', PAL['target'], -0.22),
              ('D', 'Distractor gain (HP + LP)', PAL['dist'], 0.0),
-             ('G', 'Global gain (non-spatial)', PAL['muted'], 0.22)]
+             ('G', 'Global gain (whole display)', PAL['muted'], 0.22)]
     for term, lab, colr, off in terms:
         roi_points(ax, comp[comp['term'] == term], colr, offset=off, ms=3.5)
     for k, (term, lab, colr, off) in enumerate(terms):
