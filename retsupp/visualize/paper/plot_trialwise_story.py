@@ -285,8 +285,9 @@ def main(data: Path, out: Path):
     sf1, sf2, sf3, sf4 = fig.subfigures(
         4, 1, height_ratios=[1.2, 1.12, 0.92, 1.08])
     margins = dict(left=0.075, right=0.94, bottom=0.12)
-    row1 = sf1.add_gridspec(1, 4, width_ratios=[1.35, 0.75, 1.75, 1.15],
-                            wspace=0.55, top=0.74, **margins)
+    row1 = sf1.add_gridspec(1, 5, right=0.89, width_ratios=[1.15, 0.65, 1.45, 1.25, 0.8],
+                            wspace=0.6, top=0.74,
+                            **{k: v for k, v in margins.items() if k != 'right'})
     row2 = sf2.add_gridspec(1, 2, width_ratios=[1.15, 2.1], wspace=0.22,
                             top=0.74, **margins)
     row3 = sf3.add_gridspec(1, 1, top=0.78, **{**margins, 'left': 0.095})
@@ -299,7 +300,7 @@ def main(data: Path, out: Path):
               'and switch trials. A second fit splits the distractor\n'
               'gains into distractor-repeat and switch trials. c, d: fitted '
               'gain on repeat minus switch trials, N = 30. Behaviour (b) '
-              'from the same trials.')
+              'from the same trials; e: across subjects.')
     row_title(sf2, 'Trial by trial: response strength predicts RT, with '
               'opposite signs in early visual and dorsal cortex',
               'Per-trial gains re-estimated with PRFs, HRFs and field widths '
@@ -319,7 +320,7 @@ def main(data: Path, out: Path):
     # a — task + definition of a repeat -----------------------------------
     ax = sf1.add_subplot(row1[0])
     ax.set_xlim(0, 10.4)
-    ax.set_ylim(0, 10)
+    ax.set_ylim(-1.2, 9.2)
     ax.set_aspect('equal')
     ax.set_axis_off()
     for x, d_pos, lab in [(2.3, 6, 'Trial n − 1'), (8.0, 1, 'Trial n')]:
@@ -328,15 +329,15 @@ def main(data: Path, out: Path):
         ty = 6.3 + 1.5 * np.sin(np.deg2rad(135))
         ax.add_patch(Circle((tx, ty), 0.5, fill=False, ec=PAL['target'],
                             lw=1.0, zorder=3))
-        ax.text(x, 4.05, lab, ha='center', va='top', fontsize=7)
+        ax.text(x, 4.3, lab, ha='center', va='top', fontsize=6.5)
     ax.add_patch(FancyArrowPatch((4.55, 6.3), (5.75, 6.3), arrowstyle='-|>',
                                  mutation_scale=7, color=PAL['fg'], lw=0.9))
-    ax.text(5.15, 2.45, 'Target repeat: target at the\nsame location as before',
+    ax.text(5.15, 1.75, 'Target repeat: target at the\nsame location as before',
             ha='center', va='center', fontsize=6.5, color=PAL['target'])
-    ax.add_patch(Rectangle((0.9, 0.55), 0.5, 0.13, color=PAL['item']))
-    ax.text(1.65, 0.62, 'Target', fontsize=6, color=PAL['fg'], va='center')
-    ax.add_patch(Rectangle((5.6, 0.37), 0.13, 0.5, color=PAL['singleton']))
-    ax.text(6.0, 0.62, 'Distractor', fontsize=6, color=PAL['fg'],
+    ax.add_patch(Rectangle((0.9, -0.55), 0.5, 0.13, color=PAL['item']))
+    ax.text(1.65, -0.48, 'Target', fontsize=6, color=PAL['fg'], va='center')
+    ax.add_patch(Rectangle((5.6, -0.73), 0.13, 0.5, color=PAL['singleton']))
+    ax.text(6.0, -0.48, 'Distractor', fontsize=6, color=PAL['fg'],
             va='center')
     panel_letter(ax, 'a', x=0.0, y=0.98)
 
@@ -355,7 +356,7 @@ def main(data: Path, out: Path):
         ax.plot(i, x.mean(), 'D', ms=5, color=cols[k], mec=PAL['fg'],
                 mew=0.8, zorder=4)
     ax.axhline(0, color=PAL['fg'], lw=0.6, zorder=0)
-    ax.set_xticks([0, 1], ['Target', 'Distractor'])
+    ax.set_xticks([0, 1], ['Target', 'Distr.'])
     ax.set(xlabel='Repeated', ylabel='RT, repeat − switch (ms)',
            ylim=(-90, 40), yticks=[-80, -40, 0, 40])
     panel_letter(ax, 'b', x=-0.55)
@@ -385,12 +386,36 @@ def main(data: Path, out: Path):
              [-4, 0, 4])
     panel_letter(ax, 'd', x=0.02, y=0.98)
 
+    # e — individual differences: brain vs behavioural repeat effect -------
+    ax = sf1.add_subplot(row1[4])
+    pool = ['V3', 'V3AB', 'hV4', 'VO', 'IPS', 'SPL1']
+    tr = fits[(fits['model'] == 'targetRepeat') & fits['roi'].isin(pool)]
+    g = (tr['g_T_dyn_repeat'] - tr['g_T_dyn_switch']).groupby(
+        tr['subject']).mean()
+    rt = beh[beh['kind'] == 'Target'].set_index('subject')['d'].reindex(g.index)
+    ax.scatter(rt, g, s=9, color=PAL['target'], alpha=0.75, lw=0)
+    rho, p = stats.spearmanr(rt, g)
+    ax.axhline(0, color=PAL['fg'], lw=0.6, zorder=0)
+    ax.set(xlabel='RT repeat effect (ms)',
+           ylabel='Target gain, repeat − switch\n(mean V3–SPL1)',
+           xticks=[-80, -40, 0])
+    ax.set_title(f'No link across subjects\nρ = {rho:.2f}, p = {p:.2f}',
+                 fontsize=6.3, color=PAL['fg'], loc='right',
+                 linespacing=1.2)
+    ax.set_label('right_axis')
+    ax.yaxis.tick_right()
+    ax.yaxis.set_label_position('right')
+    ax.spines['left'].set_visible(False)
+    ax.spines['right'].set_visible(True)
+    sns.despine(ax=ax, left=True, right=False, offset=4)
+    panel_letter(ax, 'e', x=-0.2, y=1.0)
+
     # e — cortex map of the RT link -----------------------------------------
     norm_rt = TwoSlopeNorm(vmin=-7, vcenter=0, vmax=7)
     ax = sf2.add_subplot(row2[0])
     flatmap(ax, flat, amp.set_index('roi')['t'].to_dict(), RT_CMAP, norm_rt)
     colorbar(fig, ax, RT_CMAP, norm_rt, 'Response–RT link (t)', [-7, 0, 7])
-    panel_letter(ax, 'e', x=0.02, y=0.98)
+    panel_letter(ax, 'f', x=0.02, y=0.98)
 
     # f — RT link per ROI ---------------------------------------------------
     ax = sf2.add_subplot(row2[1])
@@ -409,7 +434,7 @@ def main(data: Path, out: Path):
             ha='center', va='top', fontsize=6.5, color=PAL['fast'])
     ax.text(9, -0.025, 'Dorsal:\nstronger response,\nslower RT',
             ha='center', va='top', fontsize=6.5, color=PAL['slow'])
-    panel_letter(ax, 'f', x=-0.1)
+    panel_letter(ax, 'g', x=-0.1)
 
     # g — components ---------------------------------------------------------
     ax = sf3.add_subplot(row3[0])
@@ -423,12 +448,12 @@ def main(data: Path, out: Path):
                 color=colr, fontsize=6.5, va='top')
     ax.axvspan(7.5, 10.5, facecolor=PAL['muted'], alpha=0.18, lw=0,
                zorder=0)
-    ax.text(9, -0.075, 'Not separable per trial\n(gains r > .9, panel i)',
+    ax.text(9, -0.075, 'Not separable per trial\n(gains r > .9, panel j)',
             ha='center', va='bottom', fontsize=6.2, color=PAL['fg'])
     ax.set_xticks(range(len(ROI_ORDER)), ROI_ORDER, rotation=0)
     ax.set(ylabel='RT per SD of\nsingle-trial gain (β)', ylim=(-0.075, 0.17),
            yticks=[-0.05, 0, 0.05, 0.1, 0.15])
-    panel_letter(ax, 'g', x=-0.05, y=1.0)
+    panel_letter(ax, 'h', x=-0.05, y=1.0)
 
     # h — cross-ROI correlation of single-trial responses ------------------
     ax = sf4.add_subplot(row4[0])
@@ -452,7 +477,7 @@ def main(data: Path, out: Path):
     cb.set_label('Single-trial response r', fontsize=6, labelpad=1)
     ax.text(0.55, 0.56, 'Shared most with\nneighbouring areas', fontsize=6.5,
             transform=ax.transAxes, color=PAL['fg'])
-    panel_letter(ax, 'h', x=-0.18, y=1.0)
+    panel_letter(ax, 'i', x=-0.18, y=1.0)
 
     # i — within-ROI separability of the components ------------------------
     ax = sf4.add_subplot(row4[1])
@@ -472,10 +497,11 @@ def main(data: Path, out: Path):
     ax.set(ylim=(0, 1.0), xlim=(-0.4, 10.4), yticks=[0, .25, .5, .75, 1],
            ylabel='Within-ROI r between\nsingle-trial gains')
     prf_cartoon(sf4.add_subplot(row4[2]))
-    panel_letter(ax, 'i', x=-0.2, y=1.0)
+    panel_letter(ax, 'j', x=-0.2, y=1.0)
 
     for a in fig.axes:
-        if a.axison and a.get_label() != '<colorbar>' and not a.images \
+        if a.axison and a.get_label() not in ('<colorbar>', 'right_axis') \
+                and not a.images \
                 and a.get_xlim()[1] > 1.5:
             sns.despine(ax=a, offset=4)
     fig.savefig(out.with_suffix('.pdf'))
