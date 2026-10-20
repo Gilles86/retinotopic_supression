@@ -553,17 +553,24 @@ def plot(prefix: Path, fig_dir: Path):
 
 
 def _stars(ax, st, order, hue_order, dodge=0.5):
-    """Mark FDR-significant cells (q < .05: *, q < .01: **) above the CIs."""
+    """Mark FDR-significant cells (q < .05: *, q < .01: **) just beyond the
+    end of their 95% CI, on the side of the effect, in the cell's colour."""
     n = len(hue_order)
     offs = np.linspace(-dodge / 2, dodge / 2, n) if n > 1 else [0.0]
-    top = ax.get_ylim()[1]
+    pad = 0.02 * np.diff(ax.get_ylim())[0]
     for i, x in enumerate(order):
         for off, h in zip(offs, hue_order):
-            q = st[(st['roi'] == x) & (st['kind'] == h)]['q']
-            if len(q) and q.iloc[0] < 0.05:
-                ax.text(i + off, top, '**' if q.iloc[0] < 0.01 else '*',
-                        ha='center', va='bottom', fontsize=11,
-                        fontweight='bold', color='#1F2933')
+            row = st[(st['roi'] == x) & (st['kind'] == h)]
+            if not len(row) or row['q'].iloc[0] >= 0.05:
+                continue
+            r = row.iloc[0]
+            sign = np.sign(r['mean'])
+            end = r['mean'] + sign * stats.t.ppf(0.975, r['n'] - 1) * r['sem']
+            ax.text(i + off, end + sign * pad,
+                    '**' if r['q'] < 0.01 else '*',
+                    ha='center', va='bottom' if sign > 0 else 'top',
+                    fontsize=11, fontweight='bold',
+                    color=KIND_PALETTE.get(h, '#1F2933'))
 
 
 def plot_rt_summary(prefix: Path, fig_dir: Path):
@@ -597,7 +604,6 @@ def plot_rt_summary(prefix: Path, fig_dir: Path):
     ax.set(ylabel='β: z(log RT) ~ z(trial gain)',
            title='A. Trial-by-trial gain → RT, per ROI '
                  '(* q < .05, ** q < .01, FDR across ROIs)')
-    ax.set_title(ax.get_title(), pad=16)
     h, l = ax.get_legend_handles_labels()
     ax.legend(h, [KIND_LABEL[x] for x in l], frameon=False, fontsize=7,
               ncol=4, loc='lower left')
@@ -613,7 +619,6 @@ def plot_rt_summary(prefix: Path, fig_dir: Path):
                              'Dorsal (V3AB, IPS,\nSPL1, FEF)'])
     ax.set(ylabel='β: z(log RT) ~ z(trial gain)',
            title='B. Pooled over ROI groups (FDR across groups)')
-    ax.set_title(ax.get_title(), pad=16)
 
     ax = fig.add_subplot(gs[1, 1])
     sns.barplot(st_par, x='kind', y='t', hue='model', order=kinds,
