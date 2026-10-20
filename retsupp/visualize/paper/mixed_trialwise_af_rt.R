@@ -12,19 +12,20 @@
 #   overall:  logrt ~ A + priming covariates
 #             A     = z(mean of the trial's z-scored gains) -- overall trial
 #                     response amplitude, identifiable even where T/G/D are not
-# Random effects: per-subject intercept + independent slopes for every gain.
-# p-values from t with df = n_subjects - 1 (conservative for the slopes),
-# BH-FDR across ROIs (or across the three groups) per term.
+# Random effects: per-subject intercept + correlated slopes for every gain
+# (lme4); if that fit is singular, refit with uncorrelated slopes (||).
+# p-values from lmerTest (Satterthwaite df), BH-FDR across ROIs (or across
+# the three groups) per term.
 #
 # Also writes the median within-subject correlation between per-trial
 # gains per ROI: where it is ~1 (IPS/SPL1/FEF) T, G and D can't be told
 # apart and only the overall model is interpretable.
 #
-# Usage (needs nlme; the rbayes env has it):
+# Usage (needs lme4 + lmerTest; installed in the rbayes env):
 #   ~/mambaforge/envs/rbayes/bin/Rscript retsupp/visualize/paper/mixed_trialwise_af_rt.R \
 #       notes/data/trialwise_af
 
-suppressMessages(library(nlme))
+suppressMessages({library(lme4); library(lmerTest)})
 args <- commandArgs(trailingOnly = TRUE)
 prefix <- if (length(args)) args[1] else 'notes/data/trialwise_af'
 tt <- read.delim(gzfile(paste0(prefix, '_trial_table.tsv.gz')))
@@ -47,23 +48,23 @@ prep <- function(d) {
 }
 
 fit <- function(d, unit, kind) {
-  if (kind == 'specific') {
-    f <- as.formula(paste('logrt ~ T + G + D + Ddiff +', covs))
-    re <- pdDiag(~ T + G + D)
-    terms <- c('T', 'G', 'D', 'Ddiff')
-  } else {
-    f <- as.formula(paste('logrt ~ A +', covs))
-    re <- pdDiag(~ A)
-    terms <- 'A'
+  terms <- if (kind == 'specific') c('T', 'G', 'D', 'Ddiff') else 'A'
+  slopes <- if (kind == 'specific') 'T + G + D' else 'A'
+  fixed <- paste('logrt ~', paste(terms, collapse = ' + '), '+', covs)
+  ctrl <- lmerControl(optimizer = 'bobyqa', calc.derivs = FALSE)
+  re <- 'correlated'
+  m <- lmer(as.formula(paste0(fixed, ' + (1 + ', slopes, ' | subject)')),
+            data = d, REML = TRUE, control = ctrl)
+  if (isSingular(m)) {
+    re <- 'uncorrelated'
+    m <- lmer(as.formula(paste0(fixed, ' + (1 + ', slopes, ' || subject)')),
+              data = d, REML = TRUE, control = ctrl)
   }
-  m <- lme(f, random = list(subject = re), data = d, method = 'REML',
-           control = lmeControl(opt = 'optim', maxIter = 200))
-  tab <- summary(m)$tTable[terms, , drop = FALSE]
-  n <- length(unique(d$subject))
-  data.frame(unit = unit, model = kind, term = terms, beta = tab[, 'Value'],
-             se = tab[, 'Std.Error'], t = tab[, 't-value'],
-             p = 2 * pt(-abs(tab[, 't-value']), df = n - 1), n = n,
-             row.names = NULL)
+  tab <- coef(summary(m))[terms, , drop = FALSE]
+  data.frame(unit = unit, model = kind, term = terms, beta = tab[, 'Estimate'],
+             se = tab[, 'Std. Error'], df = tab[, 'df'], t = tab[, 't value'],
+             p = tab[, 'Pr(>|t|)'], n = length(unique(d$subject)),
+             random = re, singular = isSingular(m), row.names = NULL)
 }
 
 tt <- prep(tt)
@@ -105,6 +106,6 @@ write.table(ident, paste0(prefix, '_gain_collinearity.tsv'), sep = '\t',
             quote = FALSE, row.names = FALSE)
 
 options(width = 140)
-print(format(out[, c('level', 'unit', 'model', 'term', 'beta', 't', 'p', 'q')],
+print(format(out[, c('level', 'unit', 'model', 'term', 'beta', 'df', 't', 'p', 'q', 'random', 'singular')],
              digits = 3), row.names = FALSE)
 print(ident, digits = 2)
