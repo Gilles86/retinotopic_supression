@@ -661,9 +661,82 @@ def plot_rt_summary(prefix: Path, fig_dir: Path):
     print(f'-> {fig_dir}/trialwise_af_gains_rt_summary.pdf')
 
 
+def plot_rt_mixed(prefix: Path, fig_dir: Path):
+    """Figure for the mixed-effects models (mixed_trialwise_af_rt.R)."""
+    sns.set_theme(style='ticks', context='paper')
+    st = pd.read_csv(f'{prefix}_mixed_stats.tsv', sep='\t')
+    col = pd.read_csv(f'{prefix}_gain_collinearity.tsv', sep='\t')
+    tcrit = stats.t.ppf(0.975, st['n'].iloc[0] - 1)
+    st['ci'] = tcrit * st['se']
+    palette = {**KIND_PALETTE, 'D': '#7B2CBF', 'Ddiff': '#1F2933',
+               'A': '#2A9D8F'}
+    label = {**KIND_LABEL, 'D': 'Distractor (HP + LP)',
+             'Ddiff': 'Distractor HP − LP', 'A': 'Overall response'}
+    rois = [r for r in ROI_ORDER if r in set(st['unit'])]
+    groups = ['early', 'ventral/lateral', 'dorsal']
+    blind = col.set_index('roi')['r_TG'].reindex(rois) > 0.9
+
+    def points(ax, d, order, terms, dodge=0.6):
+        offs = (np.linspace(-dodge / 2, dodge / 2, len(terms))
+                if len(terms) > 1 else [0.0])
+        for off, term in zip(offs, terms):
+            x = d[d['term'] == term].set_index('unit').reindex(order)
+            xs = np.arange(len(order)) + off
+            ax.errorbar(xs, x['beta'], yerr=x['ci'], fmt='o', ms=4,
+                        color=palette[term], label=label[term], lw=1.2)
+            for xi, r in zip(xs, x.itertuples()):
+                if r.q < 0.05:
+                    sign = np.sign(r.beta)
+                    ax.text(xi, r.beta + sign * (r.ci + 0.004),
+                            '**' if r.q < 0.01 else '*', ha='center',
+                            va='bottom' if sign > 0 else 'top', fontsize=11,
+                            fontweight='bold', color=palette[term])
+        ax.axhline(0, color='#1F2933', lw=0.8)
+        ax.set_xticks(range(len(order)), order)
+
+    fig, axes = plt.subplots(3, 1, figsize=(10, 10))
+    ax = axes[0]
+    points(ax, st[(st['level'] == 'roi') & (st['model'] == 'overall')], rois,
+           ['A'])
+    ax.set(ylabel='β: z(log RT) per SD of response',
+           title='A. Overall trial response amplitude → RT')
+    ax = axes[1]
+    terms = ['T', 'G', 'D', 'Ddiff']
+    points(ax, st[(st['level'] == 'roi') & (st['model'] == 'specific')], rois,
+           terms, dodge=0.66)
+    for i, b in enumerate(blind):
+        if b:
+            ax.axvspan(i - 0.45, i + 0.45, color='#9AA5B1', alpha=0.2, lw=0)
+    ax.set(ylabel='β: z(log RT) per SD of gain',
+           title='B. Component gains → RT (shaded: per-trial gains '
+                 'collinear, r > .9 — not separable)')
+    ax.legend(frameon=False, fontsize=7, ncol=4, loc='upper left')
+    ax = axes[2]
+    g = st[st['level'] == 'group']
+    points(ax, pd.concat([g[g['model'] == 'specific'],
+                          g[g['model'] == 'overall']]),
+           groups, [*terms, 'A'], dodge=0.7)
+    ax.set_xticks(range(3), ['Early (V1–V3)', 'Ventral/lateral (hV4, LO, TO, VO)',
+                             'Dorsal (V3AB, IPS, SPL1, FEF)'])
+    ax.set(ylabel='β: z(log RT) per SD',
+           title='C. Pooled over ROI groups (overall response in teal, rightmost)')
+    for ax in axes:
+        title = ax.get_title()
+        ax.set_title('')
+        ax.set_title(title, loc='left')
+    sns.despine(fig)
+    fig.text(0.01, 0.002, 'Linear mixed models per ROI: random subject '
+             'intercepts + slopes; 95% CI and p from t(29); '
+             '* q < .05, ** q < .01 (FDR across ROIs / groups per term).',
+             fontsize=7, color='#1F2933')
+    fig.tight_layout(rect=(0, 0.015, 1, 1))
+    fig.savefig(fig_dir / 'trialwise_af_gains_rt_mixed.pdf')
+    print(f'-> {fig_dir}/trialwise_af_gains_rt_mixed.pdf')
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('step', choices=['collect', 'plot', 'summary'])
+    parser.add_argument('step', choices=['collect', 'plot', 'summary', 'mixed'])
     parser.add_argument('--bids-folder', type=Path, default=Path('/data/ds-retsupp'))
     parser.add_argument('--prefix', type=Path, default=Path('notes/data/trialwise_af'))
     parser.add_argument('--fig-dir', type=Path, default=Path('notes/figures'))
@@ -672,5 +745,7 @@ if __name__ == '__main__':
         collect(args.bids_folder, args.prefix)
     elif args.step == 'plot':
         plot(args.prefix, args.fig_dir)
-    else:
+    elif args.step == 'summary':
         plot_rt_summary(args.prefix, args.fig_dir)
+    else:
+        plot_rt_mixed(args.prefix, args.fig_dir)
