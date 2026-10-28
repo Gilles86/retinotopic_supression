@@ -135,9 +135,11 @@ CONTRASTS = [
 
 
 def collect(root: Path, bids_folder: Path, with_null: bool,
-            cv_scheme: str = 'loco') -> pd.DataFrame:
+            cv_scheme: str = 'loco',
+            subjects: list[int] | None = None) -> pd.DataFrame:
     models = sorted(p.name for p in root.iterdir()
-                    if p.is_dir() and any(p.glob('sub-*/*_cv-r2.tsv')))
+                    if p.is_dir() and not p.name.startswith('canary')
+                    and any(p.glob('sub-*/*_cv-r2.tsv')))
     print(f'Models found: {models}')
     cells: dict[tuple[int, str], dict[str, Path]] = {}
     for m in models:
@@ -148,6 +150,8 @@ def collect(root: Path, bids_folder: Path, with_null: bool,
 
     rows = []
     for subject in sorted({s for s, _ in cells}):
+        if subjects is not None and subject not in subjects:
+            continue
         bold = None
         if with_null:
             try:
@@ -255,11 +259,36 @@ def main():
     ap.add_argument('--no-null', action='store_true',
                     help='Skip the BOLD-based null level (scores all voxels).')
     ap.add_argument('--cv-scheme', choices=['loco', 'run3'], default='loco')
+    ap.add_argument('--subject', type=int, default=None,
+                    help='Only collect this subject and write '
+                         'per_subject/sub-XX_cv_ladder_per_voxel.tsv '
+                         '(run as a SLURM array; then --merge).')
+    ap.add_argument('--merge', action='store_true',
+                    help='Concatenate per_subject/*.tsv instead of '
+                         're-collecting, then write the three TSVs.')
     a = ap.parse_args()
     bids = Path(a.bids_folder)
     sub = 'af_prf_cv_ladder' + ('' if a.cv_scheme == 'loco' else f'_{a.cv_scheme}')
     root = bids / 'derivatives' / sub
-    vox = collect(root, bids, with_null=not a.no_null, cv_scheme=a.cv_scheme)
+    per_sub_dir = root / 'per_subject'
+    if a.subject is not None:
+        vox = collect(root, bids, with_null=not a.no_null,
+                      cv_scheme=a.cv_scheme, subjects=[a.subject])
+        if vox.empty:
+            raise SystemExit(f'No complete cells for sub-{a.subject:02d}.')
+        per_sub_dir.mkdir(exist_ok=True)
+        out = per_sub_dir / f'sub-{a.subject:02d}_cv_ladder_per_voxel.tsv'
+        vox.to_csv(out, sep='\t', index=False)
+        print(f'Wrote {out}')
+        return
+    if a.merge:
+        files = sorted(per_sub_dir.glob('sub-*_cv_ladder_per_voxel.tsv'))
+        print(f'Merging {len(files)} per-subject TSVs')
+        vox = pd.concat([pd.read_csv(f, sep='\t') for f in files],
+                        ignore_index=True)
+    else:
+        vox = collect(root, bids, with_null=not a.no_null,
+                      cv_scheme=a.cv_scheme)
     if vox.empty:
         raise SystemExit('No complete cells found.')
     vox.to_csv(root / 'cv_ladder_per_voxel.tsv', sep='\t', index=False)
