@@ -736,6 +736,8 @@ def _gain_forward_factorial(raw, sign):
       caller via ``fixed_pars`` so its gradient is zeroed; the forward
       transform additionally clamps to exact 0).
     - ``free``  : pass through (fully signed-unconstrained).
+    - ``tied``  : only valid for ``g_HP`` / ``g_HP_dyn``; resolved by the
+      model class (HP gain := LP gain), here treated as pass-through.
     """
     if sign == 'plus':
         return tf.math.softplus(raw)
@@ -743,7 +745,7 @@ def _gain_forward_factorial(raw, sign):
         return -tf.math.softplus(raw)
     if sign == 'zero':
         return tf.zeros_like(raw)
-    if sign == 'free':
+    if sign in ('free', 'tied'):
         return raw
     raise ValueError(f'Unknown sign {sign!r}')
 
@@ -762,7 +764,7 @@ def _gain_backward_factorial(usable, sign):
         return tfp.math.softplus_inverse(tf.maximum(-usable, 1e-4))
     if sign == 'zero':
         return tf.zeros_like(usable)
-    if sign == 'free':
+    if sign in ('free', 'tied'):
         return usable
     raise ValueError(f'Unknown sign {sign!r}')
 
@@ -814,11 +816,16 @@ class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_factorial(
                 f"sign_pattern is missing entries for {missing}. "
                 f"Required keys: {list(self._GAIN_NAMES)}.")
         bad = {g: s for g, s in sign_pattern.items()
-               if s not in ('plus', 'minus', 'zero', 'free')}
+               if s not in ('plus', 'minus', 'zero', 'free', 'tied')}
         if bad:
             raise ValueError(
                 f"sign_pattern values must be in "
-                f"{{'plus','minus','zero','free'}}; got {bad}.")
+                f"{{'plus','minus','zero','free','tied'}}; got {bad}.")
+        bad_tied = [g for g, s in sign_pattern.items()
+                    if s == 'tied' and g not in ('g_HP', 'g_HP_dyn')]
+        if bad_tied:
+            raise ValueError(
+                f"'tied' is only allowed for g_HP / g_HP_dyn; got {bad_tied}.")
         # Force signed mode so the parent's _signed_gains branch is
         # taken (passes raw gains through unchanged); we re-apply our
         # own per-gain sign transforms in this subclass's forward.
@@ -858,6 +865,11 @@ class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_factorial(
                                            self._sign_pattern['g_LP_dyn'])
         g_T_dyn = _gain_forward_factorial(enc[:, 13:14],
                                           self._sign_pattern['g_T_dyn'])
+        # 'tied' = location-blind gain: HP shares the LP value.
+        if self._sign_pattern['g_HP'] == 'tied':
+            g_HP = g_LP
+        if self._sign_pattern['g_HP_dyn'] == 'tied':
+            g_HP_dyn = g_LP_dyn
         # σ_T_dyn := σ_dyn (the whole point of the sharedSigma class).
         sigma_T_dyn = sigma_dyn
 
@@ -918,6 +930,68 @@ class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_factorial(
             hrf_pars = self.hrf_model._transform_parameters_backward(hrf_tail)
             return tf.concat([out_enc, hrf_pars], axis=1)
         return out_enc
+
+
+class DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_factorial_items(
+    DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_factorial,
+):
+    """Factorial sharedSigma model + a free drive scale for the search items.
+
+    The paradigm codes bar pixels and search-item pixels both as 1, which
+    fixes the item:bar drive ratio by assumption. This class adds one
+    shared parameter ``item_scale`` (β ≥ 0, softplus) that multiplies all
+    paradigm pixels outside the bar aperture (= the 8 search items):
+
+        S_eff(x, t) = S(x, t) · (β if ‖x‖ > item_radius_min else 1)
+
+    The gain fields then act on S_eff. With ``item_scale_mode='fixed'``
+    β is clamped to 1 and the model reduces to the parent.
+
+    Only implemented without a flexible-HRF tail (the CV harness uses a
+    fixed canonical HRF).
+    """
+
+    parameter_labels = (
+        DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_factorial
+        .parameter_labels + ['item_scale'])
+
+    def __init__(self, *, item_scale_mode='free', item_radius_min=3.25,
+                 **kwargs):
+        if item_scale_mode not in ('free', 'fixed'):
+            raise ValueError(f'item_scale_mode must be free/fixed, '
+                             f'got {item_scale_mode!r}')
+        if kwargs.get('flexible_hrf_parameters', False):
+            raise NotImplementedError(
+                'item_scale variant does not support flexible HRF parameters.')
+        super().__init__(**kwargs)
+        self._item_scale_mode = item_scale_mode
+        grid = np.asarray(self.grid_coordinates, dtype=np.float32)
+        item_mask = (np.hypot(grid[:, 0], grid[:, 1])
+                     > item_radius_min).astype(np.float32)
+        self._tf_item_mask = tf.constant(item_mask, dtype=tf.float32)
+
+    @tf.function
+    def _basis_predictions(self, paradigm, parameters):
+        beta = parameters[0, 0, 15]
+        pixel_scale = 1.0 + (beta - 1.0) * self._tf_item_mask   # (G,)
+        paradigm_eff = paradigm * pixel_scale[tf.newaxis, tf.newaxis, :]
+        return super()._basis_predictions(paradigm_eff, parameters[:, :, :15])
+
+    @tf.function
+    def _transform_parameters_forward(self, parameters):
+        enc = super()._transform_parameters_forward(parameters[:, :15])
+        if self._item_scale_mode == 'fixed':
+            beta = tf.ones_like(parameters[:, 15:16])
+        else:
+            beta = tf.math.softplus(parameters[:, 15:16])
+        return tf.concat([enc, beta], axis=1)
+
+    @tf.function
+    def _transform_parameters_backward(self, parameters):
+        enc = super()._transform_parameters_backward(parameters[:, :15])
+        beta_raw = tfp.math.softplus_inverse(
+            tf.maximum(parameters[:, 15:16], 1e-4))
+        return tf.concat([enc, beta_raw], axis=1)
 
 
 # ---------------------------------------------------------------------------
@@ -3864,328 +3938,3 @@ class DivisiveNormalizationDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSig
         pred_convolved = pred_convolved + bold_bl
 
         return pred_convolved
-
-
-# ---------------------------------------------------------------------------
-# Klein-style ANALYTICAL SHIFT on a DoG backbone — 6-σ split, no gains.
-# ---------------------------------------------------------------------------
-
-class DoGKleinShift_v3_target_6sigma(
-    DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma,
-):
-    """DoG + analytical Klein-shift, 6 σ split (HP/LP for sus / dyn / target),
-    no gain parameters.
-
-    The forward model has NO multiplicative modulation of the stimulus
-    drive. Instead, at each TR ``t`` and voxel ``v`` we shift the DoG
-    center AND surround Gaussians' positions and sizes via Klein's
-    Gaussian-product precision-weighted-mean formula, applied
-    separately to center (σ_C = sd_v) and surround (σ_S = sd_v · srf_size_v).
-
-    Per-TR precision contribution from each ring ℓ::
-
-        c_ℓ(t) = ci_ℓ(t) · [ 1/σ_HP_sus²  +  d_ℓ(t)/σ_HP_dyn²
-                            + tgt_ℓ(t)/σ_HP_T² ]
-               + (1-ci_ℓ(t)) · [ 1/σ_LP_sus²  +  d_ℓ(t)/σ_LP_dyn²
-                                + tgt_ℓ(t)/σ_LP_T² ]
-
-    where ``ci_ℓ(t) ∈ {0, 1}`` says whether ring ℓ is the HP-of-the-
-    current-condition at TR ``t``, ``d_ℓ(t) ∈ [0, 1]`` is the per-TR
-    distractor-overlap fraction at ring ℓ, ``tgt_ℓ(t)`` is the per-TR
-    target-overlap fraction.
-
-    Then per voxel × TR (separately for center and surround)::
-
-        τ_total_C(t, v) = 1/sd_v²                + Σ_ℓ c_ℓ(t)
-        τ_total_S(t, v) = 1/(sd_v·srf_size_v)²    + Σ_ℓ c_ℓ(t)
-
-        μ_C_eff(t, v)   = (μ_v/sd_v² + Σ_ℓ c_ℓ(t)·r_ℓ) / τ_total_C(t, v)
-        μ_S_eff(t, v)   = (μ_v/(sd_v·srf_size_v)² + Σ_ℓ c_ℓ(t)·r_ℓ) /
-                          τ_total_S(t, v)
-        σ_C_eff(t, v)   = 1 / sqrt(τ_total_C(t, v))    # strict Klein
-        σ_S_eff(t, v)   = 1 / sqrt(τ_total_S(t, v))
-
-    BOLD response (area-preserving)::
-
-        # Compensation factor preserves each unnormalized Gaussian's
-        # integral (2π·σ²) at its at-rest value, so σ-shrinkage becomes a
-        # *pure* shape change (narrower peak, taller peak) without
-        # implicitly down-scaling the integrated PRF response. Without
-        # this, σ_eff < sd_v would silently couple Klein-shifts to an
-        # ~σ²-amplitude reduction at the attended location — the wrong
-        # sign for retsupp's HP-attraction effect from AF+1.
-        G̃_C(t, v, p)    = (sd_v² / σ_C_eff(t,v)²) · G(p; μ_C_eff, σ_C_eff)
-        G̃_S(t, v, p)    = ((sd_v·srf_size_v)² / σ_S_eff(t,v)²)
-                           · G(p; μ_S_eff, σ_S_eff)
-        DoG_eff(t, v, p) = G̃_C(t, v, p) − srf_amp_v · G̃_S(t, v, p)
-        response(t, v)   = amplitude_v · ∫ stim(t, p) · DoG_eff(t, v, p) dp
-                         + baseline_v
-        (then HRF convolve)
-
-    Parameter layout (13 encoding + HRF)
-    -------------------------------------
-    Per-voxel (7):
-        0 x, 1 y, 2 sd, 3 baseline, 4 amplitude,
-        5 srf_amplitude, 6 srf_size.
-    Shared (6):
-        7 sigma_HP_sus, 8 sigma_LP_sus,
-        9 sigma_HP_dyn, 10 sigma_LP_dyn,
-        11 sigma_HP_T,  12 sigma_LP_T.
-
-    No gain parameters anywhere; all per-ring "strength" is encoded by
-    the σ values (smaller σ → larger precision contribution → bigger
-    shift toward that ring).
-
-    `mode` is ignored — pure Klein product has no sign; attraction is
-    structural.
-    """
-
-    parameter_labels = [
-        'x', 'y', 'sd', 'baseline', 'amplitude',
-        'srf_amplitude', 'srf_size',
-        'sigma_HP_sus', 'sigma_LP_sus',
-        'sigma_HP_dyn', 'sigma_LP_dyn',
-        'sigma_HP_T',   'sigma_LP_T',
-    ]
-
-    # Floor on total precision to avoid divisions by ~0.
-    _TAU_FLOOR = 1e-6
-
-    @tf.function
-    def _per_tr_precision_centers(self, parameters):
-        """Per-TR precision contribution & moment from the 6 σ's.
-
-        Returns
-        -------
-        c_sum_t : (T,)   Σ_ℓ c_ℓ(t)
-        c_x_t   : (T,)   Σ_ℓ c_ℓ(t) · r_ℓ_x
-        c_y_t   : (T,)   Σ_ℓ c_ℓ(t) · r_ℓ_y
-        """
-        sigma_HP_sus = parameters[0, 0, 7]
-        sigma_LP_sus = parameters[0, 0, 8]
-        sigma_HP_dyn = parameters[0, 0, 9]
-        sigma_LP_dyn = parameters[0, 0, 10]
-        sigma_HP_T   = parameters[0, 0, 11]
-        sigma_LP_T   = parameters[0, 0, 12]
-
-        ci  = self._tf_condition_indicator   # (T, n_C) ∈ {0, 1}
-        d   = self._tf_dynamic_indicator     # (T, n_C) ∈ [0, 1]
-        tgt = self._tf_target_indicator      # (T, n_C) ∈ [0, 1]
-
-        # Per-(t, ℓ) precision contribution.
-        c_sus = ci         / (sigma_HP_sus ** 2) + (1.0 - ci) / (sigma_LP_sus ** 2)
-        c_dyn = d * (ci    / (sigma_HP_dyn ** 2) + (1.0 - ci) / (sigma_LP_dyn ** 2))
-        c_tgt = tgt * (ci  / (sigma_HP_T   ** 2) + (1.0 - ci) / (sigma_LP_T   ** 2))
-        c_tl = c_sus + c_dyn + c_tgt          # (T, n_C)
-
-        rx = self._tf_ring_positions[:, 0]   # (n_C,)
-        ry = self._tf_ring_positions[:, 1]
-        c_sum_t = tf.reduce_sum(c_tl, axis=1)             # (T,)
-        c_x_t   = tf.einsum('tl,l->t', c_tl, rx)          # (T,)
-        c_y_t   = tf.einsum('tl,l->t', c_tl, ry)          # (T,)
-        return c_sum_t, c_x_t, c_y_t
-
-    @tf.function
-    def _basis_predictions(self, paradigm, parameters):
-        # paradigm:   (B, T, G)
-        # parameters: (B, V, 13[+n_hrf])
-        T = tf.shape(paradigm)[1]
-
-        mu_x_v = parameters[:, :, 0]         # (B, V)
-        mu_y_v = parameters[:, :, 1]
-        sd_v   = parameters[:, :, 2]
-        baseline_v  = parameters[:, :, 3]
-        amplitude_v = parameters[:, :, 4]
-        srf_amp_v   = parameters[:, :, 5]
-        srf_size_v  = parameters[:, :, 6]
-
-        # Per-voxel center & surround precisions.
-        tau_v_C = 1.0 / (sd_v ** 2)                                 # (B, V)
-        sd_S_v  = sd_v * srf_size_v
-        tau_v_S = 1.0 / (sd_S_v ** 2)                               # (B, V)
-
-        # Per-TR shared precision contribution (depends on t, not v).
-        c_sum_t, c_x_t, c_y_t = self._per_tr_precision_centers(parameters)
-
-        # Per (B, V, T) total precision.
-        tau_total_C = tau_v_C[:, :, tf.newaxis] + c_sum_t[tf.newaxis, tf.newaxis, :]
-        tau_total_S = tau_v_S[:, :, tf.newaxis] + c_sum_t[tf.newaxis, tf.newaxis, :]
-        tau_total_C_safe = tf.maximum(tau_total_C, self._TAU_FLOOR)
-        tau_total_S_safe = tf.maximum(tau_total_S, self._TAU_FLOOR)
-
-        # Per (B, V, T) shifted center & surround means.
-        num_x_C = tau_v_C[:, :, tf.newaxis] * mu_x_v[:, :, tf.newaxis] \
-                  + c_x_t[tf.newaxis, tf.newaxis, :]
-        num_y_C = tau_v_C[:, :, tf.newaxis] * mu_y_v[:, :, tf.newaxis] \
-                  + c_y_t[tf.newaxis, tf.newaxis, :]
-        num_x_S = tau_v_S[:, :, tf.newaxis] * mu_x_v[:, :, tf.newaxis] \
-                  + c_x_t[tf.newaxis, tf.newaxis, :]
-        num_y_S = tau_v_S[:, :, tf.newaxis] * mu_y_v[:, :, tf.newaxis] \
-                  + c_y_t[tf.newaxis, tf.newaxis, :]
-
-        mu_C_x = num_x_C / tau_total_C_safe                         # (B, V, T)
-        mu_C_y = num_y_C / tau_total_C_safe
-        mu_S_x = num_x_S / tau_total_S_safe
-        mu_S_y = num_y_S / tau_total_S_safe
-
-        sigma_C_eff = 1.0 / tf.sqrt(tau_total_C_safe)               # (B, V, T)
-        sigma_S_eff = 1.0 / tf.sqrt(tau_total_S_safe)
-
-        # Separable-Gaussian contraction. The grid is a regular RECTANGULAR
-        # Nx×Ny lattice — a full Cartesian product of an x-axis and a y-axis
-        # (np.meshgrid + C-order ravel: g = row*Nx + col, so gx is the
-        # fast/column axis and gy the slow/row axis), matched by
-        # paradigm.reshape((T, Ny, Nx)) -> [t, row=gy, col=gx]. Nx and Ny need
-        # NOT be equal — only rectangular (every x paired with every y). The
-        # isotropic Gaussian factorizes
-        #   exp(-((gx-µx)² + (gy-µy)²)·c) = exp(-(gx-µx)²·c) · exp(-(gy-µy)²·c)
-        # so we build two 1-D factors (lengths Nx and Ny) instead of one
-        # (B,V,Tc,G=Nx·Ny) buffer — a ~G/(Nx+Ny) ≈ 25-50× smaller hot tensor.
-        # The whole tape then fits well under 1 GB at V=500, so the model runs
-        # on a 24 GB L4 / 40 GB A100 GPU with no gradient checkpointing. The
-        # dense (B,V,Tc,G) form needed ~128 GB host RAM (CPU-only) and OOM'd
-        # every GPU. Exact up to float32 round-off (reordering Σ_g into Σ_i Σ_j
-        # and factoring exp): verified r=1-5e-14, trace R²=1.0, ~13× faster
-        # than the dense einsum at production size V=500/G=2500.
-        # --- Guard: only a rectangular, axis-aligned lattice ravelled C-order
-        # (x fast) factorizes this way. Detect Nx/Ny from the static numpy grid
-        # and reconstruct it (tile/repeat) once at trace time (zero hot-loop
-        # cost); fail loudly rather than silently mis-reshaping if a future
-        # grid is polar/irregular or ordered differently. ---
-        gc_np = np.asarray(self._grid_coordinates)
-        G_ = gc_np.shape[0]
-        gx_np, gy_np = gc_np[:, 0], gc_np[:, 1]
-        # Each y-value recurs once per column → #points sharing the first
-        # row's y == Nx; symmetrically Ny. No squareness assumed (Nx may ≠ Ny).
-        Nx = int(np.sum(gy_np == gy_np[0]))
-        Ny = int(np.sum(gx_np == gx_np[0]))
-        x1d_np = gx_np[:Nx]            # first row spans the full x-axis
-        y1d_np = gy_np[::Nx]           # one entry per row spans the full y-axis
-        if Nx * Ny != G_ or not (
-                np.allclose(gx_np, np.tile(x1d_np, Ny))
-                and np.allclose(gy_np, np.repeat(y1d_np, Nx))):
-            raise ValueError(
-                "DoGKleinShift separable forward requires a rectangular, "
-                "axis-aligned Nx×Ny grid ravelled C-order as g=row*Nx+col "
-                f"(x fast); got G={G_} (detected Nx={Nx}, Ny={Ny}) that does "
-                "not reconstruct as a Cartesian product. A polar/irregular or "
-                "differently-ordered grid is not separable this way.")
-        # The two 1-D axes (x = fast/column, y = slow/row); not assumed equal.
-        g1d_x = self._grid_coordinates[:Nx, 0]                      # (Nx,)
-        g1d_y = self._grid_coordinates[::Nx, 1]                     # (Ny,)
-        g1d_x_b = g1d_x[tf.newaxis, tf.newaxis, tf.newaxis, :]      # (1,1,1,Nx)
-        g1d_y_b = g1d_y[tf.newaxis, tf.newaxis, tf.newaxis, :]      # (1,1,1,Ny)
-        # Area-preserving compensation factor — keeps each Gaussian's
-        # integral at its at-rest value (2π·sd²) so Klein-σ shrinkage
-        # is pure shape modulation, no implicit amplitude effect.
-        # area_C0 = sd_v²; at rest σ_C_eff = sd_v → factor = 1.
-        sd_v_b = sd_v[:, :, tf.newaxis, tf.newaxis]                 # (B,V,1,1)
-        sd_S_v_b = sd_S_v[:, :, tf.newaxis, tf.newaxis]
-        area_C0 = sd_v_b * sd_v_b                                   # (B,V,1,1)
-        area_S0 = sd_S_v_b * sd_S_v_b
-        amp_eff_b = amplitude_v[:, :, tf.newaxis, tf.newaxis]              # (B,V,1,1)
-        amp_S_eff_b = srf_amp_v[:, :, tf.newaxis, tf.newaxis] * amp_eff_b
-
-        @tf.function(jit_compile=True)
-        def _chunk_forward(par_c, mu_Cx_c, mu_Cy_c, sC_c,
-                            mu_Sx_c, mu_Sy_c, sS_c):
-            # par_c: (B,Tc,G) → (B,Tc, Ny[row=gy], Nx[col=gx]).
-            # mu_*_c, sC_c, sS_c: (B,V,Tc,1).
-            b = tf.shape(par_c)[0]
-            tc = tf.shape(par_c)[1]
-            par_img = tf.reshape(par_c, (b, tc, Ny, Nx))
-
-            inv2sC2 = 0.5 / (sC_c * sC_c)                           # (B,V,Tc,1)
-            inv2sS2 = 0.5 / (sS_c * sS_c)
-            scale_C = area_C0 * (2.0 * inv2sC2) * amp_eff_b         # (B,V,Tc,1)
-            scale_S = area_S0 * (2.0 * inv2sS2) * amp_S_eff_b
-
-            # 1-D factors. Amplitude/area scale folded into the x-factor ONLY
-            # (folding into both would square it). i=row=gy (Ny), j=col=gx (Nx).
-            fxC = scale_C * tf.exp(-((g1d_x_b - mu_Cx_c) ** 2) * inv2sC2)  # (B,V,Tc,Nx)
-            fyC =           tf.exp(-((g1d_y_b - mu_Cy_c) ** 2) * inv2sC2)  # (B,V,Tc,Ny)
-            fxS = scale_S * tf.exp(-((g1d_x_b - mu_Sx_c) ** 2) * inv2sS2)
-            fyS =           tf.exp(-((g1d_y_b - mu_Sy_c) ** 2) * inv2sS2)
-
-            # Contract gx (fast/col=j, Nx) first, then gy (slow/row=i, Ny).
-            tmp_C = tf.einsum('btij,bvtj->bvti', par_img, fxC)     # (B,V,Tc,Ny) over row i
-            pred_c_c = tf.einsum('bvti,bvti->bvt', tmp_C, fyC)     # (B,V,Tc)
-            tmp_S = tf.einsum('btij,bvtj->bvti', par_img, fxS)
-            pred_c_s = tf.einsum('bvti,bvti->bvt', tmp_S, fyS)
-            return pred_c_c - pred_c_s                              # (B,V,Tc)
-
-        T_static = paradigm.shape[1]
-        T_CHUNK = 128
-        if T_static is None:
-            t_starts = [0]
-            chunk_sizes = [T]
-        else:
-            t_starts = list(range(0, T_static, T_CHUNK))
-            chunk_sizes = [min(T_CHUNK, T_static - s) for s in t_starts]
-
-        pred_chunks = []
-        for t0, tc in zip(t_starts, chunk_sizes):
-            par_c   = paradigm[:, t0:t0 + tc, :]                    # (B,Tc,G)
-            mu_Cx_c = mu_C_x[:, :, t0:t0 + tc, tf.newaxis]          # (B,V,Tc,1)
-            mu_Cy_c = mu_C_y[:, :, t0:t0 + tc, tf.newaxis]
-            sC_c    = sigma_C_eff[:, :, t0:t0 + tc, tf.newaxis]
-            mu_Sx_c = mu_S_x[:, :, t0:t0 + tc, tf.newaxis]
-            mu_Sy_c = mu_S_y[:, :, t0:t0 + tc, tf.newaxis]
-            sS_c    = sigma_S_eff[:, :, t0:t0 + tc, tf.newaxis]
-            pred_chunks.append(
-                _chunk_forward(par_c, mu_Cx_c, mu_Cy_c, sC_c,
-                                mu_Sx_c, mu_Sy_c, sS_c)
-            )
-
-        pred = tf.concat(pred_chunks, axis=2)                       # (B,V,T)
-        pred = tf.transpose(pred, perm=[0, 2, 1])                   # (B,T,V)
-        return pred + baseline_v[:, tf.newaxis, :]
-
-    # ----- Parameter transforms (6 σ's, all softplus, no gain params) ------
-
-    @tf.function
-    def _transform_parameters_forward(self, parameters):
-        # Per-voxel slots 0..6 — same as DoG parent's encoding (no transform
-        # except sd which needs softplus with sd_min). srf_amplitude and
-        # srf_size also need positivity (softplus). amplitude is signed.
-        # We use _sd_softplus_forward for σ-like values; identity for x, y;
-        # softplus for srf_amplitude, srf_size; identity for amplitude.
-        x = parameters[:, 0:1]
-        y = parameters[:, 1:2]
-        sd = _sd_softplus_forward(parameters[:, 2:3], self.sd_min)
-        baseline = parameters[:, 3:4]
-        amplitude = parameters[:, 4:5]
-        srf_amplitude = tf.math.softplus(parameters[:, 5:6])
-        srf_size = tf.math.softplus(parameters[:, 6:7]) + 1.0
-        # 6 σ's, all softplus with sd_min floor.
-        sigmas_raw = parameters[:, 7:13]
-        sigmas = _sd_softplus_forward(sigmas_raw, self.sd_min)
-
-        enc = tf.concat([x, y, sd, baseline, amplitude,
-                          srf_amplitude, srf_size, sigmas], axis=1)
-
-        if self.flexible_hrf_parameters:
-            n_hrf = len(self.hrf_model.parameter_labels)
-            hrf_pars = self.hrf_model._transform_parameters_forward(
-                parameters[:, -n_hrf:])
-            return tf.concat([enc, hrf_pars], axis=1)
-        return enc
-
-    @tf.function
-    def _transform_parameters_backward(self, parameters):
-        x = parameters[:, 0:1]
-        y = parameters[:, 1:2]
-        sd = _sd_softplus_inverse(parameters[:, 2:3], self.sd_min)
-        baseline = parameters[:, 3:4]
-        amplitude = parameters[:, 4:5]
-        srf_amplitude = tfp.math.softplus_inverse(parameters[:, 5:6])
-        srf_size = tfp.math.softplus_inverse(parameters[:, 6:7] - 1.0)
-        sigmas_raw = _sd_softplus_inverse(parameters[:, 7:13], self.sd_min)
-        enc = tf.concat([x, y, sd, baseline, amplitude,
-                          srf_amplitude, srf_size, sigmas_raw], axis=1)
-        if self.flexible_hrf_parameters:
-            n_hrf = len(self.hrf_model.parameter_labels)
-            hrf_pars = self.hrf_model._transform_parameters_backward(
-                parameters[:, -n_hrf:])
-            return tf.concat([enc, hrf_pars], axis=1)
-        return enc

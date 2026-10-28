@@ -60,7 +60,7 @@ The pickle contains, per fold:
     train_r2_per_fold    : list[ndarray]
     fit_pars_per_fold    : list[DataFrame]
 
-In addition (canonical output, read by ``aggregate_shiftvsgain_cv``) the
+In addition (canonical output, read by ``aggregate_cv_ladder``) the
 script writes three tidy TSV/JSON files via ``cv_helpers.write_cv_tsvs``::
 
     sub-XX_roi-{ROI}_cv-r2.tsv      [subject, roi, model, fold, voxel_id,
@@ -71,13 +71,13 @@ script writes three tidy TSV/JSON files via ``cv_helpers.write_cv_tsvs``::
                                      selector, p_signal_thr
 
 ``voxel_id`` is the BOLD-masker flat index so every arm
-(null/model0/gain/shift) aligns exactly.
+(null/model0/gain) aligns exactly.
 
 Voxel selection
 ---------------
 Defaults to the GMM ``select_roi_voxels_psignal`` (``--p-signal-thr 0.5``),
-matching the non-CV klein best-fit voxels in
-``af_prf_klein_shift_6sigma_sharedSigma_pSig0.5/``.  Pass ``--no-psignal``
+matching the voxels of the canonical non-CV gain-model fit in
+``af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_pSig0.5/``.  Pass ``--no-psignal``
 to fall back to the legacy r²-threshold selector.  The ``--max-voxels``
 top-by-r² ranking is applied identically in both branches.
 
@@ -105,19 +105,26 @@ from braincoder.optimize import ParameterFitter
 from retsupp.modeling.cv_helpers import (
     CONDITIONS,
     RunMeta,
-    held_out_condition,
     per_voxel_r2,
-    summarize_split,
     write_cv_tsvs,
 )
 from retsupp.modeling.local_models import (
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_factorial,
+    DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_factorial_items,
 )
 from retsupp.utils.data import Subject, distractor_locations
 
 
 SIGN_CHOICES = ('plus', 'zero', 'minus', 'free')
+# 'tied' = HP gain := LP gain (location-blind); only for the HP gains.
+HP_SIGN_CHOICES = SIGN_CHOICES + ('tied',)
 TARGET_GAIN_CHOICES = ('plus', 'zero', 'minus', 'free')
+# 'none' = bar-only paradigm (vanilla pRF stimulus, no search items).
+ITEM_SHAPES = ('circle', 'rectangle', 'none')
+ITEM_SCALE_MODES = ('none', 'fixed', 'free')
+# 'loco': leave one HP location out (4 folds).
+# 'run3': 3 folds, each holding out one run per HP location (all 4 in every fold).
+CV_SCHEMES = ('loco', 'run3')
 
 
 # All 5 gain names used by the factorial sharedSigma model.
@@ -139,14 +146,20 @@ ALL_SHARED_PARS = ['sigma_AF', 'g_HP', 'g_LP',
 
 def class_dirname(sus_hp: str, sus_lp: str,
                   dyn_hp: str, dyn_lp: str,
-                  target_gain: str) -> str:
+                  target_gain: str,
+                  item_shape: str = 'circle',
+                  item_scale: str = 'none') -> str:
     """Convert the 5 sign args into the output directory name.
 
-    Format: ``sus-{sus_hp}-{sus_lp}_dyn-{dyn_hp}-{dyn_lp}_tgt-{target}``.
+    Format: ``sus-{sus_hp}-{sus_lp}_dyn-{dyn_hp}-{dyn_lp}_tgt-{target}``,
+    plus ``_items-{shape}-{scale}`` when the non-legacy stimulus model is used.
     """
-    return (f'sus-{sus_hp}-{sus_lp}_'
+    name = (f'sus-{sus_hp}-{sus_lp}_'
             f'dyn-{dyn_hp}-{dyn_lp}_'
             f'tgt-{target_gain}')
+    if item_shape != 'circle' or item_scale != 'none':
+        name += f'_items-{item_shape}-{item_scale}'
+    return name
 
 
 def get_ring_positions():
@@ -162,6 +175,7 @@ def get_ring_positions():
 def build_data_and_paradigm(
     sub: Subject,
     resolution: int = 50, grid_radius: float = 5.0,
+    item_shape: str = 'circle',
 ):
     """Load BOLD + paradigm + condition / dynamic / target indicators.
 
@@ -205,10 +219,22 @@ def build_data_and_paradigm(
             print(f'  ses-{session}_run-{run}: HP={hp!r}, skipping')
             continue
 
-        par_run = sub.get_stimulus_with_distractors(
-            session=session, run=run, resolution=resolution,
-            grid_radius=grid_radius,
-        ).astype(np.float32)
+        if item_shape == 'none':
+            par_run = sub.get_bar_stimulus(
+                session=session, run=run, resolution=resolution,
+                grid_radius=grid_radius).astype(np.float32)
+        else:
+            if item_shape == 'rectangle':
+                # Same item footprint as the m4 Step-1 fits (fit_prf.py).
+                shape_kwargs = dict(distractor_shape='rectangle',
+                                    distractor_long_side=1.5,
+                                    distractor_short_side=0.375)
+            else:
+                shape_kwargs = {}
+            par_run = sub.get_stimulus_with_distractors(
+                session=session, run=run, resolution=resolution,
+                grid_radius=grid_radius, **shape_kwargs,
+            ).astype(np.float32)
         par_run_flat = par_run.reshape((par_run.shape[0], -1))
         n_T_run = par_run_flat.shape[0]
 
@@ -308,8 +334,8 @@ def choose_voxel_mask(sub: Subject, roi: str, prf_pars: pd.DataFrame,
 
     When ``use_psignal`` is True this calls the GMM ``p_signal`` selector
     from :mod:`fit_dog_dynamic_af_braincoder` — IDENTICAL to the non-CV
-    best-fit klein selection (so the CV voxels equal the non-CV voxels
-    in ``af_prf_klein_shift_6sigma_sharedSigma_pSig0.5/``).  Otherwise it
+    canonical gain-model selection (so the CV voxels equal the non-CV voxels
+    in ``af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_pSig0.5/``).  Otherwise it
     falls back to the legacy r²-threshold ROI selector.
 
     The top-``max_voxels`` ranking (argsort r² descending) is applied
@@ -353,7 +379,8 @@ def make_init_pars(prf_pars: pd.DataFrame,
                    voxel_mask: np.ndarray,
                    sign_pattern: dict[str, str],
                    sigma_af_init: float,
-                   sigma_dyn_init: float) -> pd.DataFrame:
+                   sigma_dyn_init: float,
+                   item_scale: str = 'none') -> pd.DataFrame:
     """Initialise per-voxel + shared parameters for the sharedSigma factorial.
 
     σ_AF and σ_dyn are initialised at the values given (defaults 5.0).
@@ -390,7 +417,26 @@ def make_init_pars(prf_pars: pd.DataFrame,
     for gain_name in GAIN_NAMES:
         init_pars[gain_name] = _init_usable(sign_pattern[gain_name])
 
+    if item_scale != 'none':
+        init_pars['item_scale'] = 1.0
+
     return init_pars
+
+
+def make_folds(run_meta: list[RunMeta], cv_scheme: str):
+    """List of (fold label, set of held-out (session, run)) per CV fold."""
+    if cv_scheme == 'loco':
+        return [(c, {(rm.session, rm.run) for rm in run_meta if rm.hp == c})
+                for c in CONDITIONS]
+    if cv_scheme == 'run3':
+        folds = [('run3-0', set()), ('run3-1', set()), ('run3-2', set())]
+        for c in CONDITIONS:
+            runs = sorted((rm.session, rm.run) for rm in run_meta
+                          if rm.hp == c)
+            for i, sr in enumerate(runs):
+                folds[i % 3][1].add(sr)
+        return folds
+    raise ValueError(f'cv_scheme must be in {CV_SCHEMES}')
 
 
 def split_by_condition_with_target(
@@ -398,18 +444,11 @@ def split_by_condition_with_target(
     condition_indicator: np.ndarray,
     dynamic_indicator: np.ndarray,
     target_indicator: np.ndarray,
-    run_meta: list[RunMeta], held_out_cond: str,
+    run_meta: list[RunMeta], held_out_runs: set,
 ):
-    """Local re-implementation of cv_helpers.split_by_condition that
-    also splits ``target_indicator`` along the time axis.
-
-    We deliberately avoid modifying ``cv_helpers.py`` so CV-v1 stays
-    pinned to its current semantics.
+    """Split the concatenated stack (incl. ``target_indicator``) into
+    train rows and the held-out (session, run) chunks.
     """
-    if held_out_cond not in CONDITIONS:
-        raise ValueError(
-            f'held_out_cond must be in {CONDITIONS!r} (got {held_out_cond!r}).')
-
     expected_T = sum(rm.n_T for rm in run_meta)
     if bold.shape[0] != expected_T:
         raise ValueError(
@@ -424,7 +463,7 @@ def split_by_condition_with_target(
     held_offset = 0
     for rm in run_meta:
         rows = np.arange(rm.start, rm.stop)
-        if rm.hp == held_out_cond:
+        if (rm.session, rm.run) in held_out_runs:
             held_rows.append(rows)
             held_run_meta.append(RunMeta(
                 session=rm.session, run=rm.run, hp=rm.hp,
@@ -440,12 +479,9 @@ def split_by_condition_with_target(
             train_offset += rm.n_T
 
     if not train_rows:
-        raise RuntimeError(
-            f'No training runs left after holding out {held_out_cond!r}.')
+        raise RuntimeError('No training runs left after holding out.')
     if not held_rows:
-        raise RuntimeError(
-            f'No held-out runs found for condition {held_out_cond!r}. '
-            f'(Subject may not have any runs with this HP.)')
+        raise RuntimeError('No held-out runs in this fold.')
 
     train_idx = np.concatenate(train_rows)
     held_idx = np.concatenate(held_rows)
@@ -472,9 +508,10 @@ def split_by_condition_with_target(
 def build_model(*, grid_coords, paradigm,
                 condition_indicator, dynamic_indicator,
                 target_indicator,
-                ring_positions, hrf_model, sign_pattern):
+                ring_positions, hrf_model, sign_pattern,
+                item_scale: str = 'none'):
     """Construct the sharedSigma + factorial model for one CV fold."""
-    return DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_factorial(
+    kwargs = dict(
         grid_coordinates=grid_coords,
         paradigm=paradigm,
         hrf_model=hrf_model,
@@ -484,36 +521,49 @@ def build_model(*, grid_coords, paradigm,
         ring_positions=ring_positions,
         sign_pattern=sign_pattern,
     )
+    if item_scale == 'none':
+        return DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_factorial(
+            **kwargs)
+    return DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_factorial_items(
+        item_scale_mode=item_scale, **kwargs)
 
 
-def fixed_pars_for(sign_pattern: dict[str, str]) -> list[str] | None:
-    """Names of gains whose sign is 'zero' (passed to ParameterFitter).
+def fixed_pars_for(sign_pattern: dict[str, str],
+                   item_scale: str = 'none') -> list[str] | None:
+    """Names of gains whose sign is 'zero' or 'tied' (passed to ParameterFitter).
 
-    The model already clamps zero-signed gains to 0 in the forward
-    transform; we ALSO mark them fixed so the optimiser doesn't waste
-    effort updating their (irrelevant) raw variables.
+    The model already clamps zero-signed gains to 0 (and overwrites tied
+    HP gains with the LP gain) in the forward transform; we ALSO mark them
+    fixed so the optimiser doesn't waste effort updating their (irrelevant)
+    raw variables.
 
     Note: we do NOT add ``sigma_T_dyn`` to ``fixed_pars`` even though it
     is effectively dead (tied to σ_dyn).  Adding it would fight with
     the shared_pars list.  Its raw variable simply receives zero
     gradient through the model.
     """
-    fixed = [name for name in GAIN_NAMES if sign_pattern[name] == 'zero']
+    fixed = [name for name in GAIN_NAMES
+             if sign_pattern[name] in ('zero', 'tied')]
+    if item_scale == 'fixed':
+        fixed.append('item_scale')
     return fixed if fixed else None
 
 
-def shared_pars_for(sign_pattern: dict[str, str]) -> list[str]:
-    """Optimiser-shared parameters that are NOT zero-fixed.
+def shared_pars_for(sign_pattern: dict[str, str],
+                    item_scale: str = 'none') -> list[str]:
+    """Optimiser-shared parameters that are NOT fixed.
 
     σ_AF, σ_dyn, σ_T_dyn are always shared across voxels (σ_T_dyn even
     though dead — keeping it shared keeps the shape of the fit_pars
     DataFrame consistent across cells).  Each gain is shared unless
-    its sign is 'zero' (which would conflict with ``fixed_pars``).
+    its sign is 'zero' or 'tied' (which would conflict with ``fixed_pars``).
     """
     keep = ['sigma_AF', 'sigma_dyn', 'sigma_T_dyn']
     for gain_name in GAIN_NAMES:
-        if sign_pattern[gain_name] != 'zero':
+        if sign_pattern[gain_name] not in ('zero', 'tied'):
             keep.append(gain_name)
+    if item_scale == 'free':
+        keep.append('item_scale')
     return keep
 
 
@@ -540,12 +590,25 @@ def main(subject: int,
          sigma_dyn_init: float = 2.0,
          use_psignal: bool = True,
          p_signal_thr: float = 0.5,
-         output_subdir: str | None = None):
+         output_subdir: str | None = None,
+         item_shape: str = 'circle',
+         item_scale: str = 'none',
+         cv_scheme: str = 'loco'):
 
-    for s in (sus_hp_sign, sus_lp_sign, dyn_hp_sign, dyn_lp_sign):
+    if cv_scheme not in CV_SCHEMES:
+        raise ValueError(f'cv_scheme must be in {CV_SCHEMES}')
+    for s in (sus_lp_sign, dyn_lp_sign):
         if s not in SIGN_CHOICES:
             raise ValueError(
                 f'sign args must be one of {SIGN_CHOICES} (got {s!r}).')
+    for s in (sus_hp_sign, dyn_hp_sign):
+        if s not in HP_SIGN_CHOICES:
+            raise ValueError(
+                f'HP sign args must be one of {HP_SIGN_CHOICES} (got {s!r}).')
+    if item_shape not in ITEM_SHAPES:
+        raise ValueError(f'item_shape must be in {ITEM_SHAPES}')
+    if item_scale not in ITEM_SCALE_MODES:
+        raise ValueError(f'item_scale must be in {ITEM_SCALE_MODES}')
     if target_gain not in TARGET_GAIN_CHOICES:
         raise ValueError(
             f'--target-gain must be one of {TARGET_GAIN_CHOICES} '
@@ -560,7 +623,9 @@ def main(subject: int,
     }
     cls_dir = class_dirname(sus_hp_sign, sus_lp_sign,
                             dyn_hp_sign, dyn_lp_sign,
-                            target_gain)
+                            target_gain, item_shape, item_scale)
+    shared_par_labels = ALL_SHARED_PARS + (
+        ['item_scale'] if item_scale != 'none' else [])
 
     bids_folder = Path(bids_folder)
     sub = Subject(subject, bids_folder)
@@ -580,10 +645,11 @@ def main(subject: int,
      dynamic_indicator, target_indicator,
      grid_coords, _masker, run_meta) = build_data_and_paradigm(
         sub, resolution=resolution, grid_radius=grid_radius,
+        item_shape=item_shape,
     )
 
     # 2) Restrict to ROI voxels. By default use the GMM p_signal selector
-    #    (matching the non-CV klein best-fit voxels); fall back to the
+    #    (matching the canonical non-CV gain-model fit voxels); fall back to the
     #    legacy r²-threshold selector if --no-psignal.
     prf_pars = sub.get_prf_parameters_volume(model=model_label,
                                              return_images=False)
@@ -599,17 +665,19 @@ def main(subject: int,
         prf_pars, voxel_mask, sign_pattern,
         sigma_af_init=sigma_af_init,
         sigma_dyn_init=sigma_dyn_init,
+        item_scale=item_scale,
     )
     ring_positions = get_ring_positions()
     hrf_model = SPMHRFModel(tr=sub.get_tr(session=1, run=1),
                             delay=4.5, dispersion=0.75)
 
-    fixed_pars = fixed_pars_for(sign_pattern)
-    shared_pars = shared_pars_for(sign_pattern)
+    fixed_pars = fixed_pars_for(sign_pattern, item_scale)
+    shared_pars = shared_pars_for(sign_pattern, item_scale)
     print(f'   fixed_pars : {fixed_pars}')
     print(f'   shared_pars: {shared_pars}')
 
-    # 3) Loop over CV folds (4 held-out HP conditions).
+    # 3) Loop over CV folds.
+    folds = make_folds(run_meta, cv_scheme)
     shared_pars_per_fold: list[dict] = []
     cv_r2_per_fold: list[np.ndarray] = []
     train_r2_per_fold: list[np.ndarray] = []
@@ -619,10 +687,10 @@ def main(subject: int,
 
     n_voxels_fit = int(voxel_mask.sum())
 
-    for cv_fold in range(4):
-        held_out = held_out_condition(cv_fold)
+    for cv_fold, (held_out, held_runs) in enumerate(folds):
         print()
-        print(f'=== CV fold {cv_fold} : held-out = {held_out} ===')
+        print(f'=== CV fold {cv_fold} : held-out = {held_out} '
+              f'{sorted(held_runs)} ===')
 
         try:
             split = split_by_condition_with_target(
@@ -630,7 +698,7 @@ def main(subject: int,
                 condition_indicator=condition_indicator,
                 dynamic_indicator=dynamic_indicator,
                 target_indicator=target_indicator,
-                run_meta=run_meta, held_out_cond=held_out,
+                run_meta=run_meta, held_out_runs=held_runs,
             )
         except RuntimeError as e:
             print(f'  -> SKIPPING fold {cv_fold}: {e}')
@@ -644,7 +712,8 @@ def main(subject: int,
             continue
 
         train, held = split['train'], split['held']
-        print(summarize_split(run_meta, held_out))
+        print(f'  train runs: {len(train["run_meta"])}, '
+              f'held runs: {[(rm.session, rm.run, rm.hp) for rm in held["run_meta"]]}')
 
         bold_train_sub = pd.DataFrame(train['bold'][:, voxel_mask])
         bold_held_sub = pd.DataFrame(held['bold'][:, voxel_mask])
@@ -658,6 +727,7 @@ def main(subject: int,
             ring_positions=ring_positions,
             hrf_model=hrf_model,
             sign_pattern=sign_pattern,
+            item_scale=item_scale,
         )
 
         fitter = ParameterFitter(model_train, bold_train_sub,
@@ -687,6 +757,7 @@ def main(subject: int,
             ring_positions=ring_positions,
             hrf_model=hrf_model,
             sign_pattern=sign_pattern,
+            item_scale=item_scale,
         )
         pred_held = model_held.predict(paradigm=held['paradigm'],
                                        parameters=fit_pars)
@@ -700,7 +771,7 @@ def main(subject: int,
         # All shared-par columns reported (always include all 8
         # ALL_SHARED_PARS; zero-fixed gains will be 0 because the
         # forward transform clamps them; σ_T_dyn will equal σ_dyn).
-        shared_dict = fit_pars[ALL_SHARED_PARS].iloc[0].to_dict()
+        shared_dict = fit_pars[shared_par_labels].iloc[0].to_dict()
 
         shared_pars_per_fold.append(shared_dict)
         cv_r2_per_fold.append(cv_r2)
@@ -722,9 +793,11 @@ def main(subject: int,
                         dyn_hp_sign, dyn_lp_sign, target_gain),
         'class_dirname': cls_dir,
         'sign_pattern': sign_pattern,
-        'shared_par_labels': ALL_SHARED_PARS,
+        'shared_par_labels': shared_par_labels,
         'fitted_shared_pars': shared_pars,
         'fixed_pars': fixed_pars or [],
+        'item_shape': item_shape,
+        'item_scale': item_scale,
         'voxel_mask_indices': np.where(voxel_mask)[0],
         'roi': roi,
         'resolution': resolution,
@@ -732,8 +805,9 @@ def main(subject: int,
         'paradigm_type': 'full',
         'grid_radius': grid_radius,
         'model_name': 'dog-dyn-v3-target-sharedSigma-factorial',
-        'cv_folds': list(range(4)),
-        'cv_held_out_conditions': list(CONDITIONS),
+        'cv_scheme': cv_scheme,
+        'cv_folds': list(range(len(folds))),
+        'cv_held_out_conditions': [f[0] for f in folds],
         'train_run_meta_per_fold': train_run_meta_per_fold,
         'held_run_meta_per_fold': held_run_meta_per_fold,
         'sigma_af_init': sigma_af_init,
@@ -743,7 +817,7 @@ def main(subject: int,
         pickle.dump(payload, f)
     print(f'Saved: {out_pkl}')
 
-    # 5) Canonical TSV output (read by aggregate_shiftvsgain_cv).
+    # 5) Canonical TSV output (read by aggregate_cv_ladder).
     #    The 'model' column is the arm label: the trailing component of
     #    output_subdir (.../gain or .../model0) when it is canonical,
     #    else derived from the sign pattern, else the class dirname.
@@ -751,8 +825,10 @@ def main(subject: int,
     per_voxel_par_cols = ['x', 'y', 'sd', 'baseline', 'amplitude',
                           'srf_amplitude', 'srf_size']
     tail = Path(output_subdir).name
-    if tail in ('gain', 'model0', 'shift'):
+    if tail in ('gain', 'model0'):
         model_label_str = tail
+    elif item_shape != 'circle' or item_scale != 'none':
+        model_label_str = cls_dir
     elif all(s == 'free' for s in sign_pattern.values()):
         model_label_str = 'gain'
     elif all(s == 'zero' for s in sign_pattern.values()):
@@ -768,7 +844,7 @@ def main(subject: int,
         train_r2_per_fold=train_r2_per_fold,
         fit_pars_per_fold=fit_pars_per_fold,
         shared_pars_per_fold=shared_pars_per_fold,
-        shared_par_labels=ALL_SHARED_PARS,
+        shared_par_labels=shared_par_labels,
         per_voxel_par_cols=per_voxel_par_cols,
         train_run_meta_per_fold=train_run_meta_per_fold,
         held_run_meta_per_fold=held_run_meta_per_fold,
@@ -779,6 +855,10 @@ def main(subject: int,
             sign_pattern=sign_pattern,
             model_name='dog-dyn-v3-target-sharedSigma-factorial',
             max_voxels=max_voxels,
+            item_shape=item_shape,
+            item_scale=item_scale,
+            cv_scheme=cv_scheme,
+            cv_held_out_conditions=[f[0] for f in folds],
         ),
     )
     print(f'Saved TSVs: {tsv_paths["r2"]}, {tsv_paths["params"]}, '
@@ -792,15 +872,15 @@ if __name__ == '__main__':
     parser.add_argument('subject', type=int)
     parser.add_argument('--bids-folder', default='/data/ds-retsupp')
     parser.add_argument('--roi', default='V3AB')
-    parser.add_argument('--sus-hp-sign', choices=list(SIGN_CHOICES),
+    parser.add_argument('--sus-hp-sign', choices=list(HP_SIGN_CHOICES),
                         required=True,
-                        help='Sign constraint on g_HP (sustained).')
+                        help="Sign constraint on g_HP (sustained); 'tied' = g_HP := g_LP.")
     parser.add_argument('--sus-lp-sign', choices=list(SIGN_CHOICES),
                         required=True,
                         help='Sign constraint on g_LP (sustained).')
-    parser.add_argument('--dyn-hp-sign', choices=list(SIGN_CHOICES),
+    parser.add_argument('--dyn-hp-sign', choices=list(HP_SIGN_CHOICES),
                         required=True,
-                        help='Sign constraint on g_HP_dyn (dynamic).')
+                        help="Sign constraint on g_HP_dyn (dynamic); 'tied' = g_HP_dyn := g_LP_dyn.")
     parser.add_argument('--dyn-lp-sign', choices=list(SIGN_CHOICES),
                         required=True,
                         help='Sign constraint on g_LP_dyn (dynamic).')
@@ -824,13 +904,25 @@ if __name__ == '__main__':
     parser.add_argument('--use-psignal', dest='use_psignal',
                         action='store_true', default=True,
                         help='Use the GMM p_signal voxel selector '
-                             '(default ON; matches the non-CV klein fit).')
+                             '(default ON; matches the canonical non-CV '
+                             'gain-model fit).')
     parser.add_argument('--no-psignal', dest='use_psignal',
                         action='store_false',
                         help='Fall back to the legacy r²-threshold selector.')
     parser.add_argument('--p-signal-thr', type=float, default=0.5,
                         help='p_signal posterior threshold (default 0.5).')
     parser.add_argument('--output-subdir', default=None)
+    parser.add_argument('--item-shape', choices=list(ITEM_SHAPES),
+                        default='circle',
+                        help="Search-item footprint in the paradigm "
+                             "('rectangle' = 1.5x0.375 deg, as in m4).")
+    parser.add_argument('--item-scale', choices=list(ITEM_SCALE_MODES),
+                        default='none',
+                        help="'free' = fit a shared drive scale for the "
+                             "search items; 'fixed' = same class with scale=1; "
+                             "'none' = legacy class.")
+    parser.add_argument('--cv-scheme', choices=list(CV_SCHEMES),
+                        default='loco')
     args = parser.parse_args()
     main(
         subject=args.subject,
@@ -853,4 +945,7 @@ if __name__ == '__main__':
         use_psignal=args.use_psignal,
         p_signal_thr=args.p_signal_thr,
         output_subdir=args.output_subdir,
+        item_shape=args.item_shape,
+        item_scale=args.item_scale,
+        cv_scheme=args.cv_scheme,
     )

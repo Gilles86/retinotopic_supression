@@ -73,7 +73,6 @@ from retsupp.modeling.local_models import (
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_runPosition_dynHP,
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_repeat,
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_targetRepeat,
-    DoGKleinShift_v3_target_6sigma,
 )
 from retsupp.utils.sentinels import assert_gpu_available_if_expected
 from retsupp.utils.data import (
@@ -540,14 +539,7 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
          with_target_repeat_split: bool = False,
          distractor_shape: str = 'circle',
          distractor_long_side: float = 1.5,
-         distractor_short_side: float = 0.5,
-         klein_shift: bool = False,
-         sigma_hp_sus_init: float = 2.0,
-         sigma_lp_sus_init: float = 2.0,
-         sigma_hp_dyn_init: float = 2.0,
-         sigma_lp_dyn_init: float = 2.0,
-         sigma_hp_t_init: float = 2.0,
-         sigma_lp_t_init: float = 2.0):
+         distractor_short_side: float = 0.5):
     """Top-level fit driver.
 
     Parameters
@@ -641,22 +633,8 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
             f"got {distractor_shape!r}")
     bids_folder = Path(bids_folder)
     sub = Subject(subject, bids_folder)
-    if klein_shift:
-        if not (with_target and model_version == 'v3' and shared_target_sigma):
-            raise ValueError(
-                "--klein-shift requires --model-version v3 --with-target "
-                "--shared-target-sigma (it inherits the sharedSigma class).")
-        if all_shared_sigma or shared_dyn_gain or per_run_position_gains \
-                or per_run_position_dyn_hp or with_repeat_split \
-                or with_target_repeat_split:
-            raise ValueError(
-                "--klein-shift uses its own 6-σ split; do not combine with "
-                "--all-shared-sigma / --shared-dyn-gain / --per-run-position* "
-                "/ --with-repeat-split / --with-target-repeat-split.")
     if output_subdir is None:
-        if klein_shift:
-            base = 'af_prf_klein_shift_6sigma'
-        elif with_target:
+        if with_target:
             base = 'af_prf_joint_dynamic_v3_dog_with_target'
         else:
             base = {
@@ -912,24 +890,6 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
                                for p in shared_pars]
             shared_pars = shared_pars + ['g_T_dyn_repeat']
 
-    # If we're running Klein-shift, replace the AF gain/sigma init block
-    # with the 6-σ no-gain layout the new model expects.
-    if klein_shift:
-        drop_cols = [c for c in init_pars.columns
-                     if (c.startswith('g_') or c == 'sigma_AF'
-                         or c.startswith('sigma_dyn')
-                         or c == 'sigma_T_dyn')]
-        init_pars = init_pars.drop(columns=drop_cols, errors='ignore')
-        init_pars['sigma_HP_sus'] = sigma_hp_sus_init
-        init_pars['sigma_LP_sus'] = sigma_lp_sus_init
-        init_pars['sigma_HP_dyn'] = sigma_hp_dyn_init
-        init_pars['sigma_LP_dyn'] = sigma_lp_dyn_init
-        init_pars['sigma_HP_T']   = sigma_hp_t_init
-        init_pars['sigma_LP_T']   = sigma_lp_t_init
-        shared_pars = ['sigma_HP_sus', 'sigma_LP_sus',
-                       'sigma_HP_dyn', 'sigma_LP_dyn',
-                       'sigma_HP_T',   'sigma_LP_T']
-
     # 4) Build the dynamic DoG-AF + PRF model and the fitter.
     ring_positions = get_ring_positions()  # (4, 2)
     print('Ring positions:\n', ring_positions)
@@ -941,9 +901,7 @@ def main(subject: int, bids_folder: str = '/data/ds-retsupp',
     hrf_model = SPMHRFModel(tr=tr_for_hrf,
                             delay=4.5, dispersion=0.75)
 
-    if klein_shift:
-        ModelCls = DoGKleinShift_v3_target_6sigma
-    elif model_version == 'v2':
+    if model_version == 'v2':
         ModelCls = DoGDynamicAttentionFieldPRF2DWithHRF_v2
     elif with_target:
         if use_oversampled_codepath:
@@ -1235,20 +1193,6 @@ if __name__ == '__main__':
                         help='Rectangle short-axis length, deg '
                              '(default 0.5). Only used with '
                              '--distractor-shape=rectangle.')
-    parser.add_argument('--klein-shift', action='store_true',
-                        help='Use DoG-Klein-shift model: per-TR shift of '
-                             'DoG center+surround Gaussians by precision-'
-                             'weighted-mean, NO multiplicative gain on '
-                             'stim drive. 6 σ split (HP/LP × sus/dyn/T). '
-                             'Requires --model-version v3 --with-target '
-                             '--shared-target-sigma. Output subdir is '
-                             "'af_prf_klein_shift_6sigma'.")
-    parser.add_argument('--sigma-hp-sus-init', type=float, default=2.0)
-    parser.add_argument('--sigma-lp-sus-init', type=float, default=2.0)
-    parser.add_argument('--sigma-hp-dyn-init', type=float, default=2.0)
-    parser.add_argument('--sigma-lp-dyn-init', type=float, default=2.0)
-    parser.add_argument('--sigma-hp-t-init',   type=float, default=2.0)
-    parser.add_argument('--sigma-lp-t-init',   type=float, default=2.0)
     parser.add_argument('--temporal-oversampling', type=int, default=None,
                         help='Temporal oversampling factor N for the HRF '
                              'convolution (only valid with v3 + '
@@ -1293,11 +1237,4 @@ if __name__ == '__main__':
         distractor_shape=args.distractor_shape,
         distractor_long_side=args.distractor_long_side,
         distractor_short_side=args.distractor_short_side,
-        klein_shift=args.klein_shift,
-        sigma_hp_sus_init=args.sigma_hp_sus_init,
-        sigma_lp_sus_init=args.sigma_lp_sus_init,
-        sigma_hp_dyn_init=args.sigma_hp_dyn_init,
-        sigma_lp_dyn_init=args.sigma_lp_dyn_init,
-        sigma_hp_t_init=args.sigma_hp_t_init,
-        sigma_lp_t_init=args.sigma_lp_t_init,
     )

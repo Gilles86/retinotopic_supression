@@ -237,7 +237,7 @@ def write_cv_tsvs(
         sub-XX_roi-{ROI}_meta.json      fold run assignments, n_vox, selector
 
     ``voxel_ids`` are the BOLD-masker flat indices (so every CV arm —
-    null/model0/gain/shift — aligns exactly by voxel_id).  ``cv_r2_per_fold``
+    null/model0/gain — aligns exactly by voxel_id).  ``cv_r2_per_fold``
     and ``train_r2_per_fold`` are length-4 lists of per-voxel arrays
     (folds where the held-out condition was absent may be ``None`` or a
     NaN array; both are handled).  ``fit_pars_per_fold`` is a length-4 list
