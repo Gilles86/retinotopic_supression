@@ -259,6 +259,9 @@ def main():
     ap.add_argument('--no-null', action='store_true',
                     help='Skip the BOLD-based null level (scores all voxels).')
     ap.add_argument('--cv-scheme', choices=['loco', 'run3'], default='loco')
+    ap.add_argument('--root-name', default='af_prf_cv_ladder',
+                    help="Derivatives folder of the ladder "
+                         "(e.g. 'af_prf_cv_ladder_nested').")
     ap.add_argument('--subject', type=int, default=None,
                     help='Only collect this subject and write '
                          'per_subject/sub-XX_cv_ladder_per_voxel.tsv '
@@ -268,7 +271,7 @@ def main():
                          're-collecting, then write the three TSVs.')
     a = ap.parse_args()
     bids = Path(a.bids_folder)
-    sub = 'af_prf_cv_ladder' + ('' if a.cv_scheme == 'loco' else f'_{a.cv_scheme}')
+    sub = a.root_name + ('' if a.cv_scheme == 'loco' else f'_{a.cv_scheme}')
     root = bids / 'derivatives' / sub
     per_sub_dir = root / 'per_subject'
     if a.subject is not None:

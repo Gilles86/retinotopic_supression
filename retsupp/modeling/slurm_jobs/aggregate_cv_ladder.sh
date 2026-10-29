@@ -10,8 +10,9 @@
 set -euo pipefail
 CODE_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
 CV_SCHEME="${CV_SCHEME:-loco}"
+ROOT_NAME="${ROOT_NAME:-af_prf_cv_ladder}"
 PYTHON='$HOME/data/conda/envs/retsupp_cuda/bin/python'
-AGG="PYTHONPATH=${CODE_DIR} ${PYTHON} -u -m retsupp.modeling.aggregate_cv_ladder --cv-scheme ${CV_SCHEME}"
+AGG="PYTHONPATH=${CODE_DIR} ${PYTHON} -u -m retsupp.modeling.aggregate_cv_ladder --cv-scheme ${CV_SCHEME} --root-name ${ROOT_NAME}"
 mkdir -p "$HOME/logs"
 
 ARRAY_ID=$(sbatch --parsable --account=zne.uzh --partition=standard \
