@@ -4,7 +4,7 @@
 #SBATCH --partition=standard
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=8
-#SBATCH --time=06:00:00
+#SBATCH --time=08:00:00  # m00+m0 long GD ~3.5h + gain models ~1h on 8 CPUs (resumable)
 #SBATCH --mem=48G  # large-brain subjects (e.g. sub-08) OOM at 16G loading full BOLD
 #
 # Nested CV ladder (fit_cv_ladder_nested): one array task per (subject, ROI)
