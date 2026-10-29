@@ -77,7 +77,8 @@ GAINS = ['g_HP', 'g_LP', 'g_HP_dyn', 'g_LP_dyn', 'g_T_dyn']
 TIE_PARTNER = {'g_HP': 'g_LP', 'g_HP_dyn': 'g_LP_dyn'}
 PER_VOXEL_COLS = ['x', 'y', 'sd', 'baseline', 'amplitude',
                   'srf_amplitude', 'srf_size']
-SIGMA_STARTS = (None, 1.0, 4.0)   # None = parent's σ's
+SIGMA_STARTS = (None, 0.5, 1.0, 2.0, 4.0)   # None = parent's σ's
+LBFGS_ROUNDS = 5   # restarts from the previous end point (fresh Hessian)
 
 
 def sign_pattern_of(name):
@@ -108,7 +109,7 @@ def gd_fit(model, bold_train, paradigm, init_pars, sign_pattern, item_scale,
 def make_sse_fn(model, bold_train, paradigm, raw_pars, free_ix):
     """SSE and gradient as a function of the free shared raw parameters."""
     n_pars = raw_pars.shape[1]
-    y = tf.constant(bold_train, dtype=tf.float32)
+    y = tf.constant(bold_train, dtype=tf.float64)
     par_ = model.stimulus._clean_paradigm(paradigm)
     raw = tf.constant(raw_pars, dtype=tf.float32)
     mask = np.zeros(n_pars, dtype=np.float32)
@@ -126,7 +127,9 @@ def make_sse_fn(model, bold_train, paradigm, raw_pars, free_ix):
                 par_[tf.newaxis, ...],
                 model._transform_parameters_forward(params)[tf.newaxis, ...],
                 None)[0]
-            sse = tf.reduce_sum((y - pred) ** 2)
+            # Residuals and sum in float64: in float32 the summation noise
+            # (~1e-7 relative) stops L-BFGS before the optimum.
+            sse = tf.reduce_sum((y - tf.cast(pred, tf.float64)) ** 2)
         return sse, tape.gradient(sse, v)
 
     def fun(v64):
@@ -170,16 +173,19 @@ def shared_fit(model, bold_train, paradigm, init_pars, free_shared,
             for j, k in enumerate(free_ix):
                 if k in sigma_ix:
                     x0[j] = raw_s[0, k]
-        res = minimize(fun, x0, jac=True, method='L-BFGS-B',
-                       options=dict(maxiter=max_iter, maxfun=4 * max_iter,
-                                    ftol=1e-12, gtol=1e-8))
-        f_end = res.fun
-        x_end = res.x
         f_start, _ = fun(x0)
-        if f_end > f_start:            # never accept an uphill end point
-            f_end, x_end = f_start, x0
+        f_end, x_end, nit = f_start, x0, 0
+        for _round in range(LBFGS_ROUNDS):
+            res = minimize(fun, x_end, jac=True, method='L-BFGS-B',
+                           options=dict(maxiter=max_iter, maxfun=4 * max_iter,
+                                        ftol=1e-14, gtol=1e-9))
+            nit += int(res.nit)
+            if not res.fun < f_end - 1e-9 * abs(f_end):
+                break
+            f_end, x_end = res.fun, res.x
         starts.append(dict(sigma_start=s, f_start=f_start, f_end=f_end,
-                           nit=int(res.nit), status=int(res.status),
+                           nit=nit, rounds=_round + 1,
+                           status=int(res.status),
                            message=str(res.message)))
         if best is None or f_end < best[0]:
             best = (f_end, x_end)
