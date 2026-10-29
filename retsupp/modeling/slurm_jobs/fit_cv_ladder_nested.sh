@@ -14,20 +14,24 @@
 # Usage (from the repo root on the cluster login node):
 #   sbatch --array=1-330 retsupp/modeling/slurm_jobs/fit_cv_ladder_nested.sh
 #   CV_SCHEME=run3 sbatch --array=1-330 --export=ALL,CV_SCHEME=run3 ...
+#   sbatch --array=1-330 --export=ALL,POLISH=1 ...    # + all-free polish pass
+#   sbatch --array=1-330 --export=ALL,CV_SCHEME=full,POLISH=1 ...  # main fits
 # Task index -> (subject, ROI): idx0 = task-1; subject = idx0/11 + 1; roi = ROIS[idx0%11].
 
 set -eo pipefail
 CV_SCHEME="${CV_SCHEME:-loco}"
+POLISH="${POLISH:-}"
+TAG="${CV_SCHEME}${POLISH:+_polish}"
 ROIS=(V1 V2 V3 V3AB hV4 LO TO VO IPS SPL1 FEF)
 idx0=$(( SLURM_ARRAY_TASK_ID - 1 ))
 subject=$(( idx0 / ${#ROIS[@]} + 1 ))
 roi="${ROIS[$(( idx0 % ${#ROIS[@]} ))]}"
 
-LOGFILE="$HOME/logs/cvl_nested_${CV_SCHEME}_sub-$(printf %02d "$subject")_${roi}_${SLURM_JOB_ID}.txt"
+LOGFILE="$HOME/logs/cvl_nested_${TAG}_sub-$(printf %02d "$subject")_${roi}_${SLURM_JOB_ID}.txt"
 mkdir -p "$HOME/logs"
 exec >"$LOGFILE" 2>&1
-echo "Host: $(hostname) | job ${SLURM_JOB_ID} task ${SLURM_ARRAY_TASK_ID} | sub-${subject} ${roi} | cv=${CV_SCHEME} | $(date)"
-scontrol update jobid="${SLURM_JOB_ID}" name="cvl_nested_${CV_SCHEME}" 2>/dev/null || true
+echo "Host: $(hostname) | job ${SLURM_JOB_ID} task ${SLURM_ARRAY_TASK_ID} | sub-${subject} ${roi} | cv=${CV_SCHEME} polish=${POLISH:-0} | $(date)"
+scontrol update jobid="${SLURM_JOB_ID}" name="cvl_nested_${TAG}" 2>/dev/null || true
 
 export CUDA_VISIBLE_DEVICES=""
 export TF_NUM_INTRAOP_THREADS="${SLURM_CPUS_PER_TASK:-8}"
@@ -40,6 +44,6 @@ echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
 "$HOME/data/conda/envs/retsupp_cuda/bin/python" -u -m retsupp.modeling.fit_cv_ladder_nested \
     "$subject" --roi "$roi" \
     --bids-folder /shares/zne.uzh/gdehol/ds-retsupp \
-    --cv-scheme "$CV_SCHEME"
+    --cv-scheme "$CV_SCHEME" ${POLISH:+--polish}
 
 echo "Finished: $(date)"
