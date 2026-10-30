@@ -32,7 +32,9 @@ prediction improve or degrade?
 ``--cv-scheme full`` fits one "fold" on all runs (no held-out data, CV-R² is
 NaN): the main parameter estimates under the same nested procedure.
 
-Output: ``derivatives/af_prf_cv_ladder_nested[_<scheme>][_polished]/<model>/sub-XX/``.
+``--bounded`` boxes the shared terms (``SHARED_BOUNDS``) in both fits.
+
+Output: ``derivatives/af_prf_cv_ladder_nested[_<scheme>][_bounded][_polished]/<model>/sub-XX/``.
 Existing outputs are loaded, never overwritten.
 
 Usage::
@@ -91,6 +93,13 @@ PER_VOXEL_COLS = ['x', 'y', 'sd', 'baseline', 'amplitude',
 SIGMA_STARTS = (None, 0.5, 1.0, 2.0, 4.0)   # None = parent's σ's
 LBFGS_ROUNDS = 5   # restarts from the previous end point (fresh Hessian)
 POLISH_ROUNDS = 3
+# --bounded: box on the shared terms. Unbounded, a few % of fold fits ran to
+# σ_dyn ~0.03° or ~1e4° with |gain| up to 5e5 -- directions the data do not
+# constrain (a pinprick far below the 1.5° item, or a uniform field that
+# trades off against pRF amplitude).
+SHARED_BOUNDS = {'sigma_AF': (0.5, 8.0), 'sigma_dyn': (0.5, 8.0),
+                 'item_scale': (1e-3, 50.0),
+                 **{g: (-10.0, 10.0) for g in GAINS}}
 POLISH_MAX_ITER = 3000
 SCHEMES = tuple(CV_SCHEMES) + ('full',)
 
@@ -153,8 +162,26 @@ def make_sse_fn(model, bold_train, paradigm, raw_pars, free_ix):
     return fun
 
 
+def raw_bounds(model, init_pars, cols):
+    """SHARED_BOUNDS of ``cols`` mapped to raw (optimiser) space."""
+    labels = list(model.parameter_labels)
+    lo = init_pars[labels].iloc[:1].copy()
+    hi = lo.copy()
+    for c in cols:
+        lo[c], hi[c] = SHARED_BOUNDS[c]
+    r = np.asarray(model._transform_parameters_backward(
+        np.vstack([lo.values, hi.values]).astype(np.float32)), dtype=np.float64)
+    out = []
+    for c in cols:
+        a, b = r[0, labels.index(c)], r[1, labels.index(c)]
+        if not (np.isfinite(a) and np.isfinite(b)):
+            raise ValueError(f'non-finite raw bound for {c}: {a}, {b}')
+        out.append((min(a, b), max(a, b)))
+    return out
+
+
 def shared_fit(model, bold_train, paradigm, init_pars, free_shared,
-               max_iter=2000):
+               max_iter=2000, bounded=False):
     """L-BFGS-B over the shared parameters, per-voxel pRFs frozen.
 
     Starts from ``init_pars`` (the parent optimum, new terms at null) and
@@ -169,9 +196,15 @@ def shared_fit(model, bold_train, paradigm, init_pars, free_shared,
         init_pars[labels].values.astype(np.float32))
     raw0 = np.asarray(raw0)
     fun = make_sse_fn(model, bold_train, paradigm, raw0, free_ix)
+    bnds = raw_bounds(model, init_pars, free_shared) if bounded else None
+
+    def clip(x):
+        if bnds is None:
+            return x
+        return np.clip(x, [b[0] for b in bnds], [b[1] for b in bnds])
 
     t0 = time.time()
-    f_parent, _ = fun(raw0[0, free_ix].astype(np.float64))
+    f_parent, _ = fun(clip(raw0[0, free_ix].astype(np.float64)))
     best = None
     starts = []
     for s in SIGMA_STARTS:
@@ -187,10 +220,12 @@ def shared_fit(model, bold_train, paradigm, init_pars, free_shared,
             for j, k in enumerate(free_ix):
                 if k in sigma_ix:
                     x0[j] = raw_s[0, k]
+        x0 = clip(x0)
         f_start, _ = fun(x0)
         f_end, x_end, nit = f_start, x0, 0
         for _round in range(LBFGS_ROUNDS):
             res = minimize(fun, x_end, jac=True, method='L-BFGS-B',
+                           bounds=bnds,
                            options=dict(maxiter=max_iter, maxfun=4 * max_iter,
                                         ftol=1e-14, gtol=1e-9))
             nit += int(res.nit)
@@ -234,7 +269,7 @@ def child_init(parent_pars, model, name):
 
 
 def polish_fit(model, bold_train, paradigm, init_pars, free_shared,
-               free_per_voxel):
+               free_per_voxel, bounded=False):
     """L-BFGS-B over all free parameters, from the clamped optimum.
 
     Per-voxel columns ``free_per_voxel`` get one value per voxel, the
@@ -282,11 +317,18 @@ def polish_fit(model, bold_train, paradigm, init_pars, free_shared,
 
     x0 = np.concatenate([raw0[:, pv_ix].ravel(),
                          raw0[0, sh_ix]]).astype(np.float64)
+    bnds = None
+    if bounded:
+        bnds = [(None, None)] * n_pv + raw_bounds(model, init_pars,
+                                                  free_shared)
+        lo = np.array([-np.inf if b[0] is None else b[0] for b in bnds])
+        hi = np.array([np.inf if b[1] is None else b[1] for b in bnds])
+        x0 = np.clip(x0, lo, hi)
     t0 = time.time()
     f_start, _ = fun(x0)
     f_end, x_end, nit = f_start, x0, 0
     for _round in range(POLISH_ROUNDS):
-        res = minimize(fun, x_end, jac=True, method='L-BFGS-B',
+        res = minimize(fun, x_end, jac=True, method='L-BFGS-B', bounds=bnds,
                        options=dict(maxiter=POLISH_MAX_ITER,
                                     maxfun=2 * POLISH_MAX_ITER,
                                     ftol=1e-14, gtol=1e-9))
@@ -324,7 +366,7 @@ def bar_paradigm(sub, run_meta, resolution, grid_radius):
 def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
          grid_radius=5.0, max_voxels=500, p_signal_thr=0.5,
          gd_iterations=8000, learning_rate=0.01, models=None,
-         output_root=None, polish=False):
+         output_root=None, polish=False, bounded=False):
     if cv_scheme not in SCHEMES:
         raise ValueError(f'cv_scheme must be in {SCHEMES}')
     bids_folder = Path(bids_folder)
@@ -332,7 +374,8 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
     root = Path(output_root) if output_root else (
         bids_folder / 'derivatives' / (
             'af_prf_cv_ladder_nested'
-            + ('' if cv_scheme == 'loco' else f'_{cv_scheme}')))
+            + ('' if cv_scheme == 'loco' else f'_{cv_scheme}')
+            + ('_bounded' if bounded else '')))
     polish_root = root.parent / f'{root.name}_polished'
     models = models or list(LADDER)
 
@@ -448,7 +491,7 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
                            if p not in shared and p not in fixed]
                 init = fits[name][k].reindex(columns=labels)
                 pars, info = polish_fit(m_tr, y_tr, train['paradigm'], init,
-                                        free_sh, free_pv)
+                                        free_sh, free_pv, bounded=bounded)
                 print(f'  fold {k}: SSE clamped {info["sse_clamped"]:.2f}'
                       f' -> {info["sse_final"]:.2f} | nit {info["nit"]} | '
                       f'|grad| {info["grad_norm"]:.3g} (shared '
@@ -476,7 +519,7 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
                 free = [p for p in shared_pars_for(sp, item_scale)
                         if p != 'sigma_T_dyn']
                 pars, info = shared_fit(m_tr, y_tr, train['paradigm'],
-                                        init, free)
+                                        init, free, bounded=bounded)
                 print(f'  fold {k}: SSE parent-start {info["sse_parent_start"]:.2f}'
                       f' -> {info["sse_final"]:.2f} | |grad| '
                       f'{info["grad_norm"]:.3g} | {info["seconds"]:.0f}s')
@@ -528,6 +571,7 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
                             item_scale=item_scale, cv_scheme=cv_scheme,
                             max_voxels=max_voxels,
                             gd_iterations=gd_iterations, stage=stage,
+                            bounded=bounded,
                             optimizer_info=infos))
         with open(pkl, 'wb') as f:
             pickle.dump(dict(fit_pars_per_fold=fold_pars, parent=parent,
@@ -552,8 +596,11 @@ if __name__ == '__main__':
     ap.add_argument('--polish', action='store_true',
                     help='Then refit every model with all parameters free '
                          '(written to <root>_polished).')
+    ap.add_argument('--bounded', action='store_true',
+                    help='Box the shared terms (SHARED_BOUNDS); root gets '
+                         'a _bounded suffix.')
     a = ap.parse_args()
     main(a.subject, a.bids_folder, a.roi, cv_scheme=a.cv_scheme,
          gd_iterations=a.gd_iterations, learning_rate=a.learning_rate,
          models=a.models, max_voxels=a.max_voxels,
-         output_root=a.output_root, polish=a.polish)
+         output_root=a.output_root, polish=a.polish, bounded=a.bounded)
