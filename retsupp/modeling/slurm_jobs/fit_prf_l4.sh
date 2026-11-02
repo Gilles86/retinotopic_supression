@@ -1,6 +1,6 @@
-#!/bin/bash
+#!/bin/bash -l
 #SBATCH --job-name=prf_gpu
-#SBATCH --account=hare.econ.uzh
+#SBATCH --account=zne.uzh
 #SBATCH --output=/dev/null
 #SBATCH --gres=gpu:1
 # Constraint to GPUs whose compute capability the env's CUDA 11.8 ptxas
@@ -18,7 +18,7 @@
 # After MODEL is parsed, the script renames itself via scontrol so
 # squeue shows e.g.  prf_m3_sub-05  instead of the generic prf_gpu.
 #
-# Env vars (all read via --export=ALL,KEY=VAL):
+# Env vars (pass as KEY=VAL sbatch ...):
 #   MODEL    int 1..6   (required)
 #   KIND     full|bar   (default: full)
 #   SMOKE    0|1        (1 → --debug)
@@ -26,8 +26,8 @@
 #   OUTPUT_SUFFIX str   (optional)
 #
 # Usage:
-#   sbatch --array=1-30 --export=ALL,MODEL=1 .../fit_prf_l4.sh
-#   sbatch --array=1-30 --export=ALL,MODEL=2,KIND=bar .../fit_prf_l4.sh
+#   MODEL=1 sbatch --array=1-30 .../fit_prf_l4.sh
+#   MODEL=2 KIND=bar sbatch --array=1-30 .../fit_prf_l4.sh
 #
 # Chain: m1 → {m2, m3}; m2 → {m4, m5}; m5 → m6 (see MODEL_CFG.init_from
 # in fit_prf.py). Submit later stages with --dependency=afterok:$PREV.
@@ -43,7 +43,7 @@ if [[ -z "${SLURM_ARRAY_TASK_ID:-}" ]]; then
     echo "ERROR: SLURM_ARRAY_TASK_ID not set." >&2; exit 2
 fi
 if [[ -z "${MODEL:-}" ]]; then
-    echo "ERROR: MODEL env var not set. Pass --export=ALL,MODEL=N." >&2; exit 2
+    echo "ERROR: MODEL env var not set. Submit as MODEL=N sbatch ..." >&2; exit 2
 fi
 if [[ "$KIND" != "full" && "$KIND" != "bar" ]]; then
     echo "ERROR: KIND must be 'full' or 'bar' (got '$KIND')." >&2; exit 2
@@ -86,7 +86,7 @@ if [[ "${SMOKE:-0}" == "1" ]]; then DEBUG_FLAG="--debug"; fi
 # Bench (notes/prf_models.md §"Chunk size"): 10k is overhead-dominated;
 # 50k is the documented sweet spot across L4 / V100 / A100, ~6 chunks
 # per subject and few XLA recompiles. Override at submit time via
-# `--export=ALL,...,CHUNK=N`.
+# `CHUNK=N sbatch ...`.
 CHUNK="${CHUNK:-50000}"
 SUFFIX_FLAG=""
 if [[ -n "${OUTPUT_SUFFIX:-}" ]]; then

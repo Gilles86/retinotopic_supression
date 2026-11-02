@@ -61,23 +61,20 @@ submit_chunks() {
     local model=$1 ; local wall=$2 ; local dep=$3
     local depflag=""
     [[ -n "$dep" ]] && depflag="--dependency=afterok:$dep"
-    sb --array=1-$N_CHUNK_TASKS --time=$wall $depflag \
-        --export=ALL,MODEL=$model,KIND=$KIND,N_CHUNKS=$N_CHUNKS,N_SUBS=$N_SUBS \
+    MODEL=$model KIND=$KIND N_CHUNKS=$N_CHUNKS N_SUBS=$N_SUBS sb --array=1-$N_CHUNK_TASKS --time=$wall $depflag \
         "$S_CHUNK"
 }
 
 submit_merge() {
     local model=$1 ; local dep=$2
-    sb --array=1-$N_SUBS --time=$T_MERGE \
+    MODEL=$model KIND=$KIND sb --array=1-$N_SUBS --time=$T_MERGE \
         --dependency=afterok:$dep \
-        --export=ALL,MODEL=$model,KIND=$KIND \
         "$S_MERGE"
 }
 
 echo "=== chunked sweep, kind=$KIND, ${N_CHUNKS} chunks × ${N_SUBS} subjects ==="
 
-CACHE=$(sb --array=1-$N_SUBS --time=$T_CACHE \
-        --export=ALL,KIND=$KIND \
+CACHE=$(KIND=$KIND sb --array=1-$N_SUBS --time=$T_CACHE \
         "$S_CACHE")
 echo "  cache build -> $CACHE"
 

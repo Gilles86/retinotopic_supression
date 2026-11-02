@@ -65,12 +65,11 @@ for sub in $SUBJECTS; do
                 total_skipped=$((total_skipped + 1))
                 continue
             fi
-            export_str="ALL,SUBJECT=$sub,MODEL=$model,FOLD=$fold,N_FOLDS=$N_FOLDS,N_CHUNKS=$N_CHUNKS,KIND=$KIND"
-            J_CHUNK=$(sb --array=1-$N_CHUNKS --time=$T_CHUNK \
-                         --export="$export_str" "$S_CHUNK")
-            J_MERGE=$(sb --array=$sub --time=$T_MERGE \
+            J_CHUNK=$(SUBJECT=$sub MODEL=$model FOLD=$fold N_FOLDS=$N_FOLDS N_CHUNKS=$N_CHUNKS KIND=$KIND \
+                      sb --array=1-$N_CHUNKS --time=$T_CHUNK "$S_CHUNK")
+            J_MERGE=$(MODEL=$model FOLD=$fold sb --array=$sub --time=$T_MERGE \
                          --dependency=afterok:$J_CHUNK \
-                         --export=ALL,MODEL=$model,FOLD=$fold "$S_MERGE")
+                         "$S_MERGE")
             echo "sub-${sp} m${model} fold${fold}: chunks=$J_CHUNK merge=$J_MERGE"
             total_submitted=$((total_submitted + 1))
         done

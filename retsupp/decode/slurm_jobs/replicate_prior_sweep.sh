@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -l
 # Replicate the prior working decode sweep (the "much better" GIFs at
 # notes/figures/decode_sweep/m4/) on sub-23 V1 ses-1 run-1. Uses
 # smoke_test_sweep.py as-is with its original voxel filters:

@@ -10,7 +10,7 @@
 # One subject per array task; one model per submission.
 #
 # Usage:
-#   sbatch --array=1-30 --export=ALL,MODEL=4 \
+#   MODEL=4 sbatch --array=1-30 \
 #       retsupp/surface/slurm_jobs/sample_prf_to_surface.sh
 
 set -euo pipefail

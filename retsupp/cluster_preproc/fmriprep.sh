@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -l
 #SBATCH --job-name=fmriprep_retinonumeral
 #SBATCH --output=/home/gdehol/logs/retsupp_fmriprep_%A-%a.txt
 #SBATCH --ntasks=1

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -l
 #SBATCH --job-name=nordic_job            # Job name
 #SBATCH --output=/home/gdehol/logs/nordic_job_%j.log  # Standard output and error log
 #SBATCH --ntasks=32                      # Number of cores

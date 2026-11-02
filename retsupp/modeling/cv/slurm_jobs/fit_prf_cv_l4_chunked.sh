@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -l
 #SBATCH --job-name=prf_cv_chunked
 #SBATCH --account=zne.uzh
 #SBATCH --partition=lowprio
@@ -12,7 +12,7 @@
 # fit_prf_l4_chunked.sh exactly (lowprio L4 + cuInit flock + 32G);
 # only the python entry point and output path change.
 #
-# Required env (--export=ALL,...):
+# Required env (pass as VAR=x sbatch ...):
 #   MODEL      1..6
 #   FOLD       0..(N_FOLDS-1)        held-out fold index
 #   N_FOLDS    total folds           (default 3)

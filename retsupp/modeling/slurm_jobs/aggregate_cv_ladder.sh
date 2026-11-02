@@ -19,7 +19,6 @@ ARRAY_ID=$(sbatch --parsable --account=zne.uzh --partition=standard \
     --job-name="cvl_agg_${CV_SCHEME}" --array=1-30 \
     --time=00:20:00 --mem=32G --cpus-per-task=2 \
     --output="$HOME/logs/cvl_agg_${CV_SCHEME}_%A_%a.log" \
-    --export=ALL \
     --wrap="${AGG} --subject \${SLURM_ARRAY_TASK_ID}")
 
 MERGE_ID=$(sbatch --parsable --account=zne.uzh --partition=standard \
@@ -27,7 +26,6 @@ MERGE_ID=$(sbatch --parsable --account=zne.uzh --partition=standard \
     --dependency="afterany:${ARRAY_ID}" \
     --time=00:15:00 --mem=16G --cpus-per-task=1 \
     --output="$HOME/logs/cvl_merge_${CV_SCHEME}_%j.log" \
-    --export=ALL \
     --wrap="${AGG} --merge")
 
 echo "per-subject array: ${ARRAY_ID}   merge: ${MERGE_ID}"

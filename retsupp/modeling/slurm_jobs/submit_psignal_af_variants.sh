@@ -73,11 +73,9 @@ for sub in $SUBJECTS; do
     base=$(( (sub - 1) * N_ROIS + 1 ))
     end=$(( base + N_ROIS - 1 ))
 
-    J_A=$(sb --array=${base}-${end} $dep_flag \
-        --export=ALL,PSIGNAL_THR=${PSIGNAL_THR},APERTURE_MASS_THR=0,MODEL=${MODEL} \
+    J_A=$(PSIGNAL_THR=${PSIGNAL_THR} APERTURE_MASS_THR=0 MODEL=${MODEL} sb --array=${base}-${end} $dep_flag \
         "$S_AF")
-    J_B=$(sb --array=${base}-${end} $dep_flag \
-        --export=ALL,PSIGNAL_THR=${PSIGNAL_THR},APERTURE_MASS_THR=${APERTURE_THR},MODEL=${MODEL} \
+    J_B=$(PSIGNAL_THR=${PSIGNAL_THR} APERTURE_MASS_THR=${APERTURE_THR} MODEL=${MODEL} sb --array=${base}-${end} $dep_flag \
         "$S_AF")
     echo "sub-${sp}: A(pSig)=$J_A  B(pSig+apt)=$J_B  dep=${dep_label}"
 done

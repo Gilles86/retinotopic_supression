@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -l
 #SBATCH --job-name=prf_fit
 #SBATCH --output=/home/gdehol/logs/retsupp_prf_%j.out  # Default SLURM log
 #SBATCH --gres=gpu:1

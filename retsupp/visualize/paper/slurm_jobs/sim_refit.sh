@@ -22,8 +22,7 @@
 #     for r in hV4 TO IPS; do echo "$s $r"; done
 #   done > ~/sim_refit_jobs.txt
 #
-#   sbatch --array=1-24 \
-#       --export=ALL,JOB_TABLE=$HOME/sim_refit_jobs.txt \
+#   JOB_TABLE=$HOME/sim_refit_jobs.txt sbatch --array=1-24 \
 #       retsupp/visualize/paper/slurm_jobs/sim_refit.sh
 
 set -euo pipefail

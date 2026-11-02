@@ -1,6 +1,6 @@
-#!/bin/bash
+#!/bin/bash -l
 #SBATCH --job-name=v100_smoke
-#SBATCH --account=hare.econ.uzh
+#SBATCH --account=zne.uzh
 #SBATCH --partition=lowprio
 #SBATCH --constraint=V100
 #SBATCH --gres=gpu:1

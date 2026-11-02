@@ -41,8 +41,7 @@ for sub in $SUBJECTS; do
     fi
     base=$(( (sub - 1) * N_ROIS + 1 ))
     end=$(( base + N_ROIS - 1 ))
-    J=$(sb --array=${base}-${end} $dep_flag \
-        --export=ALL,PSIGNAL_THR=${PSIGNAL_THR},APERTURE_MASS_THR=0,MODEL=${MODEL} \
+    J=$(PSIGNAL_THR=${PSIGNAL_THR} APERTURE_MASS_THR=0 MODEL=${MODEL} sb --array=${base}-${end} $dep_flag \
         "$S_AF")
     echo "sub-${sp}: pSig>${PSIGNAL_THR}: $J  dep=${dep_label}"
 done

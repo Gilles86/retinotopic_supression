@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=cache_bold
-#SBATCH --account=hare.econ.uzh
+#SBATCH --account=zne.uzh
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=20G
@@ -10,9 +10,9 @@
 # chunked PRF fits. One subject per array task.
 #
 # Usage:
-#   sbatch --array=1-30 --export=ALL,KIND=full \
+#   KIND=full sbatch --array=1-30 \
 #          retsupp/modeling/slurm_jobs/build_cleaned_bold_cache.sh
-#   sbatch --array=1-30 --export=ALL,KIND=bar \
+#   KIND=bar sbatch --array=1-30 \
 #          retsupp/modeling/slurm_jobs/build_cleaned_bold_cache.sh
 #
 # Output: /shares/zne.uzh/gdehol/ds-retsupp/derivatives/cleaned_bold_cache/sub-XX/sub-XX_kind-{full,bar}_res-50.npz

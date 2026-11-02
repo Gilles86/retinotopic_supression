@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=prf_merge
-#SBATCH --account=hare.econ.uzh
+#SBATCH --account=zne.uzh
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=8G
@@ -11,7 +11,7 @@
 # (use --dependency=afterok:JOB_ID).
 #
 # Usage:
-#   sbatch --array=1-30 --export=ALL,MODEL=1 \
+#   MODEL=1 sbatch --array=1-30 \
 #          --dependency=afterok:CHUNKED_JOB_ID \
 #          retsupp/modeling/slurm_jobs/merge_prf_chunks.sh
 

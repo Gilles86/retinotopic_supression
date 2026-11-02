@@ -47,11 +47,9 @@ submit_model_block() {
     local sub=$1 model=$2 dep=$3
     local DEP=""
     [[ -n "$dep" ]] && DEP="--dependency=afterok:$dep"
-    local JC=$(sb --array=1-$N_CHUNKS --time=00:35:00 $DEP \
-        --export=ALL,SUBJECT=$sub,MODEL=$model,N_CHUNKS=$N_CHUNKS,KIND=$KIND \
+    local JC=$(SUBJECT=$sub MODEL=$model N_CHUNKS=$N_CHUNKS KIND=$KIND sb --array=1-$N_CHUNKS --time=00:35:00 $DEP \
         "$S_CHUNK")
-    local JM=$(sb --array=$sub --time=00:03:00 --dependency=afterok:$JC \
-        --export=ALL,MODEL=$model,KIND=$KIND \
+    local JM=$(MODEL=$model KIND=$KIND sb --array=$sub --time=00:03:00 --dependency=afterok:$JC \
         "$S_MERGE")
     echo "$JM"
 }

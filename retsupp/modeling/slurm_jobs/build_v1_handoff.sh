@@ -1,13 +1,13 @@
 #!/bin/bash
 #SBATCH --job-name=v1_handoff
-#SBATCH --account=hare.econ.uzh
+#SBATCH --account=zne.uzh
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=24G
 #SBATCH --time=00:20:00
 #SBATCH --output=%j_handoff.log
 
 # Build V1 decoding handoff NPZ for one subject. Usage:
-#   sbatch --export=ALL,SUB=15,MODEL=4 build_v1_handoff.sh
+#   SUB=15 MODEL=4 sbatch build_v1_handoff.sh
 
 set -eo pipefail
 source "$HOME/data/miniforge3/etc/profile.d/conda.sh"

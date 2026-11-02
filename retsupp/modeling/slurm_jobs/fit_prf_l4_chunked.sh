@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -l
 #SBATCH --job-name=prf_chunked
 #SBATCH --account=zne.uzh
 #SBATCH --partition=lowprio
@@ -41,7 +41,7 @@
 #   chunk_idx = idx0 % N_CHUNKS
 #   subject   = sub_idx + 1
 #
-# Required env vars (--export=ALL,...):
+# Required env vars (pass as VAR=x sbatch ...):
 #   MODEL      1..6
 #   N_CHUNKS   chunks per subject (typically 10)
 #   N_SUBS     total subjects     (typically 30)

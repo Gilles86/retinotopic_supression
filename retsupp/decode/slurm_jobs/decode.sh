@@ -6,9 +6,9 @@
 # (sub-20 ses-1, sub-24 ses-2 → 5 runs) skip the trailing task.
 #
 # Submit:
-#   sbatch --array=0-11 --export=ALL,SUB=15,MAX_VOXELS=100 \
+#   SUB=15 MAX_VOXELS=100 sbatch --array=0-11 \
 #       retsupp/decode/slurm_jobs/decode.sh
-#   sbatch --array=0-11 --export=ALL,SUB=15,MAX_VOXELS=200 \
+#   SUB=15 MAX_VOXELS=200 sbatch --array=0-11 \
 #       retsupp/decode/slurm_jobs/decode.sh
 #
 # Optional env overrides:
@@ -70,7 +70,7 @@ EXTRA="--noise-dist $NOISE_DIST"
 
 # Output: rely on decode.py's default path
 # (<bids>/derivatives/decoded/model{M}/sub-{NN}/decoded_<tag>.npz)
-# unless OUT is explicitly set via --export=ALL,OUT=... .
+# unless OUT is explicitly set (OUT=... sbatch ...).
 
 if [[ -n "${OUT:-}" ]]; then
     OUT_ARG="--out $OUT"

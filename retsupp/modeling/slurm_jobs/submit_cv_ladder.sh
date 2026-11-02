@@ -65,8 +65,7 @@ for spec in "${SPECS[@]}"; do
     if [[ -n "${MODELS:-}" ]] && [[ " ${MODELS} " != *" ${name} "* ]]; then
         continue
     fi
-    jid=$(sbatch --parsable --array=1-${N_TASKS}%${THROTTLE} "${RES[@]}" \
-        --export=ALL,MODEL="$name",SUS_HP="$sus_hp",SUS_LP="$sus_lp",DYN_HP="$dyn_hp",DYN_LP="$dyn_lp",TGT="$tgt",ITEM_SHAPE="$item_shape",ITEM_SCALE="$item_scale",PILOT="$PILOT",CV_SCHEME="$CV_SCHEME" \
+    jid=$(MODEL="$name" SUS_HP="$sus_hp" SUS_LP="$sus_lp" DYN_HP="$dyn_hp" DYN_LP="$dyn_lp" TGT="$tgt" ITEM_SHAPE="$item_shape" ITEM_SCALE="$item_scale" PILOT="$PILOT" CV_SCHEME="$CV_SCHEME" sbatch --parsable --array=1-${N_TASKS}%${THROTTLE} "${RES[@]}" \
         "$JOB_SCRIPT")
     echo "${CV_SCHEME} ${name}: job ${jid} (${N_TASKS} tasks)"
 done

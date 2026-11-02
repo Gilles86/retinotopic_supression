@@ -13,9 +13,9 @@
 #
 # Usage (from the repo root on the cluster login node):
 #   sbatch --array=1-330 retsupp/modeling/slurm_jobs/fit_cv_ladder_nested.sh
-#   CV_SCHEME=run3 sbatch --array=1-330 --export=ALL,CV_SCHEME=run3 ...
-#   sbatch --array=1-330 --export=ALL,POLISH=1 ...    # + all-free polish pass
-#   sbatch --array=1-330 --export=ALL,CV_SCHEME=full,POLISH=1 ...  # main fits
+#   CV_SCHEME=run3 sbatch --array=1-330 ...
+#   POLISH=1 sbatch --array=1-330 ...    # + all-free polish pass
+#   CV_SCHEME=full POLISH=1 sbatch --array=1-330 ...  # main fits
 #   BOUNDED=1 boxes the shared terms (root gets a _bounded suffix)
 # Task index -> (subject, ROI): idx0 = task-1; subject = idx0/11 + 1; roi = ROIS[idx0%11].
 

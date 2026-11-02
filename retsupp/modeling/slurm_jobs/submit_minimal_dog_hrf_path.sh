@@ -51,8 +51,7 @@ submit_chunks() {
     local sub=$1 model=$2 dep=$3
     local DEP=""
     [[ -n "$dep" ]] && DEP="--dependency=afterok:$dep"
-    sb --array=1-$N_CHUNKS --time=$T_CHUNK $DEP \
-        --export=ALL,SUBJECT=$sub,MODEL=$model,N_CHUNKS=$N_CHUNKS,KIND=$KIND \
+    SUBJECT=$sub MODEL=$model N_CHUNKS=$N_CHUNKS KIND=$KIND sb --array=1-$N_CHUNKS --time=$T_CHUNK $DEP \
         "$S_CHUNK"
 }
 
@@ -60,8 +59,7 @@ submit_merge() {
     local sub=$1 model=$2 dep=$3
     local DEP=""
     [[ -n "$dep" ]] && DEP="--dependency=afterok:$dep"
-    sb --array=$sub --time=$T_MERGE $DEP \
-        --export=ALL,MODEL=$model,KIND=$KIND \
+    MODEL=$model KIND=$KIND sb --array=$sub --time=$T_MERGE $DEP \
         "$S_MERGE"
 }
 
@@ -78,8 +76,8 @@ submit_mix_and_af() {
     local J_MIX=$(sb --array=$sub $DEP "$S_MIX")
     local base=$(( (sub - 1) * N_ROIS + 1 ))
     local end=$(( base + N_ROIS - 1 ))
-    local J_AF=$(sb --array=${base}-${end} --dependency=afterok:$J_MIX \
-        --export=ALL,USE_FDR=1,MODEL=4 "$S_AF")
+    local J_AF=$(USE_FDR=1 MODEL=4 sb --array=${base}-${end} --dependency=afterok:$J_MIX \
+        "$S_AF")
     echo "mix=$J_MIX af=$J_AF"
 }
 
@@ -109,7 +107,7 @@ for sub in $(seq 1 30); do
         echo "sub-${sp} [D]: m1-merge=$JM1 m2=$JM2 m4=$JM4 $out"
         n_d=$((n_d + 1))
     else
-        JCACHE=$(sb --array=$sub --time=$T_CACHE --export=ALL,KIND=$KIND "$S_CACHE")
+        JCACHE=$(KIND=$KIND sb --array=$sub --time=$T_CACHE "$S_CACHE")
         JM1=$(submit_model_block "$sub" 1 "$JCACHE")
         JM2=$(submit_model_block "$sub" 2 "$JM1")
         JM4=$(submit_model_block "$sub" 4 "$JM2")

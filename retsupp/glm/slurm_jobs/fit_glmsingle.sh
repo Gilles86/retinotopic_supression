@@ -19,12 +19,12 @@
 #   192 GB / 12 h -> headroom for the largest subjects.
 #
 # Usage (single subject):
-#   sbatch --export=PARTICIPANT_LABEL=05 fit_glmsingle.sh
+#   PARTICIPANT_LABEL=05 sbatch fit_glmsingle.sh
 #
 # Usage (array job over all subjects):
 #   sbatch --array=1-30 fit_glmsingle.sh
 #
-# Optional --export=KEY=VAL overrides:
+# Optional overrides (set as KEY=VAL in front of sbatch):
 #   SESSION         space-separated session numbers (default: both)
 #   BOLD_TYPE       fmriprep | cleaned (default: fmriprep)
 #   SMOOTHED        "1" to smooth BOLD before fitting (default: off)

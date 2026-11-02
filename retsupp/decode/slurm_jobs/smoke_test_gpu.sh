@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -l
 # GPU smoke test: same sub-02 V1 ses-1 run-1 config as smoke_test.sh
 # but on a GPU node. Use to compare wall-clock vs the CPU smoke.
 #   sbatch retsupp/decode/slurm_jobs/smoke_test_gpu.sh

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -l
 #SBATCH --job-name=cv_ladder
 #SBATCH --account=zne.uzh
 #SBATCH --partition=lowprio

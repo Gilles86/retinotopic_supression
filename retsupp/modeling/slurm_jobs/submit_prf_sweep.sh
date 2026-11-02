@@ -40,38 +40,32 @@ submit_chain_for_kind() {
     # `aftercorr:` is per-task: task N of downstream array waits for
     # task N of upstream array. So sub-9's m2 starts as soon as
     # sub-9's m1 finishes, without waiting for sub-30's m1.
-    J1=$(sb --array="$SUBJECTS" \
-            --export=ALL,MODEL=1,KIND="$kind" \
+    J1=$(MODEL=1 KIND="$kind" sb --array="$SUBJECTS" \
             "$SLURM_SCRIPT")
     echo "  m1 -> jobid $J1"
 
-    J2=$(sb --array="$SUBJECTS" \
+    J2=$(MODEL=2 KIND="$kind" sb --array="$SUBJECTS" \
             --dependency=aftercorr:"$J1" \
-            --export=ALL,MODEL=2,KIND="$kind" \
             "$SLURM_SCRIPT")
     echo "  m2 -> jobid $J2 (aftercorr $J1)"
 
-    J3=$(sb --array="$SUBJECTS" \
+    J3=$(MODEL=3 KIND="$kind" sb --array="$SUBJECTS" \
             --dependency=aftercorr:"$J1" \
-            --export=ALL,MODEL=3,KIND="$kind" \
             "$SLURM_SCRIPT")
     echo "  m3 -> jobid $J3 (aftercorr $J1)"
 
-    J4=$(sb --array="$SUBJECTS" \
+    J4=$(MODEL=4 KIND="$kind" sb --array="$SUBJECTS" \
             --dependency=aftercorr:"$J2" \
-            --export=ALL,MODEL=4,KIND="$kind" \
             "$SLURM_SCRIPT")
     echo "  m4 -> jobid $J4 (aftercorr $J2)"
 
-    J5=$(sb --array="$SUBJECTS" \
+    J5=$(MODEL=5 KIND="$kind" sb --array="$SUBJECTS" \
             --dependency=aftercorr:"$J2" \
-            --export=ALL,MODEL=5,KIND="$kind" \
             "$SLURM_SCRIPT")
     echo "  m5 -> jobid $J5 (aftercorr $J2)"
 
-    J6=$(sb --array="$SUBJECTS" \
+    J6=$(MODEL=6 KIND="$kind" sb --array="$SUBJECTS" \
             --dependency=aftercorr:"$J5" \
-            --export=ALL,MODEL=6,KIND="$kind" \
             "$SLURM_SCRIPT")
     echo "  m6 -> jobid $J6 (aftercorr $J5)"
 }

@@ -39,8 +39,7 @@ submit_variant() {
     local sub=$1 sdg=$2 ass=$3 dep_flag=$4
     local base=$(( (sub - 1) * N_ROIS + 1 ))
     local end=$(( base + N_ROIS - 1 ))
-    sb --array=${base}-${end} $dep_flag \
-        --export=ALL,PSIGNAL_THR=${PSIGNAL_THR},APERTURE_MASS_THR=0,MODEL=${MODEL},SHARED_DYN_GAIN=${sdg},ALL_SHARED_SIGMA=${ass} \
+    PSIGNAL_THR=${PSIGNAL_THR} APERTURE_MASS_THR=0 MODEL=${MODEL} SHARED_DYN_GAIN=${sdg} ALL_SHARED_SIGMA=${ass} sb --array=${base}-${end} $dep_flag \
         "$S_AF"
 }
 

@@ -15,7 +15,7 @@
 # memory bandwidth), but ties up twice the node.  16 CPUs lets ~2× as
 # many tasks land per node, which matters more on a congested cluster.
 #
-# Required env vars (--export=ALL,...):
+# Required env vars (pass as VAR=x sbatch ...):
 #   MODEL      1..6
 #   N_CHUNKS   chunks per subject (10 is fine on CPU)
 #   KIND       full | bar         (default full)

@@ -53,8 +53,9 @@ echo
 n_submitted=0
 for sub in $SUBJECTS; do
     for roi in $ROIS; do
-        cmd=(sbatch --array=0-11%${THROTTLE}
-             --export="ALL,SUB=$sub,ROI=$roi,MAX_VOXELS=$MAX_VOXELS,NOISE_DIST=$NOISE_DIST,VOXEL_FILTER=$VOXEL_FILTER,PSIGNAL_POSTERIOR=$PSIGNAL_POSTERIOR"
+        cmd=(env "SUB=$sub" "ROI=$roi" "MAX_VOXELS=$MAX_VOXELS" "NOISE_DIST=$NOISE_DIST"
+             "VOXEL_FILTER=$VOXEL_FILTER" "PSIGNAL_POSTERIOR=$PSIGNAL_POSTERIOR"
+             sbatch --array=0-11%${THROTTLE}
              ~/git/retsupp/retsupp/decode/slurm_jobs/decode.sh)
         if [[ "$DRY_RUN" == "1" ]]; then
             echo "[DRY] ${cmd[*]}"

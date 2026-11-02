@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=prf_chk
-#SBATCH --account=hare.econ.uzh
+#SBATCH --account=zne.uzh
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=16G
@@ -16,7 +16,7 @@
 # Layout: array task ID maps to (subject_idx, chunk_idx).
 #
 # Usage:
-#   sbatch --array=1-1620 --export=ALL,MODEL=1,N_CHUNKS=54,N_SUBS=30,KIND=full \
+#   MODEL=1 N_CHUNKS=54 N_SUBS=30 KIND=full sbatch --array=1-1620 \
 #          retsupp/modeling/slurm_jobs/fit_prf_chunked.sh
 #
 # 30 subjects × 54 chunks = 1620 array tasks. Each task is small

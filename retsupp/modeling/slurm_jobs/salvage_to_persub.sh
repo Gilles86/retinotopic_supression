@@ -74,50 +74,44 @@ submit_one_subject() {
     local m1_dep=$(per_sub_m1chunk_dep $sub)
     local DEP_OPT=""
     [[ -n "$m1_dep" ]] && DEP_OPT="--dependency=afterok:$m1_dep"
-    local J1_M=$(sb --array=$sub --time=$T_MERGE \
+    local J1_M=$(MODEL=1 KIND=$KIND sb --array=$sub --time=$T_MERGE \
         $DEP_OPT \
-        --export=ALL,MODEL=1,KIND=$KIND \
         "$S_MERGE")
 
-    local J2_C=$(sb --array=1-$N_CHUNKS --time=$T_CHUNK_M2 \
+    local J2_C=$(MODEL=2 KIND=$KIND SUBJECT=$sub N_CHUNKS=$N_CHUNKS sb --array=1-$N_CHUNKS --time=$T_CHUNK_M2 \
         --dependency=afterok:$J1_M \
-        --export=ALL,MODEL=2,KIND=$KIND,SUBJECT=$sub,N_CHUNKS=$N_CHUNKS \
         "$S_CHUNK")
-    local J2_M=$(sb --array=$sub --time=$T_MERGE \
+    local J2_M=$(MODEL=2 KIND=$KIND sb --array=$sub --time=$T_MERGE \
         --dependency=afterok:$J2_C \
-        --export=ALL,MODEL=2,KIND=$KIND "$S_MERGE")
+        "$S_MERGE")
 
-    local J3_C=$(sb --array=1-$N_CHUNKS --time=$T_CHUNK_M3 \
+    local J3_C=$(MODEL=3 KIND=$KIND SUBJECT=$sub N_CHUNKS=$N_CHUNKS sb --array=1-$N_CHUNKS --time=$T_CHUNK_M3 \
         --dependency=afterok:$J1_M \
-        --export=ALL,MODEL=3,KIND=$KIND,SUBJECT=$sub,N_CHUNKS=$N_CHUNKS \
         "$S_CHUNK")
-    local J3_M=$(sb --array=$sub --time=$T_MERGE \
+    local J3_M=$(MODEL=3 KIND=$KIND sb --array=$sub --time=$T_MERGE \
         --dependency=afterok:$J3_C \
-        --export=ALL,MODEL=3,KIND=$KIND "$S_MERGE")
+        "$S_MERGE")
 
-    local J4_C=$(sb --array=1-$N_CHUNKS --time=$T_CHUNK_M4 \
+    local J4_C=$(MODEL=4 KIND=$KIND SUBJECT=$sub N_CHUNKS=$N_CHUNKS sb --array=1-$N_CHUNKS --time=$T_CHUNK_M4 \
         --dependency=afterok:$J2_M \
-        --export=ALL,MODEL=4,KIND=$KIND,SUBJECT=$sub,N_CHUNKS=$N_CHUNKS \
         "$S_CHUNK")
-    local J4_M=$(sb --array=$sub --time=$T_MERGE \
+    local J4_M=$(MODEL=4 KIND=$KIND sb --array=$sub --time=$T_MERGE \
         --dependency=afterok:$J4_C \
-        --export=ALL,MODEL=4,KIND=$KIND "$S_MERGE")
+        "$S_MERGE")
 
-    local J5_C=$(sb --array=1-$N_CHUNKS --time=$T_CHUNK_M5 \
+    local J5_C=$(MODEL=5 KIND=$KIND SUBJECT=$sub N_CHUNKS=$N_CHUNKS sb --array=1-$N_CHUNKS --time=$T_CHUNK_M5 \
         --dependency=afterok:$J2_M \
-        --export=ALL,MODEL=5,KIND=$KIND,SUBJECT=$sub,N_CHUNKS=$N_CHUNKS \
         "$S_CHUNK")
-    local J5_M=$(sb --array=$sub --time=$T_MERGE \
+    local J5_M=$(MODEL=5 KIND=$KIND sb --array=$sub --time=$T_MERGE \
         --dependency=afterok:$J5_C \
-        --export=ALL,MODEL=5,KIND=$KIND "$S_MERGE")
+        "$S_MERGE")
 
-    local J6_C=$(sb --array=1-$N_CHUNKS --time=$T_CHUNK_M6 \
+    local J6_C=$(MODEL=6 KIND=$KIND SUBJECT=$sub N_CHUNKS=$N_CHUNKS sb --array=1-$N_CHUNKS --time=$T_CHUNK_M6 \
         --dependency=afterok:$J5_M \
-        --export=ALL,MODEL=6,KIND=$KIND,SUBJECT=$sub,N_CHUNKS=$N_CHUNKS \
         "$S_CHUNK")
-    local J6_M=$(sb --array=$sub --time=$T_MERGE \
+    local J6_M=$(MODEL=6 KIND=$KIND sb --array=$sub --time=$T_MERGE \
         --dependency=afterok:$J6_C \
-        --export=ALL,MODEL=6,KIND=$KIND "$S_MERGE")
+        "$S_MERGE")
 
     echo "sub-${sub_pad}: m1_merge=${J1_M} (deps ${M1_CHUNKS_JOB}_$((((sub-1)*N_CHUNKS+1)))-$((sub*N_CHUNKS)))"\
 " m2=${J2_C}/${J2_M} m3=${J3_C}/${J3_M} m4=${J4_C}/${J4_M} m5=${J5_C}/${J5_M} m6=${J6_C}/${J6_M}"

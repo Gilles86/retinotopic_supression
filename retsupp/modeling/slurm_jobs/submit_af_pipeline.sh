@@ -42,19 +42,19 @@ for sub in $SUBJECTS; do
     fi
 
     # Summarize mean (no deps — m4 NIfTI already there)
-    J_MEAN=$(sb --array=$sub --export=ALL,MODEL=$MODEL,KIND=mean "$S_SUMM")
+    J_MEAN=$(MODEL=$MODEL KIND=mean sb --array=$sub "$S_SUMM")
 
     # Conditionwise PRF refit (no deps — uses m4 mean as init)
-    J_COND=$(sb --array=$sub --export=ALL,MODEL=$MODEL "$S_COND")
+    J_COND=$(MODEL=$MODEL sb --array=$sub "$S_COND")
 
     # Summarize conditionwise (after fit_condition)
-    J_SUMM_C=$(sb --array=$sub --dependency=afterok:$J_COND \
-        --export=ALL,MODEL=$MODEL,KIND=conditionwise "$S_SUMM")
+    J_SUMM_C=$(MODEL=$MODEL KIND=conditionwise sb --array=$sub --dependency=afterok:$J_COND \
+        "$S_SUMM")
 
     # Fit attention model (after both summaries)
-    J_AF=$(sb --array=$sub \
+    J_AF=$(MODEL=$MODEL sb --array=$sub \
         --dependency=afterok:$J_MEAN,afterok:$J_SUMM_C \
-        --export=ALL,MODEL=$MODEL "$S_AF")
+        "$S_AF")
 
     echo "sub-${sp}: summ_mean=$J_MEAN cond=$J_COND summ_c=$J_SUMM_C af=$J_AF"
     n_submitted=$((n_submitted + 1))

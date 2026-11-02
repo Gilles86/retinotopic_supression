@@ -26,8 +26,7 @@ SCRIPT_CPU=$HOME/git/retsupp/retsupp/modeling/slurm_jobs/fit_prf_chunked.sh
 # dispatch. Generous defaults in the script (4h for GPU, 1h for CPU)
 # bury us at the bottom of the queue.
 echo "=== bench config 1: GPU monolithic ==="
-J1=$(sbatch --array=$SUB --time=01:00:00 \
-    --export=ALL,MODEL=$MODEL,KIND=$KIND,OUTPUT_SUFFIX=bench.gpu1x \
+J1=$(MODEL=$MODEL KIND=$KIND OUTPUT_SUFFIX=bench.gpu1x sbatch --array=$SUB --time=01:00:00 \
     "$SCRIPT_GPU" | awk '{print $4}')
 echo "  -> $J1"
 
@@ -35,8 +34,7 @@ echo "=== bench config 2: GPU chunked N=10 ==="
 # fit_prf_l4.sh uses SLURM_ARRAY_TASK_ID as subject; spawn 10 jobs.
 J2_IDS=""
 for c in $(seq 0 9); do
-    J=$(sbatch --array=$SUB --time=00:20:00 \
-        --export=ALL,MODEL=$MODEL,KIND=$KIND,OUTPUT_SUFFIX=bench.gpu10x,CHUNK_INDEX=$c,N_CHUNKS=10 \
+    J=$(MODEL=$MODEL KIND=$KIND OUTPUT_SUFFIX=bench.gpu10x CHUNK_INDEX=$c N_CHUNKS=10 sbatch --array=$SUB --time=00:20:00 \
         "$SCRIPT_GPU" | awk '{print $4}')
     J2_IDS="${J2_IDS}${J}_${SUB} "
 done
@@ -48,14 +46,12 @@ echo "=== bench config 3: CPU chunked N=10 ==="
 # OUTPUT_SUFFIX isn't supported by fit_prf_chunked.sh; we'll bench-merge separately.
 # So we just submit one array; output lands under derivatives/prf/model1/sub-02/chunks/
 # (canonical). We'll inspect sacct timing only, not the NIfTIs.
-J3=$(sbatch --array=11-20 --time=00:40:00 \
-    --export=ALL,MODEL=$MODEL,KIND=$KIND,N_CHUNKS=10,N_SUBS=2 \
+J3=$(MODEL=$MODEL KIND=$KIND N_CHUNKS=10 N_SUBS=2 sbatch --array=11-20 --time=00:40:00 \
     "$SCRIPT_CPU" | awk '{print $4}')
 echo "  -> $J3"
 
 echo "=== bench config 4: CPU chunked N=54 ==="
-J4=$(sbatch --array=55-108 --time=00:20:00 \
-    --export=ALL,MODEL=$MODEL,KIND=$KIND,N_CHUNKS=54,N_SUBS=2 \
+J4=$(MODEL=$MODEL KIND=$KIND N_CHUNKS=54 N_SUBS=2 sbatch --array=55-108 --time=00:20:00 \
     "$SCRIPT_CPU" | awk '{print $4}')
 echo "  -> $J4"
 

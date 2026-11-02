@@ -127,41 +127,36 @@ submit_model_block() {
     local NICE_ARG=""
     [[ "$NICE_VAL" -gt 0 ]] && NICE_ARG="--nice=$NICE_VAL"
 
-    local CHUNK_EXPORT="ALL,SUBJECT=$sub,MODEL=$model,N_CHUNKS=$N_CHUNKS,KIND=$KIND"
     if [[ "$CANARY" == "1" && "$N_CHUNKS" -gt 1 ]]; then
         # Canary chunk #1 — runs alone so the sentinels at job start
         # (assert_gpu_available_if_expected, OOM, etc.) get exercised
         # before we sink 9 more slots into the same fault.
-        local J_CANARY=$(sb $NICE_ARG --array=1 --time=$T_CHUNK $DEP_C \
-            --export=$CHUNK_EXPORT "$S_CHUNK")
-        J_CHUNK=$(sb $NICE_ARG --array=2-$N_CHUNKS --time=$T_CHUNK \
+        local J_CANARY=$(SUBJECT=$sub MODEL=$model N_CHUNKS=$N_CHUNKS KIND=$KIND sb $NICE_ARG --array=1 --time=$T_CHUNK $DEP_C \
+            "$S_CHUNK")
+        J_CHUNK=$(SUBJECT=$sub MODEL=$model N_CHUNKS=$N_CHUNKS KIND=$KIND sb $NICE_ARG --array=2-$N_CHUNKS --time=$T_CHUNK \
             --dependency=afterok:$J_CANARY \
-            --export=$CHUNK_EXPORT "$S_CHUNK")
+            "$S_CHUNK")
         # Merge needs BOTH the canary AND the rest. Use compound dep.
-        J_MERGE=$(sb $NICE_ARG --array=$sub --time=$T_MERGE \
+        J_MERGE=$(MODEL=$model KIND=$KIND sb $NICE_ARG --array=$sub --time=$T_MERGE \
             --dependency=afterok:$J_CANARY:$J_CHUNK \
-            --export=ALL,MODEL=$model,KIND=$KIND \
             "$S_MERGE")
     else
-        J_CHUNK=$(sb $NICE_ARG --array=1-$N_CHUNKS --time=$T_CHUNK $DEP_C \
-            --export=$CHUNK_EXPORT "$S_CHUNK")
-        J_MERGE=$(sb $NICE_ARG --array=$sub --time=$T_MERGE \
+        J_CHUNK=$(SUBJECT=$sub MODEL=$model N_CHUNKS=$N_CHUNKS KIND=$KIND sb $NICE_ARG --array=1-$N_CHUNKS --time=$T_CHUNK $DEP_C \
+            "$S_CHUNK")
+        J_MERGE=$(MODEL=$model KIND=$KIND sb $NICE_ARG --array=$sub --time=$T_MERGE \
             --dependency=afterok:$J_CHUNK \
-            --export=ALL,MODEL=$model,KIND=$KIND \
             "$S_MERGE")
     fi
-    J_SURF=$(sb $NICE_ARG --partition=lowprio --array=$sub --time=$T_SURF \
+    J_SURF=$(MODEL=$model sb $NICE_ARG --partition=lowprio --array=$sub --time=$T_SURF \
         --dependency=afterok:$J_MERGE \
-        --export=ALL,MODEL=$model \
         "$S_SURF")
     # neuropythy must be serial within subject; depends on its surface
     # AND the previous model's neuropythy (so freesurfer scratch dir
     # is no longer in use).
     local NEURO_DEP="afterok:$J_SURF"
     [[ -n "$dep_neuro" ]] && NEURO_DEP="$NEURO_DEP,afterok:$dep_neuro"
-    J_NEURO=$(sb $NICE_ARG --partition=lowprio --array=$sub --time=$T_NEURO \
+    J_NEURO=$(MODEL=$model sb $NICE_ARG --partition=lowprio --array=$sub --time=$T_NEURO \
         --dependency=$NEURO_DEP \
-        --export=ALL,MODEL=$model \
         "$S_NEURO")
 }
 
@@ -172,8 +167,8 @@ submit_one_subject() {
     if cache_already_done "$sub"; then
         echo "  sub-${sub_pad} cache: exists; skipping"
     else
-        J_CACHE=$(sb --array=$sub --time=$T_CACHE \
-            --export=ALL,KIND=$KIND "$S_CACHE")
+        J_CACHE=$(KIND=$KIND sb --array=$sub --time=$T_CACHE \
+            "$S_CACHE")
     fi
 
     # m1 chunks gated on cache; everything else cascades.

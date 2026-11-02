@@ -73,9 +73,9 @@ for s in $SUBJECTS; do
             echo "  sub-${sp} m${m}: AF script not available, skipping"
             continue
         fi
-        J=$(sb --array=${base}-${end} \
+        J=$(USE_FDR=1 MODEL=$m sb --array=${base}-${end} \
             --dependency=afterok:$J_MIX \
-            --export=ALL,USE_FDR=1,MODEL=$m "$script")
+            "$script")
         af_jobs="$af_jobs m${m}=$J"
     done
     echo "sub-${sp}: mix=$J_MIX$af_jobs"

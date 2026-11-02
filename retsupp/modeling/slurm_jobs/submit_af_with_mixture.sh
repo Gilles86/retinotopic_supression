@@ -48,8 +48,8 @@ for s in $SUBJECTS; do
     #   array_id = (subject - 1) * 11 + roi_idx + 1
     base=$(( (s - 1) * N_ROIS + 1 ))
     end=$(( base + N_ROIS - 1 ))
-    J_AF=$(sb --array=${base}-${end} --dependency=afterok:$J_MIX \
-        --export=ALL,USE_FDR=1 "$S_AF")
+    J_AF=$(USE_FDR=1 sb --array=${base}-${end} --dependency=afterok:$J_MIX \
+        "$S_AF")
 
     echo "sub-${sp}: mixture=$J_MIX  af=$J_AF  (tasks ${base}-${end})"
     n_sub=$((n_sub + 1))

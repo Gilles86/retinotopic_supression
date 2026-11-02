@@ -1,6 +1,6 @@
-#!/bin/bash
+#!/bin/bash -l
 #SBATCH --job-name=prf_conditionfit
-#SBATCH --account=hare.econ.uzh
+#SBATCH --account=zne.uzh
 #SBATCH --output=/dev/null
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
@@ -10,7 +10,7 @@
 # Per-subject conditionwise PRF fit (per HP-condition runs grouped).
 #
 # Usage:
-#   sbatch --array=1-30 --export=ALL,MODEL=4 \
+#   MODEL=4 sbatch --array=1-30 \
 #        retsupp/modeling/fit_condition.sh
 #
 # Reads MODEL from env, subject from SLURM_ARRAY_TASK_ID. Logs to

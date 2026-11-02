@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -l
 # GPU benchmark of ParameterFitter: patched (current submodule HEAD)
 # vs original (the parent commit's optimize.py). Runs both versions
 # back-to-back on the same GPU node to give a clean A/B.
