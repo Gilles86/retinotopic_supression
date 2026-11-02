@@ -6,6 +6,23 @@ Terms: items = m0_prf vs m00_bar; T = m1_T vs m0_prf; D = m2_D vs m0_prf; S = m3
 
 Sources: `derivatives/af_prf_cv_ladder_nested/lessons_20261102/{fold_table,train_monotonic}.tsv.gz`, `within_cv_20261102/`, `stability_20261101/shared_params.tsv`; `af_fixed_group_mechanisms/`. Figures: `notes/figures/fixed_group_mechanisms_loso_illustrated.pdf`, `fixed_group_mechanisms_within_subject_cv_supp.pdf`.
 
+## Outlier-variance voxels (found 2026-11-02)
+
+`cleaned` BOLD is psc per run, so low-mean voxels (mask edge, dropout) can have huge variance. sub-03 fold 0, all 9,894 ROI voxels: the top voxel holds 51% of test SST, the top 10 hold 90% (SD 418% vs median 1.1%). Pooled test R² without them is m1 .102, m2 .104, m3 .107, m4 .109, against .0070, −.0024, .0068, −.0027 with them. The negative m2 and m4 values are this, not runaway fits. Raw mean falls with SD (median 947 for SD ≤ 3, 170 for SD > 10; mask median 777).
+
+The AF voxels (at most 500 per ROI) are affected too: top voxel median 5.7% of SST, top 10 median 26%, worst cases sub-07 IPS 67%, sub-21 SPL1 62%, sub-07 V2 61% (top 10: 95%).
+
+Offline robustness of the LOSO test (signal voxels, δ from the other subjects, same voxel limit applied to δ and to the score). % of subjects improved, p:
+
+| Limit on voxel SD | Signal voxels per subject | items | T | D | S | dS | dD |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| None (reported) | 1795 | 100 | 90 | 50, p=.94 | 87 | 80, p=.006 | 73, p=.011 |
+| ≤ 10% | 1786 | 100 | 93 | 37, p=.44 | 90 | 73, p=.004 | 67, p=.036 |
+| ≤ 5% | 1732 | 100 | 87 | 53, p=.79 | 90 | 67, p=.016 | 67, p=.077 |
+| ≤ 3% | 1560 | 100 | 100 | 53, p=.64 | 93 | 67, p=.029 | 73, p=.061 |
+
+dS survives every limit. dD keeps its direction but is no longer below .05 at ≤ 5% and ≤ 3%. Limitation: the base fits still contain these voxels, and σ_AF, σ_dyn and the shared gains are fitted to summed squared error across the ROI, so high-variance voxels can dominate them. Only a refit without them removes that. Script: session scratchpad `robust_loso.py`, to move into the repo.
+
 ## % of subjects whose prediction improves (signal voxels; variance-weighted ΔR²)
 
 | Term | Leave one HP location out (n=30) | Leave one run per HP location out (n=26, preliminary) | Leave one subject out, zero parameters (n=30) |
