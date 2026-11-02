@@ -46,9 +46,13 @@ block_already_done() {
     [[ -f "${BIDS}/derivatives/prf_cv/model${model}/fold-${fold}/sub-${sp}/sub-${sp}_fold-${fold}_desc-r2_test.nii.gz" ]]
 }
 
+BASE_ENV=$(env | sort)
 sb() {
     if [[ "$DRY_RUN" == "1" ]]; then
-        echo "DRY: sbatch $*" >&2
+        # Variables passed as VAR=x in front of sb: whatever differs from the start env.
+        local vars
+        vars=$(comm -13 <(echo "$BASE_ENV") <(env | sort) | grep -v '^_=' | paste -sd' ' -)
+        echo "DRY: ${vars:+$vars }sbatch $*" >&2
         echo "$$_dry_$RANDOM"
     else
         sbatch "$@" | awk '{print $4}'
