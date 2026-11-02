@@ -12,6 +12,7 @@
 #
 # Usage (from the repo root on the cluster login node):
 #   sbatch --array=1-30 retsupp/modeling/slurm_jobs/fit_fixed_group_mechanisms.sh
+#   OVERLAY_ROOT=<derivatives folder> OUTPUT_SUBDIR=<new folder> sbatch --array=1-30 ...
 
 set -eo pipefail
 subject=${SLURM_ARRAY_TASK_ID}
@@ -29,6 +30,7 @@ export PYTHONPATH="${CODE_DIR}${PYTHONPATH:+:$PYTHONPATH}"
 echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
 
 "$HOME/data/conda/envs/retsupp_cuda/bin/python" -u -m retsupp.modeling.fit_fixed_group_mechanisms \
-    "$subject" --bids-folder /shares/zne.uzh/gdehol/ds-retsupp ${ROIS:+--rois $ROIS}
+    "$subject" --bids-folder /shares/zne.uzh/gdehol/ds-retsupp ${ROIS:+--rois $ROIS} \
+    ${OVERLAY_ROOT:+--overlay-root "$OVERLAY_ROOT"} ${OUTPUT_SUBDIR:+--output-subdir "$OUTPUT_SUBDIR"}
 
 echo "Finished: $(date)"
