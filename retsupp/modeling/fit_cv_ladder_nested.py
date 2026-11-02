@@ -34,6 +34,12 @@ NaN): the main parameter estimates under the same nested procedure.
 
 ``--bounded`` boxes the shared terms (``SHARED_BOUNDS``) in both fits.
 
+``--loss nll`` fits the shared terms to the Gaussian negative log-likelihood
+with each voxel's noise variance profiled out, sum_v (T/2) log SSE_v, instead
+of the summed SSE, so a voxel counts by its fit relative to its own noise and
+not by its scale. ``--base-root`` reuses that root's m00 and m0 fits instead
+of refitting them (their per-voxel pRFs and the voxel set must match).
+
 Output: ``derivatives/af_prf_cv_ladder_nested[_<scheme>][_bounded][_polished]/<model>/sub-XX/``.
 Existing outputs are loaded, never overwritten.
 
@@ -129,8 +135,12 @@ def gd_fit(model, bold_train, paradigm, init_pars, sign_pattern, item_scale,
     return fit_pars, info
 
 
-def make_sse_fn(model, bold_train, paradigm, raw_pars, free_ix):
-    """SSE and gradient as a function of the free shared raw parameters."""
+def make_sse_fn(model, bold_train, paradigm, raw_pars, free_ix, loss='sse'):
+    """Objective and gradient as a function of the free shared raw parameters.
+
+    ``loss='sse'``: summed SSE. ``loss='nll'``: sum_v (T/2) log SSE_v.
+    """
+    n_timepoints = float(bold_train.shape[0])
     n_pars = raw_pars.shape[1]
     y = tf.constant(bold_train, dtype=tf.float64)
     par_ = model.stimulus._clean_paradigm(paradigm)
@@ -152,7 +162,11 @@ def make_sse_fn(model, bold_train, paradigm, raw_pars, free_ix):
                 None)[0]
             # Residuals and sum in float64: in float32 the summation noise
             # (~1e-7 relative) stops L-BFGS before the optimum.
-            sse = tf.reduce_sum((y - tf.cast(pred, tf.float64)) ** 2)
+            sse_v = tf.reduce_sum((y - tf.cast(pred, tf.float64)) ** 2, axis=0)
+            if loss == 'nll':
+                sse = 0.5 * n_timepoints * tf.reduce_sum(tf.math.log(sse_v))
+            else:
+                sse = tf.reduce_sum(sse_v)
         return sse, tape.gradient(sse, v)
 
     def fun(v64):
@@ -181,7 +195,7 @@ def raw_bounds(model, init_pars, cols):
 
 
 def shared_fit(model, bold_train, paradigm, init_pars, free_shared,
-               max_iter=2000, bounded=False):
+               max_iter=2000, bounded=False, loss='sse'):
     """L-BFGS-B over the shared parameters, per-voxel pRFs frozen.
 
     Starts from ``init_pars`` (the parent optimum, new terms at null) and
@@ -195,7 +209,7 @@ def shared_fit(model, bold_train, paradigm, init_pars, free_shared,
     raw0 = model._transform_parameters_backward(
         init_pars[labels].values.astype(np.float32))
     raw0 = np.asarray(raw0)
-    fun = make_sse_fn(model, bold_train, paradigm, raw0, free_ix)
+    fun = make_sse_fn(model, bold_train, paradigm, raw0, free_ix, loss=loss)
     bnds = raw_bounds(model, init_pars, free_shared) if bounded else None
 
     def clip(x):
@@ -246,7 +260,7 @@ def shared_fit(model, bold_train, paradigm, init_pars, free_shared,
         columns=labels, index=init_pars.index)
     _, g = fun(best[1])
     info = dict(optimizer='lbfgs_shared', seconds=time.time() - t0,
-                sse_parent_start=f_parent, sse_final=best[0],
+                loss=loss, sse_parent_start=f_parent, sse_final=best[0],
                 grad_norm=float(np.linalg.norm(g)), starts=starts)
     return fit_pars, info
 
@@ -366,9 +380,12 @@ def bar_paradigm(sub, run_meta, resolution, grid_radius):
 def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
          grid_radius=5.0, max_voxels=500, p_signal_thr=0.5,
          gd_iterations=8000, learning_rate=0.01, models=None,
-         output_root=None, polish=False, bounded=False, max_bold_sd=None):
+         output_root=None, polish=False, bounded=False, max_bold_sd=None,
+         loss='sse', base_root=None):
     if cv_scheme not in SCHEMES:
         raise ValueError(f'cv_scheme must be in {SCHEMES}')
+    if polish and loss != 'sse':
+        raise ValueError('--polish only implements the SSE loss')
     bids_folder = Path(bids_folder)
     sub = Subject(subject, bids_folder)
     root = Path(output_root) if output_root else (
@@ -376,7 +393,8 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
             'af_prf_cv_ladder_nested'
             + ('' if cv_scheme == 'loco' else f'_{cv_scheme}')
             + ('_bounded' if bounded else '')
-            + (f'_maxsd{max_bold_sd:g}' if max_bold_sd else '')))
+            + (f'_maxsd{max_bold_sd:g}' if max_bold_sd else '')
+            + ('' if loss == 'sse' else f'_{loss}')))
     polish_root = root.parent / f'{root.name}_polished'
     models = models or list(LADDER)
 
@@ -457,6 +475,12 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
         out_root = root if stage == 'clamped' else polish_root
         store = fits if stage == 'clamped' else polished
         cached = load(name, out_root)
+        if cached is None and base_root and name in ('m00_bar', 'm0_prf'):
+            cached = load(name, Path(base_root))
+            if cached is None:
+                raise FileNotFoundError(f'{name} not in {base_root}')
+            if any(p is not None and len(p) != voxel_ids.size for p in cached):
+                raise ValueError(f'{name} in {base_root}: voxel set differs')
         if cached is not None:
             print(f'== {name} [{stage}]: loaded existing fit')
             store[name] = cached
@@ -528,7 +552,7 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
                 free = [p for p in shared_pars_for(sp, item_scale)
                         if p != 'sigma_T_dyn']
                 pars, info = shared_fit(m_tr, y_tr, train['paradigm'],
-                                        init, free, bounded=bounded)
+                                        init, free, bounded=bounded, loss=loss)
                 print(f'  fold {k}: SSE parent-start {info["sse_parent_start"]:.2f}'
                       f' -> {info["sse_final"]:.2f} | |grad| '
                       f'{info["grad_norm"]:.3g} | {info["seconds"]:.0f}s')
@@ -580,12 +604,12 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
                             item_scale=item_scale, cv_scheme=cv_scheme,
                             max_voxels=max_voxels,
                             gd_iterations=gd_iterations, stage=stage,
-                            bounded=bounded,
+                            bounded=bounded, loss=loss,
                             optimizer_info=infos))
         with open(pkl, 'wb') as f:
             pickle.dump(dict(fit_pars_per_fold=fold_pars, parent=parent,
                              optimizer_info=infos, voxel_ids=voxel_ids,
-                             cv_scheme=cv_scheme, stage=stage), f)
+                             cv_scheme=cv_scheme, stage=stage, loss=loss), f)
         print(f'Saved {name} [{stage}] -> {out_dir}')
 
 
@@ -611,9 +635,14 @@ if __name__ == '__main__':
     ap.add_argument('--max-bold-sd', type=float, default=None,
                     help='Drop voxels whose BOLD SD (percent signal) exceeds '
                          'this; root gets a _maxsd<value> suffix.')
+    ap.add_argument('--loss', choices=['sse', 'nll'], default='sse',
+                    help='Objective of the shared-term fits; nll adds a _nll '
+                         'suffix to the root.')
+    ap.add_argument('--base-root', default=None,
+                    help='Reuse m00 and m0 from this root.')
     a = ap.parse_args()
     main(a.subject, a.bids_folder, a.roi, cv_scheme=a.cv_scheme,
          gd_iterations=a.gd_iterations, learning_rate=a.learning_rate,
          models=a.models, max_voxels=a.max_voxels,
          output_root=a.output_root, polish=a.polish, bounded=a.bounded,
-         max_bold_sd=a.max_bold_sd)
+         max_bold_sd=a.max_bold_sd, loss=a.loss, base_root=a.base_root)

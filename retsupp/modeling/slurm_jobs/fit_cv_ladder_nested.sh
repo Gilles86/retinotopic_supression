@@ -17,6 +17,8 @@
 #   POLISH=1 sbatch --array=1-330 ...    # + all-free polish pass
 #   CV_SCHEME=full POLISH=1 sbatch --array=1-330 ...  # main fits
 #   BOUNDED=1 boxes the shared terms (root gets a _bounded suffix)
+#   LOSS=nll fits the shared terms by likelihood (root gets a _nll suffix)
+#   BASE_ROOT=<path> reuses the m00 and m0 fits of that root
 #   MAX_BOLD_SD=20 drops voxels above that BOLD SD (root gets a _maxsd20 suffix)
 # Task index -> (subject, ROI): idx0 = task-1; subject = idx0/11 + 1; roi = ROIS[idx0%11].
 
@@ -25,7 +27,9 @@ CV_SCHEME="${CV_SCHEME:-loco}"
 POLISH="${POLISH:-}"
 BOUNDED="${BOUNDED:-}"
 MAX_BOLD_SD="${MAX_BOLD_SD:-}"
-TAG="${CV_SCHEME}${BOUNDED:+_bounded}${POLISH:+_polish}${MAX_BOLD_SD:+_maxsd$MAX_BOLD_SD}"
+LOSS="${LOSS:-sse}"
+BASE_ROOT="${BASE_ROOT:-}"
+TAG="${CV_SCHEME}${BOUNDED:+_bounded}${POLISH:+_polish}${MAX_BOLD_SD:+_maxsd$MAX_BOLD_SD}_${LOSS}"
 ROIS=(V1 V2 V3 V3AB hV4 LO TO VO IPS SPL1 FEF)
 idx0=$(( SLURM_ARRAY_TASK_ID - 1 ))
 subject=$(( idx0 / ${#ROIS[@]} + 1 ))
@@ -49,6 +53,7 @@ echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
     "$subject" --roi "$roi" \
     --bids-folder /shares/zne.uzh/gdehol/ds-retsupp \
     --cv-scheme "$CV_SCHEME" ${POLISH:+--polish} ${BOUNDED:+--bounded} \
-    ${MAX_BOLD_SD:+--max-bold-sd "$MAX_BOLD_SD"}
+    ${MAX_BOLD_SD:+--max-bold-sd "$MAX_BOLD_SD"} --loss "$LOSS" \
+    ${BASE_ROOT:+--base-root "$BASE_ROOT"}
 
 echo "Finished: $(date)"
