@@ -41,6 +41,8 @@ These voxels mostly already fail the signal selection used for scoring (null > 0
 
 ## Refit canaries: shared parameters under three voxel treatments
 
+Likelihood fits are dropped (decision 2026-11-02): no full `--loss nll` ladder. The columns below and the noise-weighted section further down remain as a record only. Outlier removal (`maxsd20`) continues.
+
 Full-data nested bounded fits. `sse` is the original fit; `maxsd20` drops voxels above 20% SD and refits m00 and m0 as well (job 7967396); `nll` minimizes Σ_v (T/2) log SSE_v for the shared terms but reuses the m0 of `sse` (job 7970095, 17–33 min per subject × ROI). Table: `notes/data/shared_fit_comparison_canary_3versions_20261102.tsv`. The contaminated cases were picked because they were the worst, so they do not estimate a typical change.
 
 g_HP − g_LP in m5_TDS_dS and g_HP_dyn − g_LP_dyn in m6_TDS_dD:
