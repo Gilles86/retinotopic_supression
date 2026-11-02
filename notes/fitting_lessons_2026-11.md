@@ -39,6 +39,19 @@ The ≤ 5% and ≤ 3% rows are too strict and should not be read as a weakening 
 
 These voxels mostly already fail the signal selection used for scoring (null > 0), so they barely touch the score. They reach the result through δ and through the shared parameters of the base fits, where they enter the summed squared error. Refit canary with `MAX_BOLD_SD=20` (job 7967396: sub-03 V3AB, sub-07 V2, sub-07 IPS, sub-20 SPL1), to `derivatives/af_prf_cv_ladder_nested_full_bounded_maxsd20`. Per-run diagnostic: `retsupp/modeling/diagnose_outlier_voxels.py` (job 7967395). Offline script: session scratchpad `robust_loso2.py`, to move into the repo.
 
+## LOSO with noise weighting (offline, base fits still SSE)
+
+Each subject's δ is taken as Σ(b/σ²_v) / Σ(a/σ²_v), with σ²_v the voxel's residual variance in the base fit, as a per-voxel Gaussian likelihood would weight it (`noise_model='gaussian'` in braincoder 0.6+). Scored as ΔlogL = −(T/2)·log(1 + ΔSSE/SSE0), or as pooled ΔR². % of subjects improved, p (signal voxels):
+
+| δ from | Score | dS | dD |
+|---|---|---:|---:|
+| Unweighted (reported) | Pooled ΔR² | 80, p=.006 | 73, p=.011 |
+| Unweighted | ΔlogL | 73, p=.035 | 73, p=.007 |
+| Noise-weighted | Pooled ΔR² | 77, p=.012 | 60, p=.28 |
+| Noise-weighted | ΔlogL | 67, p=.088 | 63, p=.28 |
+
+dD depends on how voxels are weighted when its strength is estimated, so treat it as less secure than dS. Items, T and S hold in all rows; D stays at chance. Script: session scratchpad `ml_loso.py`, to move into the repo.
+
 ## % of subjects whose prediction improves (signal voxels; variance-weighted ΔR²)
 
 | Term | Leave one HP location out (n=30) | Leave one run per HP location out (n=26, preliminary) | Leave one subject out, zero parameters (n=30) |
