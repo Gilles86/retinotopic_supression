@@ -39,6 +39,27 @@ The ≤ 5% and ≤ 3% rows are too strict and should not be read as a weakening 
 
 These voxels mostly already fail the signal selection used for scoring (null > 0), so they barely touch the score. They reach the result through δ and through the shared parameters of the base fits, where they enter the summed squared error. Refit canary with `MAX_BOLD_SD=20` (job 7967396: sub-03 V3AB, sub-07 V2, sub-07 IPS, sub-20 SPL1), to `derivatives/af_prf_cv_ladder_nested_full_bounded_maxsd20`. Per-run diagnostic: `retsupp/modeling/diagnose_outlier_voxels.py` (job 7967395). Offline script: session scratchpad `robust_loso2.py`, to move into the repo.
 
+## Refit canaries: shared parameters under three voxel treatments
+
+Full-data nested bounded fits. `sse` is the original fit; `maxsd20` drops voxels above 20% SD and refits m00 and m0 as well (job 7967396); `nll` minimizes Σ_v (T/2) log SSE_v for the shared terms but reuses the m0 of `sse` (job 7970095, 17–33 min per subject × ROI). Table: `notes/data/shared_fit_comparison_canary_3versions_20261102.tsv`. The contaminated cases were picked because they were the worst, so they do not estimate a typical change.
+
+g_HP − g_LP in m5_TDS_dS and g_HP_dyn − g_LP_dyn in m6_TDS_dD:
+
+| Subject, ROI | Voxels dropped | dS sse | dS maxsd20 | dS nll | dD sse | dD maxsd20 | dD nll |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| sub-03 V3AB | 0 | +.003 | +.003 | −.007 | .000 | .000 | −.076 |
+| sub-07 V2 | 13 | −10.32 | +.122 | +.037 | +1.762 | −.132 | −.087 |
+| sub-07 IPS | 1 | −.155 | +.002 | .000 | −.378 | −.063 | −.038 |
+| sub-20 SPL1 | 4 | +.564 | +.039 | +.130 | +.921 | +.605 | +.611 |
+| sub-08 V3 | not run | −.018 | | −.037 | −.194 | | −.203 |
+| sub-12 V3AB | not run | −.018 | | −.019 | −.132 | | −.095 |
+| sub-15 IPS | not run | −.017 | | −.010 | −.131 | | −.119 |
+| sub-23 hV4 | not run | −.052 | | −.045 | −.152 | | −.125 |
+
+In sub-07 V2 the m5 sse fit puts g_HP at its bound of −10. Without those 13 voxels the dS sign flips. The ordinary cases barely move between sse and nll. Item_scale in m3_S also depends on the outliers: sub-20 SPL1 1.32 (sse), 1.59 (nll), 24.33 (maxsd20); sub-07 V2 5.03, 5.00, 2.49. nll stays near sse there because it starts from the sse m0, so it does not remove the outliers' effect on the base fit.
+
+Above 20% SD: 53 voxels in 23 of 330 subject × ROI combinations, 12 subjects, 8 of the 23 in sub-07. Refits of the other 20: job 7975291, same root. One further case to watch has no voxel above 20%: sub-21 SPL1, top voxel 62% of SST.
+
 ## LOSO with noise weighting (offline, base fits still SSE)
 
 Each subject's δ is taken as Σ(b/σ²_v) / Σ(a/σ²_v), with σ²_v the voxel's residual variance in the base fit, as a per-voxel Gaussian likelihood would weight it (`noise_model='gaussian'` in braincoder 0.6+). Scored as ΔlogL = −(T/2)·log(1 + ΔSSE/SSE0), or as pooled ΔR². % of subjects improved, p (signal voxels):
