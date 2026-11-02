@@ -366,7 +366,7 @@ def bar_paradigm(sub, run_meta, resolution, grid_radius):
 def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
          grid_radius=5.0, max_voxels=500, p_signal_thr=0.5,
          gd_iterations=8000, learning_rate=0.01, models=None,
-         output_root=None, polish=False, bounded=False):
+         output_root=None, polish=False, bounded=False, max_bold_sd=None):
     if cv_scheme not in SCHEMES:
         raise ValueError(f'cv_scheme must be in {SCHEMES}')
     bids_folder = Path(bids_folder)
@@ -375,7 +375,8 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
         bids_folder / 'derivatives' / (
             'af_prf_cv_ladder_nested'
             + ('' if cv_scheme == 'loco' else f'_{cv_scheme}')
-            + ('_bounded' if bounded else '')))
+            + ('_bounded' if bounded else '')
+            + (f'_maxsd{max_bold_sd:g}' if max_bold_sd else '')))
     polish_root = root.parent / f'{root.name}_polished'
     models = models or list(LADDER)
 
@@ -391,6 +392,14 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
         sub, roi, prf_pars, use_psignal=True, p_signal_thr=p_signal_thr,
         r2_thr=0.05, model_label=4, max_voxels=max_voxels)
     print(f'{descr}: {voxel_mask.sum()} voxels')
+    if max_bold_sd:
+        # Applied after the top-N ranking, so the result is a strict subset of
+        # the voxels of the fit without this limit.
+        sd = bold.std(0)
+        drop = voxel_mask & (sd > max_bold_sd)
+        voxel_mask = voxel_mask & ~drop
+        print(f'BOLD SD > {max_bold_sd:g}: dropped {drop.sum()} voxels '
+              f'{np.where(drop)[0].tolist()}, {voxel_mask.sum()} left')
     voxel_ids = np.where(voxel_mask)[0]
     ring_positions = get_ring_positions()
     hrf_model = SPMHRFModel(tr=sub.get_tr(session=1, run=1),
@@ -599,8 +608,12 @@ if __name__ == '__main__':
     ap.add_argument('--bounded', action='store_true',
                     help='Box the shared terms (SHARED_BOUNDS); root gets '
                          'a _bounded suffix.')
+    ap.add_argument('--max-bold-sd', type=float, default=None,
+                    help='Drop voxels whose BOLD SD (percent signal) exceeds '
+                         'this; root gets a _maxsd<value> suffix.')
     a = ap.parse_args()
     main(a.subject, a.bids_folder, a.roi, cv_scheme=a.cv_scheme,
          gd_iterations=a.gd_iterations, learning_rate=a.learning_rate,
          models=a.models, max_voxels=a.max_voxels,
-         output_root=a.output_root, polish=a.polish, bounded=a.bounded)
+         output_root=a.output_root, polish=a.polish, bounded=a.bounded,
+         max_bold_sd=a.max_bold_sd)

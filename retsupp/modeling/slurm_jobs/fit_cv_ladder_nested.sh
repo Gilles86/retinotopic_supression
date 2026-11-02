@@ -17,13 +17,15 @@
 #   POLISH=1 sbatch --array=1-330 ...    # + all-free polish pass
 #   CV_SCHEME=full POLISH=1 sbatch --array=1-330 ...  # main fits
 #   BOUNDED=1 boxes the shared terms (root gets a _bounded suffix)
+#   MAX_BOLD_SD=20 drops voxels above that BOLD SD (root gets a _maxsd20 suffix)
 # Task index -> (subject, ROI): idx0 = task-1; subject = idx0/11 + 1; roi = ROIS[idx0%11].
 
 set -eo pipefail
 CV_SCHEME="${CV_SCHEME:-loco}"
 POLISH="${POLISH:-}"
 BOUNDED="${BOUNDED:-}"
-TAG="${CV_SCHEME}${BOUNDED:+_bounded}${POLISH:+_polish}"
+MAX_BOLD_SD="${MAX_BOLD_SD:-}"
+TAG="${CV_SCHEME}${BOUNDED:+_bounded}${POLISH:+_polish}${MAX_BOLD_SD:+_maxsd$MAX_BOLD_SD}"
 ROIS=(V1 V2 V3 V3AB hV4 LO TO VO IPS SPL1 FEF)
 idx0=$(( SLURM_ARRAY_TASK_ID - 1 ))
 subject=$(( idx0 / ${#ROIS[@]} + 1 ))
@@ -46,6 +48,7 @@ echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
 "$HOME/data/conda/envs/retsupp_cuda/bin/python" -u -m retsupp.modeling.fit_cv_ladder_nested \
     "$subject" --roi "$roi" \
     --bids-folder /shares/zne.uzh/gdehol/ds-retsupp \
-    --cv-scheme "$CV_SCHEME" ${POLISH:+--polish} ${BOUNDED:+--bounded}
+    --cv-scheme "$CV_SCHEME" ${POLISH:+--polish} ${BOUNDED:+--bounded} \
+    ${MAX_BOLD_SD:+--max-bold-sd "$MAX_BOLD_SD"}
 
 echo "Finished: $(date)"
