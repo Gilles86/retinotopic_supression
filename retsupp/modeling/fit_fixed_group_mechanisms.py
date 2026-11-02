@@ -66,28 +66,36 @@ MECHANISMS = {
 }
 
 
-def fit_path(bids_folder, model, subject, roi):
-    return (Path(bids_folder) / 'derivatives' / BASE_ROOT / model
-            / f'sub-{subject:02d}' / f'sub-{subject:02d}_roi-{roi}_cv-fits.pkl')
+def fit_path(bids_folder, model, subject, roi, overlay_root=None):
+    """The fit in ``overlay_root`` if that subject x ROI finished there, else in BASE_ROOT.
+
+    m7_full is the last model of the ladder, so its presence means the whole
+    chain exists and base and child models never mix roots.
+    """
+    tail = (f'sub-{subject:02d}', f'sub-{subject:02d}_roi-{roi}_cv-fits.pkl')
+    deriv = Path(bids_folder) / 'derivatives'
+    if overlay_root and (deriv / overlay_root / 'm7_full').joinpath(*tail).exists():
+        return (deriv / overlay_root / model).joinpath(*tail)
+    return (deriv / BASE_ROOT / model).joinpath(*tail)
 
 
-def load_fit(bids_folder, model, subject, roi):
-    with open(fit_path(bids_folder, model, subject, roi), 'rb') as f:
+def load_fit(bids_folder, model, subject, roi, overlay_root=None):
+    with open(fit_path(bids_folder, model, subject, roi, overlay_root), 'rb') as f:
         return pickle.load(f)
 
 
-def loso_width(bids_folder, par, model, subject, roi):
+def loso_width(bids_folder, par, model, subject, roi, overlay_root=None):
     """Median of the other subjects' fitted width in the child model."""
     vals = []
     for s in SUBJECTS:
-        if s == subject or not fit_path(bids_folder, model, s, roi).exists():
+        if s == subject or not fit_path(bids_folder, model, s, roi, overlay_root).exists():
             continue
-        vals.append(float(load_fit(bids_folder, model, s, roi)
+        vals.append(float(load_fit(bids_folder, model, s, roi, overlay_root)
                           ['fit_pars_per_fold'][0][par].iloc[0]))
     return float(np.median(vals)), len(vals)
 
 
-def fit_roi(sub, roi, data, out_path):
+def fit_roi(sub, roi, data, out_path, overlay_root=None):
     bold, paradigm, ci, di, ti, grid_coords, run_meta = data
     hrf_model = SPMHRFModel(tr=sub.get_tr(session=1, run=1),
                             delay=4.5, dispersion=0.75)
@@ -107,7 +115,7 @@ def fit_roi(sub, roi, data, out_path):
              for hp in sorted({rm.hp for rm in run_meta})}
     out = []
     for mech, (base, perturb, width) in MECHANISMS.items():
-        fit = load_fit(sub.bids_folder, base, sub.subject_id, roi)
+        fit = load_fit(sub.bids_folder, base, sub.subject_id, roi, overlay_root)
         pars = fit['fit_pars_per_fold'][0].reindex(
             columns=list(model.parameter_labels))
         if pars['item_scale'].isna().all():
@@ -117,7 +125,7 @@ def fit_roi(sub, roi, data, out_path):
         width_val, n_width = np.nan, 0
         if width is not None:
             width_val, n_width = loso_width(sub.bids_folder, *width,
-                                            sub.subject_id, roi)
+                                            sub.subject_id, roi, overlay_root)
             pars[width[0]] = width_val
         pars['sigma_T_dyn'] = pars['sigma_dyn']
         assert not pars.isna().any().any(), pars.columns[pars.isna().any()]
@@ -152,7 +160,8 @@ def fit_roi(sub, roi, data, out_path):
     df.to_csv(out_path, sep='\t', index=False)
 
 
-def main(subject, bids_folder, rois, output_subdir='af_fixed_group_mechanisms'):
+def main(subject, bids_folder, rois, output_subdir='af_fixed_group_mechanisms',
+         overlay_root=None):
     sub = Subject(subject, bids_folder=Path(bids_folder))
     out_dir = Path(bids_folder) / 'derivatives' / output_subdir / f'sub-{subject:02d}'
     todo = {roi: out_dir / f'sub-{subject:02d}_roi-{roi}_stats.tsv.gz' for roi in rois}
@@ -165,7 +174,7 @@ def main(subject, bids_folder, rois, output_subdir='af_fixed_group_mechanisms'):
                                          item_shape='rectangle')
     data = (bold, paradigm, ci, di, ti, grid_coords, run_meta)
     for roi, path in todo.items():
-        fit_roi(sub, roi, data, path)
+        fit_roi(sub, roi, data, path, overlay_root)
 
 
 if __name__ == '__main__':
@@ -174,5 +183,7 @@ if __name__ == '__main__':
     ap.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
     ap.add_argument('--rois', nargs='+', default=ROIS)
     ap.add_argument('--output-subdir', default='af_fixed_group_mechanisms')
+    ap.add_argument('--overlay-root', default=None,
+                    help='Derivatives folder whose finished subject x ROI fits replace BASE_ROOT')
     args = ap.parse_args()
-    main(args.subject, args.bids_folder, args.rois, args.output_subdir)
+    main(args.subject, args.bids_folder, args.rois, args.output_subdir, args.overlay_root)
