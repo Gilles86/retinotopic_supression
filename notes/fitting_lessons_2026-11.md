@@ -21,7 +21,23 @@ Offline robustness of the LOSO test (signal voxels, δ from the other subjects, 
 | ≤ 5% | 1732 | 100 | 87 | 53, p=.79 | 90 | 67, p=.016 | 67, p=.077 |
 | ≤ 3% | 1560 | 100 | 100 | 53, p=.64 | 93 | 67, p=.029 | 73, p=.061 |
 
-dS survives every limit. dD keeps its direction but is no longer below .05 at ≤ 5% and ≤ 3%. Limitation: the base fits still contain these voxels, and σ_AF, σ_dyn and the shared gains are fitted to summed squared error across the ROI, so high-variance voxels can dominate them. Only a refit without them removes that. Script: session scratchpad `robust_loso.py`, to move into the repo.
+| ≤ 50% (drops 13 voxels, 32% of variance) | 1795 | 100 | 90 | 60, p=.28 | 87 | 77, p=.025 | 73, p=.009 |
+| ≤ 20% (drops 53 voxels, 36% of variance) | 1794 | 100 | 93 | 50, p=.87 | 90 | 80, p=.002 | 70, p=.014 |
+
+The ≤ 5% and ≤ 3% rows are too strict and should not be read as a weakening of dD: voxels with SD 3–20% have the best signal of all (table below). Only above 20% does reliability collapse.
+
+| Voxel SD (%) | Voxels | Share of variance | Median R² (m4_TDS) | Median cross-run null R² | % with null > 0 |
+|---|---:|---:|---:|---:|---:|
+| ≤ 1 | 17,801 | 1.6% | .055 | −.050 | 27 |
+| 1–2 | 65,703 | 16.6% | .092 | −.011 | 47 |
+| 2–3 | 17,243 | 12.1% | .187 | +.109 | 65 |
+| 3–5 | 7,659 | 13.2% | .246 | +.172 | 67 |
+| 5–10 | 2,412 | 12.9% | .281 | +.193 | 67 |
+| 10–20 | 357 | 7.8% | .269 | +.177 | 65 |
+| 20–50 | 40 | 3.8% | .124 | −.093 | 43 |
+| > 50 | 13 | 31.9% | .069 | −5.2 | 0 |
+
+These voxels mostly already fail the signal selection used for scoring (null > 0), so they barely touch the score. They reach the result through δ and through the shared parameters of the base fits, where they enter the summed squared error. Refit canary with `MAX_BOLD_SD=20` (job 7967396: sub-03 V3AB, sub-07 V2, sub-07 IPS, sub-20 SPL1), to `derivatives/af_prf_cv_ladder_nested_full_bounded_maxsd20`. Per-run diagnostic: `retsupp/modeling/diagnose_outlier_voxels.py` (job 7967395). Offline script: session scratchpad `robust_loso2.py`, to move into the repo.
 
 ## % of subjects whose prediction improves (signal voxels; variance-weighted ΔR²)
 
