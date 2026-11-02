@@ -58,7 +58,7 @@ Several scripts dispatch on an integer `model_label`:
 | 3 | Gaussian | yes | |
 | 4 | DoG | yes | the **canonical "mean" model** used as baseline in conditionwise/runwise fits |
 | 5 | Divisive Normalization Gaussian | no | DN with fixed canonical HRF; inits from m2 (DoG seed) — see `_adapt_m5_from_m2` in `modeling/fit_prf.py` |
-| 6 | Divisive Normalization Gaussian | yes | from braincoder `DivisiveNormalizationGaussianPRF2DWithHRF`; inits from m5 |
+| 6 | Divisive Normalization Gaussian | yes | from braincoder `DivisiveNormalizationGaussianPRF2DWithHRF`; inits from m5. **Fits before braincoder 0.6.1 / 2849288 are invalid:** the flexible-HRF transform read bold_baseline as hrf_delay (delay = 4·sigmoid(bold_baseline)+3 in every voxel). Refit. |
 | 7–11 | DoG variants | yes | parameter labels match model 4 (see `get_prf_parameter_labels`) |
 | 8 | DoG variant | yes | the model used by `fit_attention_model.py` |
 
@@ -155,9 +155,10 @@ edits don't undo them:
   time from ~45-90 min to ~15-30 min on fsnative meshes. This
   matters because the per-subject neuropythy is on the AF critical
   path.
-- **GPU constraint**: `L4|V100|A100`. H100/H200 excluded (those need
-  CUDA 12; the `retsupp_cuda` env is on 11.8). Confirmed working on
-  all three included.
+- **GPU constraint**: `L4|A100`. The V100 nodes are gone (2026-11-02);
+  a constraint naming `V100` is rejected with "Invalid feature
+  specification". H100/H200 excluded (those need CUDA 12; the
+  `retsupp_cuda` env is on 11.8).
 - **`cuInit` race defense**: per-node `flock` warm-up in the SLURM
   script body. The previous `sleep $((RANDOM % 30))` stagger was
   insufficient when 8 jobs landed on the same V100/A100 node (math:
@@ -202,26 +203,24 @@ tasks. So don't try to bake the array task index (e.g. chunk_idx)
 into the name; it would mislead in squeue. The task index is always
 visible in the `_N` suffix of the JobID column anyway.
 
-### Avoid the "user env retrieval failed" dogpile
+### Avoid "user env retrieval failed requeued held": no `--export` lists
 
-Submitting a large array (~500+ tasks) lets all tasks start within
-seconds of each other; they then dogpile the NFS server reading
-`$HOME/.bashrc` and a fraction fail with `user env retrieval failed
-requeued held`. Held tasks don't auto-retry — release with
-`scontrol release <jobid>`.
-
-**Fix: throttle the array.** `--array=1-N%150` runs at most 150
-concurrent tasks (caps SLURM's task-launch phase, which is what
-reads `$HOME`). `%150` is conservative; push higher if clean runs.
-The per-subject submitter naturally avoids this (only ~10 chunks
-per subject at a time).
-
-Recovery if held tasks accumulate:
+Cause (verified 2026-11-02): any `--export` value other than plain `ALL`,
+**including `--export=ALL,VAR=x`**, makes slurmd run `su - $USER -c env` on the
+node before launch, and that fails intermittently on a few nodes. Every held
+allocation since mid-October came from such a submit line; plain submits never
+got held. Pass variables in sbatch's environment instead:
 
 ```bash
-squeue --me -t PD -r --format="%i %r" | grep -i "user env" |
-    awk '{print $1}' | xargs -I {} scontrol release {}
+# not: sbatch --export=ALL,CV_SCHEME=run3,BOUNDED=1 --array=1-330 job.sh
+CV_SCHEME=run3 BOUNDED=1 sbatch --array=1-330 job.sh
 ```
+
+All submit scripts in the repo were converted to `VAR=x sb ...` (2026-11-02), and
+job scripts that call `module load` use `#!/bin/bash -l` (without retrieval the
+job no longer inherits `MODULEPATH`). Keep it that way in new scripts. Held tasks are released by the scrontab healer
+(`heal_env_holds.sh`, every 15 min). Details: sciencecluster skill, top
+section.
 
 ### NIfTI dtype trap
 
@@ -393,6 +392,36 @@ Notes:
 - V3 / hV4 medians are usually higher than V1 — these ROIs are smaller and more concentrated in the mapped region.
 - **sub-08** has no volume PRF outputs locally (sub-dir empty) — summary TSV exists, so it was fit on the cluster but not synced.
 - For a full ranking re-run the script (uses ~5s, no fitting): iterate `prf_summaries/model4/sub-*/`, compute `df['r2'].median()` per ROI.
+
+## Subject QC: whole-brain signal-voxel count at FDR α=0.05 (as of 2026-05-15)
+
+Different lens on subject quality than the median-R² ranking above. For each subject × model, fit the logit-Gaussian R² mixture (via `Subject.get_r2_fdr_threshold`), threshold at α=0.05, and count voxels above the threshold inside the BOLD mask. Captures total PRF coverage across the whole brain (parietal/frontal included), not just early-visual retinotopy. Full TSV: `notes/data/sig_voxel_counts_m4_m6.tsv`.
+
+**m4 (DoG + flex HRF, canonical mean fit)** — 29/30 subjects (sub-10 missing).
+
+| Top | n_sig | %brain | thr ‖ | Bottom | n_sig | %brain | thr |
+|---|---|---|---|---|---|---|---|
+| sub-18 | 39 668 | 13.2% | 0.017 ‖ | sub-20 | 10 113 | 3.1% | 0.023 |
+| sub-12 | 35 910 | 10.8% | 0.017 ‖ | sub-27 | 13 287 | 3.8% | 0.019 |
+| sub-01 | 34 009 | 11.8% | 0.018 ‖ | sub-16 | 15 872 | 6.0% | 0.022 |
+| sub-19 | 30 882 |  9.0% | 0.016 ‖ | sub-25 | 16 337 | 5.2% | 0.016 |
+| sub-24 | 29 748 | 11.0% | 0.021 ‖ | sub-11 | 18 305 | 7.5% | 0.016 |
+
+**m6 (DivisiveNormalization + flex HRF)** — 23/30 subjects with data (missing m6 NIfTIs for sub-08, 10, 11, 18, 20, 26, 30 — chunked sweep incomplete).
+
+| Top | n_sig | %brain | thr ‖ | Bottom | n_sig | %brain | thr |
+|---|---|---|---|---|---|---|---|
+| sub-12 | 25 464 | 7.7% | 0.018 ‖ | sub-16 | 11 817 | 4.5% | 0.023 |
+| sub-24 | 24 218 | 8.9% | 0.022 ‖ | sub-29 | 13 864 | 5.5% | 0.022 |
+| sub-17 | 23 571 | 7.3% | 0.021 ‖ | sub-25 | 14 134 | 4.5% | 0.017 |
+| sub-19 | 22 861 | 6.7% | 0.017 ‖ | sub-27 | 14 285 | 4.0% | 0.019 |
+| sub-05 | 22 633 | 6.3% | 0.019 ‖ | sub-28 | 15 914 | 5.9% | 0.021 |
+
+Notes:
+- **The two QC metrics disagree.** The median-R² ranking weights V1/V2/V3 retinotopy quality; signal-voxel count weights total brain coverage. sub-18 is "bottom tier" on median R² but "top tier" on signal-voxel count (large brain mask + many parietal voxels just barely survive FDR). Use median-R² for retinotopy/visual-field demos; use signal-voxel count for whole-brain analyses (decoding, AF fits on IPS/SPL/FEF).
+- sub-23 (median-R² champion) sits in the middle on this metric — strong V1-V3, modest beyond — so it's still the right pick for retinotopy figures but not necessarily for whole-brain demos.
+- FDR thresholds cluster around 0.016-0.023; m6 thresholds run slightly higher (more parameters → slightly heavier null tail).
+- Re-run: ssh sciencecluster + `sbatch --account=zne.uzh --partition=lowprio --time=25 --mem=8G --wrap='$HOME/data/conda/envs/retsupp_cuda/bin/python -u $HOME/count_sig_voxels.py'` (script preserved on cluster login node).
 
 ## Notes folder
 

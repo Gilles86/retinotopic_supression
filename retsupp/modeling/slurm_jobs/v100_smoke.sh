@@ -1,5 +1,7 @@
 #!/bin/bash -l
 #SBATCH --job-name=v100_smoke
+# Obsolete: sciencecluster has no V100 nodes any more (checked 2026-11-02); this
+# constraint is now rejected as "Invalid feature specification".
 #SBATCH --account=zne.uzh
 #SBATCH --partition=lowprio
 #SBATCH --constraint=V100

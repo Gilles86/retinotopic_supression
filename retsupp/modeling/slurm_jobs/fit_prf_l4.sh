@@ -6,7 +6,7 @@
 # Constraint to GPUs whose compute capability the env's CUDA 11.8 ptxas
 # supports. H100/H200 are compute_9.0 (Hopper) and crash with
 # "ptxas: Failed to launch ptxas" — see sub-02 m1 attempt for the trace.
-#SBATCH --constraint="A100|V100|L4"
+#SBATCH --constraint="A100|L4"
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=48G
 # Generous walltime — measured m1 GPU is ~40 min, but m2-m6 timing

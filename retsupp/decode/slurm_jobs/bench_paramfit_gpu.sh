@@ -11,7 +11,7 @@
 #SBATCH --account=zne.uzh
 #SBATCH --partition=lowprio
 #SBATCH --gres=gpu:1
-#SBATCH --constraint=L4|V100|A100
+#SBATCH --constraint=L4|A100
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=24G
 
