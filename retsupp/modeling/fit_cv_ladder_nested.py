@@ -40,6 +40,10 @@ of the summed SSE, so a voxel counts by its fit relative to its own noise and
 not by its scale. ``--base-root`` reuses that root's m00 and m0 fits instead
 of refitting them (their per-voxel pRFs and the voxel set must match).
 
+``--family dn`` uses the divisive-normalization pRF (``dn_attention_field``)
+instead of the DoG: m00 starts from the whole-brain m5 fit, the gain fields are
+the same. Root gets a _dn suffix.
+
 Output: ``derivatives/af_prf_cv_ladder_nested[_<scheme>][_bounded][_polished]/<model>/sub-XX/``.
 Existing outputs are loaded, never overwritten.
 
@@ -63,6 +67,7 @@ from scipy.optimize import minimize
 from braincoder.hrf import SPMHRFModel
 from braincoder.optimize import ParameterFitter
 from retsupp.modeling.cv_helpers import per_voxel_r2, write_cv_tsvs
+from retsupp.modeling.dn_attention_field import DNDynamicAttentionFieldPRF2D, init_from_m5
 from retsupp.modeling.fit_af_prf_cv_v2 import (
     ALL_SHARED_PARS,
     CV_SCHEMES,
@@ -381,11 +386,15 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
          grid_radius=5.0, max_voxels=500, p_signal_thr=0.5,
          gd_iterations=8000, learning_rate=0.01, models=None,
          output_root=None, polish=False, bounded=False, max_bold_sd=None,
-         loss='sse', base_root=None):
+         loss='sse', base_root=None, family='dog'):
     if cv_scheme not in SCHEMES:
         raise ValueError(f'cv_scheme must be in {SCHEMES}')
     if polish and loss != 'sse':
         raise ValueError('--polish only implements the SSE loss')
+    if polish and family != 'dog':
+        raise ValueError('--polish only implements the DoG family')
+    per_voxel_cols = PER_VOXEL_COLS + (
+        ['neural_baseline', 'surround_baseline'] if family == 'dn' else [])
     bids_folder = Path(bids_folder)
     sub = Subject(subject, bids_folder)
     root = Path(output_root) if output_root else (
@@ -394,7 +403,8 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
             + ('' if cv_scheme == 'loco' else f'_{cv_scheme}')
             + ('_bounded' if bounded else '')
             + (f'_maxsd{max_bold_sd:g}' if max_bold_sd else '')
-            + ('' if loss == 'sse' else f'_{loss}')))
+            + ('' if loss == 'sse' else f'_{loss}')
+            + ('' if family == 'dog' else f'_{family}')))
     polish_root = root.parent / f'{root.name}_polished'
     models = models or list(LADDER)
 
@@ -487,6 +497,8 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
             continue
         sus_hp, sus_lp, dyn_hp, dyn_lp, tgt, item_scale, parent = LADDER[name]
         sp = sign_pattern_of(name)
+        if family == 'dn' and item_scale == 'none':
+            item_scale = 'fixed'   # one class; the bar paradigm has no item pixels
         print(f'\n===== {name} [{stage}] (parent {parent}) =====')
         fold_pars, cv_r2s, train_r2s, shared_dicts, infos = [], [], [], [], []
         tr_meta, he_meta = [], []
@@ -500,12 +512,21 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
                 tr_meta.append([])
                 he_meta.append([])
                 continue
-            s = split[1] if item_scale == 'none' else split[0]
+            s = split[1] if LADDER[name][5] == 'none' else split[0]
             train, held = s['train'], s['held']
             y_tr = train['bold'][:, voxel_mask]
             y_he = None if held is None else held['bold'][:, voxel_mask]
 
             def mk(d):
+                if family == 'dn':
+                    return DNDynamicAttentionFieldPRF2D(
+                        grid_coordinates=grid_coords, paradigm=d['paradigm'],
+                        hrf_model=hrf_model,
+                        condition_indicator=d['condition_indicator'],
+                        dynamic_indicator=d['dynamic_indicator'],
+                        target_indicator=d['target_indicator'],
+                        ring_positions=ring_positions, sign_pattern=sp,
+                        item_scale_mode=item_scale)
                 return build_model(
                     grid_coords=grid_coords, paradigm=d['paradigm'],
                     condition_indicator=d['condition_indicator'],
@@ -530,6 +551,16 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
                       f'|grad| {info["grad_norm"]:.3g} (shared '
                       f'{info["grad_norm_shared"]:.3g}) | '
                       f'{info["seconds"]:.0f}s')
+            elif name == 'm00_bar' and family == 'dn':
+                m5 = init_from_m5(sub, voxel_mask)
+                init = make_init_pars(m5, np.ones(len(m5), dtype=bool), sp,
+                                      sigma_af_init=2.0, sigma_dyn_init=2.0,
+                                      item_scale=item_scale)
+                init['neural_baseline'] = m5['neural_baseline'].values
+                init['surround_baseline'] = m5['surround_baseline'].values
+                init = init.reindex(columns=labels)
+                pars, info = gd_fit(m_tr, y_tr, train['paradigm'], init, sp,
+                                    item_scale, gd_iterations, learning_rate)
             elif name == 'm00_bar':
                 init = make_init_pars(prf_pars, voxel_mask, sp,
                                       sigma_af_init=2.0, sigma_dyn_init=2.0,
@@ -593,11 +624,11 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
             voxel_ids=voxel_ids, cv_r2_per_fold=cv_r2s,
             train_r2_per_fold=train_r2s,
             fit_pars_per_fold=[None if p is None else
-                               p.reindex(columns=PER_VOXEL_COLS + shared_labels)
+                               p.reindex(columns=per_voxel_cols + shared_labels)
                                for p in fold_pars],
             shared_pars_per_fold=shared_dicts,
             shared_par_labels=shared_labels,
-            per_voxel_par_cols=PER_VOXEL_COLS,
+            per_voxel_par_cols=per_voxel_cols,
             train_run_meta_per_fold=tr_meta, held_run_meta_per_fold=he_meta,
             selector='psignal', p_signal_thr=p_signal_thr,
             extra_meta=dict(parent=parent, sign_pattern=sp,
@@ -638,6 +669,8 @@ if __name__ == '__main__':
     ap.add_argument('--loss', choices=['sse', 'nll'], default='sse',
                     help='Objective of the shared-term fits; nll adds a _nll '
                          'suffix to the root.')
+    ap.add_argument('--family', choices=['dog', 'dn'], default='dog',
+                    help='pRF model under the gain fields; dn adds a _dn suffix.')
     ap.add_argument('--base-root', default=None,
                     help='Reuse m00 and m0 from this root.')
     a = ap.parse_args()
