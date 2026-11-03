@@ -21,3 +21,7 @@ Limits:
 - One bar stimulus at one contrast in a 3.17° aperture; Aqil used several stimulus conditions. 23% of voxels have a surround σ above 5°, beyond the stimulus grid, so φ and d are probably poorly constrained here.
 - With training R² > .3 (closer to Aqil), only 13–16 subjects keep at least 5 ROIs and few voxels remain outside V1–V3 and LO: b weakens (m6 ρ −.30, p=.22), φ rises (+.60, p=.002; ecc control +.12, p=.36), d +.86, b/d −.90.
 - VO (median 8 reliable voxels per fold) and IPS (31) enter for few subjects.
+
+## Supplementary figure
+
+`notes/figures/dn_hierarchy_ratios_supp.pdf`, stats `notes/data/dn_hierarchy_ratios_stats.tsv`, script `retsupp/visualize/paper/plot_dn_ratio_supp.py`. Top row as fitted; bottom row free of the common scale. Grey lines are subjects, the coloured line is the median across subjects, m6 in reliable voxels. Right: median and interquartile range of each subject's Spearman ρ across the ROIs.
