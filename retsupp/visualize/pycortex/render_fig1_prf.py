@@ -54,6 +54,9 @@ VIEWS = {
     'ventral': {'camera.azimuth': 180, 'camera.altitude': 145, 'camera.radius': 165,
                 'camera.target': [0, -75, 0],
                 'surface.{subject}.pivot': 0, 'surface.{subject}.shift': 0},
+    'fef_left': {'camera.azimuth': 75, 'camera.altitude': 35, 'camera.radius': 150,
+                 'camera.target': [-25, 25, 20],
+                 'surface.{subject}.pivot': 0, 'surface.{subject}.shift': 0},
     'lateral': {'camera.azimuth': 180, 'camera.altitude': 90,
                 'surface.{subject}.pivot': 180, 'surface.{subject}.shift': 10},
 }
