@@ -678,4 +678,4 @@ if __name__ == '__main__':
          gd_iterations=a.gd_iterations, learning_rate=a.learning_rate,
          models=a.models, max_voxels=a.max_voxels,
          output_root=a.output_root, polish=a.polish, bounded=a.bounded,
-         max_bold_sd=a.max_bold_sd, loss=a.loss, base_root=a.base_root)
+         max_bold_sd=a.max_bold_sd, loss=a.loss, base_root=a.base_root, family=a.family)
