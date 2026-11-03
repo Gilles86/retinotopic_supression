@@ -48,8 +48,8 @@ VIEWS = {
     'pole': {'camera.azimuth': 180, 'camera.altitude': 90, 'camera.radius': 190,
              'camera.target': [0, 0, -6],
              'surface.{subject}.pivot': 0, 'surface.{subject}.shift': 0},
-    'dorsal': {'camera.azimuth': 180, 'camera.altitude': 35, 'camera.radius': 200,
-               'camera.target': [0, -25, 0],
+    'dorsal': {'camera.azimuth': 180, 'camera.altitude': 35, 'camera.radius': 225,
+               'camera.target': [0, -10, 0],
                'surface.{subject}.pivot': 0, 'surface.{subject}.shift': 0},
     'ventral': {'camera.azimuth': 180, 'camera.altitude': 145, 'camera.radius': 165,
                 'camera.target': [0, -75, 0],
@@ -57,6 +57,9 @@ VIEWS = {
     'fef_left': {'camera.azimuth': 75, 'camera.altitude': 35, 'camera.radius': 150,
                  'camera.target': [-25, 25, 20],
                  'surface.{subject}.pivot': 0, 'surface.{subject}.shift': 0},
+    'fef_right': {'camera.azimuth': 285, 'camera.altitude': 35, 'camera.radius': 150,
+                  'camera.target': [25, 25, 20],
+                  'surface.{subject}.pivot': 0, 'surface.{subject}.shift': 0},
     'lateral': {'camera.azimuth': 180, 'camera.altitude': 90,
                 'surface.{subject}.pivot': 180, 'surface.{subject}.shift': 10},
 }
@@ -183,20 +186,27 @@ def render(ds, cx_subject, out_dir, stem, views, wait):
     handle = cortex.webgl.show(ds, open_browser=True, autoclose=False)
     time.sleep(wait)
     for view in views:
+        fn = (out_dir / f'{stem}_{view}.png').resolve()
+        if fn.exists():
+            print('exists', fn, flush=True)
+            continue
         # Until the surface has loaded the viewer ignores the view, silently.
         want = VIEWS[view]['camera.azimuth']
         t0 = time.time()
         while True:
-            handle._set_view(**{**BASE_VIEW, **VIEWS[view]})
+            try:
+                handle._set_view(**{**BASE_VIEW, **VIEWS[view]})
+            except (TypeError, IndexError, KeyError):   # UI not up yet
+                pass
             time.sleep(4)
-            if abs(handle.ui.get('camera.azimuth')[0] - want) < 1e-3:
-                break
+            try:
+                if abs(handle.ui.get('camera.azimuth')[0] - want) < 1e-3:
+                    break
+            except (TypeError, IndexError, KeyError):   # UI not up yet
+                pass
             if time.time() - t0 > 180:
                 raise TimeoutError(f'{stem} {view}: viewer did not take the view')
         time.sleep(4)
-        fn = (out_dir / f'{stem}_{view}.png').resolve()
-        if fn.exists():
-            raise FileExistsError(fn)
         handle.getImage(str(fn), IMAGE_SIZE)
         t0 = time.time()
         while not fn.exists():
@@ -210,7 +220,9 @@ def render(ds, cx_subject, out_dir, stem, views, wait):
         p.terminate()
 
 
-def main(subject, out_dir, views, pars, wait):
+def main(subject, out_dir, views, pars, wait, r2_ramp=R2_RAMP):
+    global R2_RAMP
+    R2_RAMP = tuple(r2_ramp)
     store = Path(cortex.database.default_filestore)
     cx_subject = f'retsuppsub{subject:02d}'
     alias = store / cx_subject
@@ -223,6 +235,8 @@ def main(subject, out_dir, views, pars, wait):
         out_dir.mkdir(parents=True, exist_ok=True)
         border = border_mask(subject, cx_subject)
         for par in pars:
+            if all((out_dir / f'sub-{subject:02d}_{par}_{v}.png').exists() for v in views):
+                continue
             rgb = (area_rgb(subject, cx_subject, border) if par == 'areas'
                    else vertex_rgb(subject, cx_subject, par, border))
             ds = cortex.Dataset(**{par: cortex.VertexRGB(rgb[:, 0], rgb[:, 1], rgb[:, 2],
@@ -238,6 +252,8 @@ if __name__ == '__main__':
     ap.add_argument('--out-dir', default='notes/figures/fig1_inflated')
     ap.add_argument('--views', nargs='+', default=['pole'])
     ap.add_argument('--pars', nargs='+', default=['areas'] + list(PANELS))
+    ap.add_argument('--r2-ramp', nargs=2, type=float, default=R2_RAMP,
+                    help='R² at which the colour starts to show and is fully opaque')
     ap.add_argument('--wait', type=float, default=45, help='Seconds for the viewer to load')
     a = ap.parse_args()
-    main(a.subject, a.out_dir, a.views, a.pars, a.wait)
+    main(a.subject, a.out_dir, a.views, a.pars, a.wait, a.r2_ramp)
