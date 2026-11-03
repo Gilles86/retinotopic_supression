@@ -39,6 +39,39 @@ The ≤ 5% and ≤ 3% rows are too strict and should not be read as a weakening 
 
 These voxels mostly already fail the signal selection used for scoring (null > 0), so they barely touch the score. They reach the result through δ and through the shared parameters of the base fits, where they enter the summed squared error. Refit canary with `MAX_BOLD_SD=20` (job 7967396: sub-03 V3AB, sub-07 V2, sub-07 IPS, sub-20 SPL1), to `derivatives/af_prf_cv_ladder_nested_full_bounded_maxsd20`. Per-run diagnostic: `retsupp/modeling/diagnose_outlier_voxels.py` (job 7967395). Offline script: session scratchpad `robust_loso2.py`, to move into the repo.
 
+## LOSO on the outlier-free refits (2026-11-03)
+
+The 23 subject × ROI fits with voxels above 20% SD were refit without them (m00 and m0 included), and the test was rerun for all 30 subjects: `derivatives/af_fixed_group_mechanisms_maxsd20`, `retsupp/modeling/loso_fixed_group_compare.py`. % of subjects improved, p:
+
+| Fits | items | T | D | S | dS | dD |
+|---|---:|---:|---:|---:|---:|---:|
+| Original | 100 | 90 | 50, p=.94 | 87 | 80, p=.006 | 73, p=.011 |
+| 23 outlier-free | 100 | 90 | 50, p=.81 | 90 | 77, p=.010 | 63, p=.088 |
+
+dS holds; dD no longer reaches p < .05. dD changes partly through the group δ: in V3 the median moves from −.014 to +.003 because sub-07 (−.049 to +.011) and sub-23 (−.113 to +.031) change sign, and subjects with no refit in that ROI then score differently. V3 subjects improving on dD fall from 57% to 17%. The own estimates in V3 and V1 straddle zero with gaps around the median, so this rests on a few ranks. δ in hV4, LO, V3AB, VO and IPS barely moves.
+
+## Cause of the outlier variance (per-run diagnostic, sub-03, 07, 20)
+
+Percent signal change divides by a raw mean that collapses towards zero. For the 13 voxels with SD > 50%: median 68% of the variance sits in one run, where the raw mean is 5.6 against 177 in the other runs, while raw SD is unchanged (58 vs 55). Some raw means are negative (sub-07 voxel 212164: −38 and −48). Voxels with 20–50% SD: 33% in one run, raw mean 71 vs 178. log SD after cleaning against log(100 × raw SD / raw mean), r = .85. The worst runs differ per voxel, so no single bad run explains it. A rule on the raw mean is worse than the SD limit: a per-run minimum below 200 catches 36 of 40 voxels above 20% and also removes 120 of the 2,248 good voxels with SD 3–20%.
+
+## m0–m6 in reliable voxels (leave-one-run-set-out, 30 subjects × 3 folds)
+
+Voxels selected per fold on training-run reliability > 0, scored on held-out runs. Reliable: V3 26%, LO 24%, V2 23%, V1 19%, hV4 15%, TO 10%, V3AB 8%, VO 3%, IPS 2%, SPL1 and FEF 0%. Table: `notes/data/prf_cv_roi_summary.tsv`. Figure: `notes/figures/prf_cv_roi_reliable.pdf`. Script: `retsupp/visualize/paper/plot_prf_cv_roi.py`.
+
+Median held-out R²: m1 .201, m2 .210, m3 .230, m4 .238, m5 .216, m6 .245.
+
+| Contrast | Reliable, median | % subjects | Reliable, pooled | All voxels, median | % subjects |
+|---|---:|---:|---:|---:|---:|
+| DoG vs Gaussian, fixed HRF | +.0077 | 100 | +.0082 | +.0029 | 93 |
+| DoG vs Gaussian, flexible HRF | +.0061 | 97 | +.0074 | +.0041 | 93 |
+| DN vs DoG, fixed HRF | +.0054 | 100 | +.0084 | −.0001 (p=.21) | 30 |
+| DN vs DoG, flexible HRF | +.0071 | 100 | +.0082 | −.0004 (p=.045) | 33 |
+| Flexible HRF, Gaussian | +.0179 | 100 | +.0182 | +.0021 | 93 |
+| Flexible HRF, DoG | +.0177 | 100 | +.0171 | +.0033 | 97 |
+| Flexible HRF, DN | +.0200 | 100 | +.0167 | +.0032 | 93 |
+
+The reliable-voxel contrasts have p < 1e-8. Adding the SD ≤ 20% limit to the reliable voxels leaves the pooled contrasts unchanged within .001. DN beats DoG only in reliable voxels. These fits use braincoder a4fc80b, which contains the DN flexible-HRF fix (2849288).
+
 ## Refit canaries: shared parameters under three voxel treatments
 
 Likelihood fits are dropped (decision 2026-11-02): no full `--loss nll` ladder. The columns below and the noise-weighted section further down remain as a record only. Outlier removal (`maxsd20`) continues.
