@@ -1,0 +1,105 @@
+"""Figure 1 maps: pycortex renders of ``render_fig1_prf`` in one row, with their keys.
+
+Usage (pycortex2 env)::
+
+    ~/mambaforge/envs/pycortex2/bin/python retsupp/visualize/pycortex/compose_fig1_prf.py 23
+"""
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import numpy as np
+from PIL import Image
+
+mpl.rcParams.update({
+    'font.family': 'Helvetica', 'font.size': 7, 'axes.titlesize': 8, 'axes.linewidth': .8,
+    'xtick.direction': 'out', 'xtick.major.size': 2.5, 'xtick.major.width': .8,
+    'xtick.labelsize': 6.5, 'pdf.fonttype': 42, 'ps.fonttype': 42,
+    'savefig.bbox': 'tight', 'savefig.pad_inches': .02,
+})
+FG = '#1F2933'
+AREAS = {'V1': '#3D5A80', 'V2': '#2A9D8F', 'V3': '#8AB17D', 'V3AB': '#7209B7',
+         'hV4': '#E9C46A', 'VO': '#F4A261', 'LO': '#E76F51', 'TO': '#B5179E'}
+PANELS = [('areas', 'Visual areas'), ('angle', 'Polar angle'), ('ecc', 'Eccentricity (°)'),
+          ('sd', 'pRF size σ (°)'), ('r2', 'R²')]
+BARS = {'ecc': ('nipy_spectral', 0, 4, [0, 2, 4]), 'sd': ('nipy_spectral', 0, 3, [0, 1.5, 3]),
+        'r2': ('inferno', 0, .6, [0, .3, .6])}
+
+
+def theta_value(theta, hemi):
+    if hemi == 'R':
+        v = np.mod(theta, 2 * np.pi)
+        return np.clip((v - .25 * np.pi) / (1.5 * np.pi), 0, 1)
+    v = np.mod(theta + np.pi, 2 * np.pi)
+    return 1. - np.clip((v - .25 * np.pi) / (1.5 * np.pi), 0, 1)
+
+
+def angle_key(ax):
+    """Visual field as coded: the left hemisphere's map covers the right field."""
+    g = np.linspace(-1, 1, 401)
+    x, y = np.meshgrid(g, g)
+    th = np.arctan2(y, x)
+    v = np.where(x > 0, theta_value(th, 'L'), theta_value(th, 'R'))
+    rgba = mpl.colormaps['hsv'](v)
+    rgba[..., 3] = np.hypot(x, y) <= 1
+    ax.imshow(rgba, extent=(-1, 1, -1, 1), origin='lower', interpolation='bilinear')
+    ax.plot([0, 0], [-1, 1], color='white', lw=.8)
+    ax.set_xlim(-1.45, 1.45)
+    ax.set_ylim(-1.05, 1.05)
+    ax.text(-1.1, 0, 'L', ha='right', va='center', color=FG, fontsize=6.5)
+    ax.text(1.1, 0, 'R', ha='left', va='center', color=FG, fontsize=6.5)
+    ax.set_axis_off()
+
+
+def area_key(ax):
+    for i, (name, col) in enumerate(AREAS.items()):
+        ax.text(.02 + .24 * (i % 4), .68 - .5 * (i // 4), name, color=col,
+                fontsize=6.5, fontweight='bold', va='center', transform=ax.transAxes)
+    ax.set_axis_off()
+
+
+def bar_key(fig, ax, cmap, lo, hi, ticks):
+    pos = ax.get_position()
+    ax.set_axis_off()
+    cax = fig.add_axes([pos.x0 + .18 * pos.width, pos.y0 + .55 * pos.height,
+                        .64 * pos.width, .22 * pos.height])
+    cb = fig.colorbar(mpl.cm.ScalarMappable(mpl.colors.Normalize(lo, hi), cmap),
+                      cax=cax, orientation='horizontal', ticks=ticks)
+    cb.outline.set_visible(False)
+    cb.ax.tick_params(pad=1.5)
+
+
+def main(subject, in_dir, out):
+    in_dir = Path(in_dir)
+    images = {p: Image.open(in_dir / f'sub-{subject:02d}_{p}_pole.png').convert('RGBA')
+              for p, _ in PANELS}
+    boxes = np.array([im.getbbox() for im in images.values()])
+    box = (boxes[:, 0].min(), boxes[:, 1].min(), boxes[:, 2].max(), boxes[:, 3].max())
+    fig, axes = plt.subplots(2, 5, figsize=(7.25, 1.75), height_ratios=[1, .32],
+                             gridspec_kw=dict(wspace=.03, hspace=.02))
+    for j, (par, title) in enumerate(PANELS):
+        im = images[par].crop(box)
+        bg = Image.new('RGBA', im.size, 'white')
+        bg.alpha_composite(im)
+        axes[0, j].imshow(np.asarray(bg.convert('RGB')), interpolation='none')
+        axes[0, j].set_axis_off()
+        axes[0, j].set_title(title, color=FG, pad=3)
+    area_key(axes[1, 0])
+    angle_key(axes[1, 1])
+    for j, (par, _) in enumerate(PANELS[2:], start=2):
+        bar_key(fig, axes[1, j], *BARS[par])
+    fig.savefig(out, dpi=600)
+    fig.savefig(str(out).replace('.pdf', '.png'), dpi=220)
+    print('Saved', out)
+
+
+if __name__ == '__main__':
+    ap = argparse.ArgumentParser()
+    ap.add_argument('subject', type=int)
+    ap.add_argument('--in-dir', default='notes/figures/fig1_inflated')
+    ap.add_argument('--out', default=None)
+    a = ap.parse_args()
+    main(a.subject, a.in_dir, a.out or f'{a.in_dir}/fig1_prf_maps_sub-{a.subject:02d}.pdf')
