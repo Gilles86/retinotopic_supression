@@ -20,6 +20,7 @@
 #   N_CHUNKS   chunks per subject (10 is fine on CPU)
 #   KIND       full | bar         (default full)
 #   SUBJECT    pin to one subject (preferred mode)
+#   OUTPUT_SUFFIX  optional: write to prf.<suffix>/ instead of prf/
 #   N_SUBS     phase-wide mode (alternative; with no SUBJECT, array
 #              index encodes both subject and chunk)
 #
@@ -83,6 +84,7 @@ $PYTHON -u "$HOME/git/retsupp/retsupp/modeling/fit_prf.py" \
     --voxel-chunk-size 100000 \
     --paradigm-kind "$KIND" \
     --chunk-index "$chunk_idx" \
-    --n-chunks "$N_CHUNKS"
+    --n-chunks "$N_CHUNKS" \
+    ${OUTPUT_SUFFIX:+--output-suffix "$OUTPUT_SUFFIX"}
 
 echo "Finished: $(date)"

@@ -185,6 +185,7 @@ $PYTHON -u "$HOME/git/retsupp/retsupp/modeling/fit_prf.py" \
     --voxel-chunk-size 100000 \
     --paradigm-kind "$KIND" \
     --chunk-index "$chunk_idx" \
-    --n-chunks "$N_CHUNKS"
+    --n-chunks "$N_CHUNKS" \
+    ${OUTPUT_SUFFIX:+--output-suffix "$OUTPUT_SUFFIX"}
 
 echo "Finished: $(date)"

@@ -49,6 +49,6 @@ echo "FS version: $(mri_surf2surf --version 2>&1 | head -1)"
 PYTHON="$HOME/data/conda/envs/retsupp_cuda/bin/python"
 $PYTHON -u "$HOME/git/retsupp/retsupp/surface/sample_prf_to_surface_nilearn.py" \
     "$subject" --model "$MODEL" \
-    --bids_folder /shares/zne.uzh/gdehol/ds-retsupp
+    --bids_folder /shares/zne.uzh/gdehol/ds-retsupp ${OUTPUT_SUFFIX:+--prf-suffix "$OUTPUT_SUFFIX"}
 
 echo "Finished: $(date)"

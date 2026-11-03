@@ -37,6 +37,6 @@ PYTHON="$HOME/data/conda/envs/retsupp_cuda/bin/python"
 $PYTHON -u "$HOME/git/retsupp/retsupp/modeling/merge_prf_chunks.py" \
     "$subject" --model "$MODEL" \
     --bids-folder /shares/zne.uzh/gdehol/ds-retsupp \
-    --paradigm-kind "$KIND"
+    --paradigm-kind "$KIND" ${OUTPUT_SUFFIX:+--output-suffix "$OUTPUT_SUFFIX"}
 
 echo "Finished: $(date)"

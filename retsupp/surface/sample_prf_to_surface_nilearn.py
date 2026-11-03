@@ -33,20 +33,19 @@ def transform_fsaverage(in_file, fs_hemi, source_subject, bids_folder):
         print(f"        (fsnative .gii is still saved; neuropythy needs only fsnative)")
         return None
 
-def main(subject, model, bids_folder):
+def main(subject, model, bids_folder, prf_suffix=''):
 
     sub = Subject(subject, bids_folder=bids_folder)
     surfinfo = sub.get_surf_info()
 
-    prf_pars_volume = sub.get_prf_parameters_volume(model=model, type='mean')
-
-
-    par_keys = prf_pars_volume.index
-    prf_pars_volume = image.concat_imgs([prf_pars_volume[k] for k in par_keys])
-
     bids_folder = Path(bids_folder)
+    prf_dir = 'prf' + (f'.{prf_suffix}' if prf_suffix else '')
+    target_dir = bids_folder / 'derivatives' / prf_dir / f'model{model}' / f'sub-{subject:02d}'
 
-    target_dir = bids_folder / 'derivatives' / 'prf' / f'model{model}' / f'sub-{subject:02d}'
+    par_keys = sub.get_prf_parameter_labels(model=model)
+    prf_pars_volume = image.concat_imgs(
+        [target_dir / f'sub-{subject:02d}_desc-{k}.nii.gz' for k in par_keys])
+
     target_dir.mkdir(parents=True, exist_ok=True)
 
     print(f'Writing to {target_dir}')
@@ -71,6 +70,8 @@ if __name__ == '__main__':
     parser.add_argument('subject', type=int, default=None)
     parser.add_argument('--model', default=1, type=int)
     parser.add_argument('--bids_folder', default='/data/ds-retsupp')
+    parser.add_argument('--prf-suffix', default='',
+                        help='Read and write prf.<suffix>/ instead of prf/')
     args = parser.parse_args()
 
-    main(args.subject, args.model, bids_folder=args.bids_folder)
+    main(args.subject, args.model, bids_folder=args.bids_folder, prf_suffix=args.prf_suffix)
