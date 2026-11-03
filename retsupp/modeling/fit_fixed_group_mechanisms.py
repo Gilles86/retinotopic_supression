@@ -43,6 +43,7 @@ import numpy as np
 import pandas as pd
 
 from braincoder.hrf import SPMHRFModel
+from retsupp.modeling.dn_attention_field import DNDynamicAttentionFieldPRF2D
 from retsupp.modeling.fit_af_prf_cv_v2 import (
     build_data_and_paradigm,
     build_model,
@@ -55,6 +56,7 @@ ROIS = ['V1', 'V2', 'V3', 'V3AB', 'hV4', 'LO', 'TO', 'VO', 'IPS', 'SPL1', 'FEF']
 SUBJECTS = range(1, 31)
 BASE_ROOT = 'af_prf_cv_ladder_nested_full_bounded'
 H = 0.05
+FAMILY = 'dog'
 # name: (base model, perturbed parameters, (width parameter, child model))
 MECHANISMS = {
     'items': ('m00_bar', ['item_scale'], None),
@@ -100,11 +102,18 @@ def fit_roi(sub, roi, data, out_path, overlay_root=None):
     hrf_model = SPMHRFModel(tr=sub.get_tr(session=1, run=1),
                             delay=4.5, dispersion=0.75)
     # Everything free, so each mechanism can move away from its base value.
-    model = build_model(
-        grid_coords=grid_coords, paradigm=paradigm,
-        condition_indicator=ci, dynamic_indicator=di, target_indicator=ti,
-        ring_positions=get_ring_positions(), hrf_model=hrf_model,
-        sign_pattern=sign_pattern_of('m7_full'), item_scale='free')
+    if FAMILY == 'dn':
+        model = DNDynamicAttentionFieldPRF2D(
+            grid_coordinates=grid_coords, paradigm=paradigm,
+            condition_indicator=ci, dynamic_indicator=di, target_indicator=ti,
+            ring_positions=get_ring_positions(), hrf_model=hrf_model,
+            sign_pattern=sign_pattern_of('m7_full'), item_scale_mode='free')
+    else:
+        model = build_model(
+            grid_coords=grid_coords, paradigm=paradigm,
+            condition_indicator=ci, dynamic_indicator=di, target_indicator=ti,
+            ring_positions=get_ring_positions(), hrf_model=hrf_model,
+            sign_pattern=sign_pattern_of('m7_full'), item_scale='free')
 
     def pred(p):
         return np.asarray(model.predict(paradigm=paradigm, parameters=p),
@@ -161,7 +170,9 @@ def fit_roi(sub, roi, data, out_path, overlay_root=None):
 
 
 def main(subject, bids_folder, rois, output_subdir='af_fixed_group_mechanisms',
-         overlay_root=None):
+         overlay_root=None, base_root=None, family='dog', step=None):
+    global BASE_ROOT, FAMILY, H
+    BASE_ROOT, FAMILY, H = base_root or BASE_ROOT, family, step or H
     sub = Subject(subject, bids_folder=Path(bids_folder))
     out_dir = Path(bids_folder) / 'derivatives' / output_subdir / f'sub-{subject:02d}'
     todo = {roi: out_dir / f'sub-{subject:02d}_roi-{roi}_stats.tsv.gz' for roi in rois}
@@ -185,5 +196,10 @@ if __name__ == '__main__':
     ap.add_argument('--output-subdir', default='af_fixed_group_mechanisms')
     ap.add_argument('--overlay-root', default=None,
                     help='Derivatives folder whose finished subject x ROI fits replace BASE_ROOT')
+    ap.add_argument('--base-root', default=None, help='Fits to use instead of BASE_ROOT')
+    ap.add_argument('--family', choices=['dog', 'dn'], default='dog')
+    ap.add_argument('--step', type=float, default=None,
+                    help='Central-difference step; DN is less linear in the gains')
     args = ap.parse_args()
-    main(args.subject, args.bids_folder, args.rois, args.output_subdir, args.overlay_root)
+    main(args.subject, args.bids_folder, args.rois, args.output_subdir, args.overlay_root,
+         args.base_root, args.family, args.step)
