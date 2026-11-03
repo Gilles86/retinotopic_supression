@@ -28,6 +28,7 @@ import matplotlib as mpl
 import nibabel as nib
 import numpy as np
 from nibabel.freesurfer import read_morph_data
+from scipy import sparse
 
 BIDS = Path('/data/ds-retsupp')
 FS = BIDS / 'derivatives' / 'fmriprep' / 'sourcedata' / 'freesurfer'
@@ -47,8 +48,8 @@ VIEWS = {
     'pole': {'camera.azimuth': 180, 'camera.altitude': 90, 'camera.radius': 190,
              'camera.target': [0, 0, -6],
              'surface.{subject}.pivot': 0, 'surface.{subject}.shift': 0},
-    'dorsal': {'camera.azimuth': 180, 'camera.altitude': 40, 'camera.radius': 165,
-               'camera.target': [0, -75, 0],
+    'dorsal': {'camera.azimuth': 180, 'camera.altitude': 35, 'camera.radius': 200,
+               'camera.target': [0, -25, 0],
                'surface.{subject}.pivot': 0, 'surface.{subject}.shift': 0},
     'ventral': {'camera.azimuth': 180, 'camera.altitude': 145, 'camera.radius': 165,
                 'camera.target': [0, -75, 0],
@@ -60,7 +61,11 @@ IMAGE_SIZE = (2400, 1800)
 # Visual areas of the neuropythy atlas, grouped as in the analyses.
 AREA_COLORS = {'V1': ((1,), '#3D5A80'), 'V2': ((2,), '#2A9D8F'), 'V3': ((3,), '#8AB17D'),
                'hV4': ((4,), '#E9C46A'), 'VO': ((5, 6), '#F4A261'), 'LO': ((7, 8), '#E76F51'),
-               'TO': ((9, 10), '#B5179E'), 'V3AB': ((11, 12), '#7209B7')}
+               'TO': ((9, 10), '#B5179E'), 'V3AB': ((11, 12), '#7209B7'),
+               'IPS': ((101,), '#0077B6'), 'FEF': ((102,), '#D62828')}
+# Wang 2015 labels added to the neuropythy areas; the neuropythy label wins on overlap,
+# as in the analyses. Output codes as in AREA_COLORS.
+WANG = {101: (18, 19, 20, 21, 22, 23), 102: (25,)}
 
 
 def theta_value(theta, hemi):
@@ -78,10 +83,34 @@ def gii(subject, par, hemi):
     return nib.load(fn).darrays[0].data.astype(np.float64)
 
 
+def read_areas(subject, h):
+    surf = FS / f'sub-{subject:02d}' / 'surf'
+    va = np.round(read_morph_data(surf / f'{h}.inferred_varea')).astype(int)
+    wang = np.round(np.asarray(nib.load(surf / f'{h}.wang15_mplbl.mgz').dataobj).squeeze()).astype(int)
+    assert len(wang) == len(va), (len(wang), len(va))
+    tri = nib.freesurfer.read_geometry(surf / f'{h}.inflated')[1]
+    for code, labels in WANG.items():
+        keep = despeckle(np.isin(wang, labels), tri)
+        va[(va == 0) & keep] = code
+    return va
+
+
+def despeckle(mask, tri, n_iter=8, threshold=.3):
+    """For display only: the atlas projection leaves one-vertex islands and holes."""
+    n = len(mask)
+    i = np.concatenate([tri[:, 0], tri[:, 1], tri[:, 2], np.arange(n)])
+    j = np.concatenate([tri[:, 1], tri[:, 2], tri[:, 0], np.arange(n)])
+    a = sparse.coo_matrix((np.ones(len(i)), (i, j)), shape=(n, n)).tocsr()
+    a = ((a + a.T) > 0).astype(float)
+    a = sparse.diags(1. / np.asarray(a.sum(1)).ravel()) @ a
+    m = mask.astype(float)
+    for _ in range(n_iter):
+        m = a @ m
+    return m > threshold
+
+
 def read_varea(subject):
-    return np.concatenate([np.round(read_morph_data(
-        FS / f'sub-{subject:02d}' / 'surf' / f'{h}.inferred_varea')).astype(int)
-        for h in ('lh', 'rh')])
+    return np.concatenate([read_areas(subject, h) for h in ('lh', 'rh')])
 
 
 def area_rgb(subject, cx_subject, border):
@@ -100,8 +129,7 @@ def border_mask(subject, cx_subject):
     out = []
     surfs = cortex.db.get_surf(cx_subject, 'inflated')
     for h, (_, tri) in zip(('lh', 'rh'), surfs):
-        va = np.round(read_morph_data(FS / f'sub-{subject:02d}' / 'surf' / f'{h}.inferred_varea')
-                      ).astype(int)
+        va = read_areas(subject, h)
         t = va[tri]
         mixed = ~((t[:, 0] == t[:, 1]) & (t[:, 1] == t[:, 2]))
         m = np.zeros(len(va), bool)

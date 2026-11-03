@@ -21,8 +21,8 @@ mpl.rcParams.update({
     'savefig.bbox': 'tight', 'savefig.pad_inches': .02,
 })
 FG = '#1F2933'
-AREAS = {'V1': '#3D5A80', 'V2': '#2A9D8F', 'V3': '#8AB17D', 'V3AB': '#7209B7',
-         'hV4': '#E9C46A', 'VO': '#F4A261', 'LO': '#E76F51', 'TO': '#B5179E'}
+AREAS = {'V1': '#3D5A80', 'V2': '#2A9D8F', 'V3': '#8AB17D', 'hV4': '#E9C46A', 'V3AB': '#7209B7',
+         'VO': '#F4A261', 'LO': '#E76F51', 'TO': '#B5179E', 'IPS': '#0077B6', 'FEF': '#D62828'}
 PANELS = [('areas', 'Visual areas'), ('angle', 'Polar angle'), ('ecc', 'Eccentricity (°)'),
           ('sd', 'pRF size σ (°)'), ('r2', 'R²')]
 VIEW_NAMES = {'pole': 'Posterior', 'dorsal': 'Dorsal', 'ventral': 'Ventral'}
@@ -57,8 +57,8 @@ def angle_key(ax):
 
 def area_key(ax):
     for i, (name, col) in enumerate(AREAS.items()):
-        ax.text(.02 + .24 * (i % 4), .68 - .5 * (i // 4), name, color=col,
-                fontsize=6.5, fontweight='bold', va='center', transform=ax.transAxes)
+        ax.text(.02 + .2 * (i % 5), .68 - .5 * (i // 5), name, color=col,
+                fontsize=6, fontweight='bold', va='center', transform=ax.transAxes)
     ax.set_axis_off()
 
 
