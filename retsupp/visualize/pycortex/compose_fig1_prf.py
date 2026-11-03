@@ -39,19 +39,22 @@ def theta_value(theta, hemi):
 
 
 def angle_key(ax):
-    """Visual field as coded: the left hemisphere's map covers the right field."""
+    """One wheel per visual field, as coded: the colour scale spans 270°, so it runs 45°
+    past each vertical meridian (white line) into the other field. Further than that,
+    ``theta_value`` clips to the red at the ends of the scale."""
     g = np.linspace(-1, 1, 401)
     x, y = np.meshgrid(g, g)
     th = np.arctan2(y, x)
-    v = np.where(x > 0, theta_value(th, 'L'), theta_value(th, 'R'))
-    rgba = mpl.colormaps['hsv'](v)
-    rgba[..., 3] = np.hypot(x, y) <= 1
-    ax.imshow(rgba, extent=(-1, 1, -1, 1), origin='lower', interpolation='bilinear')
-    ax.plot([0, 0], [-1, 1], color='white', lw=.8)
-    ax.set_xlim(-1.45, 1.45)
+    r = np.hypot(x, y)
+    for cx, hemi, side, wedge in ((-1.25, 'R', 'L', x <= np.abs(y)), (1.25, 'L', 'R', x >= -np.abs(y))):
+        rgba = mpl.colormaps['hsv'](theta_value(th, hemi))
+        rgba[..., 3] = (r <= 1) & wedge
+        ax.imshow(rgba, extent=(cx - 1, cx + 1, -1, 1), origin='lower', interpolation='bilinear')
+        ax.plot([cx, cx], [-1, 1], color='white', lw=.8)
+    ax.set_xlim(-2.9, 2.9)
     ax.set_ylim(-1.05, 1.05)
-    ax.text(-1.1, 0, 'L', ha='right', va='center', color=FG, fontsize=6.5)
-    ax.text(1.1, 0, 'R', ha='left', va='center', color=FG, fontsize=6.5)
+    ax.text(-2.35, 0, 'L', ha='right', va='center', color=FG, fontsize=6.5)
+    ax.text(2.35, 0, 'R', ha='left', va='center', color=FG, fontsize=6.5)
     ax.set_axis_off()
 
 
