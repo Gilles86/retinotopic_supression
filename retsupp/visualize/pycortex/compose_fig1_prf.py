@@ -25,6 +25,7 @@ AREAS = {'V1': '#3D5A80', 'V2': '#2A9D8F', 'V3': '#8AB17D', 'V3AB': '#7209B7',
          'hV4': '#E9C46A', 'VO': '#F4A261', 'LO': '#E76F51', 'TO': '#B5179E'}
 PANELS = [('areas', 'Visual areas'), ('angle', 'Polar angle'), ('ecc', 'Eccentricity (°)'),
           ('sd', 'pRF size σ (°)'), ('r2', 'R²')]
+VIEW_NAMES = {'pole': 'Posterior', 'dorsal': 'Dorsal', 'ventral': 'Ventral'}
 BARS = {'ecc': ('nipy_spectral', 0, 4, [0, 2, 4]), 'sd': ('nipy_spectral', 0, 3, [0, 1.5, 3]),
         'r2': ('inferno', 0, .6, [0, .3, .6])}
 
@@ -72,25 +73,31 @@ def bar_key(fig, ax, cmap, lo, hi, ticks):
     cb.ax.tick_params(pad=1.5)
 
 
-def main(subject, in_dir, out):
+def main(subject, in_dir, out, views):
     in_dir = Path(in_dir)
-    images = {p: Image.open(in_dir / f'sub-{subject:02d}_{p}_pole.png').convert('RGBA')
-              for p, _ in PANELS}
-    boxes = np.array([im.getbbox() for im in images.values()])
-    box = (boxes[:, 0].min(), boxes[:, 1].min(), boxes[:, 2].max(), boxes[:, 3].max())
-    fig, axes = plt.subplots(2, 5, figsize=(7.25, 1.75), height_ratios=[1, .32],
+    n = len(views)
+    fig, axes = plt.subplots(n + 1, 5, figsize=(7.25, .2 + 1.3 * n + .42),
+                             height_ratios=[1] * n + [.32],
                              gridspec_kw=dict(wspace=.03, hspace=.02))
-    for j, (par, title) in enumerate(PANELS):
-        im = images[par].crop(box)
-        bg = Image.new('RGBA', im.size, 'white')
-        bg.alpha_composite(im)
-        axes[0, j].imshow(np.asarray(bg.convert('RGB')), interpolation='none')
-        axes[0, j].set_axis_off()
-        axes[0, j].set_title(title, color=FG, pad=3)
-    area_key(axes[1, 0])
-    angle_key(axes[1, 1])
+    for i, view in enumerate(views):
+        images = {p: Image.open(in_dir / f'sub-{subject:02d}_{p}_{view}.png').convert('RGBA')
+                  for p, _ in PANELS}
+        boxes = np.array([im.getbbox() for im in images.values()])
+        box = (boxes[:, 0].min(), boxes[:, 1].min(), boxes[:, 2].max(), boxes[:, 3].max())
+        for j, (par, title) in enumerate(PANELS):
+            im = images[par].crop(box)
+            bg = Image.new('RGBA', im.size, 'white')
+            bg.alpha_composite(im)
+            axes[i, j].imshow(np.asarray(bg.convert('RGB')), interpolation='none')
+            axes[i, j].set_axis_off()
+            if i == 0:
+                axes[i, j].set_title(title, color=FG, pad=3)
+        axes[i, 0].text(-.02, .5, VIEW_NAMES[view], transform=axes[i, 0].transAxes, rotation=90,
+                        ha='right', va='center', color=FG, fontsize=8)
+    area_key(axes[n, 0])
+    angle_key(axes[n, 1])
     for j, (par, _) in enumerate(PANELS[2:], start=2):
-        bar_key(fig, axes[1, j], *BARS[par])
+        bar_key(fig, axes[n, j], *BARS[par])
     fig.savefig(out, dpi=600)
     fig.savefig(str(out).replace('.pdf', '.png'), dpi=220)
     print('Saved', out)
@@ -101,5 +108,6 @@ if __name__ == '__main__':
     ap.add_argument('subject', type=int)
     ap.add_argument('--in-dir', default='notes/figures/fig1_inflated')
     ap.add_argument('--out', default=None)
+    ap.add_argument('--views', nargs='+', default=['pole', 'dorsal', 'ventral'])
     a = ap.parse_args()
-    main(a.subject, a.in_dir, a.out or f'{a.in_dir}/fig1_prf_maps_sub-{a.subject:02d}.pdf')
+    main(a.subject, a.in_dir, a.out or f'{a.in_dir}/fig1_prf_maps_sub-{a.subject:02d}.pdf', a.views)

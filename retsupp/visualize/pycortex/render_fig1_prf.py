@@ -47,6 +47,12 @@ VIEWS = {
     'pole': {'camera.azimuth': 180, 'camera.altitude': 90, 'camera.radius': 190,
              'camera.target': [0, 0, -6],
              'surface.{subject}.pivot': 0, 'surface.{subject}.shift': 0},
+    'dorsal': {'camera.azimuth': 180, 'camera.altitude': 40, 'camera.radius': 165,
+               'camera.target': [0, -75, 0],
+               'surface.{subject}.pivot': 0, 'surface.{subject}.shift': 0},
+    'ventral': {'camera.azimuth': 180, 'camera.altitude': 145, 'camera.radius': 165,
+                'camera.target': [0, -75, 0],
+                'surface.{subject}.pivot': 0, 'surface.{subject}.shift': 0},
     'lateral': {'camera.azimuth': 180, 'camera.altitude': 90,
                 'surface.{subject}.pivot': 180, 'surface.{subject}.shift': 10},
 }
