@@ -33,6 +33,9 @@ from retsupp.modeling.local_models import (
 N_PARENT = 16
 SRF_SIZE, NEURAL_BASELINE, SURROUND_BASELINE = 6, 16, 17
 SRF_SIZE_EPS = 1e-4
+# Lower limit of b and d: at d -> 0 the softplus underflows and b/d turns NaN, which a
+# shared parameter then spreads to every voxel (seen in sub-07 V2).
+BASELINE_FLOOR = 1e-3
 
 
 def _replace_col(x, ix, col):
@@ -81,7 +84,7 @@ class DNDynamicAttentionFieldPRF2D(_Items):
         enc = super()._transform_parameters_forward(parameters[:, :N_PARENT])
         srf_size = 1.0 + tf.math.softplus(parameters[:, SRF_SIZE:SRF_SIZE + 1])
         return tf.concat([_replace_col(enc, SRF_SIZE, srf_size),
-                          tf.math.softplus(parameters[:, N_PARENT:])], axis=1)
+                          BASELINE_FLOOR + tf.math.softplus(parameters[:, N_PARENT:])], axis=1)
 
     @tf.function
     def _transform_parameters_backward(self, parameters):
@@ -91,7 +94,8 @@ class DNDynamicAttentionFieldPRF2D(_Items):
         srf_raw = tfp.math.softplus_inverse(
             tf.maximum(parameters[:, SRF_SIZE:SRF_SIZE + 1] - 1.0, SRF_SIZE_EPS))
         return tf.concat([_replace_col(enc, SRF_SIZE, srf_raw),
-                          tfp.math.softplus_inverse(parameters[:, N_PARENT:])], axis=1)
+                          tfp.math.softplus_inverse(tf.maximum(
+                              parameters[:, N_PARENT:] - BASELINE_FLOOR, 1e-6))], axis=1)
 
 
 def init_from_m5(sub, voxel_mask):

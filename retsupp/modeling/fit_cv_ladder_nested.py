@@ -588,6 +588,8 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
                       f' -> {info["sse_final"]:.2f} | |grad| '
                       f'{info["grad_norm"]:.3g} | {info["seconds"]:.0f}s')
 
+            if pars[labels].isna().any().any():
+                raise ValueError(f'{name} fold {k}: NaN in the fitted parameters')
             tr_r2 = per_voxel_r2(y_tr, np.asarray(
                 m_tr.predict(paradigm=train['paradigm'], parameters=pars)))
             if held is None:
