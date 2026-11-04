@@ -25,8 +25,13 @@ dD         m4_TDS       g_HP_dyn                                (base)
 X is a central difference with step ``H``; ``lin_err`` compares the
 forward and backward differences.
 
+DN responses curve with the gains, so this approximation fails there. ``--exact``
+evaluates the actual predictions on a grid of δ instead and saves each voxel's
+ΔSSE(δ); ``loso_fixed_group_exact`` does the test from those curves.
+
 Outputs (never overwritten) under
-``derivatives/af_fixed_group_mechanisms/sub-XX/sub-XX_roi-R_stats.tsv.gz``.
+``derivatives/af_fixed_group_mechanisms/sub-XX/sub-XX_roi-R_stats.tsv.gz``, or
+``sub-XX_roi-R_curves.npz`` with ``--exact``.
 
 Usage::
 
@@ -66,6 +71,16 @@ MECHANISMS = {
     'dS': ('m4_TDS', ['g_HP'], None),
     'dD': ('m4_TDS', ['g_HP_dyn'], None),
 }
+# Lower and upper δ of the --exact grid. items stops at item_scale = 0.
+EXACT_RANGE = {'items': (-1., .5), 'T': (-1.5, 1.5), 'D': (-1.5, 1.5),
+               'S': (-.4, .4), 'dS': (-.8, .8), 'dD': (-1.5, 1.5)}
+N_GRID = 25
+
+
+def exact_grid(lo, hi):
+    """N_GRID values of δ from lo to hi, including 0 and densest around it."""
+    u = np.sinh(np.linspace(-2.5, 2.5, N_GRID)) / np.sinh(2.5)
+    return np.where(u < 0, -u * lo, u * hi)
 
 
 def fit_path(bids_folder, model, subject, roi, overlay_root=None):
@@ -97,23 +112,45 @@ def loso_width(bids_folder, par, model, subject, roi, overlay_root=None):
     return float(np.median(vals)), len(vals)
 
 
-def fit_roi(sub, roi, data, out_path, overlay_root=None):
-    bold, paradigm, ci, di, ti, grid_coords, run_meta = data
+def build_full_model(sub, data):
+    _bold, paradigm, ci, di, ti, grid_coords, _run_meta = data
     hrf_model = SPMHRFModel(tr=sub.get_tr(session=1, run=1),
                             delay=4.5, dispersion=0.75)
     # Everything free, so each mechanism can move away from its base value.
     if FAMILY == 'dn':
-        model = DNDynamicAttentionFieldPRF2D(
+        return DNDynamicAttentionFieldPRF2D(
             grid_coordinates=grid_coords, paradigm=paradigm,
             condition_indicator=ci, dynamic_indicator=di, target_indicator=ti,
             ring_positions=get_ring_positions(), hrf_model=hrf_model,
             sign_pattern=sign_pattern_of('m7_full'), item_scale_mode='free')
-    else:
-        model = build_model(
-            grid_coords=grid_coords, paradigm=paradigm,
-            condition_indicator=ci, dynamic_indicator=di, target_indicator=ti,
-            ring_positions=get_ring_positions(), hrf_model=hrf_model,
-            sign_pattern=sign_pattern_of('m7_full'), item_scale='free')
+    return build_model(
+        grid_coords=grid_coords, paradigm=paradigm,
+        condition_indicator=ci, dynamic_indicator=di, target_indicator=ti,
+        ring_positions=get_ring_positions(), hrf_model=hrf_model,
+        sign_pattern=sign_pattern_of('m7_full'), item_scale='free')
+
+
+def base_parameters(sub, model, roi, base, width, overlay_root):
+    """A mechanism's base fit, with its width taken from the other subjects."""
+    fit = load_fit(sub.bids_folder, base, sub.subject_id, roi, overlay_root)
+    pars = fit['fit_pars_per_fold'][0].reindex(columns=list(model.parameter_labels))
+    if pars['item_scale'].isna().all():
+        pars['item_scale'] = 1.0           # m00: items at bar strength
+    for g, partner in TIE_PARTNER.items():
+        pars[g] = pars[partner]
+    width_val, n_width = np.nan, 0
+    if width is not None:
+        width_val, n_width = loso_width(sub.bids_folder, *width,
+                                        sub.subject_id, roi, overlay_root)
+        pars[width[0]] = width_val
+    pars['sigma_T_dyn'] = pars['sigma_dyn']
+    assert not pars.isna().any().any(), pars.columns[pars.isna().any()]
+    return fit, pars.astype(np.float32), width_val, n_width
+
+
+def fit_roi(sub, roi, data, out_path, overlay_root=None):
+    bold, paradigm, _ci, _di, _ti, _grid, run_meta = data
+    model = build_full_model(sub, data)
 
     def pred(p):
         return np.asarray(model.predict(paradigm=paradigm, parameters=p),
@@ -124,21 +161,7 @@ def fit_roi(sub, roi, data, out_path, overlay_root=None):
              for hp in sorted({rm.hp for rm in run_meta})}
     out = []
     for mech, (base, perturb, width) in MECHANISMS.items():
-        fit = load_fit(sub.bids_folder, base, sub.subject_id, roi, overlay_root)
-        pars = fit['fit_pars_per_fold'][0].reindex(
-            columns=list(model.parameter_labels))
-        if pars['item_scale'].isna().all():
-            pars['item_scale'] = 1.0           # m00: items at bar strength
-        for g, partner in TIE_PARTNER.items():
-            pars[g] = pars[partner]
-        width_val, n_width = np.nan, 0
-        if width is not None:
-            width_val, n_width = loso_width(sub.bids_folder, *width,
-                                            sub.subject_id, roi, overlay_root)
-            pars[width[0]] = width_val
-        pars['sigma_T_dyn'] = pars['sigma_dyn']
-        assert not pars.isna().any().any(), pars.columns[pars.isna().any()]
-        pars = pars.astype(np.float32)
+        fit, pars, width_val, n_width = base_parameters(sub, model, roi, base, width, overlay_root)
         Y = bold[:, fit['voxel_ids']].astype(np.float64)
 
         P0 = pred(pars)
@@ -169,13 +192,47 @@ def fit_roi(sub, roi, data, out_path, overlay_root=None):
     df.to_csv(out_path, sep='\t', index=False)
 
 
+def fit_roi_exact(sub, roi, data, out_path, overlay_root=None):
+    """Each voxel's ΔSSE(δ) from the actual predictions, per mechanism."""
+    bold, paradigm, _ci, _di, _ti, _grid, run_meta = data
+    model = build_full_model(sub, data)
+    conds = [np.concatenate([np.arange(rm.start, rm.stop) for rm in run_meta if rm.hp == hp])
+             for hp in sorted({rm.hp for rm in run_meta})]
+    saved = {}
+    for mech, (base, perturb, width) in MECHANISMS.items():
+        fit, pars, width_val, n_width = base_parameters(sub, model, roi, base, width, overlay_root)
+        Y = bold[:, fit['voxel_ids']].astype(np.float64)
+        grid = exact_grid(*EXACT_RANGE[mech])
+        sse = []
+        for delta in grid:
+            p = pars.copy()
+            for name in perturb:
+                p[name] += delta
+            P = np.asarray(model.predict(paradigm=paradigm, parameters=p), dtype=np.float64)
+            assert np.isfinite(P).all(), f'{mech} δ={delta}: non-finite prediction'
+            sse.append(((Y - P) ** 2).sum(0))
+        sse = np.stack(sse, 1)                                 # (V, K)
+        dsse = sse - sse[:, [N_GRID // 2]]
+        saved.update({f'{mech}_grid': grid, f'{mech}_dsse': dsse.astype(np.float32),
+                      f'{mech}_voxel_ids': np.asarray(fit['voxel_ids']),
+                      f'{mech}_sst': sum(((Y[t] - Y[t].mean(0)) ** 2).sum(0) for t in conds),
+                      f'{mech}_width': width_val, f'{mech}_n_width': n_width})
+        total = dsse.sum(0)
+        print(f'sub-{sub.subject_id:02d} {roi} {mech}: {Y.shape[1]} voxels, '
+              f'width={width_val:.3f}, best δ on grid={grid[total.argmin()]:+.3f}, '
+              f'ΔSSE={total.min():.2f}', flush=True)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(out_path, subject=sub.subject_id, roi=roi, **saved)
+
+
 def main(subject, bids_folder, rois, output_subdir='af_fixed_group_mechanisms',
-         overlay_root=None, base_root=None, family='dog', step=None):
+         overlay_root=None, base_root=None, family='dog', step=None, exact=False):
     global BASE_ROOT, FAMILY, H
     BASE_ROOT, FAMILY, H = base_root or BASE_ROOT, family, step or H
     sub = Subject(subject, bids_folder=Path(bids_folder))
     out_dir = Path(bids_folder) / 'derivatives' / output_subdir / f'sub-{subject:02d}'
-    todo = {roi: out_dir / f'sub-{subject:02d}_roi-{roi}_stats.tsv.gz' for roi in rois}
+    tail = 'curves.npz' if exact else 'stats.tsv.gz'
+    todo = {roi: out_dir / f'sub-{subject:02d}_roi-{roi}_{tail}' for roi in rois}
     todo = {roi: p for roi, p in todo.items() if not p.exists()}
     if not todo:
         print('All outputs exist, nothing to do')
@@ -185,7 +242,7 @@ def main(subject, bids_folder, rois, output_subdir='af_fixed_group_mechanisms',
                                          item_shape='rectangle')
     data = (bold, paradigm, ci, di, ti, grid_coords, run_meta)
     for roi, path in todo.items():
-        fit_roi(sub, roi, data, path, overlay_root)
+        (fit_roi_exact if exact else fit_roi)(sub, roi, data, path, overlay_root)
 
 
 if __name__ == '__main__':
@@ -200,6 +257,8 @@ if __name__ == '__main__':
     ap.add_argument('--family', choices=['dog', 'dn'], default='dog')
     ap.add_argument('--step', type=float, default=None,
                     help='Central-difference step; DN is less linear in the gains')
+    ap.add_argument('--exact', action='store_true',
+                    help='Save ΔSSE on a grid of δ from the actual predictions')
     args = ap.parse_args()
     main(args.subject, args.bids_folder, args.rois, args.output_subdir, args.overlay_root,
-         args.base_root, args.family, args.step)
+         args.base_root, args.family, args.step, args.exact)
