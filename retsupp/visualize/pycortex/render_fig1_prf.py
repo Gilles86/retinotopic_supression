@@ -1,7 +1,8 @@
 """Pycortex renders of one subject's pRF maps on the inflated surface, for figure 1.
 
 Polar angle, eccentricity, pRF size and R² of the mean-across-runs m4 fit, with the
-neuropythy visual-area borders. Colour and borders are baked per vertex with curvature
+neuropythy visual-area borders. ``--prf-dir prf.hrffix/model6`` shows the DN fit, with
+the panels ``srf_size``, ``b_over_d`` and ``d_over_c`` on top of these. Colour and borders are baked per vertex with curvature
 (``VertexRGB``). The subjects have no flatmap and so no ROI overlay.
 
 The viewer's ``surface.<subject>.<control>`` paths split on dots, so ``retsupp.sub-23``
@@ -37,7 +38,12 @@ R2_RAMP = (.05, .20)         # R² -> opacity of the colour over the curvature
 ECC_MAX_SHOWN = 5.0          # stimulus grid radius
 CURV = dict(brightness=.55, contrast=.17, smooth=20)
 PANELS = {'angle': ('hsv', 0, 1), 'ecc': ('nipy_spectral', 0, 4),
-          'sd': ('nipy_spectral', 0, 3), 'r2': ('inferno', 0, .6)}
+          'sd': ('nipy_spectral', 0, 3), 'r2': ('inferno', 0, .6),
+          'srf_size': ('nipy_spectral', 1, 8)}
+# DN ratios, free of the scale a, b and d share; colour runs over log10 of the value.
+LOG_PANELS = {'b_over_d': ('nipy_spectral', .5, 50), 'd_over_c': ('nipy_spectral', 5, 1000)}
+PIXEL_AREA = (10 / 49) ** 2  # as plot_dn_hierarchy: a and c in units of a Gaussian of height 1
+PRF_DIR = 'prf/model4'
 BASE_VIEW = {'camera.target': [0, 0, 0], 'camera.radius': 190, 'surface.{subject}.unfold': 1,
              'surface.{subject}.specularity': 0}
 VIEWS = {
@@ -84,7 +90,7 @@ def theta_value(theta, hemi):
 
 
 def gii(subject, par, hemi):
-    fn = (BIDS / 'derivatives' / 'prf' / 'model4' / f'sub-{subject:02d}'
+    fn = (BIDS / 'derivatives' / PRF_DIR / f'sub-{subject:02d}'
           / f'sub-{subject:02d}_desc-{par}.optim.nilearn_space-fsnative_hemi-{hemi}.func.gii')
     return nib.load(fn).darrays[0].data.astype(np.float64)
 
@@ -144,15 +150,29 @@ def border_mask(subject, cx_subject):
     return np.concatenate(out)
 
 
+def dn_ratio(subject, par, hemi):
+    b, d = gii(subject, 'neural_baseline', hemi), gii(subject, 'surround_baseline', hemi)
+    if par == 'b_over_d':
+        return b / d
+    a, c, sd, ratio = (gii(subject, p, hemi)
+                       for p in ('rf_amplitude', 'srf_amplitude', 'sd', 'srf_size'))
+    return d / (a * c * PIXEL_AREA / (sd * np.sqrt(2 * np.pi)) / ratio)
+
+
 def vertex_rgb(subject, cx_subject, par, border):
-    cmap, lo, hi = PANELS[par]
-    values, r2s, eccs = [], [], []
+    cmap, lo, hi = {**PANELS, **LOG_PANELS}[par]
+    values, r2s, eccs, valid = [], [], [], []
     for hemi in 'LR':
         r2, ecc = gii(subject, 'r2', hemi), gii(subject, 'ecc', hemi)
         if par == 'angle':
             v = theta_value(gii(subject, 'theta', hemi), hemi)
         elif par == 'r2':
             v = r2 / hi
+        elif par in LOG_PANELS:
+            with np.errstate(divide='ignore', invalid='ignore'):
+                ratio = dn_ratio(subject, par, hemi)
+                v = np.log10(ratio / lo) / np.log10(hi / lo)
+            valid.append(np.isfinite(ratio) & (ratio > 0))
         else:
             v = (gii(subject, par, hemi) - lo) / (hi - lo)
         values.append(v)
@@ -163,6 +183,8 @@ def vertex_rgb(subject, cx_subject, par, border):
     alpha = np.clip((r2 - R2_RAMP[0]) / (R2_RAMP[1] - R2_RAMP[0]), 0, 1)
     if par != 'r2':
         alpha = alpha * (ecc <= ECC_MAX_SHOWN)
+    if valid:
+        alpha = alpha * np.concatenate(valid)
     curv = cortex.db.get_surfinfo(cx_subject, smooth=CURV['smooth']).data
     grey = (curv > 0) * CURV['contrast'] + CURV['brightness']
     out = alpha[:, None] * rgb + (1 - alpha[:, None]) * grey[:, None]
@@ -220,9 +242,9 @@ def render(ds, cx_subject, out_dir, stem, views, wait):
         p.terminate()
 
 
-def main(subject, out_dir, views, pars, wait, r2_ramp=R2_RAMP):
-    global R2_RAMP
-    R2_RAMP = tuple(r2_ramp)
+def main(subject, out_dir, views, pars, wait, r2_ramp=R2_RAMP, prf_dir=PRF_DIR):
+    global R2_RAMP, PRF_DIR
+    R2_RAMP, PRF_DIR = tuple(r2_ramp), prf_dir
     store = Path(cortex.database.default_filestore)
     cx_subject = f'retsuppsub{subject:02d}'
     alias = store / cx_subject
@@ -254,6 +276,7 @@ if __name__ == '__main__':
     ap.add_argument('--pars', nargs='+', default=['areas'] + list(PANELS))
     ap.add_argument('--r2-ramp', nargs=2, type=float, default=R2_RAMP,
                     help='R² at which the colour starts to show and is fully opaque')
+    ap.add_argument('--prf-dir', default=PRF_DIR, help='Fit folder under derivatives')
     ap.add_argument('--wait', type=float, default=45, help='Seconds for the viewer to load')
     a = ap.parse_args()
-    main(a.subject, a.out_dir, a.views, a.pars, a.wait, a.r2_ramp)
+    main(a.subject, a.out_dir, a.views, a.pars, a.wait, a.r2_ramp, a.prf_dir)
