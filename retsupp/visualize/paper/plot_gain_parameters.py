@@ -83,7 +83,7 @@ def main(table, model, out, stats_out):
                               color=col, ax=ax, markersize=2.2, linewidth=.9, linestyle='none',
                               dodge=False, native_scale=False)
                 if lab and i == 0:
-                    ax.text(.04 + .55 * k if j == 5 else .04, .02 if j == 5 else .02 + .1 * k, lab,
+                    ax.text({5: .04 + .55 * k, 2: .6}.get(j, .04), .02 if j == 5 else .02 + .1 * k, lab,
                             color=col, transform=ax.transAxes, va='bottom', fontsize=6.5)
                 if par in ('dS', 'dD'):
                     t = s[(s.family == fam) & (s.par == par)].set_index('roi')
