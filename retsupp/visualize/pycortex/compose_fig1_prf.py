@@ -39,22 +39,23 @@ def theta_value(theta, hemi):
 
 
 def angle_key(ax):
-    """One wheel per visual field, as coded: the colour scale spans 270°, so it runs 45°
-    past each vertical meridian (white line) into the other field. Further than that,
-    ``theta_value`` clips to the red at the ends of the scale."""
+    """One wheel per hemisphere, under the side of the brain it applies to: the left
+    hemisphere (left in every view) codes the right visual field (RVF), and vice versa.
+    The colour scale spans 270°, so it runs 45° past each vertical meridian (white line)
+    into the other field. Further than that, ``theta_value`` clips to the red at the ends."""
     g = np.linspace(-1, 1, 401)
     x, y = np.meshgrid(g, g)
     th = np.arctan2(y, x)
     r = np.hypot(x, y)
-    for cx, hemi, side, wedge in ((-1.25, 'R', 'L', x <= np.abs(y)), (1.25, 'L', 'R', x >= -np.abs(y))):
+    for cx, hemi, wedge in ((-1.25, 'L', x >= -np.abs(y)), (1.25, 'R', x <= np.abs(y))):
         rgba = mpl.colormaps['hsv'](theta_value(th, hemi))
         rgba[..., 3] = (r <= 1) & wedge
         ax.imshow(rgba, extent=(cx - 1, cx + 1, -1, 1), origin='lower', interpolation='bilinear')
         ax.plot([cx, cx], [-1, 1], color='white', lw=.8)
-    ax.set_xlim(-2.9, 2.9)
+    ax.set_xlim(-3.6, 3.6)
     ax.set_ylim(-1.05, 1.05)
-    ax.text(-2.35, 0, 'L', ha='right', va='center', color=FG, fontsize=6.5)
-    ax.text(2.35, 0, 'R', ha='left', va='center', color=FG, fontsize=6.5)
+    ax.text(-2.35, 0, 'RVF', ha='right', va='center', color=FG, fontsize=6.5)
+    ax.text(2.35, 0, 'LVF', ha='left', va='center', color=FG, fontsize=6.5)
     ax.set_axis_off()
 
 

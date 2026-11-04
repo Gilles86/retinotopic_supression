@@ -218,3 +218,22 @@ exact test matches it (largest cell difference .36e-5 on items, under .001e-5 on
 - DN items: own δ at the edge of the grid (item_scale = 0) in 97% of cells, so that row is a
   lower bound. Fitted m7 item_scale has a median of 6.5 (DoG) and 1.6 (DN), which looks at odds
   with the LOSO δ below zero from base 1. Not resolved.
+
+## Fitted gain parameters, DoG vs DN (2026-11-04)
+
+`retsupp/visualize/paper/plot_gain_parameters.py`, m7_full, table `notes/data/gain_field_parameters.tsv`.
+Positive gain enhances (checked numerically on the model); subject value = median over ROIs.
+
+| Parameter | DoG median | DoG % negative | DoG p | DN median | DN % negative | DN p |
+|---|---:|---:|---:|---:|---:|---:|
+| g_HP | −.061 | 93 | <.0001 | −.134 | 97 | <.0001 |
+| g_LP | −.039 | 97 | <.0001 | −.099 | 97 | <.0001 |
+| dS | −.016 | 73 | .010 | −.028 | 80 | .004 |
+| g_HP_dyn | +.099 | 23 | .004 | +.180 | 17 | .0002 |
+| g_LP_dyn | +.131 | 13 | <.0001 | +.210 | 17 | <.0001 |
+| dD | −.062 | 70 | .028 | −.024 | 57 | .44 |
+| g_T_dyn | +.247 | 3 | <.0001 | +.487 | 3 | <.0001 |
+
+dS in m5_TDS_dS: DoG −.018 (p = .0005), DN −.034 (p = .0006). Not tested: a null with HP labels
+permuted; HP is one ring location and LP three, so the difference need not be symmetric under the null.
+Gains are 1.6-1.8 times larger under DN. σ_dyn is at a bound in 44% (DoG) and 31% (DN) of fits.
