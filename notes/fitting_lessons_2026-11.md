@@ -191,3 +191,30 @@ This corrects the 2026-10-29 note: most of the "richer models fit worse" pattern
 | m7_full | L-BFGS | 129 | 245 | 219 |
 
 Add about 4 min per subject to load the full-brain BOLD (19 s per run, 12 runs, about 270k voxels).
+
+## Leave-one-subject-out test from actual predictions: DoG vs DN (2026-11-04)
+
+`retsupp/modeling/fit_fixed_group_mechanisms.py --exact`, then
+`retsupp/modeling/loso_fixed_group_exact.py`. ΔSSE on 25 values of δ; outlier-free fits.
+The DN `lin_err` (median .008-.025) ruled out the linear approximation there. For DoG the
+exact test matches it (largest cell difference .36e-5 on items, under .001e-5 on dS).
+
+| Term | DoG % improved | DoG p | DoG ΔR² (e-5) | DN % improved | DN p | DN ΔR² (e-5) |
+|---|---:|---:|---:|---:|---:|---:|
+| items | 100 | <.0001 | 329.29 | 100 | <.0001 | 2190.72 |
+| T | 90 | <.0001 | 7.00 | 97 | <.0001 | 7.75 |
+| D | 50 | .81 | .01 | 53 | .84 | .03 |
+| S | 90 | <.0001 | .31 | 90 | <.0001 | .14 |
+| dS | 77 | .010 | .25 | 63 | .23 | .09 |
+| dD | 63 | .088 | .10 | 67 | .084 | .05 |
+
+- dS is smaller under DN (paired p = .0002), across subjects the two agree (ρ = .92).
+- Post hoc: each subject's own best dS is negative in 83% under DN (p = .001) and 80% under
+  DoG (p < .0001), ρ = .75. Direction holds; out-of-subject prediction does not reach
+  significance under DN. Own values use all AF voxels, the LOSO scores signal voxels.
+- dS by ROI, uncorrected, DoG vs DN: IPS 83% vs 28%, V3AB 76% vs 68%, hV4 62% vs 66% (DN p = .005).
+- Base m4_TDS R² in signal voxels: DoG .213, DN .216 (DN higher in 93% of subjects), in sample,
+  with two more parameters per voxel.
+- DN items: own δ at the edge of the grid (item_scale = 0) in 97% of cells, so that row is a
+  lower bound. Fitted m7 item_scale has a median of 6.5 (DoG) and 1.6 (DN), which looks at odds
+  with the LOSO δ below zero from base 1. Not resolved.
