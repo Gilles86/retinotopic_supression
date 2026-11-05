@@ -17,20 +17,20 @@ from retsupp.visualize.paper.paper_style import DISTRACTOR, DOUBLE, FG, HP, MUTE
 from retsupp.visualize.paper.plot_fig1 import APERTURE, display
 
 LEGEND = """
-**Figure 2. Gain-field model.** Top, the screen is reduced to a model input (bar plus items), multiplied by a gain field: the sum of sustained fields at the four ring locations and transient fields at the target and singleton distractor. Bottom, a schematic stretch of a run with illustrative gains and HP at the lower right: one bar sweep from left to right and four trials, with symbols above their onsets. For three pRFs (circle in the symbols), the rows show the stimulus reaching the pRF, the gain it sees, and the predicted response with and without gain, after the HRF. Rows share their scale across columns.
+**Figure 2. Gain-field model.** Top, the screen is reduced to a model input (bar plus items), multiplied by a gain field: the sum of sustained fields at the four ring locations and transient fields at the target and singleton distractor. Bottom, a schematic stretch of a run with gains exaggerated for clarity and HP at the lower right: one bar sweep from left to right and four trials, with symbols above their onsets. For three pRFs (circle in the symbols), the rows show the stimulus reaching the pRF, the gain it sees, and the predicted response with and without gain, after the HRF. Rows share their scale across columns.
 """
 LEGEND_HP = """
-**Figure 2, block version.** Top, as in the other version. Bottom, a schematic stretch of a run for one pRF near a ring location with illustrative gains, in a block with HP at that location and in a block with HP at the opposite location: one bar sweep from left to right and four trials, with symbols above their onsets. Rows show the stimulus reaching the pRF, the gain it sees, and the predicted response with and without gain, after the HRF. Right, the two predicted responses on one axis. Rows share their scale across columns.
+**Figure 2, block version.** Top, as in the other version. Bottom, a schematic stretch of a run for one pRF near a ring location with gains exaggerated for clarity, in a block with HP at that location and in a block with HP at the opposite location: one bar sweep from left to right and four trials, with symbols above their onsets. Rows show the stimulus reaching the pRF, the gain it sees, and the predicted response with and without gain, after the HRF. Right, the two predicted responses on one axis. Rows share their scale across columns.
 """
 LIM = 5.2
 RING = 4.
 POS = RING / np.sqrt(2) * np.array([[1, 1], [-1, 1], [-1, -1], [1, -1]])   # order of the event indicators
 HP_IX, T_IX = 3, 1                                                         # as in Figure 1a
-GAINS = dict(hp=-.45, lp=-.12, t=.7, d=.45)                                 # illustrative
+GAINS = dict(hp=-.8, lp=-.1, t=1.6, d=1.1)                                 # illustrative
 SIGMA = dict(sus=1.3, dyn=1.6)
 PRFS = {'pRF near HP': (2.1, -2.1, .9), 'pRF near LP': (-2.1, 2.1, .9), 'pRF near fixation': (.9, .3, .6)}
 DURATION = 38.
-ITEM_SCALE = 6.   # about the fitted median
+ITEM_SCALE = 8.
 BAR_W = 2 * APERTURE / 8
 # Onset, target location, singleton location (order of POS; None: no singleton).
 TRIALS = [(5, 1, 3), (14, 0, 3), (23, 3, 1), (31, 2, 3)]
@@ -139,8 +139,8 @@ def main(name='fig2_model'):
     sus = sum((GAINS['hp'] if i == HP_IX else GAINS['lp']) * gauss(*p, SIGMA['sus']) for i, p in enumerate(POS))
     tgt = GAINS['t'] * gauss(*POS[T_IX], SIGMA['dyn'])
     dis = GAINS['d'] * gauss(*POS[HP_IX], SIGMA['dyn'])
-    maps = [('Model input', -stimulus(), 'gray', 1, FG), ('Sustained:\nless gain at HP', sus, 'RdBu_r', .6, HP),
-            ('Target', tgt, 'RdBu_r', .8, TARGET), ('Distractor', dis, 'RdBu_r', .8, DISTRACTOR)]
+    maps = [('Model input', -stimulus(), 'gray', 1, FG), ('Sustained:\nless gain at HP', sus, 'RdBu_r', 1., HP),
+            ('Target', tgt, 'RdBu_r', 1.8, TARGET), ('Distractor', dis, 'RdBu_r', 1.8, DISTRACTOR)]
     for j, (title, im, cmap, lim, col) in enumerate(maps, start=1):
         ax = fig.add_subplot(a[0, j])
         show(ax, im, cmap, lim, title, col)
@@ -148,7 +148,7 @@ def main(name='fig2_model'):
             for nm, (x, y, sd) in PRFS.items():
                 ax.contour(X, Y, gauss(x, y, sd), levels=[.5], colors=['#2A9D8F'], linewidths=.9)
     ax = fig.add_subplot(a[0, 5])
-    ax.imshow(stimulus() * (1 + sus + tgt + dis), origin='lower', extent=(-LIM, LIM, -LIM, LIM), cmap='magma', vmin=0, vmax=1.7)
+    ax.imshow(stimulus() * (1 + sus + tgt + dis), origin='lower', extent=(-LIM, LIM, -LIM, LIM), cmap='magma', vmin=0, vmax=2.6)
     ax.set_axis_off()
     ax.set_title('Effective drive', fontsize=7, color=FG, pad=2)
     for i, sign in ((1, None), (2, '× (1 +'), (3, '+'), (4, '+'), (5, ') =')):
@@ -231,8 +231,8 @@ def top_row(fig, gs):
     sus = sum((GAINS['hp'] if i == HP_IX else GAINS['lp']) * gauss(*p, SIGMA['sus']) for i, p in enumerate(POS))
     tgt = GAINS['t'] * gauss(*POS[T_IX], SIGMA['dyn'])
     dis = GAINS['d'] * gauss(*POS[HP_IX], SIGMA['dyn'])
-    maps = [('Model input', -stimulus(), 'gray', 1, FG), ('Sustained:\nless gain at HP', sus, 'RdBu_r', .6, HP),
-            ('Target', tgt, 'RdBu_r', .8, TARGET), ('Distractor', dis, 'RdBu_r', .8, DISTRACTOR)]
+    maps = [('Model input', -stimulus(), 'gray', 1, FG), ('Sustained:\nless gain at HP', sus, 'RdBu_r', 1., HP),
+            ('Target', tgt, 'RdBu_r', 1.8, TARGET), ('Distractor', dis, 'RdBu_r', 1.8, DISTRACTOR)]
     for j, (title, im, cmap, lim, col) in enumerate(maps, start=1):
         ax = fig.add_subplot(a[0, j])
         show(ax, im, cmap, lim, title, col)
@@ -240,7 +240,7 @@ def top_row(fig, gs):
             x, y, sd = RING_PRF
             ax.contour(X, Y, gauss(x, y, sd), levels=[.5], colors=['#2A9D8F'], linewidths=.9)
     ax = fig.add_subplot(a[0, 5])
-    ax.imshow(stimulus() * (1 + sus + tgt + dis), origin='lower', extent=(-LIM, LIM, -LIM, LIM), cmap='magma', vmin=0, vmax=1.7)
+    ax.imshow(stimulus() * (1 + sus + tgt + dis), origin='lower', extent=(-LIM, LIM, -LIM, LIM), cmap='magma', vmin=0, vmax=2.6)
     ax.set_axis_off()
     ax.set_title('Effective drive', fontsize=7, color=FG, pad=2)
     for i, sign in ((1, None), (2, '× (1 +'), (3, '+'), (4, '+'), (5, ') =')):
