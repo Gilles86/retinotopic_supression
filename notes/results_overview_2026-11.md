@@ -50,6 +50,38 @@ Terms: items = m0 vs m00; T, D, S = m1, m2, m3 vs m0; dS = m5 vs m4, or the para
 
 **LOSO test.** Effect size δ = median of the other subjects' own conditional estimate, so nothing is fitted to the subject tested. Scored as ΔR² on signal voxels (cross-run null cvR² > 0); subject value = median over ROIs; Wilcoxon across subjects.
 
+### Which pRF models feed the gain models
+
+Of the six whole-brain pRF models, the gain fits use only m4 and m5, and neither is carried over as it is.
+
+| Step | DoG family | DN family |
+|---|---|---|
+| Voxel selection (p_signal > .5, top 500 by R²) | m4 | **m4 as well** |
+| Starting values for m00 | m4 | m5 |
+| Per-voxel pRFs | Refit per subject × ROI in m00, m0 | Refit per subject × ROI in m00, m0 |
+| HRF | **Fixed canonical** (SPM, delay 4.5, dispersion .75) | **Fixed canonical** |
+| Closest whole-brain model | m2 | m5 |
+
+m1, m3 and m6 are not used. The whole-brain m6 refit only serves the DN maps. **Flexible HRFs are not in any gain fit**; the model class with items raises an error if asked for them. This matters because a flexible HRF is the largest pRF improvement we measured (held-out R² +.018 to +.020 in reliable voxels, section 4), larger than DoG vs Gaussian or DN vs DoG.
+
+Robustness checks of the gain models:
+
+| Check | Status | What it showed |
+|---|---|---|
+| DoG vs DN | Done | dS direction holds; LOSO significance does not (section 6) |
+| Outlier voxels, SD limits from 3 to 50% | Done, DoG | dS holds; dD weakens |
+| Noise-weighted δ and likelihood scoring | Done offline, DoG | dS p = .012 to .088; dD p = .28 |
+| Bounded vs unbounded fits | Done | dS negative in both |
+| Likelihood fits | Canary only, then dropped | Ordinary cells barely move |
+| All-free polish | Canary only, too costly | Lower training SSE, no CV gain |
+| **Flexible HRF** | **Not done, not supported** | Unknown |
+| **Gaussian pRF in the current ladder** | **Not done** | Older non-nested fits only |
+| **DN-based voxel selection** | **Not done** | DN fits use voxels chosen by m4 |
+| Maximum voxel count (500) | Not done | Unknown |
+| Model-neutral per-fold selection | Not done | No validated BOLD time-series permutation yet |
+
+A sustained gain should be less sensitive to HRF timing than the event-evoked terms, but that is an expectation, not a result. The obvious next check is to freeze each voxel's HRF at its m4 estimate.
+
 ## 3. Behaviour: solid
 
 n = 30 including pilots sub-01 and sub-02, 21,480 trials, RTs from correct trials. Recomputed 2026-11-05 with `notes/scripts/results_overview_behaviour.py`. The pilots' events have no HP column, so each run's HP comes from the modal singleton location (`Subject.get_hpd_locations`); that rule matches the recorded column on every trial of the other 28.
@@ -99,6 +131,24 @@ Limits: a, b and d share a free scale, so raw b and d depend on the fit's path; 
 
 **Outlier voxels: solid, needs a Methods line.** Percent signal change divides by a raw mean that collapses in some runs: 53 voxels above 20% SD hold 36% of variance and are irreproducible. In the worst fit (sub-07 V2) they drove g_HP to its bound and flipped the sign of dS. Voxels of 3–20% SD have the best signal, so a tighter limit would be wrong. Outlier-free refits are used throughout below.
 
+### Figure 1: paradigm and pRF sanity checks
+
+Intended content: the paradigm plus the checks that the pRF fits are sound. The parts exist, but there is no assembled figure and several parts need redoing.
+
+| Panel | Prototype | Status |
+|---|---|---|
+| Paradigm | `notes/figures/_archive/meeting_dock_20260509/01_paradigm_overview.pdf`; real stimulus in `retsupp/visualize/vss2026/animate_rectangle_paradigm.py` and `notes/figures/paradigm_movie.mp4` | **Redraw.** The schematic from May shows 4 circles, not the 8 rectangles, has no trial timing, and includes a model term in the timeline |
+| Maps: areas, polar angle, eccentricity, σ, R² | `notes/figures/fig1_r2low/fig1_prf_maps_sub-19.pdf` (also sub-18, sub-23), `retsupp/visualize/pycortex/render_fig1_prf.py` | Close to final; choose the subject. m4 |
+| σ vs eccentricity per ROI | `notes/figures/talk/talk_prf_validity_m4.pdf`, `notes/figures/talk/plot_prf_validity.py` | **Rerun.** Data from 14 May cover 20 subjects, before most m4 fits were finalised (16 May) |
+| R² per ROI | Same figure | **Rerun**, same reason |
+| pRF centre coverage | Same figure | **Rerun**, same reason. V1 density shows a horizontal band worth checking |
+| Held-out R² across m1–m6 | `notes/figures/prf_cv_roi_reliable.pdf` | Current |
+| DoG and DN parameters | `notes/figures/talk/plot_dog_params.py`, `notes/figures/talk/plot_dn_params.py`, `notes/figures/dn_hierarchy_aqil.pdf` | Supplementary; the first two are May versions |
+| Example voxel time courses | `notes/figures/voxel_traces_group.pdf`, `notes/figures/voxel_traces_af_vs_no_af.pdf` | May versions, older models |
+| Bar decoded from BOLD | `notes/docky_vss2026/4_decoding/`, `notes/figures/decode_sweep/m4/` | Movies only; optional as an independent check |
+
+To decide: these prototypes show m4 (flexible HRF), while the gain fits use refit pRFs under a fixed HRF. Figure 1 should either show the fits that enter the gain models or say why it does not.
+
 ## 5. Gain-field parameters
 
 m7_full, full data. Subject value = median over ROIs; Wilcoxon across n = 30. Figure `notes/figures/gain_parameters_m7.pdf`; tables `notes/data/gain_field_parameters.tsv`, `notes/data/gain_field_parameter_stats.tsv`.
@@ -141,6 +191,20 @@ So dS is mainly a V2–hV4 result at pooled level, and in m7 only DN V3 passes F
 4. **dD is not robust.** Parameter p = .028 vs .44, weakens with outlier removal and noise weighting, and changes sign across the hierarchy (positive V1–V3, negative hV4 onward).
 
 ## 6. Prediction tests
+
+### Most convincing comparison, and the conundrum
+
+**Most convincing overall:** LOSO for items (100% of subjects, both pRF models) and target gain (90% DoG, 97% DN, p < .0001). Nothing is fitted to the subject tested. Within subject, items also hold (96–100%); target holds leaving one location out (73%, p = .0016) but not yet in the preliminary run3 scheme (65%, p = .15).
+
+**Most convincing for the key question:** LOSO for dS under DoG: 77% of subjects, p = .010, holding across outlier treatments (p = .002 to .029 at the SD limits tested). No prediction test supports dS under DN (63%, p = .23), so this comparison depends on the pRF model.
+
+**The conundrum: HP-specific gains are consistent across subjects, yet adding them to a model hurts its prediction within subject.** Explained below: per-subject estimates are too noisy for an effect this small (noise SD about .03 from three conditions, effect about .01 to .02). Prediction with a noisy δ loses even if the effect is real, and only LOSO averages that noise away. Target gain (about .25) sits well above the break-even of about .05 found for dS, which fits it passing leave-one-location-out, though its leverage differs and this was not simulated.
+
+**Not explained by this:**
+
+1. **DN parameters vs DN prediction.** dS is p = .004 as a parameter but p = .23 in LOSO. LOSO already removes the noise, so power within subject cannot be the reason. The label null should help decide.
+2. **Tied distractor gain.** g_LP_dyn is strongly positive in m7 (p < .0001), yet D improves only 50% of subjects in LOSO. The likely reason, not yet tested: D is scored on m0, without the target term. Alone (m2_D) its gain is weak (DoG +.040, p = .29), and it grows once T is in the model (m3b_TD +.077, p = .0002). Testing D on top of m1_T would settle it.
+3. **`item_scale` under DN** (below).
 
 ### Leave one subject out: qualified
 
@@ -269,8 +333,9 @@ What it can and cannot show:
 2. **Primary test and pRF model.** Choose before seeing the null, or report openly how the choice was made.
 3. **Which ROIs count.** Parameter tables use 11; several tests use V1–IPS. SPL1 and FEF have almost no signal voxels.
 4. **`item_scale` under DN** (section 6).
-5. **`distractor_radius`** in `Subject.get_stimulus_with_distractors`: `CLAUDE.md` flags that it may not match the rendered size. The fits use rectangles (1.5 × .375°), so check this only for older outputs.
-6. **Unreviewed:** uncommitted changes to the GLMsingle quadrant outputs (`notes/figures/glmsingle_quadrants.tsv`, `.pdf`). Not included here. There are many other uncommitted changes in the tree, including deleted talk figures and a modified `libs/braincoder`.
+5. **HRF.** The gain fits use a fixed HRF, although a flexible HRF is the largest pRF improvement. Voxel selection for the DN fits comes from m4.
+6. **`distractor_radius`** in `Subject.get_stimulus_with_distractors`: `CLAUDE.md` flags that it may not match the rendered size. The fits use rectangles (1.5 × .375°), so check this only for older outputs.
+7. **Unreviewed:** uncommitted changes to the GLMsingle quadrant outputs (`notes/figures/glmsingle_quadrants.tsv`, `.pdf`). Not included here. There are many other uncommitted changes in the tree, including deleted talk figures and a modified `libs/braincoder`.
 
 ## 11. Input for the paper plan
 
@@ -278,6 +343,6 @@ Not a decision, only what the results above imply.
 
 - **Lead with parameters, not model comparison.** Group tests suit an effect this small; within-subject prediction demonstrably cannot detect it. Report every prediction test anyway, and state that this order was chosen after seeing them.
 - **Strong anchors:** behaviour, pRF fits, items, target gain.
-- **Suggested sequence:** (1) behaviour; (2) maps and pRF models; (3) items and gain-field model, target and distractor; (4) dS with the null, conditional effect size and sensitivity analysis; (5) generalization: LOSO, DoG vs DN, power analysis for within-subject CV; (6) learning and behaviour links as secondary results.
+- **Suggested sequence:** (1) Figure 1: paradigm and pRF sanity checks, then behaviour; (2) pRF model comparison; (3) items and gain-field model, target and distractor; (4) dS with the null, conditional effect size and sensitivity analysis; (5) generalization: LOSO, DoG vs DN, power analysis for within-subject CV; (6) learning and behaviour links as secondary results.
 - **What the claim can be, if the null holds:** a small, consistently signed group-level reduction of sustained gain at the HP location, clearest in V2–hV4, whose out-of-subject generalization depends on the pRF model. Not robust at the level of one subject.
-- **Remaining work:** the null; run3 completion; whole-brain DN maps (needs the 78 missing chunks); optional simulation with dS in the BOLD; rerun of the RT link on current fits if it stays in the paper.
+- **Remaining work:** the null; run3 completion; a flexible-HRF robustness check of the gain models; D tested on top of T; Figure 1 assembly with the sanity panels rerun on all 30 subjects; whole-brain DN maps (needs the 78 missing chunks); optional simulation with dS in the BOLD; rerun of the RT link on current fits if it stays in the paper.
