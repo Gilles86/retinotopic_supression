@@ -20,7 +20,7 @@ from retsupp.visualize.paper.paper_style import DOUBLE, FG, HP, MUTED, letter, o
 from retsupp.visualize.paper.plot_fig1 import panel_display, panel_trial
 
 LEGEND = """
-**Figure 1. Paradigm and behaviour.** a, Search display with the bar in its 3.17° aperture: 8 items on a ring at 4°, with target and singleton distractor at the four diagonal positions; percentages are over all trials. b, Trial timing to scale and the HP location across blocks of runs (example order). c, Response time with the singleton distractor at the HP location, at an LP location, or absent. d, Response time with the target at the HP or an LP location, on trials with a distractor. c, d, n = 30, correct trials. Dots are subjects with their overall mean removed (Cousineau normalization), large points and bars are the mean ± within-subject SEM (Morey correction). Wilcoxon signed-rank tests: *** p < .001.
+**Figure 1. Paradigm and behaviour.** a, Search display with the bar in its 3.17° aperture: 8 items on a ring at 4°, with target and singleton distractor at the four diagonal positions; percentages are over all trials. b, Trial timing to scale and the HP location across blocks of runs (example order). c, Response time with the singleton distractor at the HP location, at an LP location, or absent. d, Response time with the target at the HP or an LP location, on trials with a distractor. c, d, n = 30, correct trials. Dots are subjects, triangles are subjects beyond the axis limits; large points and bars are the mean ± within-subject SEM (Cousineau-Morey). Wilcoxon signed-rank tests: *** p < .001.
 """
 
 
@@ -37,42 +37,45 @@ def stars(p):
 
 
 def rt_panel(ax, d, conds, colors, pairs, ylim):
-    """Subjects with their own overall mean removed (Cousineau), so that the comparison is the
-    one the test makes while the axis stays in ms. Error bars are within-subject SEM (Morey)."""
+    """Actual subject RTs on an axis capped around the means; subjects beyond it are triangles on
+    the cap, so none is dropped. Error bars are within-subject SEM (Cousineau-Morey)."""
     w = d.pivot(index='subject', columns='condition', values='rt')[conds]
-    norm = w.sub(w.mean(1), axis=0) + w.values.mean()
     k = len(conds)
-    m = norm.mean()
-    se = norm.sem() * np.sqrt(k / (k - 1))
+    m = w.mean()
+    se = (w.sub(w.mean(1), axis=0) + w.values.mean()).sem() * np.sqrt(k / (k - 1))
+    lo, hi = ylim
     rng = np.random.default_rng(3)
     for i, c in enumerate(conds):
-        ax.scatter(i + rng.uniform(-.13, .13, len(norm)), norm[c], s=9, color=colors[i], alpha=.28, lw=0, zorder=1, clip_on=False)
+        xx = i + rng.uniform(-.14, .14, len(w))
+        v = w[c].to_numpy()
+        ok, over, under = (v >= lo) & (v <= hi), v > hi, v < lo
+        ax.scatter(xx[ok], v[ok], s=9, color=colors[i], alpha=.3, lw=0, zorder=1)
+        ax.scatter(xx[over], np.full(over.sum(), hi), s=10, marker='^', color=colors[i], alpha=.55, lw=0, zorder=1, clip_on=False)
+        ax.scatter(xx[under], np.full(under.sum(), lo), s=10, marker='v', color=colors[i], alpha=.55, lw=0, zorder=1, clip_on=False)
         ax.errorbar(i, m[c], yerr=se[c], color=colors[i], marker='o', ms=6, mfc=colors[i], mec='w', mew=.7, lw=1.4, capsize=0, zorder=4)
     ax.plot(range(k), m.values, color=FG, lw=.8, zorder=3)
-    top = ylim[1] - .02 * (ylim[1] - ylim[0])
-    step = .1 * (ylim[1] - ylim[0])
+    span = hi - lo
     for n, (a, b) in enumerate(pairs):
         diff = w[a] - w[b]
         i, j = conds.index(a), conds.index(b)
-        y = top - (len(pairs) - 1 - n) * step
+        y = hi + (.09 + n * .17) * span
         ax.plot([i, j], [y, y], color=FG, lw=.7, clip_on=False)
-        ax.text((i + j) / 2, y + .005 * (ylim[1] - ylim[0]), f'{diff.mean():+.0f} ms {stars(stats.wilcoxon(diff).pvalue)}'.replace('-', '−'),
+        ax.text((i + j) / 2, y + .01 * span, f'{diff.mean():+.0f} ms {stars(stats.wilcoxon(diff).pvalue)}'.replace('-', '−'),
                 ha='center', va='bottom', fontsize=6.5, color=FG, clip_on=False)
     ax.set_xticks(range(k))
     ax.set_xticklabels(conds)
     ax.set_xlim(-.45, k - .55)
-    ax.set_ylim(*ylim)
-    ax.set_yticks(np.arange(np.ceil(ylim[0] / 50) * 50, ylim[1], 50))
+    ax.set_ylim(lo, hi)
+    ax.set_yticks([800, 900, 1000])
     offset_spines(ax)
-    ax.spines['left'].set_bounds(ax.get_yticks()[0], ax.get_yticks()[-1])
 
 
 def main(rt_table, bids, name='fig1_paradigm_behaviour'):
     if not Path(rt_table).exists():
         build_rt(rt_table, bids)
     d = pd.read_csv(rt_table, sep='\t')
-    fig = plt.figure(figsize=(DOUBLE, 3.15))
-    gs = fig.add_gridspec(2, 2, width_ratios=[1, 1.62], height_ratios=[1.12, 1], left=.005, right=.995, top=.975, bottom=.13, hspace=.3, wspace=.17)
+    fig = plt.figure(figsize=(DOUBLE, 3.3))
+    gs = fig.add_gridspec(2, 2, width_ratios=[1, 1.62], height_ratios=[1.12, 1], left=.005, right=.995, top=.975, bottom=.13, hspace=.46, wspace=.17)
     ax = fig.add_subplot(gs[:, 0])
     panel_display(ax, margin=7.4)
     letter(ax, 'a', x=.05, y=.95)
@@ -80,17 +83,20 @@ def main(rt_table, bids, name='fig1_paradigm_behaviour'):
     panel_trial(fig, ax)
     letter(ax, 'b', x=0, y=.9)
     low = gs[1, 1].subgridspec(1, 2, width_ratios=[1.45, 1], wspace=.2)
-    ylim = (825, 975)
+    ylim = (770, 1020)
     ax = fig.add_subplot(low[0])
     rt_panel(ax, d[d.contrast == 'distractor'], ['HP', 'LP', 'Absent'], [HP, FG, MUTED], [('HP', 'LP'), ('LP', 'Absent')], ylim)
     ax.set_xlabel('Singleton distractor')
     ax.set_ylabel('Response time (ms)')
-    letter(ax, 'c', x=-.2, y=.98)
+    letter(ax, 'c', x=-.2, y=1.2)
     ax = fig.add_subplot(low[1])
     rt_panel(ax, d[d.contrast == 'target'], ['HP', 'LP'], [HP, FG], [('HP', 'LP')], ylim)
     ax.set_xlabel('Target')
     ax.set_yticklabels([])
-    letter(ax, 'd', x=-.1, y=.98)
+    letter(ax, 'd', x=-.1, y=1.2)
+    ax.scatter([.68], [-.26], s=10, marker='^', color=MUTED, lw=0, transform=ax.transAxes, clip_on=False)
+    ax.scatter([.74], [-.26], s=10, marker='v', color=MUTED, lw=0, transform=ax.transAxes, clip_on=False)
+    ax.text(.79, -.26, 'Off scale', transform=ax.transAxes, fontsize=6, color=FG, va='center')
     save(fig, name, LEGEND)
 
 
