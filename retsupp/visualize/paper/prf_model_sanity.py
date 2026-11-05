@@ -8,7 +8,6 @@ share estimates the false-positive share, to compare with the FDR the mixture pr
 Usage::
 
     python -m retsupp.visualize.paper.prf_model_sanity collect
-    python -m retsupp.visualize.paper.prf_model_sanity plot
 """
 from __future__ import annotations
 
@@ -23,14 +22,14 @@ ROIS = {'V1': ['V1'], 'V2': ['V2'], 'V3': ['V3'], 'hV4': ['hV4'], 'V3AB': ['V3A'
 CUTS = [.02, .05, .1, .2, .3]
 APERTURE = 3.17
 ECC = np.arange(0, 3.51, .5)
-BIDS = '/data/ds-retsupp'
 TAB, CURVE = 'notes/data/prf_model_sanity_contra.tsv', 'notes/data/prf_model_sanity_sigma.tsv'
 
 
-def one(s):
+def one(args):
+    s, bids = args
     from braincoder.utils.stats import fit_and_classify, r2_fdr_threshold
     from retsupp.utils.data import Subject
-    sub = Subject(s, BIDS)
+    sub = Subject(s, bids)
     masker = sub.get_bold_mask(return_masker=True)
     masker.fit()
     hemi = {}
@@ -85,9 +84,9 @@ def one(s):
     return pd.DataFrame(rows), pd.concat(curves) if curves else pd.DataFrame()
 
 
-def collect():
-    with mp.Pool(6) as pool:
-        out = pool.map(one, range(1, 31))
+def collect(bids, n_procs):
+    with mp.Pool(n_procs) as pool:
+        out = pool.map(one, [(s, bids) for s in range(1, 31)])
     pd.concat(o[0] for o in out).to_csv(TAB, sep='\t', index=False)
     pd.concat(o[1] for o in out).to_csv(CURVE, sep='\t', index=False)
 
@@ -95,4 +94,7 @@ def collect():
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('action', choices=['collect'])
-    collect()
+    ap.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
+    ap.add_argument('--n-procs', type=int, default=8)
+    a = ap.parse_args()
+    collect(a.bids_folder, a.n_procs)

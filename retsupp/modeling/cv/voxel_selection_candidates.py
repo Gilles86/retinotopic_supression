@@ -15,7 +15,7 @@ Outputs ``notes/data/voxel_selection_candidates_2026-11.tsv`` (subject x ROI x c
 
 Usage::
 
-    python -m retsupp.modeling.cv.voxel_selection_candidates --bids-folder /data/ds-retsupp
+    python -m retsupp.modeling.cv.voxel_selection_candidates
 """
 from __future__ import annotations
 
@@ -70,8 +70,8 @@ def one(args):
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('--bids-folder', default='/data/ds-retsupp')
-    ap.add_argument('--n-procs', type=int, default=4)
+    ap.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
+    ap.add_argument('--n-procs', type=int, default=8)
     a = ap.parse_args()
     with mp.Pool(a.n_procs) as pool:
         out = pool.map(one, [(s, a.bids_folder) for s in range(1, 31)])
