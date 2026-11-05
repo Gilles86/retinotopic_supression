@@ -17,6 +17,7 @@
 #       --array=30-32 retsupp/modeling/cv/slurm_jobs/fit_prf_cv_roi.sh
 # Optional, in front of sbatch: MODELS="0 1 2" (subset; default all),
 # OUT_SUBDIR=name (derivatives folder; default prf_cv_roi).
+# ENTRY=retsupp.modeling.cv.fit_prf_cv_roi_hrf: one HRF per subject x ROI, from existing fits.
 
 set -eo pipefail
 subject=$(( SLURM_ARRAY_TASK_ID / 10 ))
@@ -52,7 +53,7 @@ fi
 echo "Host: $(hostname) | $DEVICE | sub-${sub_pad} fold ${fold} | job ${SLURM_JOB_ID} | $(date)"
 echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
 
-"$PYTHON" -u -m retsupp.modeling.cv.fit_prf_cv_roi "$subject" --fold "$fold" \
+"$PYTHON" -u -m "${ENTRY:-retsupp.modeling.cv.fit_prf_cv_roi}" "$subject" --fold "$fold" \
     --bids-folder /shares/zne.uzh/gdehol/ds-retsupp ${MODELS:+--models $MODELS} \
     ${OUT_SUBDIR:+--output-subdir $OUT_SUBDIR}
 
