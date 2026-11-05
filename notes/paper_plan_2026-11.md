@@ -7,7 +7,7 @@ Results lead with group-level gain parameters, LOSO is the model-comparison metr
 ## Phase A: inputs to the gain fits, then stop for a decision
 
 - **A1** Cost of finishing the null vs rerunning it; further null submissions paused (arrays held).
-- **A2** HRF: canonical vs one per subject × ROI vs one per voxel, held-out R², Gaussian, DoG, DN (`retsupp/modeling/cv/fit_prf_cv_roi_hrf.py`); cache on all 30 subjects.
+- **A2** HRF: fitted, but never independently per voxel (user, 2026-11-05). Candidates are one per subject × ROI and possibly one per subject. Canonical and the existing per-voxel fits are reference points only. Held-out R², Gaussian, DoG, DN (`retsupp/modeling/cv/fit_prf_cv_roi_hrf.py`); cache on all 30 subjects.
 - **A3** Voxel selection: the working choice is **cross-run reliability only** (model-free, per fold on training runs, `retsupp/modeling/cv/prf_cv_reliability.py`). Compared for the memo against the current rule, the current rule restricted to reliable voxels, and R² ≥ .1. Voxel count, % contralateral, share below R² = .1, dS. Whether fitting and scoring use the same set.
 - **A4** pRF sanity per model and HRF (contralaterality, V1 σ vs eccentricity); test DoG centre σ, HRF, aperture, fixation.
 - **A5** `notes/decision_memo_gain_inputs_2026-11.md`, then STOP.

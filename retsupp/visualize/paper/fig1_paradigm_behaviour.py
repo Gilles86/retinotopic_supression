@@ -74,11 +74,14 @@ def main(rt_table, bids, name='fig1_paradigm_behaviour'):
     if not Path(rt_table).exists():
         build_rt(rt_table, bids)
     d = pd.read_csv(rt_table, sep='\t')
-    fig = plt.figure(figsize=(DOUBLE, 3.3))
+    fig = plt.figure(figsize=(DOUBLE, 3.05))
     gs = fig.add_gridspec(2, 2, width_ratios=[1, 1.62], height_ratios=[1.12, 1], left=.005, right=.995, top=.975, bottom=.13, hspace=.46, wspace=.17)
     ax = fig.add_subplot(gs[:, 0])
     panel_display(ax, margin=7.4)
-    letter(ax, 'a', x=.05, y=.95)
+    box = ax.get_position()
+    ax.set_position([box.x0, .005, box.width, .985])   # down to the figure edge, the x labels of c and d need no room here
+    ax.set_anchor('N')
+    letter(ax, 'a', x=.05, y=.93)
     ax = fig.add_subplot(gs[0, 1])
     panel_trial(fig, ax)
     letter(ax, 'b', x=0, y=.9)
