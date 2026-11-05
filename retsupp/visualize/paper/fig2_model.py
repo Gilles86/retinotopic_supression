@@ -1,31 +1,34 @@
-"""Figure 2: the gain-field model, its effective pRF shifts, and the ladder.
-
-Panels a and b use illustrative values. Panel a' uses the group medians of ``--gain-table``, so the
-final version takes one command once the final fits are collected into a table of the same form.
+"""Figure 2: the gain-field model and what it predicts at three pRF locations. No fitted values.
 
 Usage::
 
-    python -m retsupp.visualize.paper.fig2_model --gain-table notes/data/gain_field_parameters.tsv
+    python -m retsupp.visualize.paper.fig2_model
 """
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib.patches import Circle, FancyBboxPatch
+from matplotlib.patches import Circle
 
-from retsupp.visualize.paper.paper_style import (DISTRACTOR, DOUBLE, FG, HP, MUTED, STIM, TARGET, letter, offset_spines,
-                                                 provisional, save)
+from retsupp.visualize.paper.paper_style import DISTRACTOR, DOUBLE, FG, HP, MUTED, STIM, TARGET, letter, save
+from retsupp.visualize.paper.plot_fig1 import display
 
 LEGEND = """
-**Figure 2. Gain-field model.** a, Forward model: a fixed pRF reads the stimulus (bar plus items) multiplied by a gain field, the sum of sustained fields at the four ring locations and transient fields at the target and singleton distractor. Maps use illustrative values; time courses show when each term applies, convolved with the HRF. a′, Group-median sustained field of m7_full for an early and a late ROI, with the shift of the pRF centre of mass it implies in the HP condition (vectors enlarged). Computed from the model, n = 30, DoG fits; approximation by centre of mass of pRF × field, without refitting. b, The nested ladder, each step labelled with its contrast.
+**Figure 2. Gain-field model.** Top, the screen is reduced to a model input (bar plus items), multiplied by a gain field: the sum of sustained fields at the four ring locations and transient fields at the target and singleton distractor. Bottom, what three pRFs receive over the first 200 s of one real run of sub-19, HP at the lower right, with illustrative gains: the bar in the pRF, the sustained, target and distractor gain the pRF sees, and the predicted response after the canonical HRF. The same events give different signals depending on pRF location.
 """
 LIM = 5.2
 RING = 4.
-POS = RING / np.sqrt(2) * np.array([[1, 1], [-1, 1], [-1, -1], [1, -1]])
-HP_IX = 0
+POS = RING / np.sqrt(2) * np.array([[1, 1], [-1, 1], [-1, -1], [1, -1]])   # order of the event indicators
+HP_IX, T_IX = 3, 1                                                         # as in Figure 1a
+GAINS = dict(hp=-.22, lp=-.1, t=.35, d=.2)                                 # illustrative
+SIGMA = dict(sus=1.3, dyn=1.6)
+PRFS = {'pRF near HP': (2.1, -2.1, .9), 'pRF near LP': (-2.1, 2.1, .9), 'pRF near fixation': (.9, .3, .6)}
+PRF_COL = {'pRF near HP': HP, 'pRF near LP': '#1F2933', 'pRF near fixation': '#8D99A6'}
 g = np.linspace(-LIM, LIM, 261)
 X, Y = np.meshgrid(g, g)
 
@@ -53,126 +56,109 @@ def show(ax, im, cmap='RdBu_r', lim=None, title=None, color=FG):
         ax.set_title(title, fontsize=7, color=color, pad=2)
 
 
-def hrf(t):
+def build_events(path, bids, subject=19):
+    """Each term as seen by each example pRF, from the real events of one run with HP at the lower right."""
     from scipy.stats import gamma
-    return gamma.pdf(t, 6) - gamma.pdf(t, 16) / 6
+    from retsupp.utils.data import Subject
+    sub = Subject(subject, bids)
+    (ses, run), _ = next((k, v) for k, v in sub.get_hpd_locations().items() if v == 'lower_right')
+    kw = dict(session=ses, run=run, resolution=50, grid_radius=5.0)
+    full = np.asarray(sub.get_stimulus_with_distractors(distractor_shape='rectangle', distractor_long_side=1.5,
+                                                        distractor_short_side=.375, **kw), dtype=float)
+    bar = np.asarray(sub.get_bar_stimulus(**kw), dtype=float)
+    gx, gy = sub.get_extended_grid_coordinates(resolution=50, session=ses, run=run, grid_radius=5.0)
+    tgt, dyn = np.asarray(sub.get_target_indicator(session=ses, run=run)), np.asarray(sub.get_dynamic_indicator(session=ses, run=run))
+    n = min(len(full), len(bar), len(tgt), len(dyn))
+    g2 = lambda c, sd: np.exp(-((gx - c[0]) ** 2 + (gy - c[1]) ** 2) / (2 * sd ** 2))
+    sus = np.array([GAINS['hp'] if i == HP_IX else GAINS['lp'] for i in range(4)])
+    A_s = np.stack([g2(p, SIGMA['sus']) for p in POS])
+    A_d = np.stack([g2(p, SIGMA['dyn']) for p in POS])
+    field_s = (sus[:, None, None] * A_s).sum(0)
+    t = np.arange(0, 30, 1.6)
+    h = gamma.pdf(t, 6) - gamma.pdf(t, 16) / 6
+    rows = []
+    for name, (x, y, sd) in PRFS.items():
+        w = g2((x, y), sd)
+        w = w / w.sum()
+        field_t = GAINS['t'] * tgt[:n] @ (A_d * w).sum((1, 2))
+        field_d = GAINS['d'] * dyn[:n] @ (A_d * w).sum((1, 2))
+        M = 1 + field_s[None] + GAINS['t'] * np.einsum('tl,lxy->txy', tgt[:n], A_d) + GAINS['d'] * np.einsum('tl,lxy->txy', dyn[:n], A_d)
+        drive = (full[:n] * M * w).sum((1, 2))
+        pred = np.convolve(drive - drive.mean(), h)[:n]
+        rows.append(pd.DataFrame(dict(prf=name, t=np.arange(n) * 1.6, bar=(bar[:n] * w).sum((1, 2)),
+                                      sustained=(field_s * w).sum(), target=field_t, distractor=field_d, predicted=pred)))
+    pd.concat(rows).to_csv(path, sep='\t', index=False)
 
 
-def timecourse(ax, onsets, color, sustained=False):
-    t = np.arange(0, 60, .1)
-    if sustained:
-        y = np.ones_like(t)
-    else:
-        box = np.zeros_like(t)
-        for o in onsets:
-            box[(t >= o) & (t < o + 1.5)] = 1
-        y = np.convolve(box, hrf(np.arange(0, 30, .1)))[:len(t)]
-        y = y / y.max()
-    ax.plot(t, y, color=color, lw=1)
-    if not sustained:
-        ax.plot(onsets, np.full(len(onsets), -.12), '|', color=color, ms=3, mew=.7)
-    ax.set_ylim(-.25, 1.15)
-    ax.set_xlim(0, 60)
-    ax.set_axis_off()
-
-
-def effective_shift(ax, pars, sd, scale=25):
-    """Centre of mass of pRF x sustained plus mean transient field, HP at the upper right."""
-    field = 1 + sum((pars.g_HP if i == HP_IX else pars.g_LP) * gauss(*p, pars.sigma_AF) for i, p in enumerate(POS))
-    ax.imshow(field - 1, origin='lower', extent=(-LIM, LIM, -LIM, LIM), cmap='RdBu_r',
-              vmin=-.15, vmax=.15, interpolation='bilinear')
-    pts = [(r * np.cos(a), r * np.sin(a)) for r in (.8, 1.6, 2.4) for a in np.deg2rad(np.arange(0, 360, 30))]
-    for cx, cy in pts:
-        w = gauss(cx, cy, sd) * field
-        dx, dy = (w * X).sum() / w.sum() - cx, (w * Y).sum() / w.sum() - cy
-        ax.annotate('', xy=(cx + scale * dx, cy + scale * dy), xytext=(cx, cy),
-                    arrowprops=dict(arrowstyle='-|>', color=FG, lw=.5, mutation_scale=3.5, shrinkA=0, shrinkB=0))
-    ax.add_patch(Circle((0, 0), 3.17, fill=False, ec=MUTED, lw=.4))
-    ax.add_patch(Circle(POS[HP_IX], .9, fill=False, ec=HP, lw=.7))
-    ax.set_xlim(-LIM, LIM)
-    ax.set_ylim(-LIM, LIM)
-    ax.set_aspect('equal')
-    ax.set_axis_off()
-
-
-def ladder(ax):
-    ax.set_axis_off()
-    ax.set_xlim(0, 10)
-    ax.set_ylim(0, 3)
-    nodes = {'m00_bar': (.6, 1.5), 'm0_prf': (2.2, 1.5), 'm1_T': (3.9, 2.45), 'm2_D': (3.9, 1.5), 'm3_S': (3.9, .55),
-             'm3b_TD': (5.3, 2.45), 'm4_TDS': (6.7, 1.5), 'm5_TDS_dS': (8.1, 2.3), 'm6_TDS_dD': (8.1, .7), 'm7_full': (9.45, 1.5)}
-    labels = {'m00_bar': 'm00\nBar pRF', 'm0_prf': 'm0\n+ items', 'm1_T': 'm1\n+ target', 'm2_D': 'm2\n+ distractor', 'm3_S': 'm3\n+ sustained',
-              'm3b_TD': 'm3b\nT + D', 'm4_TDS': 'm4\nT + D + S', 'm5_TDS_dS': 'm5\n+ HP ≠ LP\nsustained', 'm6_TDS_dD': 'm6\n+ HP ≠ LP\ndistractor', 'm7_full': 'm7\ndS + dD'}
-    edges = [('m00_bar', 'm0_prf', 'Items'), ('m0_prf', 'm1_T', 'T'), ('m0_prf', 'm2_D', 'D'), ('m0_prf', 'm3_S', 'S'), ('m1_T', 'm3b_TD', ''),
-             ('m3b_TD', 'm4_TDS', ''), ('m4_TDS', 'm5_TDS_dS', 'dS'), ('m4_TDS', 'm6_TDS_dD', 'dD'), ('m5_TDS_dS', 'm7_full', '')]
-    tested = {'dS': HP, 'dD': DISTRACTOR, 'T': TARGET}
-    for a, b, lab in edges:
-        (x0, y0), (x1, y1) = nodes[a], nodes[b]
-        ax.annotate('', xy=(x1 - .5, y1), xytext=(x0 + .5, y0), arrowprops=dict(arrowstyle='-|>', color=MUTED, lw=.8, mutation_scale=6, shrinkA=0, shrinkB=0))
-        if lab:
-            ax.text((x0 + x1) / 2 - .02, (y0 + y1) / 2 + .13, lab, fontsize=6.5, fontweight='bold', ha='center', color=tested.get(lab, FG))
-    for k, (x, y) in nodes.items():
-        ax.add_patch(FancyBboxPatch((x - .5, y - .36), 1., .72, boxstyle='round,pad=0,rounding_size=.08', facecolor='#F1F3F5', edgecolor=MUTED, lw=.5))
-        ax.text(x, y, labels[k], ha='center', va='center', fontsize=5.8, color=FG, linespacing=1.05)
-
-
-def main(gain_table, family='dog', early='V2', late='V3AB', name='fig2_model'):
-    fig = plt.figure(figsize=(DOUBLE, 3.5))
-    outer = fig.add_gridspec(2, 1, height_ratios=[2.5, 1.45], hspace=.05, left=.015, right=.995, top=.95, bottom=.01)
-    top = outer[0].subgridspec(1, 2, width_ratios=[2.15, 1], wspace=.08)
-    a = top[0].subgridspec(2, 5, height_ratios=[1.35, .42], wspace=.42, hspace=-.12)
-    ex = dict(sus=1.3, trans=1.6)
-    t_ix, d_ix = 1, 3
-    maps = [('Stimulus', stimulus(), 'Greys', 1, STIM), ('Sustained:\nless gain at HP', -.12 * gauss(*POS[HP_IX], ex['sus']) - .06 * sum(gauss(*p, ex['sus']) for p in POS[1:]), 'RdBu_r', .2, HP),
-            ('Target', .3 * gauss(*POS[t_ix], ex['trans']), 'RdBu_r', .3, TARGET), ('Distractor', .15 * gauss(*POS[d_ix], ex['trans']), 'RdBu_r', .3, DISTRACTOR)]
-    onsets = np.array([5, 14, 21, 33, 40, 52])
-    prf = gauss(1.8, 1.0, .9)
-    for j, (title, im, cmap, lim, col) in enumerate(maps):
+def main(events_table, bids, window=200, name='fig2_model'):
+    if not Path(events_table).exists():
+        build_events(events_table, bids)
+    ev = pd.read_csv(events_table, sep='\t')
+    ev = ev[ev.t <= window]
+    n_r = len(PRFS)
+    fig = plt.figure(figsize=(DOUBLE, 3.15))
+    a = fig.add_gridspec(1 + n_r, 6, height_ratios=[1.75] + [.46] * n_r, width_ratios=[1] * 6, wspace=.34, hspace=.1,
+                         left=.012, right=.995, top=.925, bottom=.045)
+    ax = fig.add_subplot(a[0, 0])
+    display(ax)
+    ax.set_title('On screen', fontsize=7, color=FG, pad=2)
+    sus = sum((GAINS['hp'] if i == HP_IX else GAINS['lp']) * gauss(*p, SIGMA['sus']) for i, p in enumerate(POS))
+    tgt = GAINS['t'] * gauss(*POS[T_IX], SIGMA['dyn'])
+    dis = GAINS['d'] * gauss(*POS[HP_IX], SIGMA['dyn'])
+    maps = [('Model input', -stimulus(), 'gray', 1, FG), ('Sustained:\nless gain at HP', sus, 'RdBu_r', .3, HP),
+            ('Target', tgt, 'RdBu_r', .4, TARGET), ('Distractor', dis, 'RdBu_r', .4, DISTRACTOR)]
+    for j, (title, im, cmap, lim, col) in enumerate(maps, start=1):
         ax = fig.add_subplot(a[0, j])
-        show(ax, im if cmap != 'Greys' else -im, 'RdBu_r' if cmap != 'Greys' else 'gray', lim, title, col)
-        if j == 0:
-            letter(ax, 'a', x=-.02, y=1.12)
-            ax.contour(X, Y, prf, levels=[.5], colors=['#2A9D8F'], linewidths=.8)
-        ax2 = fig.add_subplot(a[1, j])
-        timecourse(ax2, onsets, col, sustained=j == 1) if j else ax2.set_axis_off()
-        if j == 0:
-            ax2.text(.5, .85, 'Teal: fixed pRF', transform=ax2.transAxes, fontsize=6, ha='center', va='center', color='#2A9D8F')
-            ax2.text(.5, .5, 'Blue: less gain', transform=ax2.transAxes, fontsize=6, ha='center', va='center', color='#2166AC')
-            ax2.text(.5, .15, 'Red: more gain', transform=ax2.transAxes, fontsize=6, ha='center', va='center', color='#B2182B')
-    ax = fig.add_subplot(a[0, 4])
-    field = 1 + maps[1][1] + maps[2][1] + maps[3][1]
-    ax.imshow(stimulus() * field, origin='lower', extent=(-LIM, LIM, -LIM, LIM), cmap='magma', vmin=0, vmax=1.35)
-    ax.contour(X, Y, prf, levels=[.5], colors=['#2A9D8F'], linewidths=.8)
+        show(ax, im, cmap, lim, title, col)
+        if j == 1:
+            for nm, (x, y, sd) in PRFS.items():
+                ax.contour(X, Y, gauss(x, y, sd), levels=[.5], colors=[PRF_COL[nm]], linewidths=1.)
+    ax = fig.add_subplot(a[0, 5])
+    ax.imshow(stimulus() * (1 + sus + tgt + dis), origin='lower', extent=(-LIM, LIM, -LIM, LIM), cmap='magma', vmin=0, vmax=1.35)
     ax.set_axis_off()
     ax.set_title('Effective drive', fontsize=7, color=FG, pad=2)
-    fig.add_subplot(a[1, 4]).set_axis_off()
-    for i, sign in ((1, '× (1 +'), (2, '+'), (3, '+'), (4, ') =')):
+    for i, sign in ((1, None), (2, '× (1 +'), (3, '+'), (4, '+'), (5, ') =')):
         pos = fig.add_subplot(a[0, i]).get_position()
         fig.axes[-1].remove()
-        fig.text(pos.x0 - .015, pos.y0 + pos.height / 2, sign, fontsize=8, color=FG, ha='center', va='center')
-
-    t = pd.read_csv(gain_table, sep='\t')
-    t = t[(t.family == family) & (t.model == 'm7_full')]
-    b = top[1].subgridspec(1, 2, wspace=.05)
-    sizes = {early: .65, late: 1.2}
-    for j, roi in enumerate((early, late)):
-        ax = fig.add_subplot(b[j])
-        effective_shift(ax, t[t.roi == roi][['g_HP', 'g_LP', 'sigma_AF']].median(), sizes[roi])
-        ax.set_title(roi, fontsize=7, color=FG, pad=2)
-        ax.text(.5, -.03, 'Arrows × 25' if j == 0 else 'Implied pRF shift', transform=ax.transAxes, ha='center', va='top', fontsize=6, color=FG)
-        if j == 0:
-            letter(ax, 'a′', x=.02, y=1.08)
+        x, y = pos.x0 - .024, pos.y0 + pos.height / 2
+        if sign is None:
+            fig.add_artist(mpl.patches.FancyArrowPatch((x - .012, y), (x + .012, y), arrowstyle='-|>', mutation_scale=7, lw=.9, color=FG, transform=fig.transFigure))
         else:
-            provisional(ax, y=1.2)
-    ax = fig.add_subplot(outer[1])
-    ladder(ax)
-    letter(ax, 'b', x=.02, y=.92)
+            fig.text(x, y, sign, fontsize=8, color=FG, ha='center', va='center')
+    cols = [('bar', STIM, 'Bar in the pRF'), ('sustained', HP, 'Sustained gain'), ('target', TARGET, 'Target gain'),
+            ('distractor', DISTRACTOR, 'Distractor gain'), ('predicted', FG, 'Predicted response')]
+    lims = {c: (min(ev[c].min(), 0), max(ev[c].max(), 0)) for c, _, _ in cols}
+    for i, nm in enumerate(PRFS):
+        d = ev[ev.prf == nm]
+        lab = fig.add_subplot(a[1 + i, 0])
+        lab.set_axis_off()
+        lab.plot([.02, .14], [.5, .5], color=PRF_COL[nm], lw=2.2, transform=lab.transAxes, solid_capstyle='butt')
+        lab.text(.19, .5, nm, transform=lab.transAxes, va='center', fontsize=7, color=PRF_COL[nm])
+        for j, (c, col, title) in enumerate(cols, start=1):
+            ax = fig.add_subplot(a[1 + i, j])
+            ax.set_axis_off()
+            t, y = d.t.to_numpy(), d[c].to_numpy()
+            if c == 'predicted':
+                ax.plot(t, y, color=col, lw=.8)
+            elif c == 'sustained':
+                ax.plot(t, y, color=col, lw=1.4)
+            else:
+                ax.fill_between(t, 0, y, step='mid', color=col, lw=.25, edgecolor=col)
+            ax.axhline(0, color='#D5DAE0', lw=.5, zorder=0)
+            lo, hi = lims[c]
+            ax.set_ylim(lo - .03 * (hi - lo), hi + .05 * (hi - lo))
+            ax.set_xlim(0, window)
+            if i == 0:
+                ax.text(.5, 1.0, title, transform=ax.transAxes, fontsize=6.5, ha='center', va='bottom', color=col)
+            if i == n_r - 1 and j == 5:
+                ax.plot([window - 50, window], [lo - .0 * hi] * 2, color=FG, lw=1.1, clip_on=False, solid_capstyle='butt')
+                ax.text(window - 25, lo - .08 * (hi - lo), '50 s', ha='center', va='top', fontsize=6, color=FG)
     save(fig, name, LEGEND)
 
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('--gain-table', default='notes/data/gain_field_parameters.tsv')
-    ap.add_argument('--family', default='dog')
+    ap.add_argument('--events-table', default='notes/data/fig2_example_events_2026-11.tsv')
+    ap.add_argument('--bids-folder', default='/data/ds-retsupp')
     a = ap.parse_args()
-    main(a.gain_table, a.family)
+    main(a.events_table, a.bids_folder)
