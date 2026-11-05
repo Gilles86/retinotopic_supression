@@ -330,7 +330,20 @@ What it can and cannot show:
 - Target gain is lower on target-repeat trials in V3AB, VO, IPS (q < .05).
 - Run-level and between-subject brain–behaviour: null. HP−LP differences are below the 80%-power minimum detectable effect in every ROI.
 
-**Decoding:** bar reconstruction works (`notes/docky_vss2026/4_decoding/`); a talk demonstration with no statistical result behind it for the paper.
+**Decoding with a gainless pRF model: qualified, not re-checked on current inputs.** Stimulus decoded per run from the m4 pRFs with a bar-only paradigm (`retsupp/decode/decode.py`), so any attention effect appears as misfit in the decoded stimulus. A per-pixel GLM in the HP-at-top frame gives a bar-drive β per pixel (`notes/run_static_dynamic_glm.py`), and `notes/test_static_quadrant.py` compares quadrants. May 2026, voxels m4 `p_signal` > .5 up to 2,000, sub-01 and sub-02 excluded, n = 22-26 per ROI, one-sided t-tests, uncorrected. Table `notes/figures/decode_sweep/m4/group_bar_quadrant_stats_vox2000_psig0.5.tsv`, figure `notes/figures/decode_sweep/m4/group_bar_quadrant_overlay_vox2000_psig0.5.pdf`.
+
+| Bar drive, HP < LP | vs orthogonal LP | vs opposite LP |
+|---|---:|---:|
+| V1 | p = .038 | p = .012 |
+| V2 | p = .007 | p = .069 |
+| V3 | p = .0002 | p = .044 |
+| V3AB | p = .022 | p = .089 |
+| hV4, LO | n.s. | n.s. |
+| Early (V1-V3), n = 25 | t = −3.26, p = .002 | t = −2.98, p = .003 |
+| Mid (V3AB, hV4), n = 26 | p = .39 | p = .15 |
+| Late (LO, TO, VO), n = 26 | p = .17 | p = .23 |
+
+The bar is decoded less strongly at the HP location in early visual cortex, which is the same direction and region as dS, from a model with no gain terms. Distractor-evoked β shows no such early effect (early p = .23, .28). Caveats: inputs are those now being replaced; several p values printed on the overlay figure differ slightly from the table (V1 orthogonal .020 vs .038), so that figure and table may not come from the same run; the per-ROI n below 28 is unexplained; the static-map cluster test (`group_HP_minus_LPmean_pooled_TFCE.pdf`) does not show an effect at HP. Bar reconstruction movies: `notes/docky_vss2026/4_decoding/`.
 
 ## 9. Superseded: do not cite
 
