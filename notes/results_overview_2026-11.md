@@ -2,6 +2,8 @@
 
 Written as the starting point for planning the paper. It says what each result is, how far it can be trusted and where it lives. Detailed tables are in `notes/fitting_lessons_2026-11.md`.
 
+Scope: gain-field models only.
+
 Grades: **solid** holds across the checks we ran; **qualified** real but with a stated dependence; **open** not yet decidable; **superseded** do not cite; **not re-checked** older result not reproduced under the current pipeline.
 
 ## 1. Summary
@@ -10,18 +12,17 @@ Thirty participants did a visual search task with a high-probability (HP) distra
 
 - Behaviour shows strong learned suppression: 28 ms, in all 30 subjects.
 - Visual cortex is well described by pRFs plus the search items as stimuli. Items improve out-of-subject prediction in 100% of subjects.
-- Attention acts better as gain than as pRF shift. Shifts did not survive cross-validation.
 - Target-evoked gain is strong and grows up the hierarchy. Distractor-evoked gain is positive, weaker and does not predict out of subject when tied across locations.
 - **The key test, dS = g_HP − g_LP (sustained gain at HP minus LP), is negative under both pRF models, which means less sustained gain at the HP location.** Parameters: DoG −.016, p = .010; DN −.028, p = .004. Prediction: DoG 77% of subjects improved, p = .010; DN 63%, p = .23.
-- Within-subject CV cannot test dS: a simulation with our effect size also fails it (section 7). This has to be explained in the paper, not left as a failed test.
+- Within-subject CV cannot test dS: a simulation with our effect size also fails it (section 6). This has to be explained in the paper, not left as a failed test.
 - There is no evidence of learning over runs and no robust link between HP-specific gain and RT, the latter on an older fit.
-- **Main open item:** the permutation null with HP labels rotated around the ring (section 8).
+- **Main open item:** the permutation null with HP labels rotated around the ring (section 7).
 
 ## 2. Design and terms
 
 - 30 subjects (`retsupp/data/subjects.yml`), 2 sessions × 6 runs (sub-20 ses-1 and sub-24 ses-2 have 5), TR 1.6 s, 258 volumes, NORDIC, fMRIprep.
 - Search array: 8 items on a ring at 4° (`project_paradigm_8items` memory); targets and singleton distractors at the 4 diagonal positions, with the HP location changing between runs.
-- Bar aperture radius 3.17°, so **the HP location lies outside the mapped area**. This shapes which voxels can show the effect (section 7).
+- Bar aperture radius 3.17°, so **the HP location lies outside the mapped area**. This shapes which voxels can show the effect (section 6).
 
 **Two sets of model names collide; keep them apart in the paper.**
 
@@ -98,13 +99,7 @@ Limits: a, b and d share a free scale, so raw b and d depend on the fit's path; 
 
 **Outlier voxels: solid, needs a Methods line.** Percent signal change divides by a raw mean that collapses in some runs: 53 voxels above 20% SD hold 36% of variance and are irreproducible. In the worst fit (sub-07 V2) they drove g_HP to its bound and flipped the sign of dS. Voxels of 3–20% SD have the best signal, so a tighter limit would be wrong. Outlier-free refits are used throughout below.
 
-## 5. Shifts vs gain
-
-**Gain beats shift in CV: solid but low-powered.** Leave-one-HP-condition-out, 30 subjects × 11 ROIs. Shift adds nothing over a fixed pRF in about 9 of 11 ROIs; gain ≥ shift in every ROI, significant by sign test in V1, V2, V3AB, VO, IPS. Table `derivatives/af_prf_cv_shiftvsgain/cv4_per_roi.tsv` (run 2026-06-01; the figure `cv4_verdict.pdf` is no longer in `notes/figures/`). Given section 7, read this as "shift never wins", not as evidence that shifts are absent.
-
-**PRF fits per condition and their shifts: archived, not used** (decision 2026-11-05). Code, notes and notebooks are in `archive/conditionwise_shifts/`. This includes the observed and predicted shifts, projection and GAM curves, and the post hoc Klein fits.
-
-## 6. Gain-field parameters
+## 5. Gain-field parameters
 
 m7_full, full data. Subject value = median over ROIs; Wilcoxon across n = 30. Figure `notes/figures/gain_parameters_m7.pdf`; tables `notes/data/gain_field_parameters.tsv`, `notes/data/gain_field_parameter_stats.tsv`.
 
@@ -140,12 +135,12 @@ So dS is mainly a V2–hV4 result at pooled level, and in m7 only DN V3 passes F
 
 **Caveats for dS as a parameter:**
 
-1. **No valid null yet** (section 8). HP is one ring position and LP three.
+1. **No valid null yet** (section 7). HP is one ring position and LP three.
 2. **Overstated by the joint fit.** Conditional estimate vs m5 group median: V2 −.005 vs −.042, V3 −.013 vs −.051, hV4 −.021 vs −.030, VO −.013 vs −.030, V3AB −.011 vs −.019, IPS −.009 vs −.016. Report the conditional size.
 3. **Absolute sign of sustained gain is not a result.** g_HP and g_LP are negative here but were positive in earlier joint fits (`project_af_signs_attraction` memory). The tied term has no control condition. Only the difference is interpretable.
 4. **dD is not robust.** Parameter p = .028 vs .44, weakens with outlier removal and noise weighting, and changes sign across the hierarchy (positive V1–V3, negative hV4 onward).
 
-## 7. Prediction tests
+## 6. Prediction tests
 
 ### Leave one subject out: qualified
 
@@ -231,7 +226,7 @@ By sensitivity to the gain (`a`, blind to the sign of the effect), per subject �
 
 ΔcvR² by voxel reliability (unbounded nested, ×10⁻³): dS and dD are negative at every reliability level; see `notes/fitting_lessons_2026-11.md`.
 
-## 8. Permutation null: running
+## 7. Permutation null: running
 
 Every run's HP label is moved 1, 2 or 3 ring steps; data, stimulus and events stay unchanged. Under the null, a subject's four labellings are exchangeable, so each subject is assigned one at random, the same across ROIs, 100,000 draws. Fits for m5, m6, m7 on 30 subjects × 11 ROIs, DoG and DN. Code: `retsupp/modeling/hp_rotation_null.py`, `--hp-rotation` in `retsupp/modeling/fit_cv_ladder_nested.py`, branch `hp-rotation-null`.
 
@@ -243,7 +238,7 @@ What it can and cannot show:
 - It does not catch a problem tied to the true HP location. The distractor is most frequent there, so any mismatch in how items or salience are modelled could load onto g_HP, and relabelling removes that link.
 - A real effect leaks into the rotated labellings, since the true HP then sits among the "LP" positions. In a linear approximation the four contrasts of a subject sum to zero, so the rotated values are not independent of the real one: with a real dS they should lean positive by about a third of it.
 
-## 9. Learning and behaviour links
+## 8. Learning and behaviour links
 
 **Learning: no evidence.** Gains re-estimated linearly per run, block position and parametric slope on the full-bounded m7 fit. HP−LP sustained slope within block p = .86, across blocks p = .17, no ROI q < .7. Distractor HP−LP drifts negative over block positions (−.01, −.05, −.08), p = .24. Figure `notes/figures/learning_gains_nested_full_bounded.pdf`. With the power above, this is not evidence against learning.
 
@@ -256,33 +251,33 @@ What it can and cannot show:
 
 **Decoding:** bar reconstruction works (`notes/docky_vss2026/4_decoding/`); a talk demonstration with no statistical result behind it for the paper.
 
-## 10. Superseded: do not cite
+## 9. Superseded: do not cite
 
 | Claim | Where | Replaced by |
 |---|---|---|
-| Sustained HP suppression V2 p = .0002, V3 p = .0002 (Gaussian static) | `notes/STATUS.md`, May | Sections 6, 7. Effect far smaller in current fits |
-| "5 free gain parameters", hV4 sustained null etc. | `notes/GAIN_FINDINGS.md`, May | Section 6 |
+| Sustained HP suppression V2 p = .0002, V3 p = .0002 (Gaussian static) | `notes/STATUS.md`, May | Sections 5, 6. Effect far smaller in current fits |
+| "5 free gain parameters", hV4 sustained null etc. | `notes/GAIN_FINDINGS.md`, May | Section 5 |
 | Paradigm with only the singleton | Fits before 2026-05-08 | 8-item paradigm |
-| HP ≠ LP "hurts", richer models fit worse in training | CV ladder, 28–29 Oct | Section 7. Metric and power; nested fits are monotonic in pooled SSE |
-| Both gains positive, 89% (attraction) | `project_af_signs_attraction` memory, May–June | Sign is fit-dependent, section 6 caveat 3 |
+| HP ≠ LP "hurts", richer models fit worse in training | CV ladder, 28–29 Oct | Section 6. Metric and power; nested fits are monotonic in pooled SSE |
+| Both gains positive, 89% (attraction) | `project_af_signs_attraction` memory, May–June | Sign is fit-dependent, section 5 caveat 3 |
 | May whole-brain m6 and anything using it | Before braincoder 2849288 | Refit in section 4 |
-| Conditionwise pRF shifts: hV4 and V3AB push-away, predicted vs observed shifts, AF and AF+ fits to conditionwise parameters | `archive/conditionwise_shifts/` | Archived, not to be used |
+| All pRF-shift analyses, including conditionwise fits and the shift-model CV | `archive/conditionwise_shifts/`, `derivatives/af_prf_cv_shiftvsgain` | Not used. The project only looks at gain-field models |
 
-## 11. Inconsistencies to settle before writing
+## 10. Inconsistencies to settle before writing
 
 1. **Pilots.** All analyses now use n = 30, including sub-01 and sub-02. They have a different block order (`AA BBB CCC DDD A`), so Methods should state it.
 2. **Primary test and pRF model.** Choose before seeing the null, or report openly how the choice was made.
 3. **Which ROIs count.** Parameter tables use 11; several tests use V1–IPS. SPL1 and FEF have almost no signal voxels.
-4. **`item_scale` under DN** (section 7).
+4. **`item_scale` under DN** (section 6).
 5. **`distractor_radius`** in `Subject.get_stimulus_with_distractors`: `CLAUDE.md` flags that it may not match the rendered size. The fits use rectangles (1.5 × .375°), so check this only for older outputs.
 6. **Unreviewed:** uncommitted changes to the GLMsingle quadrant outputs (`notes/figures/glmsingle_quadrants.tsv`, `.pdf`). Not included here. There are many other uncommitted changes in the tree, including deleted talk figures and a modified `libs/braincoder`.
 
-## 12. Input for the paper plan
+## 11. Input for the paper plan
 
 Not a decision, only what the results above imply.
 
 - **Lead with parameters, not model comparison.** Group tests suit an effect this small; within-subject prediction demonstrably cannot detect it. Report every prediction test anyway, and state that this order was chosen after seeing them.
 - **Strong anchors:** behaviour, pRF fits, items, target gain.
-- **Suggested sequence:** (1) behaviour; (2) maps and pRF models; (3) items and gain-field model, target and distractor; (4) dS with the null, conditional effect size and sensitivity analysis; (5) generalization: LOSO, DoG vs DN, power analysis for within-subject CV; (6) shift-model CV, learning and behaviour links as secondary results.
+- **Suggested sequence:** (1) behaviour; (2) maps and pRF models; (3) items and gain-field model, target and distractor; (4) dS with the null, conditional effect size and sensitivity analysis; (5) generalization: LOSO, DoG vs DN, power analysis for within-subject CV; (6) learning and behaviour links as secondary results.
 - **What the claim can be, if the null holds:** a small, consistently signed group-level reduction of sustained gain at the HP location, clearest in V2–hV4, whose out-of-subject generalization depends on the pRF model. Not robust at the level of one subject.
 - **Remaining work:** the null; run3 completion; whole-brain DN maps (needs the 78 missing chunks); optional simulation with dS in the BOLD; rerun of the RT link on current fits if it stays in the paper.

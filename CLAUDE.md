@@ -66,7 +66,7 @@ When adding a new model, update `get_prf_parameter_labels` *and* the dispatch in
 
 ### Archived: PRF fits per condition and their shifts
 
-Fitting PRFs per HP condition and asking whether they shifted is **no longer used anywhere** (decision 2026-11-05). The code, notes and notebooks are in `archive/conditionwise_shifts/` (see its README). The gain-field ladder (`modeling/fit_cv_ladder_nested.py`) is the current analysis. Do not build on, cite or propose the archived analysis.
+Fitting PRFs per HP condition and asking whether they shifted is **no longer used anywhere** (decision 2026-11-05); the project only looks at gain-field models, so shift models are out too. The code, notes and notebooks are in `archive/conditionwise_shifts/` (see its README). The gain-field ladder (`modeling/fit_cv_ladder_nested.py`) is the current analysis. Do not build on, cite or propose the archived analysis.
 
 ### Pipeline, in order
 
