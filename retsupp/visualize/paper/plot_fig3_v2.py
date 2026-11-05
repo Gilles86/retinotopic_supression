@@ -20,9 +20,9 @@ from retsupp.visualize.paper.paper_style import (DISTRACTOR, DOUBLE, FG, HP, MUT
                                                  letter, offset_spines, pending, provisional, save)
 
 LEGEND = """
-**Figure 3. Model fits.** a, Polar angle and eccentricity of one subject on a flattened cortical surface. b, Share of pRF centres in the contralateral field per ROI, for voxels with cross-run reliability > 0; dots are subjects, bars are medians, the number under each ROI is the number of subjects with at least {min_vox} such voxels (n = 30 in total); dashed line, chance. c, One voxel over {win:.0f} s of one run: BOLD and the m0 and m7 predictions, with target and singleton onsets at the voxel's ring location and at any location as ticks, and the bar position as a strip. d, Held-out R² of each pRF model relative to the Gaussian pRF with a fixed HRF, per ROI; voxels selected per fold on training-run reliability; dots are subjects (n = 30), bars are medians. e, Leave-one-subject-out test per ladder step: share of subjects whose held-out prediction improves with the effect size from the other subjects; n = 30, Wilcoxon across subjects on ΔR², median over ROIs. ΔR² (×10⁻⁵; DoG, DN): {dr2}.
+**Figure 3. Model fits.** a, Polar angle and eccentricity of one subject on a flattened cortical surface. b, Share of pRF centres in the contralateral field per ROI, for voxels with cross-run reliability > 0; dots are subjects, bars are medians, the number under each ROI is the number of subjects with at least {min_vox} such voxels (n = 30 in total); dashed line, chance. c, One voxel over {win:.0f} s of one run: BOLD and the m0 and m7 predictions, with target and singleton onsets at the voxel's ring location and at any location as ticks, and the bar position as a strip. d, Held-out R² per ROI for Gaussian, DoG and DN pRFs with a fixed or a per-voxel HRF; voxels selected per fold on training-run reliability; dots are subjects (n = 30), bars are medians, triangles are subjects above the axis. e, Leave-one-subject-out test per ladder step: share of subjects whose held-out prediction improves with the effect size from the other subjects; n = 30, Wilcoxon across subjects on ΔR², median over ROIs. ΔR² (×10⁻⁵; DoG, DN): {dr2}.
 """
-FAM_COL = {'DoG': '#2A9D8F', 'DN': '#7209B7'}
+FAM_COL = {'Gaussian': '#8D99A6', 'DoG': '#1F6F8B', 'DN': '#A23B72'}
 TERM_ORDER = [('items', 'Items'), ('T', 'T'), ('D', 'D'), ('DonT', 'D on T'), ('S', 'S'), ('dS', 'dS'), ('dD', 'dD')]
 MIN_VOX = 10
 
@@ -86,31 +86,33 @@ def panel_cv(ax, table):
     d = pd.read_csv(table, sep='\t')
     d = d[(d.selection == 'reliable') & d.roi.isin(ROI_ORDER) & d.model.isin([1, 2, 3, 4, 5, 6])]
     s = d.groupby(['roi', 'subject', 'model']).median_r2.mean().unstack('model')
-    groups = [(2, 'DoG', False), (4, 'DoG', True), (5, 'DN', False), (6, 'DN', True)]
-    w = .17
+    groups = [(1, 'Gaussian', False), (3, 'Gaussian', True), (2, 'DoG', False), (4, 'DoG', True), (5, 'DN', False), (6, 'DN', True)]
+    w = .135
+    lo, hi = 0, .5
     for i, roi in enumerate(ROI_ORDER):
         g = s.loc[roi]
         for k, (m, fam, flex) in enumerate(groups):
-            v = (g[m] - g[1]).dropna().to_numpy()
-            x = i + (k - 1.5) * w
+            v = g[m].dropna().to_numpy()
+            x = i + (k - 2.5) * w
             rng = np.random.default_rng(100 * i + k)
             col = FAM_COL[fam]
-            ax.scatter(x + rng.uniform(-.045, .045, len(v)), v, s=3.5, facecolors=col if flex else 'none', edgecolors=col, linewidths=.35, alpha=.5, zorder=1)
-            ax.plot([x - .07, x + .07], [np.median(v)] * 2, color=col, lw=1.4, solid_capstyle='butt', zorder=3)
-        ax.add_patch(plt.Rectangle((i + 2.55 * w, -.0), .001, .001, lw=0))
-    ax.axhline(0, color='.7', lw=.6, ls='--', zorder=0)
+            xx = x + rng.uniform(-.035, .035, len(v))
+            keep = v <= hi
+            ax.scatter(xx[keep], v[keep], s=3, facecolors=col if flex else 'none', edgecolors=col, linewidths=.3, alpha=.45, zorder=1)
+            ax.scatter(xx[~keep], np.full((~keep).sum(), hi), s=6, marker='^', color=col, lw=0, alpha=.6, zorder=1, clip_on=False)
+            ax.plot([x - .055, x + .055], [np.median(v)] * 2, color=col, lw=1.5, solid_capstyle='butt', zorder=3)
     ax.set_xticks(range(len(ROI_ORDER)))
     ax.set_xticklabels(ROI_ORDER, fontsize=6)
     ax.set_xlim(-.55, len(ROI_ORDER) - .45)
-    ax.set_ylim(-.03, .07)
-    ax.set_yticks([0, .03, .06])
-    ax.set_ylabel('Held-out ΔR² vs Gaussian')
+    ax.set_ylim(lo, hi)
+    ax.set_yticks([0, .25, .5])
+    ax.set_ylabel('Held-out R²')
     x0 = .01
-    for lab, col, filled in (('DoG', FAM_COL['DoG'], True), ('DN', FAM_COL['DN'], True), ('Fixed HRF', FG, False), ('Per-voxel HRF', FG, True)):
+    for lab, col, filled in (('Gaussian', FAM_COL['Gaussian'], True), ('DoG', FAM_COL['DoG'], True), ('DN', FAM_COL['DN'], True), ('Fixed HRF', FG, False), ('Per-voxel HRF', FG, True)):
         ax.scatter([x0 + .012], [1.05], s=11, facecolors=col if filled else 'none', edgecolors=col, linewidths=.6, transform=ax.transAxes, clip_on=False)
         ax.text(x0 + .03, 1.05, lab, transform=ax.transAxes, fontsize=6.5, color=col, va='center')
-        x0 += .06 + .012 * len(lab)
-    ax.text(1., 1.05, 'Pending: one HRF per subject × ROI', transform=ax.transAxes, fontsize=6, color=MUTED, ha='right', va='center')
+        x0 += .055 + .0125 * len(lab)
+    ax.text(1., 1.05, 'Pending: HRF per ROI', transform=ax.transAxes, fontsize=6, color=MUTED, ha='right', va='center')
     offset_spines(ax)
 
 
@@ -134,7 +136,8 @@ def panel_loso(ax, table):
     ax.set_ylim(40, 102)
     ax.set_yticks([50, 75, 100])
     ax.set_ylabel('Subjects improved (%)')
-    for k, (name, col) in enumerate(FAM_COL.items()):
+    for k, name in enumerate(('DoG', 'DN')):
+        col = FAM_COL[name]
         ax.text(.0 + k * .13, 1.05, name, transform=ax.transAxes, fontsize=6.5, color=col, va='center')
     provisional(ax, y=1.02)
     offset_spines(ax)
