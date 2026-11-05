@@ -84,6 +84,29 @@ A sustained gain should be less sensitive to HRF timing than the event-evoked te
 
 **Proposed HRF for the gain fits: flexible but shared within subject × ROI** (not implemented). No current fit does this: the whole-brain m3, m4 and m6 fit one HRF per voxel, the gain fits one canonical HRF for all. A shared HRF avoids per-voxel trade-offs with pRF size while fixing the mismatch with the canonical HRF: m4 median delay is 3.8 (canonical 4.5) and dispersion .43 (canonical .75), May cache, 20 subjects, voxels with R² > .1. Within subject × ROI, pRF size correlates with delay (median ρ −.19, up to −.35 in V3) more than with dispersion (ρ +.08). The ROI medians differ little across ROIs (delay 3.5–3.8, dispersion .40–.44) and between subjects (SD .34, .05), which suggests one HRF per subject might also do. Requires refitting m00 onward, so it should be decided before any final analysis.
 
+### Voxel selection: the R² mixture is not a valid FDR
+
+Selection and the tail-FDR threshold come from a two-Gaussian mixture on logit(R²), fitted per subject over the brain mask (`braincoder.utils.stats.fit_r2_mixture`). There is no real null. If unreliable centres fall on either side about equally, twice the ipsilateral share estimates the false-positive share:
+
+| R² at least | V1 contralateral | Implied false share |
+|---:|---:|---:|
+| .02 (about the threshold) | 74% | ~50%, against a nominal 5% |
+| .05 | 89% | ~20% |
+| .10 | 96% | ~8% |
+| .20 | 99% | ~2% |
+
+Voxels actually entering the gain fits (`p_signal` > .5, top 500 by R², m4, 30 subjects, medians):
+
+| | V1 | V2 | V3 | hV4 | V3AB | IPS |
+|---|---:|---:|---:|---:|---:|---:|
+| Contralateral, as selected | 90% | 87% | 91% | 90% | 87% | 83% |
+| Below R² = .1 | 15% | 17% | 18% | 60% | 68% | 83% |
+| Contralateral if cross-run null cvR² > 0 | 95% | 93% | 96% | 96% | 96% | 97% |
+| Contralateral if R² ≥ .1 | 94% | 93% | 96% | 96% | 98% | 95% |
+| Contralateral if m0_prf cvR² > 0 | 89% | 87% | 93% | 91% | 87% | 85% |
+
+A model's cvR² > 0 means it beats the test-run mean, and that adds little here, whereas the cross-run null does. Prediction scores already use the cross-run null, but the shared gains are fitted on all selected voxels. Current top-500 selection therefore includes many voxels with unreliable pRF positions outside V1–V3.
+
 ## 3. Behaviour: solid
 
 n = 30 including pilots sub-01 and sub-02, 21,480 trials, RTs from correct trials. Recomputed 2026-11-05 with `notes/scripts/results_overview_behaviour.py`. The pilots' events have no HP column, so each run's HP comes from the modal singleton location (`Subject.get_hpd_locations`); that rule matches the recorded column on every trial of the other 28.

@@ -4,9 +4,9 @@
 ``notes/data``. ``plot`` draws the figure from those tables, the held-out comparison
 (``notes/data/prf_cv_roi_summary.tsv``) and the pycortex renders of ``render_fig1_prf``.
 
-Mapped voxels have at least half of the pRF inside the bar aperture and sigma .3-4°. Signal
-voxels are mapped voxels with R² above the subject's whole-brain tail-FDR threshold (alpha .05).
-Sigma against eccentricity and coverage use signal voxels; panel e is their share of mapped voxels.
+Mapped voxels have at least half of the pRF inside the bar aperture and sigma .3-4°. Panels d-f use
+R² >= .1, with panel e the share of mapped voxels that pass: below that the centres are unreliable,
+and V1 is only 74% contralateral at R² >= .02 against 96% at .1.
 
 Usage::
 
@@ -35,14 +35,16 @@ mpl.rcParams.update({
 })
 
 FG, MUTED, HP = '#1F2933', '#9AA5B1', '#D62828'
+HEMI = {'L': '#5E3C99', 'R': '#E66101'}
 SCREEN, ITEM_A, ITEM_B = '#808080', '#E39100', '#00A900'   # as displayed: psychopy (.78, .14, -1), (-1, .33, -1)
 AREAS = {'V1': '#3D5A80', 'V2': '#2A9D8F', 'V3': '#8AB17D', 'hV4': '#E9C46A', 'V3AB': '#7209B7',
          'VO': '#F4A261', 'LO': '#E76F51', 'TO': '#B5179E', 'IPS': '#0077B6', 'FEF': '#D62828'}
 ROIS = ['V1', 'V2', 'V3', 'V3AB', 'hV4', 'LO', 'TO', 'VO', 'IPS', 'SPL1', 'FEF']
-LINE_ROIS = ['V1', 'V2', 'V3', 'hV4', 'V3AB', 'IPS']
+LINE_ROIS = ['V1', 'V2', 'V3', 'hV4', 'V3AB']
 STRIP_ROIS = ['V1', 'V2', 'V3', 'hV4', 'VO', 'LO', 'TO', 'V3AB', 'IPS']
 COVER_ROIS = ['V1', 'V3', 'V3AB', 'IPS']
 APERTURE, RING = 3.17, 4.0
+POSITION_R2 = .1
 ECC_BINS = np.arange(0, 3.51, .5)
 XY_BINS = np.linspace(-APERTURE, APERTURE, 41)
 DATA = Path('notes/data')
@@ -63,20 +65,21 @@ def collect(bids_folder):
                                          params=['x', 'y', 'sd', 'amplitude', 'r2'])
                 d.append(x.assign(roi=roi, hemi=hemi))
         d = pd.concat(d, ignore_index=True)
-        thr = sub.get_r2_fdr_threshold(model=4, alpha=.05)
-        good, _ = select_well_fit_voxels(d, r2_threshold=thr, aperture_radius=APERTURE)
         mapped, _ = select_well_fit_voxels(d, r2_threshold=-np.inf, aperture_radius=APERTURE)
-        print(f'sub-{s:02d}: threshold {thr:.3f}, {len(good)} of {len(d)} voxels', flush=True)
-        good = good.assign(ecc=np.hypot(good.x, good.y))
-        for roi, g in good.groupby('roi'):
+        print(f'sub-{s:02d}: {len(d)} voxels', flush=True)
+        clean, _ = select_well_fit_voxels(d, r2_threshold=POSITION_R2, aperture_radius=APERTURE)
+        print(f'  {len(clean)} pass', flush=True)
+        clean = clean.assign(ecc=np.hypot(clean.x, clean.y))
+        for roi, g in clean.groupby('roi'):
             b = pd.cut(g.ecc, ECC_BINS, include_lowest=True)
             m = g.groupby(b, observed=True).sd.agg(['median', 'size']).reset_index()
             sigma.append(pd.DataFrame(dict(subject=s, roi=roi, ecc=[i.mid for i in m.ecc], sd=m['median'], n=m['size'])))
-            h, _, _ = np.histogram2d(g.x, g.y, bins=[XY_BINS, XY_BINS])
-            ix, iy = np.nonzero(h)
-            cover.append(pd.DataFrame(dict(subject=s, roi=roi, ix=ix, iy=iy, n=h[ix, iy].astype(int))))
+            for hemi, gh in g.groupby('hemi'):
+                h, _, _ = np.histogram2d(gh.x, gh.y, bins=[XY_BINS, XY_BINS])
+                ix, iy = np.nonzero(h)
+                cover.append(pd.DataFrame(dict(subject=s, roi=roi, hemi=hemi, ix=ix, iy=iy, n=h[ix, iy].astype(int))))
         r2s.append(mapped.groupby('roi').agg(n_mapped=('r2', 'size'), median_r2=('r2', 'median'))
-                   .join(good.groupby('roi').size().rename('n_signal')).fillna(0).reset_index().assign(subject=s))
+                   .join(clean.groupby('roi').size().rename('n_signal')).fillna(0).reset_index().assign(subject=s))
     pd.concat(sigma).to_csv(SIGMA_TSV, sep='\t', index=False)
     pd.concat(r2s).to_csv(R2_TSV, sep='\t', index=False)
     pd.concat(cover).to_csv(COVER_TSV, sep='\t', index=False)
@@ -139,46 +142,68 @@ def panel_display(ax):
     ax.add_patch(Circle(pos[7], 1.12, fill=False, ec=HP, lw=1.1, ls=(0, (2.5, 1.5)), zorder=6, clip_on=False))
     kw = dict(fontsize=7, color=FG, annotation_clip=False,
               arrowprops=dict(arrowstyle='-|>', color=FG, lw=.8, mutation_scale=6, shrinkA=1, shrinkB=2))
-    ax.annotate('Target: odd orientation,\nreport the dot inside', xy=pos[3] + [0, .85], xytext=(-9.3, 7.3),
+    ax.annotate('Target: odd orientation, report\nthe dot, never at the singleton', xy=pos[3] + [0, .85], xytext=(-9.3, 7.3),
                 ha='left', va='center', **kw)
-    ax.annotate('Singleton distractor', xy=pos[7] + [0, -1.2], xytext=(5.4, -7.0), ha='right', va='center', **kw)
+    ax.annotate('Singleton distractor\n(none on 20% of trials)', xy=pos[7] + [0, -1.2], xytext=(5.4, -7.2),
+                ha='right', va='center', **kw)
     ax.annotate('Bar in 3.17°\naperture', xy=(-.5, 3.2), xytext=(9.3, 7.3), ha='right', va='center', **kw)
+    # Anchors: the ring and aperture eccentricities, and a 1° scale bar.
+    ax.add_patch(Circle((0, 0), RING, fill=False, ec='w', lw=.5, ls=(0, (1.5, 1.5)), zorder=2.5))
+    ax.plot([-5.0, -4.0], [-5.0, -5.0], color='w', lw=1.2, solid_capstyle='butt', zorder=6)
+    ax.text(-4.5, -4.82, '1°', color='w', fontsize=6, ha='center', va='bottom', zorder=6)
+    ax.text(-1.25, -3.3, '4°', color='w', fontsize=6, ha='center', va='center', zorder=6)
     ax.set_xlim(-9.5, 9.5)
     ax.set_ylim(-8, 8.6)
-    ax.text(pos[7][0] + 1.3, pos[7][1] + 1.2, 'HP', color=HP, fontsize=7, fontweight='bold', va='center', zorder=7)
+    # Where the singleton can appear, with its probability over all trials.
+    ax.text(5.65, pos[7][1], 'HP\n50%', color=HP, fontsize=7, fontweight='bold', va='center', ha='left')
+    for j, x, ha in ((1, 5.65, 'left'), (3, -5.65, 'right'), (5, -5.65, 'right')):
+        ax.add_patch(Circle(pos[j], 1.12, fill=False, ec='w', lw=.8, ls=(0, (2.5, 1.5)), zorder=6))
+        ax.text(x, pos[j][1], 'LP\n10%', color=FG, fontsize=7, va='center', ha=ha)
 
 
 def panel_trial(fig, ax):
-    """Frames of one trial, offset along a time arrow."""
+    """One trial to scale above the running bar, then the HP location over blocks of runs."""
     ax.set_axis_off()
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
-    frames = [('Fixation', '1 s', dict(search=False)), ('Search', '1.5 s', dict(search=True)),
-              ('Feedback', '1 s', dict(search=False)), ('Interval', '1.3-4.5 s', dict(search=False))]
     bb = ax.get_position()
-    fw_in = bb.width * fig.get_figwidth()
-    size = .2                        # frame width, as fraction of this axes
-    h = size * fw_in / (bb.height * fig.get_figheight())
-    y0 = .93 - h
-    for i, (name, dur, kw) in enumerate(frames):
-        x = .01 + i * (size + .06)
-        inset = ax.inset_axes([x, y0, size, h])
-        display(inset, scale=1., **kw)
-        ax.text(x + size / 2, y0 + h + .012, name, ha='center', va='bottom', fontsize=7, color=FG)
-        ax.text(x + size / 2, y0 - .02, dur, ha='center', va='top', fontsize=7, color=FG)
-    y = y0 - .085
-    ax.add_patch(FancyArrowPatch((.01, y), (.985, y), arrowstyle='-|>', mutation_scale=7, lw=.8, color=FG,
-                                 transform=ax.transAxes))
-    ax.text(.5, y - .015, 'The bar keeps sweeping, independent of the trials', ha='center', va='top', fontsize=7, color=FG)
+    aspect = bb.width * fig.get_figwidth() / (bb.height * fig.get_figheight())
+    total = 8.
+    x0, scale = .01, .98 / total
+    y, h = .72, .13
+    onset = 0.
+    for name, dur, col, tc in (('Fixation', 1., '#D5DAE0', FG), ('Search', 1.5, FG, 'w'), ('Feedback', 1., '#D5DAE0', FG)):
+        ax.add_patch(Rectangle((x0 + onset * scale, y), dur * scale - .004, h, facecolor=col, lw=0))
+        ax.text(x0 + (onset + dur / 2) * scale, y + h / 2, name, ha='center', va='center', fontsize=7, color=tc)
+        ax.text(x0 + (onset + dur / 2) * scale, y + h + .015, f'{dur:g} s', ha='center', va='bottom', fontsize=7, color=FG)
+        onset += dur
+    # The interval takes one of three durations.
+    alphas = (.75, .45, .22)
+    start = onset
+    for dur, alpha, edge in zip((1.3, 1.6, 1.6), alphas, (1.3, 2.9, 4.5)):
+        ax.add_patch(Rectangle((x0 + start * scale, y), dur * scale - .004, h, facecolor='#D5DAE0', alpha=alpha, lw=0))
+        start += dur
+        ax.text(x0 + start * scale - .004, y + h + .015, f'{edge:g} s', ha='right', va='bottom', fontsize=7, color=FG)
+    ax.text(x0 + (onset + 2.25) * scale, y + h / 2, 'Interval', ha='center', va='center', fontsize=7, color=FG)
+    # The bar runs through everything.
+    yb, hb, n = .56, .055, 56
+    for i in range(n):
+        for j in range(2):
+            ax.add_patch(Rectangle((x0 + .98 * i / n, yb + j * hb / 2), .98 / n, hb / 2, lw=0,
+                                   facecolor='k' if (i + j) % 2 else 'w', edgecolor='none'))
+    ax.add_patch(Rectangle((x0, yb), .98, hb, fill=False, ec=MUTED, lw=.4))
+    ax.text(.5, yb - .02, 'The bar keeps sweeping, independent of the trials', ha='center', va='top', fontsize=7, color=FG)
+    ax.annotate('', xy=(.995, yb + hb / 2), xytext=(.985, yb + hb / 2), annotation_clip=False,
+                arrowprops=dict(arrowstyle='-|>', color=FG, lw=.8, mutation_scale=6, shrinkA=0, shrinkB=0))
     # The HP location per block of runs.
-    y1 = .02
-    icon = .1 * fw_in / (bb.height * fig.get_figheight())
-    ax.text(.01, y1 + icon + .015, 'HP location moves between blocks of 3 runs, 12 runs in 2 sessions',
+    y1, w = .0, .14
+    icon = w * aspect
+    ax.text(.01, y1 + icon + .05, 'HP location moves between blocks of 3 runs (12 runs, 2 sessions); example order',
             ha='left', va='bottom', fontsize=7, color=FG)
     pos = item_positions()
     for i, k in enumerate([1, 5, 7, 3]):
-        x = .01 + i * .125
-        inset = ax.inset_axes([x, y1, .1, icon])
+        x = .03 + i * .25
+        inset = ax.inset_axes([x, y1, w, icon])
         inset.add_patch(Circle((0, 0), RING, fill=False, ec=MUTED, lw=.5))
         for j in (1, 3, 5, 7):
             inset.add_patch(Circle(pos[j], 1.2, facecolor=HP if j == k else 'w', ec=HP if j == k else MUTED, lw=.5))
@@ -186,10 +211,9 @@ def panel_trial(fig, ax):
         inset.set_ylim(-5.4, 5.4)
         inset.set_aspect('equal')
         inset.set_axis_off()
-    x = .56
-    for yy, s, c in ((y1 + icon * .82, 'HP: 50% of trials', HP), (y1 + icon * .5, 'Each other location: 10%', FG),
-                     (y1 + icon * .18, 'No singleton: 20%', FG)):
-        ax.text(x, yy, s, fontsize=7, color=c, va='center')
+        if i < 3:
+            ax.annotate('', xy=(x + w + .095, y1 + icon / 2), xytext=(x + w + .015, y1 + icon / 2),
+                        arrowprops=dict(arrowstyle='-|>', color=MUTED, lw=.8, mutation_scale=6, shrinkA=0, shrinkB=0))
 
 
 def theta_value(theta, hemi):
@@ -227,8 +251,8 @@ def show_render(ax, images, par):
     ax.set_axis_off()
 
 
-def panel_maps(fig, sub, subject, in_dir):
-    """All maps in the ventral view, plus areas and polar angle in the dorsal view for IPS and FEF.
+def panel_maps(fig, sub, subject, in_dir, view='ventral', view_name='Ventral'):
+    """All maps in one view, plus areas and polar angle in the dorsal view for IPS and FEF.
 
     ``sub`` is a grid of 3 rows and 5 columns; columns 2-4 of the last row are left to the caller."""
     panels = [('areas', 'Visual areas'), ('angle', 'Polar angle'), ('ecc', 'Eccentricity (°)'),
@@ -239,18 +263,18 @@ def panel_maps(fig, sub, subject, in_dir):
     def load(view, pars):
         return {p: Image.open(Path(in_dir) / f'sub-{subject:02d}_{p}_{view}.png').convert('RGBA') for p in pars}
 
-    ventral = load('ventral', [p for p, _ in panels])
+    main = load(view, [p for p, _ in panels])
     first = None
     for j, (par, title) in enumerate(panels):
         ax = fig.add_subplot(sub[0, j])
         first = first or ax
-        show_render(ax, ventral, par)
+        show_render(ax, main, par)
         ax.set_title(title, color=FG, pad=3)
     dorsal = load('dorsal', ['areas', 'angle'])
     for j, par in enumerate(dorsal):
         ax = fig.add_subplot(sub[2, j])
         show_render(ax, dorsal, par)
-    for r, name in ((0, 'Ventral'), (2, 'Dorsal')):
+    for r, name in ((0, view_name), (2, 'Dorsal')):
         ax = fig.axes[-2] if r == 2 else first
         ax.text(-.02, .5, name, transform=ax.transAxes, rotation=90, ha='right', va='center', color=FG, fontsize=7)
     ax = fig.add_subplot(sub[1, 0])
@@ -309,37 +333,64 @@ def panel_share(ax):
     ax.set_xlim(-.6, len(STRIP_ROIS) - .4)
     ax.set_ylim(0, 100)
     ax.set_yticks([0, 50, 100])
-    ax.set_ylabel('Significant voxels (%)')
+    ax.set_ylabel('Voxels with R² ≥ .1 (%)')
+
+
+def contralateral(d):
+    """Percentage of each subject's pRF centres in the field opposite their hemisphere."""
+    centres = .5 * (XY_BINS[:-1] + XY_BINS[1:])
+    x = centres[d.ix.to_numpy()]
+    contra = ((d.hemi == 'L') & (x > 0)) | ((d.hemi == 'R') & (x < 0))
+    return 100 * (d.n * contra).groupby(d.subject).sum() / d.n.groupby(d.subject).sum()
 
 
 def panel_coverage(fig, gs):
+    """pRF centres of the two hemispheres in two colours: the mapping should be contralateral."""
+    from scipy.ndimage import gaussian_filter
     d = pd.read_csv(COVER_TSV, sep='\t')
     sub = gs.subgridspec(1, 4, wspace=.05)
     first = None
+    n = len(XY_BINS) - 1
     centres = .5 * (XY_BINS[:-1] + XY_BINS[1:])
-    from scipy.ndimage import gaussian_filter
+    gx, gy = np.meshgrid(centres, centres, indexing='ij')
+    cols = {h: np.array(mpl.colors.to_rgb(c)) for h, c in HEMI.items()}
     for k, roi in enumerate(COVER_ROIS):
         ax = fig.add_subplot(sub[k])
         first = first or ax
-        h = np.zeros((len(centres),) * 2)
         g = d[d.roi == roi]
-        # Each subject counts once: proportion of their voxels per bin, then the average.
-        for _, x in g.groupby('subject'):
-            one = np.zeros_like(h)
-            one[x.ix, x.iy] = x.n
-            h += one / one.sum()
-        h = gaussian_filter(h / g.subject.nunique(), 1.)
-        im = ax.imshow(h.T, origin='lower', extent=(-APERTURE, APERTURE, -APERTURE, APERTURE), cmap='viridis',
-                       vmin=0, vmax=h.max(), interpolation='bilinear')
-        rim = Circle((0, 0), APERTURE, fill=False, ec=MUTED, lw=.5)
-        ax.add_patch(rim)
-        im.set_clip_path(Circle((0, 0), APERTURE, transform=ax.transData))
-        ax.plot(0, 0, '+', color='w', ms=4, mew=.7)
+        rgb = np.ones((n, n, 3))
+        total = {}
+        for hemi in HEMI:
+            h = np.zeros((n, n))
+            # Each subject counts once: share of their voxels per bin, then the average.
+            for _, x in g[g.hemi == hemi].groupby('subject'):
+                one = np.zeros((n, n))
+                one[x.ix, x.iy] = x.n
+                h += one / one.sum()
+            total[hemi] = gaussian_filter(h, 1.)
+        # Square root so that the periphery is visible next to the foveal peak.
+        top = np.sqrt(max(v.max() for v in total.values()))
+        for hemi, h in total.items():
+            rgb *= 1 - (np.sqrt(h) / top)[..., None] * (1 - cols[hemi])
+        rgba = np.dstack([rgb, np.hypot(gx, gy) <= APERTURE]).transpose(1, 0, 2)
+        ax.imshow(rgba, origin='lower', extent=(-APERTURE, APERTURE, -APERTURE, APERTURE), interpolation='bilinear')
+        ax.add_patch(Circle((0, 0), APERTURE, fill=False, ec=MUTED, lw=.5))
+        ax.plot([0, 0], [-APERTURE, APERTURE], color=MUTED, lw=.4, zorder=3)
+        ax.plot([-APERTURE, APERTURE], [0, 0], color=MUTED, lw=.4, zorder=3)
+        for r in (1, 2, 3):
+            ax.add_patch(Circle((0, 0), r, fill=False, ec=MUTED, lw=.4, ls=(0, (1.5, 1.5)), zorder=3))
+            if k == 0:
+                ax.text(r * .71 + .03, -r * .71 - .03, f'{r}°', color=FG, fontsize=5.5, ha='left', va='top', zorder=5)
+        ax.plot(0, 0, '+', color=FG, ms=4, mew=.7, zorder=4)
         ax.set_xlim(-3.4, 3.4)
         ax.set_ylim(-3.4, 3.4)
         ax.set_aspect('equal')
         ax.set_axis_off()
-        ax.set_title(roi, color=AREAS[roi], fontsize=7, fontweight='bold', pad=1)
+        pct = contralateral(g)
+        print(f'{roi}: {pct.median():.0f}% contralateral, range {pct.min():.0f}-{pct.max():.0f}, n={len(pct)}')
+        ax.set_title(f'{roi}, {pct.median():.0f}% contralateral', color=AREAS[roi], fontsize=7, pad=1)
+    first.text(.0, -.08, 'Left hemisphere', color=HEMI['L'], fontsize=7, transform=first.transAxes, va='top')
+    first.text(1.0, -.08, 'Right hemisphere', color=HEMI['R'], fontsize=7, transform=first.transAxes, va='top', ha='left')
     return first
 
 
@@ -367,19 +418,19 @@ def panel_cv(ax):
     ax.set_yticks([.2, .22, .24])
 
 
-def plot(subject, in_dir, out):
-    fig = plt.figure(figsize=(7.25, 8.1))
-    outer = fig.add_gridspec(3, 1, height_ratios=[2.1, 3.45, 1.15], hspace=.27,
+def plot(subject, in_dir, out, view='ventral', view_name='Ventral'):
+    fig = plt.figure(figsize=(7.25, 7.8))
+    outer = fig.add_gridspec(3, 1, height_ratios=[1.75, 3.45, 1.15], hspace=.23,
                              left=.065, right=.985, top=.985, bottom=.055)
-    top = outer[0].subgridspec(1, 2, width_ratios=[1, 1.95], wspace=.06)
+    top = outer[0].subgridspec(1, 2, width_ratios=[1, 1.75], wspace=.09)
     ax = fig.add_subplot(top[0])
     panel_display(ax)
-    letter(ax, 'a', x=.03, y=.97)
+    letter(ax, 'a', x=.0, y=1.0)
     ax = fig.add_subplot(top[1])
     panel_trial(fig, ax)
-    letter(ax, 'b', y=.97)
+    letter(ax, 'b', x=0, y=.95)
     maps = outer[1].subgridspec(3, 5, height_ratios=[1.4, .3, 1.4], wspace=.03, hspace=.04)
-    first = panel_maps(fig, maps, subject, in_dir)
+    first = panel_maps(fig, maps, subject, in_dir, view, view_name)
     letter(first, 'c', x=-.09, y=1.04)
     lower = maps[2, 2:].subgridspec(1, 3, width_ratios=[.02, 1.2, 1], wspace=.9)
     ax = fig.add_subplot(lower[1])
@@ -410,8 +461,10 @@ if __name__ == '__main__':
     ap.add_argument('--subject', type=int, default=19)
     ap.add_argument('--in-dir', default='notes/figures/fig1_r2low')
     ap.add_argument('--out', default='notes/figures/fig1_paradigm_prf.pdf')
+    ap.add_argument('--view', default='ventral')
+    ap.add_argument('--view-name', default='Ventral')
     a = ap.parse_args()
     if a.action == 'collect':
         collect(a.bids_folder)
     else:
-        plot(a.subject, a.in_dir, a.out)
+        plot(a.subject, a.in_dir, a.out, a.view, a.view_name)
