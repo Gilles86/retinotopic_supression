@@ -136,7 +136,7 @@ def display(ax, search=True, fix='w', lim=5.4, scale=1., bar=True, hp=None):
     ax.set_axis_off()
 
 
-def panel_display(ax):
+def panel_display(ax, margin=9.3):
     display(ax)
     pos = item_positions()
     ax.add_patch(Circle(pos[7], 1.12, fill=False, ec=HP, lw=1.1, ls=(0, (2.5, 1.5)), zorder=6, clip_on=False))
@@ -144,15 +144,15 @@ def panel_display(ax):
               arrowprops=dict(arrowstyle='-|>', color=FG, lw=.8, mutation_scale=6, shrinkA=1, shrinkB=2))
     ax.annotate('Target: odd orientation, report\nthe dot, never at the singleton', xy=pos[3] + [.3, .85], xytext=(0, 7.3),
                 ha='center', va='center', **kw)
-    ax.annotate('Singleton distractor\n(none on 20% of trials)', xy=pos[7] + [0, -1.2], xytext=(9.3, -7.2),
+    ax.annotate('Singleton distractor\n(none on 20% of trials)', xy=pos[7] + [0, -1.2], xytext=(margin, -7.2),
                 ha='right', va='center', **kw)
-    ax.annotate('Bar in 3.17°\naperture', xy=(-.5, -3.25), xytext=(-9.3, -7.2), ha='left', va='center', **kw)
+    ax.annotate('Bar in 3.17°\naperture', xy=(-.5, -3.25), xytext=(-margin, -7.2), ha='left', va='center', **kw)
     # Anchors: the ring and aperture eccentricities, and a 1° scale bar.
     ax.add_patch(Circle((0, 0), RING, fill=False, ec='w', lw=.5, ls=(0, (1.5, 1.5)), zorder=2.5))
     ax.plot([-5.0, -4.0], [-5.0, -5.0], color='w', lw=1.2, solid_capstyle='butt', zorder=6)
     ax.text(-4.5, -4.82, '1°', color='w', fontsize=6, ha='center', va='bottom', zorder=6)
     ax.text(-1.25, -3.3, '4°', color='w', fontsize=6, ha='center', va='center', zorder=6)
-    ax.set_xlim(-9.5, 9.5)
+    ax.set_xlim(-margin - .2, margin + .2)
     ax.set_ylim(-8, 8.6)
     # Where the singleton can appear, with its probability over all trials.
     ax.text(5.65, pos[7][1], 'HP\n50%', color=HP, fontsize=7, fontweight='bold', va='center', ha='left')
@@ -168,52 +168,47 @@ def panel_trial(fig, ax):
     ax.set_ylim(0, 1)
     bb = ax.get_position()
     aspect = bb.width * fig.get_figwidth() / (bb.height * fig.get_figheight())
-    total = 8.
-    x0, scale = .01, .98 / total
-    y, h = .72, .13
+    x0, scale = .01, .98 / 8.
+    y, h = .74, .15
     onset = 0.
     for name, dur, col, tc in (('Fixation', 1., '#D5DAE0', FG), ('Search', 1.5, FG, 'w'), ('Feedback', 1., '#D5DAE0', FG)):
         ax.add_patch(Rectangle((x0 + onset * scale, y), dur * scale - .004, h, facecolor=col, lw=0))
-        ax.text(x0 + (onset + dur / 2) * scale, y + h / 2, name, ha='center', va='center', fontsize=7, color=tc)
-        ax.text(x0 + (onset + dur / 2) * scale, y + h + .015, f'{dur:g} s', ha='center', va='bottom', fontsize=7, color=FG)
+        ax.text(x0 + (onset + dur / 2) * scale, y + h / 2, name, ha='center', va='center', fontsize=6.5, color=tc)
+        ax.text(x0 + (onset + dur / 2) * scale, y + h + .02, f'{dur:g} s', ha='center', va='bottom', fontsize=6.5, color=FG)
         onset += dur
-    # The interval takes one of three durations.
-    alphas = (.75, .45, .22)
-    start = onset
-    for dur, alpha, edge in zip((1.3, 1.6, 1.6), alphas, (1.3, 2.9, 4.5)):
-        ax.add_patch(Rectangle((x0 + start * scale, y), dur * scale - .004, h, facecolor='#D5DAE0', alpha=alpha, lw=0))
-        start += dur
-        ax.text(x0 + start * scale - .004, y + h + .015, f'{edge:g} s', ha='right', va='bottom', fontsize=7, color=FG)
-    ax.text(x0 + (onset + 2.25) * scale, y + h / 2, 'Interval', ha='center', va='center', fontsize=7, color=FG)
+    # The interval takes one of three durations: a bar with a tick at each.
+    ax.add_patch(Rectangle((x0 + onset * scale, y), 4.5 * scale, h, facecolor='#ECEFF2', lw=0))
+    ax.text(x0 + (onset + 2.25) * scale, y + h / 2, 'Interval', ha='center', va='center', fontsize=6.5, color=FG)
+    for edge in (1.3, 2.9, 4.5):
+        xe = x0 + (onset + edge) * scale
+        ax.plot([xe, xe], [y, y + h], color=MUTED, lw=.6)
+    ax.text(x0 + (onset + 4.5) * scale, y + h + .02, '1.3, 2.9 or 4.5 s', ha='right', va='bottom', fontsize=6.5, color=FG)
     # The bar runs through everything.
-    yb, hb, n = .565, .06, 56
+    yb, hb, n = .56, .07, 56
     for i in range(n):
         for j in range(2):
             ax.add_patch(Rectangle((x0 + .98 * i / n, yb + j * hb / 2), .98 / n, hb / 2, lw=0,
                                    facecolor='k' if (i + j) % 2 else 'w', edgecolor='none'))
     ax.add_patch(Rectangle((x0, yb), .98, hb, fill=False, ec=MUTED, lw=.4))
-    ax.text(.5, yb - .02, 'The bar keeps sweeping, independent of the trials', ha='center', va='top', fontsize=7, color=FG)
-    ax.annotate('', xy=(.995, yb + hb / 2), xytext=(.985, yb + hb / 2), annotation_clip=False,
-                arrowprops=dict(arrowstyle='-|>', color=FG, lw=.8, mutation_scale=6, shrinkA=0, shrinkB=0))
+    ax.text(x0, yb - .025, 'Bar sweeps throughout', ha='left', va='top', fontsize=6.5, color=FG)
     # The HP location per block of runs.
-    y1, w = .0, .105
+    w = .085
     icon = w * aspect
-    ax.text(.01, y1 + icon + .05, 'HP location moves between blocks of 3 runs (12 runs, 2 sessions); example order',
-            ha='left', va='bottom', fontsize=7, color=FG)
+    ax.text(x0, icon / 2, 'HP location moves\nevery 3 runs (example)', ha='left', va='center', fontsize=6.5, color=FG)
     pos = item_positions()
     for i, k in enumerate([1, 5, 7, 3]):
-        x = .03 + i * .25
-        inset = ax.inset_axes([x, y1, w, icon])
+        x = .32 + i * .17
+        inset = ax.inset_axes([x, 0, w, icon])
         inset.add_patch(Circle((0, 0), RING, fill=False, ec=MUTED, lw=.5))
         for j in (1, 3, 5, 7):
-            inset.add_patch(Circle(pos[j], 1.2, facecolor=HP if j == k else 'w', ec=HP if j == k else MUTED, lw=.5))
-        inset.set_xlim(-5.4, 5.4)
-        inset.set_ylim(-5.4, 5.4)
+            inset.add_patch(Circle(pos[j], 1.3, facecolor=HP if j == k else 'w', ec=HP if j == k else MUTED, lw=.5))
+        inset.set_xlim(-5.6, 5.6)
+        inset.set_ylim(-5.6, 5.6)
         inset.set_aspect('equal')
         inset.set_axis_off()
         if i < 3:
-            ax.annotate('', xy=(x + w + .095, y1 + icon / 2), xytext=(x + w + .015, y1 + icon / 2),
-                        arrowprops=dict(arrowstyle='-|>', color=MUTED, lw=.8, mutation_scale=6, shrinkA=0, shrinkB=0))
+            ax.annotate('', xy=(x + w + .07, icon / 2), xytext=(x + w + .012, icon / 2),
+                        arrowprops=dict(arrowstyle='-|>', color=MUTED, lw=.7, mutation_scale=5, shrinkA=0, shrinkB=0))
 
 
 def theta_value(theta, hemi):

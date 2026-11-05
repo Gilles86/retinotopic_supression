@@ -20,7 +20,7 @@ from retsupp.visualize.paper.paper_style import DOUBLE, FG, HP, MUTED, letter, o
 from retsupp.visualize.paper.plot_fig1 import panel_display, panel_trial
 
 LEGEND = """
-**Figure 1. Paradigm and behaviour.** a, Search display with the bar in its 3.17° aperture: 8 items on a ring at 4°, with target and singleton distractor at the four diagonal positions; percentages are over all trials. b, Trial timing to scale and the HP location across blocks of runs (example order). c, Response time with the singleton distractor at the HP location, at an LP location, or absent. d, Response time with the target at the HP or an LP location, on trials with a distractor. c, d, n = 30, lines are subjects, points and bars are mean ± SEM across subjects, correct trials, Wilcoxon signed-rank tests.
+**Figure 1. Paradigm and behaviour.** a, Search display with the bar in its 3.17° aperture: 8 items on a ring at 4°, with target and singleton distractor at the four diagonal positions; percentages are over all trials. b, Trial timing to scale and the HP location across blocks of runs (example order). c, Response time with the singleton distractor at the HP location, at an LP location, or absent. d, Response time with the target at the HP or an LP location, on trials with a distractor. c, d, n = 30, correct trials. Dots are subjects with their overall mean removed (Cousineau normalization), large points and bars are the mean ± within-subject SEM (Morey correction). Wilcoxon signed-rank tests: *** p < .001.
 """
 
 
@@ -32,55 +32,65 @@ def build_rt(path, bids):
     pd.concat([a, b]).to_csv(path, sep='\t', index=False)
 
 
-def p_text(p):
-    return 'p < .0001' if p < 1e-4 else f'p = {p:.3f}'.replace('0.', '.')
+def stars(p):
+    return '***' if p < .001 else '**' if p < .01 else '*' if p < .05 else 'n.s.'
 
 
-def rt_panel(ax, d, conds, colors, pairs):
+def rt_panel(ax, d, conds, colors, pairs, ylim):
+    """Subjects with their own overall mean removed (Cousineau), so that the comparison is the
+    one the test makes while the axis stays in ms. Error bars are within-subject SEM (Morey)."""
     w = d.pivot(index='subject', columns='condition', values='rt')[conds]
-    x = np.arange(len(conds))
-    for _, row in w.iterrows():
-        ax.plot(x, row.values, color=MUTED, lw=.4, alpha=.5, zorder=1)
-    m, se = w.mean(), w.sem()
+    norm = w.sub(w.mean(1), axis=0) + w.values.mean()
+    k = len(conds)
+    m = norm.mean()
+    se = norm.sem() * np.sqrt(k / (k - 1))
+    rng = np.random.default_rng(3)
     for i, c in enumerate(conds):
-        ax.errorbar(i, m[c], yerr=se[c], color=colors[i], marker='o', ms=4, lw=1.2, capsize=0, zorder=3)
-    top = np.percentile(w.values, 97)
-    for k, (a, b) in enumerate(pairs):
+        ax.scatter(i + rng.uniform(-.13, .13, len(norm)), norm[c], s=9, color=colors[i], alpha=.28, lw=0, zorder=1, clip_on=False)
+        ax.errorbar(i, m[c], yerr=se[c], color=colors[i], marker='o', ms=6, mfc=colors[i], mec='w', mew=.7, lw=1.4, capsize=0, zorder=4)
+    ax.plot(range(k), m.values, color=FG, lw=.8, zorder=3)
+    top = ylim[1] - .02 * (ylim[1] - ylim[0])
+    step = .1 * (ylim[1] - ylim[0])
+    for n, (a, b) in enumerate(pairs):
         diff = w[a] - w[b]
-        y = top + k * 38
         i, j = conds.index(a), conds.index(b)
-        ax.plot([i, j], [y, y], color=FG, lw=.7)
-        ax.text((i + j) / 2, y + 4, f'{diff.mean():+.0f} ms, {p_text(stats.wilcoxon(diff).pvalue)}', ha='center', va='bottom', fontsize=6, color=FG)
-    ax.set_xticks(x)
+        y = top - (len(pairs) - 1 - n) * step
+        ax.plot([i, j], [y, y], color=FG, lw=.7, clip_on=False)
+        ax.text((i + j) / 2, y + .005 * (ylim[1] - ylim[0]), f'{diff.mean():+.0f} ms {stars(stats.wilcoxon(diff).pvalue)}'.replace('-', '−'),
+                ha='center', va='bottom', fontsize=6.5, color=FG, clip_on=False)
+    ax.set_xticks(range(k))
     ax.set_xticklabels(conds)
-    ax.set_xlim(-.4, len(conds) - .6)
+    ax.set_xlim(-.45, k - .55)
+    ax.set_ylim(*ylim)
+    ax.set_yticks(np.arange(np.ceil(ylim[0] / 50) * 50, ylim[1], 50))
     offset_spines(ax)
+    ax.spines['left'].set_bounds(ax.get_yticks()[0], ax.get_yticks()[-1])
 
 
 def main(rt_table, bids, name='fig1_paradigm_behaviour'):
     if not Path(rt_table).exists():
         build_rt(rt_table, bids)
     d = pd.read_csv(rt_table, sep='\t')
-    fig = plt.figure(figsize=(DOUBLE, 3.8))
-    gs = fig.add_gridspec(2, 2, width_ratios=[1, 1.7], height_ratios=[1, 1.25], left=.01, right=.99, top=.985, bottom=.115, hspace=.3, wspace=.2)
+    fig = plt.figure(figsize=(DOUBLE, 3.15))
+    gs = fig.add_gridspec(2, 2, width_ratios=[1, 1.62], height_ratios=[1.12, 1], left=.005, right=.995, top=.975, bottom=.13, hspace=.3, wspace=.17)
     ax = fig.add_subplot(gs[:, 0])
-    panel_display(ax)
-    letter(ax, 'a', x=.05, y=.9)
+    panel_display(ax, margin=7.4)
+    letter(ax, 'a', x=.05, y=.95)
     ax = fig.add_subplot(gs[0, 1])
     panel_trial(fig, ax)
-    letter(ax, 'b', x=0, y=.95)
-    low = gs[1, 1].subgridspec(1, 2, width_ratios=[1.35, 1], wspace=.28)
+    letter(ax, 'b', x=0, y=.9)
+    low = gs[1, 1].subgridspec(1, 2, width_ratios=[1.45, 1], wspace=.2)
+    ylim = (825, 975)
     ax = fig.add_subplot(low[0])
-    rt_panel(ax, d[d.contrast == 'distractor'], ['HP', 'LP', 'Absent'], [HP, FG, MUTED], [('HP', 'LP'), ('LP', 'Absent')])
+    rt_panel(ax, d[d.contrast == 'distractor'], ['HP', 'LP', 'Absent'], [HP, FG, MUTED], [('HP', 'LP'), ('LP', 'Absent')], ylim)
     ax.set_xlabel('Singleton distractor')
     ax.set_ylabel('Response time (ms)')
-    letter(ax, 'c', x=-.2, y=.96)
-    ylim = ax.get_ylim()
+    letter(ax, 'c', x=-.2, y=.98)
     ax = fig.add_subplot(low[1])
-    rt_panel(ax, d[d.contrast == 'target'], ['HP', 'LP'], [HP, FG], [('HP', 'LP')])
+    rt_panel(ax, d[d.contrast == 'target'], ['HP', 'LP'], [HP, FG], [('HP', 'LP')], ylim)
     ax.set_xlabel('Target')
-    ax.set_ylim(ylim)
-    letter(ax, 'd', x=-.22, y=.96)
+    ax.set_yticklabels([])
+    letter(ax, 'd', x=-.1, y=.98)
     save(fig, name, LEGEND)
 
 
