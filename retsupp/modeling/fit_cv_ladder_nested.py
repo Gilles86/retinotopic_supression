@@ -44,6 +44,12 @@ of refitting them (their per-voxel pRFs and the voxel set must match).
 instead of the DoG: m00 starts from the whole-brain m5 fit, the gain fields are
 the same. Root gets a _dn suffix.
 
+``--hp-rotation K`` (1-3) relabels every run's HP location as the ring position K
+steps away, for a null distribution of the HP-specific terms. Only the labels move:
+the data, stimulus and distractor and target events stay as they were. Models with
+tied gains do not depend on the labels, so with ``--base-root`` they are loaded from
+there. Root gets a _hprot<K> suffix.
+
 Output: ``derivatives/af_prf_cv_ladder_nested[_<scheme>][_bounded][_polished]/<model>/sub-XX/``.
 Existing outputs are loaded, never overwritten.
 
@@ -97,6 +103,8 @@ LADDER = {
     'm7_full':   ('free', 'free', 'free', 'free', 'free', 'free', 'm5_TDS_dS'),
 }
 GAINS = ['g_HP', 'g_LP', 'g_HP_dyn', 'g_LP_dyn', 'g_T_dyn']
+# Models whose fit cannot depend on which ring position is labelled HP.
+LABEL_BLIND = ('m1_T', 'm2_D', 'm3_S', 'm3b_TD', 'm4_TDS')
 # An untied HP gain starts at its LP partner (that is what 'tied' meant).
 TIE_PARTNER = {'g_HP': 'g_LP', 'g_HP_dyn': 'g_LP_dyn'}
 PER_VOXEL_COLS = ['x', 'y', 'sd', 'baseline', 'amplitude',
@@ -386,9 +394,11 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
          grid_radius=5.0, max_voxels=500, p_signal_thr=0.5,
          gd_iterations=8000, learning_rate=0.01, models=None,
          output_root=None, polish=False, bounded=False, max_bold_sd=None,
-         loss='sse', base_root=None, family='dog'):
+         loss='sse', base_roots=(), family='dog', hp_rotation=0):
     if cv_scheme not in SCHEMES:
         raise ValueError(f'cv_scheme must be in {SCHEMES}')
+    if hp_rotation and not base_roots:
+        raise ValueError('--hp-rotation needs --base-root for the tied models')
     if polish and loss != 'sse':
         raise ValueError('--polish only implements the SSE loss')
     if polish and family != 'dog':
@@ -404,7 +414,8 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
             + ('_bounded' if bounded else '')
             + (f'_maxsd{max_bold_sd:g}' if max_bold_sd else '')
             + ('' if loss == 'sse' else f'_{loss}')
-            + ('' if family == 'dog' else f'_{family}')))
+            + ('' if family == 'dog' else f'_{family}')
+            + (f'_hprot{hp_rotation}' if hp_rotation else '')))
     polish_root = root.parent / f'{root.name}_polished'
     models = models or list(LADDER)
 
@@ -412,6 +423,7 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
      run_meta) = build_data_and_paradigm(
         sub, resolution=resolution, grid_radius=grid_radius,
         item_shape='rectangle')
+    ci = np.roll(ci, hp_rotation, axis=1)   # columns follow the ring order
     par_bar = bar_paradigm(sub, run_meta, resolution, grid_radius)
 
     prf_pars = pd.DataFrame(
@@ -485,12 +497,17 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
         out_root = root if stage == 'clamped' else polish_root
         store = fits if stage == 'clamped' else polished
         cached = load(name, out_root)
-        if cached is None and base_root and name in ('m00_bar', 'm0_prf'):
-            cached = load(name, Path(base_root))
+        from_base = ('m00_bar', 'm0_prf') + (LABEL_BLIND if hp_rotation else ())
+        if cached is None and base_roots and name in from_base:
+            # First root holding this fit wins, so an overlay root goes first.
+            for base in base_roots:
+                cached = load(name, Path(base))
+                if cached is not None:
+                    break
             if cached is None:
-                raise FileNotFoundError(f'{name} not in {base_root}')
+                raise FileNotFoundError(f'{name} not in {base_roots}')
             if any(p is not None and len(p) != voxel_ids.size for p in cached):
-                raise ValueError(f'{name} in {base_root}: voxel set differs')
+                raise ValueError(f'{name} in {base}: voxel set differs')
         if cached is not None:
             print(f'== {name} [{stage}]: loaded existing fit')
             store[name] = cached
@@ -637,7 +654,7 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
                             item_scale=item_scale, cv_scheme=cv_scheme,
                             max_voxels=max_voxels,
                             gd_iterations=gd_iterations, stage=stage,
-                            bounded=bounded, loss=loss,
+                            bounded=bounded, loss=loss, hp_rotation=hp_rotation,
                             optimizer_info=infos))
         with open(pkl, 'wb') as f:
             pickle.dump(dict(fit_pars_per_fold=fold_pars, parent=parent,
@@ -673,11 +690,14 @@ if __name__ == '__main__':
                          'suffix to the root.')
     ap.add_argument('--family', choices=['dog', 'dn'], default='dog',
                     help='pRF model under the gain fields; dn adds a _dn suffix.')
-    ap.add_argument('--base-root', default=None,
-                    help='Reuse m00 and m0 from this root.')
+    ap.add_argument('--base-root', nargs='+', default=[],
+                    help='Reuse m00 and m0 from these roots, first one holding the fit wins.')
+    ap.add_argument('--hp-rotation', type=int, choices=[0, 1, 2, 3], default=0,
+                    help='Relabel HP as the ring position this many steps away.')
     a = ap.parse_args()
     main(a.subject, a.bids_folder, a.roi, cv_scheme=a.cv_scheme,
          gd_iterations=a.gd_iterations, learning_rate=a.learning_rate,
          models=a.models, max_voxels=a.max_voxels,
          output_root=a.output_root, polish=a.polish, bounded=a.bounded,
-         max_bold_sd=a.max_bold_sd, loss=a.loss, base_root=a.base_root, family=a.family)
+         max_bold_sd=a.max_bold_sd, loss=a.loss, base_roots=a.base_root, family=a.family,
+         hp_rotation=a.hp_rotation)

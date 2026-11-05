@@ -18,9 +18,11 @@
 #   CV_SCHEME=full POLISH=1 sbatch --array=1-330 ...  # main fits
 #   BOUNDED=1 boxes the shared terms (root gets a _bounded suffix)
 #   LOSS=nll fits the shared terms by likelihood (root gets a _nll suffix)
-#   BASE_ROOT=<path> reuses the m00 and m0 fits of that root
+#   BASE_ROOT="<path> ..." reuses the m00 and m0 fits of these roots, first hit wins
 #   MAX_BOLD_SD=20 drops voxels above that BOLD SD (root gets a _maxsd20 suffix)
 #   FAMILY=dn uses the divisive-normalization pRF (root gets a _dn suffix)
+#   HP_ROTATION=K relabels HP K ring steps away (root gets a _hprot<K> suffix), needs BASE_ROOT
+#   MODELS="m5_TDS_dS m7_full" fits only these models and their ancestors
 # Task index -> (subject, ROI): idx0 = task-1; subject = idx0/11 + 1; roi = ROIS[idx0%11].
 
 set -eo pipefail
@@ -31,7 +33,9 @@ MAX_BOLD_SD="${MAX_BOLD_SD:-}"
 LOSS="${LOSS:-sse}"
 BASE_ROOT="${BASE_ROOT:-}"
 FAMILY="${FAMILY:-dog}"
-TAG="${CV_SCHEME}${BOUNDED:+_bounded}${POLISH:+_polish}${MAX_BOLD_SD:+_maxsd$MAX_BOLD_SD}_${LOSS}_${FAMILY}"
+HP_ROTATION="${HP_ROTATION:-0}"
+MODELS="${MODELS:-}"
+TAG="${CV_SCHEME}${BOUNDED:+_bounded}${POLISH:+_polish}${MAX_BOLD_SD:+_maxsd$MAX_BOLD_SD}_${LOSS}_${FAMILY}_hprot${HP_ROTATION}"
 ROIS=(V1 V2 V3 V3AB hV4 LO TO VO IPS SPL1 FEF)
 idx0=$(( SLURM_ARRAY_TASK_ID - 1 ))
 subject=$(( idx0 / ${#ROIS[@]} + 1 ))
@@ -56,6 +60,7 @@ echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
     --bids-folder /shares/zne.uzh/gdehol/ds-retsupp \
     --cv-scheme "$CV_SCHEME" ${POLISH:+--polish} ${BOUNDED:+--bounded} \
     ${MAX_BOLD_SD:+--max-bold-sd "$MAX_BOLD_SD"} --loss "$LOSS" \
-    ${BASE_ROOT:+--base-root "$BASE_ROOT"} --family "$FAMILY"
+    ${BASE_ROOT:+--base-root $BASE_ROOT} --family "$FAMILY" --hp-rotation "$HP_ROTATION" \
+    ${MODELS:+--models $MODELS}
 
 echo "Finished: $(date)"
