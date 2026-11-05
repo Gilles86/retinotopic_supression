@@ -28,7 +28,7 @@ Results lead with group-level gain parameters, LOSO is the model-comparison metr
 - **C3** HP-rotation null for m5, m6, m7, 100,000 draws; observed, null, p, mean of rotated values.
 - **C4** Within-condition CV (`run3`), and the power simulation on it.
 - **C5** DN vs DoG disagreement in LOSO for dS, and `item_scale` under DN.
-- **C6** Decoding with the gainless pRF model on the chosen inputs, all 30 subjects, with the pre-specified bar-drive test and a rotation null. About 3,240 decodes, 4,300 core-hours; needs OK. First explain why the May analysis has n = 22-26 and why its figure and table differ.
+- **C6** Decoding with the gainless pRF model on the chosen inputs, all 30 subjects, with the pre-specified test and a rotation null, using pRFs fitted on other runs than those decoded. Proposed design, not yet agreed: stimulus outline fixed and pixel intensities free, as one intensity map per HP condition (test), with an unconstrained per-TR decode for the example frames (the existing method, about 3,240 decodes, 4,300 core-hours; needs OK). First explain why the May analysis has n = 22-26 and why its figure and table differ.
 
 ## Phase D: analyses that shape the story
 
@@ -44,7 +44,8 @@ From current fits, gain panels stamped "Provisional: current inputs", input fits
 - **Fig. 2** Forward model, gain vs effective shift, ladder.
 - **Fig. 3** pRF maps, held-out R² per ROI, σ vs eccentricity and % contralateral, example voxel, LOSO per step.
 - **Fig. 4** Hierarchy profile: terms over ROIs, term × ROI, Bayes factors, σ_AF and σ_dyn.
-- **Fig. 5** Sustained gain at HP: a dS per ROI; b dS against the null; c dS and LOSO by sensitivity bin; d power simulation; **e bar-drive decoding at HP vs LP, gainless model.**
+- **Fig. 5** Sustained gain at HP: a dS per ROI; b dS against the null; c dS and LOSO by sensitivity bin; d power simulation.
+- **Fig. 6** Decoding with a gainless pRF model: actual decoded stimulus frames, then decoded intensity at HP vs LP. Design to settle: see C6.
 - **Table 1** The ladder.
 - **Supplement** S2 outlier voxels; S4 dD per ROI; S8 σ vs eccentricity across pRF models and HRFs; S9 contralaterality by R² bin.
 
