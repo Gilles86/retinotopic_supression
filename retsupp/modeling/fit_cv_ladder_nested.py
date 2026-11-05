@@ -50,6 +50,10 @@ the data, stimulus and distractor and target events stay as they were. Models wi
 tied gains do not depend on the labels, so with ``--base-root`` they are loaded from
 there. Root gets a _hprot<K> suffix.
 
+``--reliable-only`` keeps the selected voxels with model-free cross-run reliability > 0 (mean over
+the ``prf_cv_reliability`` folds). The m00, m0, m1 and m3b fits come from ``--base-root``, restricted
+to those voxels, so m4 onward refit the shared terms on them. Root gets a _reliable suffix.
+
 Output: ``derivatives/af_prf_cv_ladder_nested[_<scheme>][_bounded][_polished]/<model>/sub-XX/``.
 Existing outputs are loaded, never overwritten.
 
@@ -394,7 +398,7 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
          grid_radius=5.0, max_voxels=500, p_signal_thr=0.5,
          gd_iterations=8000, learning_rate=0.01, models=None,
          output_root=None, polish=False, bounded=False, max_bold_sd=None,
-         loss='sse', base_roots=(), family='dog', hp_rotation=0):
+         loss='sse', base_roots=(), family='dog', hp_rotation=0, reliable_only=False):
     if cv_scheme not in SCHEMES:
         raise ValueError(f'cv_scheme must be in {SCHEMES}')
     if hp_rotation and not base_roots:
@@ -415,7 +419,8 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
             + (f'_maxsd{max_bold_sd:g}' if max_bold_sd else '')
             + ('' if loss == 'sse' else f'_{loss}')
             + ('' if family == 'dog' else f'_{family}')
-            + (f'_hprot{hp_rotation}' if hp_rotation else '')))
+            + (f'_hprot{hp_rotation}' if hp_rotation else '')
+            + ('_reliable' if reliable_only else '')))
     polish_root = root.parent / f'{root.name}_polished'
     models = models or list(LADDER)
 
@@ -440,6 +445,15 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
         voxel_mask = voxel_mask & ~drop
         print(f'BOLD SD > {max_bold_sd:g}: dropped {drop.sum()} voxels '
               f'{np.where(drop)[0].tolist()}, {voxel_mask.sum()} left')
+    if reliable_only:
+        rel = pd.concat([pd.read_csv(f, sep='\t') for f in sorted(
+            (bids_folder / 'derivatives' / 'prf_cv_roi_reliability' / f'sub-{subject:02d}').glob(
+                f'sub-{subject:02d}_fold-*_reliability.tsv.gz'))])
+        rel = rel.groupby('voxel_index').reliability.mean()
+        reliable = np.zeros(voxel_mask.size, dtype=bool)
+        reliable[rel.index[rel > 0]] = True
+        print(f'Reliability > 0: {(voxel_mask & reliable).sum()} of {voxel_mask.sum()} voxels')
+        voxel_mask = voxel_mask & reliable
     voxel_ids = np.where(voxel_mask)[0]
     ring_positions = get_ring_positions()
     hrf_model = SPMHRFModel(tr=sub.get_tr(session=1, run=1),
@@ -497,7 +511,8 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
         out_root = root if stage == 'clamped' else polish_root
         store = fits if stage == 'clamped' else polished
         cached = load(name, out_root)
-        from_base = ('m00_bar', 'm0_prf') + (LABEL_BLIND if hp_rotation else ())
+        from_base = (('m00_bar', 'm0_prf') + (LABEL_BLIND if hp_rotation else ())
+                     + (('m1_T', 'm3b_TD') if reliable_only else ()))
         if cached is None and base_roots and name in from_base:
             # First root holding this fit wins, so an overlay root goes first.
             for base in base_roots:
@@ -506,6 +521,14 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
                     break
             if cached is None:
                 raise FileNotFoundError(f'{name} not in {base_roots}')
+            if reliable_only:
+                pkl = Path(base) / name / f'sub-{subject:02d}' / f'sub-{subject:02d}_roi-{roi}_cv-fits.pkl'
+                with open(pkl, 'rb') as f:
+                    base_ids = np.asarray(pickle.load(f)['voxel_ids'])
+                keep = np.isin(base_ids, voxel_ids)
+                if keep.sum() != voxel_ids.size:
+                    raise ValueError(f'{name} in {base}: lacks {voxel_ids.size - keep.sum()} voxels')
+                cached = [None if p is None else p.loc[keep].reset_index(drop=True) for p in cached]
             if any(p is not None and len(p) != voxel_ids.size for p in cached):
                 raise ValueError(f'{name} in {base}: voxel set differs')
         if cached is not None:
@@ -694,10 +717,12 @@ if __name__ == '__main__':
                     help='Reuse m00 and m0 from these roots, first one holding the fit wins.')
     ap.add_argument('--hp-rotation', type=int, choices=[0, 1, 2, 3], default=0,
                     help='Relabel HP as the ring position this many steps away.')
+    ap.add_argument('--reliable-only', action='store_true',
+                    help='Keep selected voxels with cross-run reliability > 0, frozen pRFs from --base-root.')
     a = ap.parse_args()
     main(a.subject, a.bids_folder, a.roi, cv_scheme=a.cv_scheme,
          gd_iterations=a.gd_iterations, learning_rate=a.learning_rate,
          models=a.models, max_voxels=a.max_voxels,
          output_root=a.output_root, polish=a.polish, bounded=a.bounded,
          max_bold_sd=a.max_bold_sd, loss=a.loss, base_roots=a.base_root, family=a.family,
-         hp_rotation=a.hp_rotation)
+         hp_rotation=a.hp_rotation, reliable_only=a.reliable_only)

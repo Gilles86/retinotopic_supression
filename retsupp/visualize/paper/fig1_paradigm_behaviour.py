@@ -58,7 +58,7 @@ def rt_panel(ax, d, conds, colors, pairs, ylim):
     for n, (a, b) in enumerate(pairs):
         diff = w[a] - w[b]
         i, j = conds.index(a), conds.index(b)
-        y = hi + (.09 + n * .17) * span
+        y = hi + (.2 + n * .17) * span
         ax.plot([i, j], [y, y], color=FG, lw=.7, clip_on=False)
         ax.text((i + j) / 2, y + .01 * span, f'{diff.mean():+.0f} ms {stars(stats.wilcoxon(diff).pvalue)}'.replace('-', '−'),
                 ha='center', va='bottom', fontsize=6.5, color=FG, clip_on=False)
@@ -94,9 +94,9 @@ def main(rt_table, bids, name='fig1_paradigm_behaviour'):
     ax.set_xlabel('Target')
     ax.set_yticklabels([])
     letter(ax, 'd', x=-.1, y=1.2)
-    ax.scatter([.68], [-.26], s=10, marker='^', color=MUTED, lw=0, transform=ax.transAxes, clip_on=False)
-    ax.scatter([.74], [-.26], s=10, marker='v', color=MUTED, lw=0, transform=ax.transAxes, clip_on=False)
-    ax.text(.79, -.26, 'Off scale', transform=ax.transAxes, fontsize=6, color=FG, va='center')
+    ax.scatter([.1], [1.13], s=10, marker='^', color=MUTED, lw=0, transform=ax.transAxes, clip_on=False)
+    ax.scatter([.16], [1.13], s=10, marker='v', color=MUTED, lw=0, transform=ax.transAxes, clip_on=False)
+    ax.text(.21, 1.13, 'Off scale', transform=ax.transAxes, fontsize=6, color=FG, va='center')
     save(fig, name, LEGEND)
 
 

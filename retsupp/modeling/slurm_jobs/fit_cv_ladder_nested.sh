@@ -23,6 +23,7 @@
 #   FAMILY=dn uses the divisive-normalization pRF (root gets a _dn suffix)
 #   HP_ROTATION=K relabels HP K ring steps away (root gets a _hprot<K> suffix), needs BASE_ROOT
 #   MODELS="m5_TDS_dS m7_full" fits only these models and their ancestors
+#   RELIABLE_ONLY=1 keeps voxels with cross-run reliability > 0 (root gets a _reliable suffix), needs BASE_ROOT
 # Task index -> (subject, ROI): idx0 = task-1; subject = idx0/11 + 1; roi = ROIS[idx0%11].
 
 set -eo pipefail
@@ -35,7 +36,7 @@ BASE_ROOT="${BASE_ROOT:-}"
 FAMILY="${FAMILY:-dog}"
 HP_ROTATION="${HP_ROTATION:-0}"
 MODELS="${MODELS:-}"
-TAG="${CV_SCHEME}${BOUNDED:+_bounded}${POLISH:+_polish}${MAX_BOLD_SD:+_maxsd$MAX_BOLD_SD}_${LOSS}_${FAMILY}_hprot${HP_ROTATION}"
+TAG="${CV_SCHEME}${BOUNDED:+_bounded}${POLISH:+_polish}${MAX_BOLD_SD:+_maxsd$MAX_BOLD_SD}_${LOSS}_${FAMILY}_hprot${HP_ROTATION}${RELIABLE_ONLY:+_reliable}"
 ROIS=(V1 V2 V3 V3AB hV4 LO TO VO IPS SPL1 FEF)
 idx0=$(( SLURM_ARRAY_TASK_ID - 1 ))
 subject=$(( idx0 / ${#ROIS[@]} + 1 ))
@@ -61,6 +62,6 @@ echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
     --cv-scheme "$CV_SCHEME" ${POLISH:+--polish} ${BOUNDED:+--bounded} \
     ${MAX_BOLD_SD:+--max-bold-sd "$MAX_BOLD_SD"} --loss "$LOSS" \
     ${BASE_ROOT:+--base-root $BASE_ROOT} --family "$FAMILY" --hp-rotation "$HP_ROTATION" \
-    ${MODELS:+--models $MODELS}
+    ${MODELS:+--models $MODELS} ${RELIABLE_ONLY:+--reliable-only}
 
 echo "Finished: $(date)"
