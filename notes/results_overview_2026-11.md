@@ -107,6 +107,47 @@ Voxels actually entering the gain fits (`p_signal` > .5, top 500 by R², m4, 30 
 
 A model's cvR² > 0 means it beats the test-run mean, and that adds little here, whereas the cross-run null does. Prediction scores already use the cross-run null, but the shared gains are fitted on all selected voxels. Current top-500 selection therefore includes many voxels with unreliable pRF positions outside V1–V3.
 
+### Selection candidates and pRF sanity across models (30 subjects, 2026-11-05)
+
+Tables: `notes/data/voxel_selection_candidates_2026-11.tsv`, `notes/data/prf_model_sanity_contra.tsv`, `notes/data/prf_model_sanity_sigma.tsv`, `notes/data/hrf_by_roi_2026-11.tsv`. Reliability is the mean over folds, a stand-in for a full-data value. Medians across subjects, m4.
+
+| Candidate | | V1 | V2 | V3 | hV4 | VO | LO | TO | V3AB | IPS |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Current: `p_signal` > .5, top 500 | Voxels | 500 | 500 | 500 | 382 | 207 | 404 | 320 | 500 | 500 |
+| | % contralateral | 88 | 87 | 92 | 91 | 93 | 92 | 88 | 86 | 83 |
+| | % below R² .1 | 15 | 18 | 18 | 63 | 86 | 34 | 77 | 66 | 83 |
+| Reliability > 0 | Voxels | 398 | 388 | 365 | 115 | 11 | 231 | 80 | 92 | 24 |
+| | % contralateral | 93 | 93 | 95 | 96 | 100 | 97 | 99 | 97 | 99 |
+| | % below R² .1 | 2 | 2 | 1 | 1 | 0 | 2 | 14 | 3 | 13 |
+| R² ≥ .1, top 500 | Voxels | 414 | 406 | 400 | 149 | 24 | 257 | 75 | 169 | 84 |
+| | % contralateral | 94 | 93 | 96 | 96 | 100 | 97 | 99 | 97 | 95 |
+
+Reliability > 0 gives clean voxels, but few in VO and IPS. The top-500 cap never binds under it.
+
+Mixture check per pRF model, V1, % contralateral (the mean `p_signal` of these voxels is .94-.98):
+
+| Model | Tail-FDR threshold | `p_signal` > .5 | R² ≥ .05 | R² ≥ .1 | R² ≥ .2 |
+|---|---:|---:|---:|---:|---:|
+| Gaussian, fixed HRF | 91 | 87 | 96 | 98 | 99 |
+| DoG, fixed HRF | 76 | 73 | 91 | 96 | 99 |
+| DN, fixed HRF | 80 | 77 | 93 | 97 | 99 |
+| Gaussian, per-voxel HRF | 90 | 88 | 96 | 98 | 99 |
+| DoG, per-voxel HRF | 74 | 72 | 89 | 96 | 99 |
+
+The mixture falls short under every model. Low-R² centres are worse with a surround (DoG, DN) than without; the per-voxel HRF makes little difference. Models converge from R² ≥ .1.
+
+pRF size against eccentricity, °/°, R² ≥ .1, slope over binned medians per subject, then median:
+
+| Model | V1 | V2 | V3 | hV4 | V3AB |
+|---|---:|---:|---:|---:|---:|
+| Gaussian, fixed HRF | −.018 | .004 | .068 | .172 | .162 |
+| DoG, fixed HRF | −.002 | .034 | .094 | .168 | .211 |
+| DN, fixed HRF | .032 | .077 | .125 | .209 | .226 |
+| Gaussian, per-voxel HRF | −.006 | .023 | .096 | .207 | .236 |
+| DoG, per-voxel HRF | .016 | .062 | .118 | .175 | .240 |
+
+Flat V1 is not caused by the DoG centre or the per-voxel HRF: it is flat under Gaussian and fixed-HRF fits too. Aperture and fixation remain untested. HRF in m4 across 30 subjects, per ROI: delay 3.54-3.91, dispersion .40-.45 (canonical 4.5, .75).
+
 ## 3. Behaviour: solid
 
 n = 30 including pilots sub-01 and sub-02, 21,480 trials, RTs from correct trials. Recomputed 2026-11-05 with `notes/scripts/results_overview_behaviour.py`. The pilots' events have no HP column, so each run's HP comes from the modal singleton location (`Subject.get_hpd_locations`); that rule matches the recorded column on every trial of the other 28.
