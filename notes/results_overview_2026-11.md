@@ -80,7 +80,9 @@ Robustness checks of the gain models:
 | Maximum voxel count (500) | Not done | Unknown |
 | Model-neutral per-fold selection | Not done | No validated BOLD time-series permutation yet |
 
-A sustained gain should be less sensitive to HRF timing than the event-evoked terms, but that is an expectation, not a result. The obvious next check is to freeze each voxel's HRF at its m4 estimate.
+A sustained gain should be less sensitive to HRF timing than the event-evoked terms, but that is an expectation, not a result.
+
+**Proposed HRF for the gain fits: flexible but shared within subject × ROI** (not implemented). No current fit does this: the whole-brain m3, m4 and m6 fit one HRF per voxel, the gain fits one canonical HRF for all. A shared HRF avoids per-voxel trade-offs with pRF size while fixing the mismatch with the canonical HRF: m4 median delay is 3.8 (canonical 4.5) and dispersion .43 (canonical .75), May cache, 20 subjects, voxels with R² > .1. Within subject × ROI, pRF size correlates with delay (median ρ −.19, up to −.35 in V3) more than with dispersion (ρ +.08). The ROI medians differ little across ROIs (delay 3.5–3.8, dispersion .40–.44) and between subjects (SD .34, .05), which suggests one HRF per subject might also do. Requires refitting m00 onward, so it should be decided before any final analysis.
 
 ## 3. Behaviour: solid
 
@@ -133,21 +135,13 @@ Limits: a, b and d share a free scale, so raw b and d depend on the fit's path; 
 
 ### Figure 1: paradigm and pRF sanity checks
 
-Intended content: the paradigm plus the checks that the pRF fits are sound. The parts exist, but there is no assembled figure and several parts need redoing.
+First version: `notes/figures/fig1_paradigm_prf.pdf`, script `retsupp/visualize/paper/plot_fig1.py`, all 30 subjects. Panels: search display and bar; trial timing and HP design; ventral maps for all parameters and dorsal maps for areas and polar angle (sub-19); pRF size against eccentricity; share of mapped voxels with a significant fit; pRF centre coverage; held-out R² across the six pRF models.
 
-| Panel | Prototype | Status |
-|---|---|---|
-| Paradigm | `notes/figures/_archive/meeting_dock_20260509/01_paradigm_overview.pdf`; real stimulus in `retsupp/visualize/vss2026/animate_rectangle_paradigm.py` and `notes/figures/paradigm_movie.mp4` | **Redraw.** The schematic from May shows 4 circles, not the 8 rectangles, has no trial timing, and includes a model term in the timeline |
-| Maps: areas, polar angle, eccentricity, σ, R² | `notes/figures/fig1_r2low/fig1_prf_maps_sub-19.pdf` (also sub-18, sub-23), `retsupp/visualize/pycortex/render_fig1_prf.py` | Close to final; choose the subject. m4 |
-| σ vs eccentricity per ROI | `notes/figures/talk/talk_prf_validity_m4.pdf`, `notes/figures/talk/plot_prf_validity.py` | **Rerun.** Data from 14 May cover 20 subjects, before most m4 fits were finalised (16 May) |
-| R² per ROI | Same figure | **Rerun**, same reason |
-| pRF centre coverage | Same figure | **Rerun**, same reason. V1 density shows a horizontal band worth checking |
-| Held-out R² across m1–m6 | `notes/figures/prf_cv_roi_reliable.pdf` | Current |
-| DoG and DN parameters | `notes/figures/talk/plot_dog_params.py`, `notes/figures/talk/plot_dn_params.py`, `notes/figures/dn_hierarchy_aqil.pdf` | Supplementary; the first two are May versions |
-| Example voxel time courses | `notes/figures/voxel_traces_group.pdf`, `notes/figures/voxel_traces_af_vs_no_af.pdf` | May versions, older models |
-| Bar decoded from BOLD | `notes/docky_vss2026/4_decoding/`, `notes/figures/decode_sweep/m4/` | Movies only; optional as an independent check |
+Open points:
 
-To decide: these prototypes show m4 (flexible HRF), while the gain fits use refit pRFs under a fixed HRF. Figure 1 should either show the fits that enter the gain models or say why it does not.
+- The panels show m4 (flexible HRF per voxel), while the gain fits use refit pRFs under a fixed HRF. The figure should show the fits that enter the gain models, or say why not. This depends on the HRF decision in section 2.
+- The IPS curve rises and dips at larger eccentricities, where few subjects have voxels (bins need at least 10 subjects).
+- V1 coverage shows a horizontal band and blobs towards the diagonal item positions. Not yet checked.
 
 ## 5. Gain-field parameters
 
