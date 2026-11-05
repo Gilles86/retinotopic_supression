@@ -9,7 +9,7 @@ subjects of each subject's median over ROIs (or the median over subjects within 
 ``collect`` reads the fits into one table, on the cluster. ``test`` works from that table.
 
 A problem specific to the true HP location is not covered: the distractor is most frequent
-there, and relabelling breaks that link in the fits it enters as the null.
+there, and the relabelled fits no longer have that link.
 
 Usage::
 

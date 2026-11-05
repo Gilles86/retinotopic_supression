@@ -58,7 +58,7 @@ into one log.
 
 ## Issues / caveats
 
-- [issues/jensen_artifact.md](issues/jensen_artifact.md) — distance-binning
+- [issues/jensen_artifact.md](../archive/conditionwise_shifts/notes/issues/jensen_artifact.md) — distance-binning
   noise bias.
 - [issues/identifiability.md](issues/identifiability.md) — σ × |gain|
   trade-off in the AF fits + σ_dyn is poorly identifiable, lands near
