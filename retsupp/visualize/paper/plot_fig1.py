@@ -142,11 +142,11 @@ def panel_display(ax):
     ax.add_patch(Circle(pos[7], 1.12, fill=False, ec=HP, lw=1.1, ls=(0, (2.5, 1.5)), zorder=6, clip_on=False))
     kw = dict(fontsize=7, color=FG, annotation_clip=False,
               arrowprops=dict(arrowstyle='-|>', color=FG, lw=.8, mutation_scale=6, shrinkA=1, shrinkB=2))
-    ax.annotate('Target: odd orientation, report\nthe dot, never at the singleton', xy=pos[3] + [0, .85], xytext=(-9.3, 7.3),
-                ha='left', va='center', **kw)
-    ax.annotate('Singleton distractor\n(none on 20% of trials)', xy=pos[7] + [0, -1.2], xytext=(5.4, -7.2),
+    ax.annotate('Target: odd orientation, report\nthe dot, never at the singleton', xy=pos[3] + [.3, .85], xytext=(0, 7.3),
+                ha='center', va='center', **kw)
+    ax.annotate('Singleton distractor\n(none on 20% of trials)', xy=pos[7] + [0, -1.2], xytext=(9.3, -7.2),
                 ha='right', va='center', **kw)
-    ax.annotate('Bar in 3.17°\naperture', xy=(-.5, 3.2), xytext=(9.3, 7.3), ha='right', va='center', **kw)
+    ax.annotate('Bar in 3.17°\naperture', xy=(-.5, -3.25), xytext=(-9.3, -7.2), ha='left', va='center', **kw)
     # Anchors: the ring and aperture eccentricities, and a 1° scale bar.
     ax.add_patch(Circle((0, 0), RING, fill=False, ec='w', lw=.5, ls=(0, (1.5, 1.5)), zorder=2.5))
     ax.plot([-5.0, -4.0], [-5.0, -5.0], color='w', lw=1.2, solid_capstyle='butt', zorder=6)
@@ -186,7 +186,7 @@ def panel_trial(fig, ax):
         ax.text(x0 + start * scale - .004, y + h + .015, f'{edge:g} s', ha='right', va='bottom', fontsize=7, color=FG)
     ax.text(x0 + (onset + 2.25) * scale, y + h / 2, 'Interval', ha='center', va='center', fontsize=7, color=FG)
     # The bar runs through everything.
-    yb, hb, n = .56, .055, 56
+    yb, hb, n = .565, .06, 56
     for i in range(n):
         for j in range(2):
             ax.add_patch(Rectangle((x0 + .98 * i / n, yb + j * hb / 2), .98 / n, hb / 2, lw=0,
@@ -196,7 +196,7 @@ def panel_trial(fig, ax):
     ax.annotate('', xy=(.995, yb + hb / 2), xytext=(.985, yb + hb / 2), annotation_clip=False,
                 arrowprops=dict(arrowstyle='-|>', color=FG, lw=.8, mutation_scale=6, shrinkA=0, shrinkB=0))
     # The HP location per block of runs.
-    y1, w = .0, .14
+    y1, w = .0, .105
     icon = w * aspect
     ax.text(.01, y1 + icon + .05, 'HP location moves between blocks of 3 runs (12 runs, 2 sessions); example order',
             ha='left', va='bottom', fontsize=7, color=FG)
@@ -251,32 +251,20 @@ def show_render(ax, images, par):
     ax.set_axis_off()
 
 
-def panel_maps(fig, sub, subject, in_dir, view='ventral', view_name='Ventral'):
-    """All maps in one view, plus areas and polar angle in the dorsal view for IPS and FEF.
-
-    ``sub`` is a grid of 3 rows and 5 columns; columns 2-4 of the last row are left to the caller."""
+def panel_maps(fig, sub, subject, in_dir, view='occipital', view_name='Occipital'):
+    """One view of every map above its colour key; ``sub`` has 2 rows and 5 columns."""
     panels = [('areas', 'Visual areas'), ('angle', 'Polar angle'), ('ecc', 'Eccentricity (°)'),
               ('sd', 'pRF size σ (°)'), ('r2', 'R²')]
     bars = {'ecc': ('nipy_spectral', 0, 4, [0, 2, 4]), 'sd': ('nipy_spectral', 0, 3, [0, 1.5, 3]),
             'r2': ('inferno', 0, .6, [0, .3, .6])}
-
-    def load(view, pars):
-        return {p: Image.open(Path(in_dir) / f'sub-{subject:02d}_{p}_{view}.png').convert('RGBA') for p in pars}
-
-    main = load(view, [p for p, _ in panels])
+    images = {p: Image.open(Path(in_dir) / f'sub-{subject:02d}_{p}_{view}.png').convert('RGBA') for p, _ in panels}
     first = None
     for j, (par, title) in enumerate(panels):
         ax = fig.add_subplot(sub[0, j])
         first = first or ax
-        show_render(ax, main, par)
-        ax.set_title(title, color=FG, pad=3)
-    dorsal = load('dorsal', ['areas', 'angle'])
-    for j, par in enumerate(dorsal):
-        ax = fig.add_subplot(sub[2, j])
-        show_render(ax, dorsal, par)
-    for r, name in ((0, view_name), (2, 'Dorsal')):
-        ax = fig.axes[-2] if r == 2 else first
-        ax.text(-.02, .5, name, transform=ax.transAxes, rotation=90, ha='right', va='center', color=FG, fontsize=7)
+        show_render(ax, images, par)
+        ax.set_title(title, color=FG, pad=2)
+    first.text(-.02, .5, view_name, transform=first.transAxes, rotation=90, ha='right', va='center', color=FG, fontsize=7)
     ax = fig.add_subplot(sub[1, 0])
     for i, (name, col) in enumerate(AREAS.items()):
         ax.text(.02 + .2 * (i % 5), .72 - .5 * (i // 5), name, color=col, fontsize=6, fontweight='bold',
@@ -348,14 +336,14 @@ def panel_coverage(fig, gs):
     """pRF centres of the two hemispheres in two colours: the mapping should be contralateral."""
     from scipy.ndimage import gaussian_filter
     d = pd.read_csv(COVER_TSV, sep='\t')
-    sub = gs.subgridspec(1, 4, wspace=.05)
+    sub = gs.subgridspec(2, 2, wspace=.04, hspace=.2)
     first = None
     n = len(XY_BINS) - 1
     centres = .5 * (XY_BINS[:-1] + XY_BINS[1:])
     gx, gy = np.meshgrid(centres, centres, indexing='ij')
     cols = {h: np.array(mpl.colors.to_rgb(c)) for h, c in HEMI.items()}
     for k, roi in enumerate(COVER_ROIS):
-        ax = fig.add_subplot(sub[k])
+        ax = fig.add_subplot(sub[k // 2, k % 2])
         first = first or ax
         g = d[d.roi == roi]
         rgb = np.ones((n, n, 3))
@@ -380,7 +368,7 @@ def panel_coverage(fig, gs):
         for r in (1, 2, 3):
             ax.add_patch(Circle((0, 0), r, fill=False, ec=MUTED, lw=.4, ls=(0, (1.5, 1.5)), zorder=3))
             if k == 0:
-                ax.text(r * .71 + .03, -r * .71 - .03, f'{r}°', color=FG, fontsize=5.5, ha='left', va='top', zorder=5)
+                ax.text(r * .71 + .03, -r * .71 - .03, f'{r}°', color=FG, fontsize=5, ha='left', va='top', zorder=5)
         ax.plot(0, 0, '+', color=FG, ms=4, mew=.7, zorder=4)
         ax.set_xlim(-3.4, 3.4)
         ax.set_ylim(-3.4, 3.4)
@@ -388,9 +376,11 @@ def panel_coverage(fig, gs):
         ax.set_axis_off()
         pct = contralateral(g)
         print(f'{roi}: {pct.median():.0f}% contralateral, range {pct.min():.0f}-{pct.max():.0f}, n={len(pct)}')
-        ax.set_title(f'{roi}, {pct.median():.0f}% contralateral', color=AREAS[roi], fontsize=7, pad=1)
-    first.text(.0, -.08, 'Left hemisphere', color=HEMI['L'], fontsize=7, transform=first.transAxes, va='top')
-    first.text(1.0, -.08, 'Right hemisphere', color=HEMI['R'], fontsize=7, transform=first.transAxes, va='top', ha='left')
+        ax.set_title(f'{roi}: {pct.median():.0f}%', color=AREAS[roi], fontsize=6.5, pad=1)
+    first.text(1.05, 1.32, 'Contralateral pRF centres', color=FG, fontsize=6.5, transform=first.transAxes, ha='center')
+    last = fig.axes[-1]
+    last.text(-.05, -.14, 'Left hemi', color=HEMI['L'], fontsize=6.5, transform=last.transAxes, va='top', ha='right')
+    last.text(-.0, -.14, 'Right hemi', color=HEMI['R'], fontsize=6.5, transform=last.transAxes, va='top', ha='left')
     return first
 
 
@@ -418,33 +408,32 @@ def panel_cv(ax):
     ax.set_yticks([.2, .22, .24])
 
 
-def plot(subject, in_dir, out, view='ventral', view_name='Ventral'):
-    fig = plt.figure(figsize=(7.25, 7.8))
-    outer = fig.add_gridspec(3, 1, height_ratios=[1.75, 3.45, 1.15], hspace=.23,
-                             left=.065, right=.985, top=.985, bottom=.055)
+def plot(subject, in_dir, out, view='occipital', view_name='Occipital'):
+    fig = plt.figure(figsize=(7.25, 5.5))
+    outer = fig.add_gridspec(3, 1, height_ratios=[1.6, 1.75, 1.45], hspace=.2,
+                             left=.05, right=.99, top=.985, bottom=.085)
     top = outer[0].subgridspec(1, 2, width_ratios=[1, 1.75], wspace=.09)
     ax = fig.add_subplot(top[0])
     panel_display(ax)
-    letter(ax, 'a', x=.0, y=1.0)
+    letter(ax, 'a', x=.02, y=.96)
     ax = fig.add_subplot(top[1])
     panel_trial(fig, ax)
     letter(ax, 'b', x=0, y=.95)
-    maps = outer[1].subgridspec(3, 5, height_ratios=[1.4, .3, 1.4], wspace=.03, hspace=.04)
+    maps = outer[1].subgridspec(2, 5, height_ratios=[1.45, .3], wspace=.03, hspace=.02)
     first = panel_maps(fig, maps, subject, in_dir, view, view_name)
     letter(first, 'c', x=-.09, y=1.04)
-    lower = maps[2, 2:].subgridspec(1, 3, width_ratios=[.02, 1.2, 1], wspace=.9)
-    ax = fig.add_subplot(lower[1])
+    bottom = outer[2].subgridspec(1, 4, width_ratios=[1.1, 1.1, .85, 1.], wspace=.72)
+    ax = fig.add_subplot(bottom[0])
     panel_sigma(ax)
-    letter(ax, 'd', x=-.2, y=.98)
-    ax = fig.add_subplot(lower[2])
+    letter(ax, 'd', x=-.16, y=.98)
+    ax = fig.add_subplot(bottom[1])
     panel_share(ax)
     letter(ax, 'e', x=-.3, y=.98)
-    bottom = outer[2].subgridspec(1, 2, width_ratios=[2.2, 1], wspace=.22)
-    first = panel_coverage(fig, bottom[0])
-    letter(first, 'f', x=-.03, y=1.02)
-    ax = fig.add_subplot(bottom[1])
+    first = panel_coverage(fig, bottom[2])
+    letter(first, 'f', x=-.12, y=1.12)
+    ax = fig.add_subplot(bottom[3])
     panel_cv(ax)
-    letter(ax, 'g', x=-.2, y=.98)
+    letter(ax, 'g', x=-.34, y=.98)
     for ax in fig.axes:
         if ax.spines['bottom'].get_visible() and ax.get_xlabel() + ax.get_ylabel():
             ax.spines['left'].set_position(('outward', 3))
@@ -459,10 +448,10 @@ if __name__ == '__main__':
     ap.add_argument('action', choices=['collect', 'plot'])
     ap.add_argument('--bids-folder', default='/data/ds-retsupp')
     ap.add_argument('--subject', type=int, default=19)
-    ap.add_argument('--in-dir', default='notes/figures/fig1_r2low')
+    ap.add_argument('--in-dir', default='notes/figures/fig1_occipital')
     ap.add_argument('--out', default='notes/figures/fig1_paradigm_prf.pdf')
-    ap.add_argument('--view', default='ventral')
-    ap.add_argument('--view-name', default='Ventral')
+    ap.add_argument('--view', default='occipital')
+    ap.add_argument('--view-name', default='Occipital')
     a = ap.parse_args()
     if a.action == 'collect':
         collect(a.bids_folder)

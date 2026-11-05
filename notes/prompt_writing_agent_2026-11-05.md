@@ -11,7 +11,7 @@ Read `notes/results_overview_2026-11.md` first; it has every number and path. Pl
 - **The R² mixture "FDR" is not valid as FDR:** at its threshold (R² about .02), V1 is 74% contralateral, implying roughly half false positives, not 5%. At R² ≥ .1 it is 96%. Do not write "FDR-corrected" for this selection.
 - **Voxels actually in the gain fits (`p_signal` > .5, top 500):** 83–91% contralateral. Below R² = .1: V1 15%, V2 17%, V3 18%, hV4 60%, V3AB 68%, IPS 83%. Restricting them to cross-run null cvR² > 0 or R² ≥ .1 gives 93–98%. The m0 pRF model's cvR² > 0 gives only 85–93%. Prediction scores already use the cross-run null, but the shared gains are fitted on all selected voxels.
 - **V1 pRF size barely grows with eccentricity:** .020 °/° (V2 .067, V3 .14, hV4 .21, V3AB .27), about .57° throughout. Cause unknown: possibly fixation, stimulus limits, DoG centre σ or the HRF.
-- **Figure 1 draft:** `notes/figures/fig1_paradigm_prf_occipital.pdf` (paradigm plus pRF sanity checks, all m4), script `retsupp/visualize/paper/plot_fig1.py`.
+- **Figure 1 draft:** `notes/figures/fig1_paradigm_prf.pdf` (paradigm plus pRF sanity checks, all m4), script `retsupp/visualize/paper/plot_fig1.py`.
 
 **Still running, no results yet**
 

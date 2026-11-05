@@ -158,7 +158,7 @@ Limits: a, b and d share a free scale, so raw b and d depend on the fit's path; 
 
 ### Figure 1: paradigm and pRF sanity checks
 
-First version: `notes/figures/fig1_paradigm_prf.pdf`, script `retsupp/visualize/paper/plot_fig1.py`, all 30 subjects. Panels: search display and bar; trial timing and HP design; ventral maps for all parameters and dorsal maps for areas and polar angle (sub-19); pRF size against eccentricity; share of mapped voxels with a significant fit; pRF centre coverage; held-out R² across the six pRF models.
+First version: `notes/figures/fig1_paradigm_prf.pdf`, script `retsupp/visualize/paper/plot_fig1.py`, all 30 subjects. Panels: search display and bar; trial timing and HP design; occipital maps of areas, polar angle, eccentricity, size and R² (sub-19); pRF size against eccentricity; share of mapped voxels with a significant fit; pRF centre coverage; held-out R² across the six pRF models.
 
 Open points:
 
