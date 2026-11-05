@@ -117,13 +117,13 @@ def ladder(ax):
 
 
 def main(gain_table, family='dog', early='V2', late='V3AB', name='fig2_model'):
-    fig = plt.figure(figsize=(DOUBLE, 3.9))
-    outer = fig.add_gridspec(2, 1, height_ratios=[2.5, 1.45], hspace=.06, left=.015, right=.995, top=.93, bottom=.01)
+    fig = plt.figure(figsize=(DOUBLE, 3.5))
+    outer = fig.add_gridspec(2, 1, height_ratios=[2.5, 1.45], hspace=.05, left=.015, right=.995, top=.95, bottom=.01)
     top = outer[0].subgridspec(1, 2, width_ratios=[2.15, 1], wspace=.08)
-    a = top[0].subgridspec(2, 5, height_ratios=[1.35, .5], wspace=.32, hspace=-.1)
+    a = top[0].subgridspec(2, 5, height_ratios=[1.35, .42], wspace=.42, hspace=-.12)
     ex = dict(sus=1.3, trans=1.6)
     t_ix, d_ix = 1, 3
-    maps = [('Stimulus', stimulus(), 'Greys', 1, STIM), ('Sustained\nHP weaker', -.12 * gauss(*POS[HP_IX], ex['sus']) - .06 * sum(gauss(*p, ex['sus']) for p in POS[1:]), 'RdBu_r', .2, HP),
+    maps = [('Stimulus', stimulus(), 'Greys', 1, STIM), ('Sustained:\nless gain at HP', -.12 * gauss(*POS[HP_IX], ex['sus']) - .06 * sum(gauss(*p, ex['sus']) for p in POS[1:]), 'RdBu_r', .2, HP),
             ('Target', .3 * gauss(*POS[t_ix], ex['trans']), 'RdBu_r', .3, TARGET), ('Distractor', .15 * gauss(*POS[d_ix], ex['trans']), 'RdBu_r', .3, DISTRACTOR)]
     onsets = np.array([5, 14, 21, 33, 40, 52])
     prf = gauss(1.8, 1.0, .9)
@@ -136,7 +136,9 @@ def main(gain_table, family='dog', early='V2', late='V3AB', name='fig2_model'):
         ax2 = fig.add_subplot(a[1, j])
         timecourse(ax2, onsets, col, sustained=j == 1) if j else ax2.set_axis_off()
         if j == 0:
-            ax2.text(.5, .5, 'Fixed pRF\n(teal contour) reads\nstimulus × gain field', transform=ax2.transAxes, fontsize=6, ha='center', va='center', color=FG)
+            ax2.text(.5, .85, 'Teal: fixed pRF', transform=ax2.transAxes, fontsize=6, ha='center', va='center', color='#2A9D8F')
+            ax2.text(.5, .5, 'Blue: less gain', transform=ax2.transAxes, fontsize=6, ha='center', va='center', color='#2166AC')
+            ax2.text(.5, .15, 'Red: more gain', transform=ax2.transAxes, fontsize=6, ha='center', va='center', color='#B2182B')
     ax = fig.add_subplot(a[0, 4])
     field = 1 + maps[1][1] + maps[2][1] + maps[3][1]
     ax.imshow(stimulus() * field, origin='lower', extent=(-LIM, LIM, -LIM, LIM), cmap='magma', vmin=0, vmax=1.35)
@@ -144,10 +146,10 @@ def main(gain_table, family='dog', early='V2', late='V3AB', name='fig2_model'):
     ax.set_axis_off()
     ax.set_title('Effective drive', fontsize=7, color=FG, pad=2)
     fig.add_subplot(a[1, 4]).set_axis_off()
-    for i, sign in ((1, '×'), (2, '+'), (3, '+'), (4, '=')):
+    for i, sign in ((1, '× (1 +'), (2, '+'), (3, '+'), (4, ') =')):
         pos = fig.add_subplot(a[0, i]).get_position()
         fig.axes[-1].remove()
-        fig.text(pos.x0 - .012, pos.y0 + pos.height / 2, sign, fontsize=11, color=FG, ha='center', va='center')
+        fig.text(pos.x0 - .015, pos.y0 + pos.height / 2, sign, fontsize=8, color=FG, ha='center', va='center')
 
     t = pd.read_csv(gain_table, sep='\t')
     t = t[(t.family == family) & (t.model == 'm7_full')]
@@ -157,6 +159,7 @@ def main(gain_table, family='dog', early='V2', late='V3AB', name='fig2_model'):
         ax = fig.add_subplot(b[j])
         effective_shift(ax, t[t.roi == roi][['g_HP', 'g_LP', 'sigma_AF']].median(), sizes[roi])
         ax.set_title(roi, fontsize=7, color=FG, pad=2)
+        ax.text(.5, -.03, 'Arrows × 25' if j == 0 else 'Implied pRF shift', transform=ax.transAxes, ha='center', va='top', fontsize=6, color=FG)
         if j == 0:
             letter(ax, 'a′', x=.02, y=1.08)
         else:

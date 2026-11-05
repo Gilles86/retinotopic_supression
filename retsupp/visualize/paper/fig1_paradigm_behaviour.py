@@ -58,7 +58,7 @@ def rt_panel(ax, d, conds, colors, pairs, ylim):
     for n, (a, b) in enumerate(pairs):
         diff = w[a] - w[b]
         i, j = conds.index(a), conds.index(b)
-        y = hi + (.2 + n * .17) * span
+        y = hi + (.2 + n * .13) * span
         ax.plot([i, j], [y, y], color=FG, lw=.7, clip_on=False)
         ax.text((i + j) / 2, y + .01 * span, f'{diff.mean():+.0f} ms {stars(stats.wilcoxon(diff).pvalue)}'.replace('-', '−'),
                 ha='center', va='bottom', fontsize=6.5, color=FG, clip_on=False)
