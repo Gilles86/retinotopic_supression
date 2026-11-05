@@ -23,7 +23,7 @@ LEGEND = """
 **Figure 3. Model fits.** a, Polar angle and eccentricity of one subject on a flattened cortical surface. b, Share of pRF centres in the contralateral field per ROI, for voxels with cross-run reliability > 0; dots are subjects, bars are medians, the number under each ROI is the number of subjects with at least {min_vox} such voxels (n = 30 in total); dashed line, chance. c, One voxel over {win:.0f} s of one run: BOLD and the m0 and m7 predictions, with target and singleton onsets at the voxel's ring location and at any location as ticks, and the bar position as a strip. d, Held-out R² per ROI for Gaussian, DoG and DN pRFs with a fixed or a per-voxel HRF; voxels selected per fold on training-run reliability; dots are subjects (n = 30), bars are medians, triangles are subjects above the axis. e, Leave-one-subject-out test per ladder step: share of subjects whose held-out prediction improves with the effect size from the other subjects; n = 30, Wilcoxon across subjects on ΔR², median over ROIs. ΔR² (×10⁻⁵; DoG, DN): {dr2}.
 """
 FAM_COL = {'Gaussian': '#8D99A6', 'DoG': '#1F6F8B', 'DN': '#A23B72'}
-TERM_ORDER = [('items', 'Items'), ('T', 'T'), ('D', 'D'), ('DonT', 'D on T'), ('S', 'S'), ('dS', 'dS'), ('dD', 'dD')]
+TERM_ORDER = [('items', 'Items'), ('T', 'T'), ('D', 'D'), ('DonT', 'D given T'), ('S', 'S'), ('dS', 'dS'), ('dD', 'dD')]
 MIN_VOX = 10
 
 

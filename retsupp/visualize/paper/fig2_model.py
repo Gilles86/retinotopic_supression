@@ -20,7 +20,7 @@ LEGEND = """
 **Figure 2. Gain-field model.** Top, the screen is reduced to a model input (bar plus items), multiplied by a gain field: the sum of sustained fields at the four ring locations and transient fields at the target and singleton distractor. Bottom, a schematic stretch of a run with gains exaggerated for clarity and HP at the lower right: one bar sweep from left to right and four trials, with symbols above their onsets. For three pRFs (circle in the symbols), the rows show the stimulus reaching the pRF, the gain it sees, and the predicted response with and without gain, after the HRF. Rows share their scale across columns.
 """
 LEGEND_HP = """
-**Figure 2, block version.** Top, as in the other version. Bottom, a schematic stretch of a run for one pRF near a ring location with gains exaggerated for clarity, in a block with HP at that location and in a block with HP at the opposite location: one bar sweep from left to right and four trials, with symbols above their onsets. Rows show the stimulus reaching the pRF, the gain it sees, and the predicted response with and without gain, after the HRF. Right, the two predicted responses on one axis. Rows share their scale across columns.
+**Figure 2, block version.** Top, as in the other version. Bottom, a schematic stretch of a run for one pRF near a ring location with gains exaggerated for clarity, in a block with HP at that location and in a block with HP at the opposite location: one bar sweep from left to right and four trials, with symbols above their onsets. The trials are the same in both blocks, so only the sustained gain differs; in the experiment the singleton is also more frequent at HP. Rows show the stimulus reaching the pRF, the gain it sees, and the predicted response with and without gain, after the HRF. Right, the two predicted responses on one axis. Rows share their scale across columns.
 """
 LIM = 5.2
 RING = 4.
@@ -256,8 +256,9 @@ def top_row(fig, gs):
 def main_hp(name='fig2_model_hp_blocks'):
     """One pRF in two blocks: HP at this pRF, or at the opposite location."""
     prf = {'pRF': RING_PRF}
-    blocks = {'HP at this pRF': (3, [(5, 1, 3), (14, 0, 3), (23, 2, 1), (31, 2, 3)]),
-              'HP elsewhere': (1, [(5, 0, 1), (14, 2, 1), (23, 2, 3), (31, 0, 1)])}
+    # The same trials in both blocks, so that only the sustained gain differs.
+    trials = [(5, 1, 3), (14, 0, 2), (23, 2, 1), (31, 3, 0)]
+    blocks = {'HP near this pRF': (3, trials), 'HP not near this pRF': (1, trials)}
     sim = {k: simulate(trials=tr, hp_ix=hp, prfs=prf)['pRF'] for k, (hp, tr) in blocks.items()}
     fig = plt.figure(figsize=(DOUBLE, 3.75))
     outer = fig.add_gridspec(2, 1, height_ratios=[1.6, 1.95], hspace=.1, left=.012, right=.995, top=.935, bottom=.035)
@@ -318,9 +319,6 @@ def main_hp(name='fig2_model_hp_blocks'):
         if k == 0:
             r3.plot([0, 10], [p_lo - .05 * (p_hi - p_lo)] * 2, color=FG, lw=1.1, clip_on=False, solid_capstyle='butt')
             r3.text(5, p_lo - .12 * (p_hi - p_lo), '10 s', ha='center', va='top', fontsize=6, color=FG)
-            g.text(.0, .9, 'Target', transform=g.transAxes, fontsize=6, color=TARGET, va='center')
-            g.text(.0, .68, 'Singleton', transform=g.transAxes, fontsize=6, color=DISTRACTOR, va='center')
-            g.text(.0, .46, 'Sustained', transform=g.transAxes, fontsize=6, color=HP, va='center')
             r3.text(.0, .92, 'With gain', transform=r3.transAxes, fontsize=6, color=FG, va='center')
             r3.text(.0, .72, 'Without gain', transform=r3.transAxes, fontsize=6, color='.5', va='center')
     # The two blocks on one axis.
@@ -328,15 +326,19 @@ def main_hp(name='fig2_model_hp_blocks'):
     title = fig.add_subplot(col[0])
     title.set_axis_off()
     title.text(.5, .5, 'Same pRF,\ntwo blocks', transform=title.transAxes, ha='center', va='center', fontsize=7, color=FG)
+    key2 = fig.add_subplot(col[2])
+    key2.set_axis_off()
+    for yy, txt, c in ((.82, 'Target', TARGET), (.5, 'Singleton', DISTRACTOR), (.18, 'Sustained', HP)):
+        key2.text(.0, yy, txt, transform=key2.transAxes, fontsize=6, color=c, va='center')
     ax = fig.add_subplot(col[3])
     ax.set_axis_off()
-    t = sim['HP at this pRF']['t']
-    ax.plot(t, sim['HP elsewhere']['predicted'], color='.45', lw=1.2)
-    ax.plot(t, sim['HP at this pRF']['predicted'], color=HP, lw=1.3)
+    t = sim['HP near this pRF']['t']
+    ax.plot(t, sim['HP not near this pRF']['predicted'], color='.45', lw=1.2)
+    ax.plot(t, sim['HP near this pRF']['predicted'], color=HP, lw=1.3)
     ax.set_xlim(0, DURATION)
     ax.set_ylim(p_lo - .05 * (p_hi - p_lo), p_hi * 1.05)
-    ax.text(0, .92, 'HP at this pRF', transform=ax.transAxes, fontsize=6, color=HP, va='center')
-    ax.text(0, .72, 'HP elsewhere', transform=ax.transAxes, fontsize=6, color='.4', va='center')
+    ax.text(0, .92, 'HP near', transform=ax.transAxes, fontsize=6, color=HP, va='center')
+    ax.text(0, .72, 'HP not near', transform=ax.transAxes, fontsize=6, color='.4', va='center')
     save(fig, name, LEGEND_HP)
 
 
