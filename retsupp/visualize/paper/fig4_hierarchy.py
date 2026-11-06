@@ -1,9 +1,10 @@
-"""Figure 4: gain terms across the visual hierarchy. Provisional until the final fits.
+"""Figure 4: gain terms across the visual hierarchy, and the full parameter table. Provisional until the final fits.
+
+Writes the figure and ``table_parameters_2026-11.{md,tsv}`` (medians, CIs, tests and Bayes factors).
 
 Usage::
 
-    python -m retsupp.visualize.paper.fig4_hierarchy --gain-table notes/data/gain_field_parameters.tsv \\
-        --conditional-table notes/data/conditional_estimates_dog_2026-11.tsv
+    python -m retsupp.visualize.paper.fig4_hierarchy --gain-table notes/data/gain_field_parameters.tsv
 """
 from __future__ import annotations
 
@@ -15,104 +16,138 @@ import pandas as pd
 from scipy import stats
 
 from retsupp.visualize.paper.fig45_common import conditional, joint, jzs_bf10, median_ci
-from retsupp.visualize.paper.paper_style import (DISTRACTOR, DOUBLE, FG, HP, MUTED, ROI_ORDER, TARGET, letter, offset_spines,
+from retsupp.visualize.paper.paper_style import (DISTRACTOR, DOUBLE, FG, HP, MUTED, OUT, ROI_ORDER, TARGET, letter, offset_spines,
                                                  pending, provisional, save)
 
-TERMS = [('T', 'Target', TARGET), ('D', 'Singleton', DISTRACTOR), ('dS', 'Sustained, HP − LP', HP), ('dD', 'Singleton, HP − LP', '#5E3C99')]
-FAM = {'dog': ('DoG', '-'), 'dn': ('DN', '--')}
+FWHM = 2 * np.sqrt(2 * np.log(2))
+TERMS = [('T', 'Target gain', TARGET), ('D', 'Singleton gain', DISTRACTOR), ('dS', 'Sustained gain, HP − LP', HP),
+         ('dD', 'Singleton gain, HP − LP', '#5E3C99')]
+FAM = {'dog': 'DoG', 'dn': 'DN'}
 LEGEND = """
-**Figure 4. Gain terms across the visual hierarchy.** a, Median across subjects (n = 30) of each term per ROI, each scaled to its largest absolute median, with bootstrapped 95% confidence intervals; joint estimates from m7_full under DoG and DN, and conditional estimates (each term alone on its parent model, DoG only). b, Slope of each term across the hierarchy per subject (ROI rank), median and 95% CI; a placeholder for the hierarchical term × ROI model. c, Bayes factor for dS ≠ 0 per ROI (JZS, r = .707), joint DoG and DN. d, Widths of the sustained and transient fields per ROI, median and 95% CI, with the share of fits at a bound (.5° or 8°). All values provisional: current inputs.
+**Figure 4. Gain terms across the visual hierarchy.** a-d, Median across subjects (n = 30) per ROI of the target gain, the singleton gain (averaged over locations), and the HP − LP differences of the sustained and the singleton gain, from m7_full under DoG (filled) and DN (open); bars are bootstrapped 95% confidence intervals. Stars: Wilcoxon signed-rank test against 0, Benjamini-Hochberg across the 9 ROIs per term and model; * q < .05, ** q < .01, *** q < .001. e, Size of the sustained and transient fields (DoG) as full width at half maximum (2.355 σ), median with bootstrapped 95% CI, and the share of fits at a bound (σ = .5° or 8°) under each ROI; dotted line, the 4° radius of the ring. f, Term × ROI hierarchical model, pending. Bayes factors and all values are in the parameter table. All values provisional: current inputs.
 """
 
 
-def panel_profile(ax, js, cond):
+def stars(q):
+    return '***' if q < .001 else '**' if q < .01 else '*' if q < .05 else ''
+
+
+def summarise(js, cond):
+    rows = []
+    for fam, d in js.items():
+        for term, _, _ in TERMS:
+            ps = []
+            for roi in ROI_ORDER:
+                v = d[d.roi == roi][term].dropna().to_numpy()
+                m, lo, hi = median_ci(v)
+                p = stats.wilcoxon(v).pvalue
+                ps.append(p)
+                c = cond[cond.roi == roi][term].dropna() if (fam == 'dog' and term in cond.columns) else pd.Series(dtype=float)
+                rows.append(dict(model=FAM[fam], term=term, roi=roi, n=len(v), median=m, ci_low=lo, ci_high=hi,
+                                 pct_negative=(v < 0).mean() * 100, p=p, bf10=jzs_bf10(v),
+                                 conditional_median=c.median() if len(c) else np.nan,
+                                 conditional_p=stats.wilcoxon(c).pvalue if len(c) > 5 else np.nan))
+            q = stats.false_discovery_control(ps)
+            for r, qq in zip(rows[-len(ROI_ORDER):], q):
+                r['q'] = qq
+    return pd.DataFrame(rows)
+
+
+def write_table(t):
+    t.to_csv(OUT / 'table_parameters_2026-11.tsv', sep='\t', index=False)
+    fmt = lambda r: f"{r['median']:+.3f} [{r.ci_low:+.3f}, {r.ci_high:+.3f}]"
+    lines = ['**Table S. Gain-field parameters per ROI (m7_full, n = 30).** Median [bootstrapped 95% CI], Wilcoxon p, BH q '
+             'across 9 ROIs, JZS Bayes factor BF10 (r = .707), and for DoG the conditional median. Provisional: current inputs.', '']
+    for term, lab, _ in TERMS:
+        lines += [f'**{lab}**', '', '| ROI | DoG median [CI] | p | q | BF10 | DoG conditional | DN median [CI] | p | q | BF10 |',
+                  '|---|---|---|---|---|---|---|---|---|---|']
+        for roi in ROI_ORDER:
+            a = t[(t.model == 'DoG') & (t.term == term) & (t.roi == roi)].iloc[0]
+            b = t[(t.model == 'DN') & (t.term == term) & (t.roi == roi)].iloc[0]
+            lines.append(f"| {roi} | {fmt(a)} | {a.p:.3g} | {a.q:.3g} | {a.bf10:.2g} | {a.conditional_median:+.3f} | "
+                         f"{fmt(b)} | {b.p:.3g} | {b.q:.3g} | {b.bf10:.2g} |")
+        lines.append('')
+    lines += ['**Field size (FWHM = 2.355 σ, degrees), median [95% CI], % of fits at a bound**', '',
+              '| ROI | DoG sustained | at bound | DoG transient | at bound | DN sustained | at bound | DN transient | at bound |',
+              '|---|---|---|---|---|---|---|---|---|']
+    for roi in ROI_ORDER:
+        cells = []
+        for fam in ('dog', 'dn'):
+            for par in ('sigma_AF', 'sigma_dyn'):
+                v = JS[fam][JS[fam].roi == roi][par].dropna()
+                m, lo, hi = (FWHM * x for x in median_ci(v))
+                cells += [f'{m:.1f} [{lo:.1f}, {hi:.1f}]', f'{((v < .51) | (v > 7.9)).mean() * 100:.0f}%']
+        lines.append(f'| {roi} | ' + ' | '.join(cells) + ' |')
+    lines += ['', 'Gain values are the fractional change in the drive at the centre of a field: +0.30 means 30% more drive '
+              'there during the event, −0.05 means 5% less throughout the block.', '']
+    (OUT / 'table_parameters_2026-11.md').write_text('\n'.join(lines))
+
+
+def panel_term(ax, t, term, lab, col):
     x = np.arange(len(ROI_ORDER))
-    for k, (term, lab, col) in enumerate(TERMS):
-        off = (k - 1.5) * .17
-        for fam, (name, ls) in FAM.items():
-            d = js[fam]
-            m = np.array([median_ci(d[d.roi == r][term])[0] for r in ROI_ORDER])
-            ci = np.array([median_ci(d[d.roi == r][term])[1:] for r in ROI_ORDER])
-            scale = np.nanmax(np.abs(m))
-            ax.errorbar(x + off + (.04 if fam == 'dn' else -.04), m / scale, yerr=np.abs(ci.T / scale - m / scale), fmt='o' if fam == 'dog' else 's',
-                        ms=2.8, color=col, mfc=col if fam == 'dog' else 'w', mew=.7, lw=.7, capsize=0)
-        if term in cond.columns:
-            c = [cond[cond.roi == r][term].median() for r in ROI_ORDER]
-            ax.scatter(x + off, np.array(c) / np.nanmax(np.abs(c)), marker='_', s=30, color=col, lw=1.2, zorder=4)
-        ax.text(1.0, 1.0 - k * .09, lab, transform=ax.transAxes, color=col, fontsize=6.5, ha='right', va='top')
-    ax.axhline(0, color='.7', lw=.6, ls='--', zorder=0)
+    for j, name in enumerate(('DoG', 'DN')):
+        d = t[(t.model == name) & (t.term == term)].set_index('roi').loc[ROI_ORDER]
+        xx = x + (j - .5) * .3
+        ax.errorbar(xx, d['median'], yerr=[d['median'] - d.ci_low, d.ci_high - d['median']], fmt='o', ms=5, mfc=col if j == 0 else 'w',
+                    mec=col, mew=1.2, color=col, lw=1.3, capsize=0)
+        for xi, (_, r) in zip(xx, d.iterrows()):
+            s = stars(r.q)
+            if s:
+                ax.text(xi, r.ci_high, s, ha='center', va='bottom', fontsize=7, color=col)
+    ax.axhline(0, color='.7', lw=.7, ls='--', zorder=0)
     ax.set_xticks(x)
     ax.set_xticklabels(ROI_ORDER, fontsize=6.5)
-    ax.set_ylabel('Median, scaled to its maximum')
-    ax.set_ylim(-1.6, 1.6)
-    ax.text(0, 1.04, 'Circles: DoG joint · squares: DN joint · dashes: DoG conditional', transform=ax.transAxes, fontsize=6, color=FG)
-    offset_spines(ax)
-
-
-def panel_slopes(ax, js):
-    rank = {r: i for i, r in enumerate(ROI_ORDER)}
-    for k, (term, lab, col) in enumerate(TERMS):
-        for j, (fam, (name, _)) in enumerate(FAM.items()):
-            d = js[fam]
-            s = [stats.linregress([rank[r] for r in g.roi], g[term]).slope for _, g in d.groupby('subject') if g[term].notna().sum() > 3]
-            m, lo, hi = median_ci(s)
-            ax.errorbar(k + (j - .5) * .3, m, yerr=[[m - lo], [hi - m]], fmt='o' if fam == 'dog' else 's', ms=3, color=col,
-                        mfc=col if fam == 'dog' else 'w', mew=.7, lw=.8, capsize=0)
-    ax.axhline(0, color='.7', lw=.6, ls='--', zorder=0)
-    ax.set_xticks(range(len(TERMS)))
-    ax.set_xticklabels(['T', 'D', 'dS', 'dD'])
-    ax.set_ylabel('Slope per ROI step')
-    ax.text(0, 1.04, 'Pending: hierarchical term × ROI model', transform=ax.transAxes, fontsize=6, color=MUTED)
-    offset_spines(ax)
-
-
-def panel_bf(ax, js):
-    x = np.arange(len(ROI_ORDER))
-    for j, (fam, (name, _)) in enumerate(FAM.items()):
-        d = js[fam]
-        bf = [jzs_bf10(d[d.roi == r].dS) for r in ROI_ORDER]
-        ax.bar(x + (j - .5) * .38, np.log10(bf), width=.36, color=HP if fam == 'dog' else 'w', edgecolor=HP, lw=.7)
-    for v, lab in ((np.log10(3), '3'), (-np.log10(3), '1/3')):
-        ax.axhline(v, color='.7', lw=.6, ls='--', zorder=0)
-        ax.text(len(ROI_ORDER) - .5, v, lab, fontsize=5.5, color='.5', va='bottom', ha='right')
-    ax.axhline(0, color=FG, lw=.5)
-    ax.set_xticks(x)
-    ax.set_xticklabels(ROI_ORDER, fontsize=6.5)
-    ax.set_ylabel('log₁₀ BF₁₀, dS ≠ 0')
-    ax.text(0, 1.04, 'Filled: DoG · open: DN', transform=ax.transAxes, fontsize=6, color=FG)
+    ax.tick_params(axis='x', labelrotation=90)
+    ax.set_title(lab, fontsize=7.5, color=col, pad=4)
     offset_spines(ax)
 
 
 def panel_widths(ax, js):
     x = np.arange(len(ROI_ORDER))
-    for j, (par, lab, col) in enumerate((('sigma_AF', 'Sustained σ', HP), ('sigma_dyn', 'Transient σ', DISTRACTOR))):
-        d = js['dog']
-        m = np.array([median_ci(d[d.roi == r][par]) for r in ROI_ORDER])
-        ax.errorbar(x + (j - .5) * .3, m[:, 0], yerr=[m[:, 0] - m[:, 1], m[:, 2] - m[:, 0]], fmt='o', ms=3, color=col, lw=.8, capsize=0)
+    d = js['dog']
+    for j, (par, lab, col) in enumerate((('sigma_AF', 'Sustained', HP), ('sigma_dyn', 'Transient', DISTRACTOR))):
+        m = FWHM * np.array([median_ci(d[d.roi == r][par]) for r in ROI_ORDER])
+        ax.errorbar(x + (j - .5) * .3, m[:, 0], yerr=[m[:, 0] - m[:, 1], m[:, 2] - m[:, 0]], fmt='o', ms=5, color=col, lw=1.3, capsize=0)
         at_bound = [((d[d.roi == r][par] < .51) | (d[d.roi == r][par] > 7.9)).mean() * 100 for r in ROI_ORDER]
         for xi, b in zip(x, at_bound):
-            ax.text(xi + (j - .5) * .3, -.25 - j * .55, f'{b:.0f}', fontsize=5, color=col, ha='center', va='top')
-        ax.text(1.0, 1.0 - j * .09, lab, transform=ax.transAxes, color=col, fontsize=6.5, ha='right', va='top')
+            ax.text(xi + (j - .5) * .3, -.8 - j * 2.1, f'{b:.0f}', fontsize=5.5, color=col, ha='center', va='top')
+        ax.text(.02, .97 - j * .1, lab, transform=ax.transAxes, color=col, fontsize=7, va='top')
     ax.set_xticks(x)
     ax.set_xticklabels(ROI_ORDER, fontsize=6.5)
-    ax.set_ylim(-1.4, 8.2)
-    ax.set_yticks([0, 4, 8])
-    ax.set_ylabel('Field width (°), DoG')
-    ax.text(-.03, .02, '% at\nbound', transform=ax.transAxes, fontsize=5, color=MUTED, ha='right')
+    ax.tick_params(axis='x', labelrotation=90)
+    ax.set_ylim(-5, 19.5)
+    ax.set_yticks([0, 4, 8, 12, 16])
+    ax.axhline(4, color='.7', lw=.6, ls=':', zorder=0)
+    ax.text(len(ROI_ORDER) - .5, 4, 'Ring radius', fontsize=5.5, color='.5', ha='right', va='bottom')
+    ax.set_ylabel('Field FWHM (°)')
+    ax.text(-.02, .05, '% at\nbound', transform=ax.transAxes, fontsize=5.5, color=MUTED, ha='right')
+    ax.set_title('Field widths, DoG', fontsize=7.5, color=FG, pad=10)
     offset_spines(ax)
 
 
 def main(gain_table, conditional_table, name='fig4_hierarchy'):
+    global JS
     js = {f: joint(gain_table, f) for f in FAM}
-    cond = conditional(conditional_table)
-    fig = plt.figure(figsize=(DOUBLE, 4.6))
-    gs = fig.add_gridspec(2, 2, width_ratios=[1.6, 1], hspace=.55, wspace=.25, left=.075, right=.99, top=.93, bottom=.09)
-    for (r, c), fn, lab in (((0, 0), lambda ax: panel_profile(ax, js, cond), 'a'), ((0, 1), lambda ax: panel_slopes(ax, js), 'b'),
-                            ((1, 0), lambda ax: panel_bf(ax, js), 'c'), ((1, 1), lambda ax: panel_widths(ax, js), 'd')):
-        ax = fig.add_subplot(gs[r, c])
-        fn(ax)
-        letter(ax, lab, x=-.08 if c == 0 else -.14, y=1.03)
-        provisional(ax, y=1.1)
+    JS = js
+    t = summarise(js, conditional(conditional_table))
+    OUT.mkdir(parents=True, exist_ok=True)
+    write_table(t)
+    fig = plt.figure(figsize=(DOUBLE, 4.9))
+    gs = fig.add_gridspec(2, 3, hspace=.75, wspace=.35, left=.075, right=.99, top=.9, bottom=.1)
+    for k, (term, lab, col) in enumerate(TERMS):
+        ax = fig.add_subplot(gs[k // 2, k % 2] if k < 2 else gs[1, k - 2])
+        panel_term(ax, t, term, lab, col)
+        if k in (0, 2):
+            ax.set_ylabel('Gain (m7)')
+        letter(ax, 'abcd'[k], x=-.12, y=1.06)
+        provisional(ax, y=1.2)
+    ax = fig.add_subplot(gs[0, 2])
+    panel_widths(ax, js)
+    letter(ax, 'e', x=-.15, y=1.06)
+    ax = fig.add_subplot(gs[1, 2])
+    pending(ax, 'term × ROI hierarchical model')
+    letter(ax, 'f', x=-.02, y=1.06)
+    fig.text(.075, .965, '●  DoG     ○  DN', fontsize=7.5, color=FG)
     save(fig, name, LEGEND)
 
 
