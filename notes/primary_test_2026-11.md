@@ -50,3 +50,10 @@ before any test was run on them; they will not be used.
   V2, V3.
 - **Secondary results, not corrected with the primary test:** dS per ROI (BH across the nine ROIs),
   dD, LOSO per ladder step, DN versions of everything.
+
+## Outcome of the sub-03 HRF-variant test (2026-11-06)
+
+sub-03, fold 0, reliable voxels, median held-out R² per ROI. The per subject × ROI HRF from the median of the
+training fits (models 14, 16) beats the variant with a shared HRF fitted per ROI (24, 26) in 7 of 9 ROIs for DoG
+(median over ROIs .225 vs .211; canonical .190, per-voxel .227) and in 8 of 9 for DN. The median variant therefore
+stays the candidate, as specified above. Rule outcome on all 30 subjects: pending (job 8117340).
