@@ -47,7 +47,7 @@ EARLY, DORSAL = ['V1', 'V2', 'V3'], ['IPS', 'SPL1', 'FEF']
 PAL = {
     'fg': '#1F2933', 'muted': '#9AA5B1', 'target': '#F77F00',
     'dist': '#0077B6', 'fast': '#2A9D8F', 'slow': '#7B2CBF',
-    'item': '#E09000', 'singleton': '#00A600', 'screen': '#8C8C8C',
+    'item': '#E09000', 'distractor': '#00A600', 'screen': '#8C8C8C',
 }
 RT_CMAP = LinearSegmentedColormap.from_list(
     'rt', [PAL['fast'], '#F4F4F4', PAL['slow']])
@@ -140,7 +140,7 @@ def panel_letter(ax, letter, x=-0.12, y=1.04):
 
 def search_display(ax, cx, cy, r, target_pos, dist_pos, scale=1.0):
     """Mini 8-item search display: orange bars, the target is the bar with
-    the odd orientation, the distractor the green colour singleton."""
+    the odd orientation, the distractor the green colour distractor."""
     ax.add_patch(Rectangle((cx - 1.35 * r, cy - 1.35 * r), 2.7 * r, 2.7 * r,
                            facecolor=PAL['screen'], edgecolor='none',
                            zorder=0))
@@ -149,7 +149,7 @@ def search_display(ax, cx, cy, r, target_pos, dist_pos, scale=1.0):
         ang = np.deg2rad(i * 45)
         x, y = cx + r * np.cos(ang), cy + r * np.sin(ang)
         vertical = i != target_pos
-        col = PAL['singleton'] if i == dist_pos else PAL['item']
+        col = PAL['distractor'] if i == dist_pos else PAL['item']
         w, h = (W, L) if vertical else (L, W)
         ax.add_patch(Rectangle((x - w / 2, y - h / 2), w, h, facecolor=col,
                                edgecolor='none', zorder=2))
@@ -336,7 +336,7 @@ def main(data: Path, out: Path):
             ha='center', va='center', fontsize=6.5, color=PAL['target'])
     ax.add_patch(Rectangle((0.9, -0.55), 0.5, 0.13, color=PAL['item']))
     ax.text(1.65, -0.48, 'Target', fontsize=6, color=PAL['fg'], va='center')
-    ax.add_patch(Rectangle((5.6, -0.73), 0.13, 0.5, color=PAL['singleton']))
+    ax.add_patch(Rectangle((5.6, -0.73), 0.13, 0.5, color=PAL['distractor']))
     ax.text(6.0, -0.48, 'Distractor', fontsize=6, color=PAL['fg'],
             va='center')
     panel_letter(ax, 'a', x=0.0, y=0.98)

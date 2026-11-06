@@ -2,7 +2,7 @@
 
 Per candidate (subject, ROI): among the fitted voxels with cross-run reliability > 0 and a pRF centre
 within 2° of a ring location, the one with the highest m7 training R². The window is the stretch of
-``--window`` s of one run with the most target and singleton events at that ring location. Runs on
+``--window`` s of one run with the most target and distractor events at that ring location. Runs on
 the cluster; writes ``notes/data/fig3_example_voxel_sub-XX_ROI_2026-11.tsv``.
 
 Usage::

@@ -14,7 +14,7 @@ def joint(table, family, model='m7_full'):
     d['dS'] = d.g_HP - d.g_LP
     d['dD'] = d.g_HP_dyn - d.g_LP_dyn
     d['T'] = d.g_T_dyn
-    d['D'] = (d.g_HP_dyn + 3 * d.g_LP_dyn) / 4   # singleton gain averaged over locations, weighted by location count
+    d['D'] = (d.g_HP_dyn + 3 * d.g_LP_dyn) / 4   # distractor gain averaged over locations, weighted by location count
     return d
 
 

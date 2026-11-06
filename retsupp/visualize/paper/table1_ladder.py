@@ -14,10 +14,10 @@ import pandas as pd
 from retsupp.visualize.paper.paper_style import DOUBLE, FG, MUTED, OUT
 
 ROWS = [('m00', '', 'pRF on the bar', '', ''), ('m0', 'm00', 'Search items, weight fitted', 'Items', 'items'),
-        ('m1', 'm0', 'Target gain', 'T', 'T'), ('m2', 'm0', 'Singleton gain, same at all locations', 'D', 'D'),
-        ('m3', 'm0', 'Sustained gain, same at all locations', 'S', 'S'), ('m3b', 'm1', 'Singleton gain', 'D given T', 'DonT'),
+        ('m1', 'm0', 'Target gain', 'T', 'T'), ('m2', 'm0', 'Distractor gain, same at all locations', 'D', 'D'),
+        ('m3', 'm0', 'Sustained gain, same at all locations', 'S', 'S'), ('m3b', 'm1', 'Distractor gain', 'D given T', 'DonT'),
         ('m4', 'm3b', 'Sustained gain', '', ''), ('m5', 'm4', 'Sustained gain differs at HP', 'dS', 'dS'),
-        ('m6', 'm4', 'Singleton gain differs at HP', 'dD', 'dD'), ('m7', 'm5', 'Both HP-specific terms', '', '')]
+        ('m6', 'm4', 'Distractor gain differs at HP', 'dD', 'dD'), ('m7', 'm5', 'Both HP-specific terms', '', '')]
 
 
 def main(loso_table, name='table1_ladder'):

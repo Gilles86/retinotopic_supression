@@ -90,7 +90,7 @@ def letter(ax, s, x=-.02, y=1.0):
 
 
 def item_positions():
-    # Eight items every 45°; odd indices are the diagonals where target and singleton appear.
+    # Eight items every 45°; odd indices are the diagonals where target and distractor appear.
     a = np.deg2rad(np.arange(8) * 45.)
     return np.c_[RING * np.cos(a), RING * np.sin(a)]
 
@@ -125,7 +125,7 @@ def display(ax, search=True, fix='w', lim=5.4, scale=1., bar=True, hp=None):
         draw_bar(ax)
     if search:
         pos = item_positions()
-        # Target upper left among horizontal bars, singleton lower right.
+        # Target upper left among horizontal bars, distractor lower right.
         dots = {0, 2, 3, 7}
         for i, xy in enumerate(pos):
             draw_item(ax, xy, ITEM_B if i == 7 else ITEM_A, i == 3, i in dots, scale)
@@ -142,9 +142,9 @@ def panel_display(ax, margin=9.3):
     ax.add_patch(Circle(pos[7], 1.12, fill=False, ec=HP, lw=1.1, ls=(0, (2.5, 1.5)), zorder=6, clip_on=False))
     kw = dict(fontsize=7, color=FG, annotation_clip=False,
               arrowprops=dict(arrowstyle='-|>', color=FG, lw=.8, mutation_scale=6, shrinkA=1, shrinkB=2))
-    ax.annotate('Target: odd orientation, report\nthe dot, never at the singleton', xy=pos[3] + [.3, .85], xytext=(0, 7.3),
+    ax.annotate('Target: odd orientation, report\nthe dot, never at the distractor', xy=pos[3] + [.3, .85], xytext=(0, 7.3),
                 ha='center', va='center', **kw)
-    ax.annotate('Singleton distractor\n(none on 20% of trials)', xy=pos[7] + [0, -1.2], xytext=(margin, -7.2),
+    ax.annotate('Distractor\n(none on 20% of trials)', xy=pos[7] + [0, -1.2], xytext=(margin, -7.2),
                 ha='right', va='center', **kw)
     ax.annotate('Bar in 3.17°\naperture', xy=(-.5, -3.25), xytext=(-margin, -7.2), ha='left', va='center', **kw)
     # Anchors: the ring and aperture eccentricities, and a 1° scale bar.
@@ -154,7 +154,7 @@ def panel_display(ax, margin=9.3):
     ax.text(-1.25, -3.3, '4°', color='w', fontsize=6, ha='center', va='center', zorder=6)
     ax.set_xlim(-margin - .2, margin + .2)
     ax.set_ylim(-8, 8.6)
-    # Where the singleton can appear, with its probability over all trials.
+    # Where the distractor can appear, with its probability over all trials.
     ax.text(5.65, pos[7][1], 'HP\n50%', color=HP, fontsize=7, fontweight='bold', va='center', ha='left')
     for j, x, ha in ((1, 5.65, 'left'), (3, -5.65, 'right'), (5, -5.65, 'right')):
         ax.add_patch(Circle(pos[j], 1.12, fill=False, ec='w', lw=.8, ls=(0, (2.5, 1.5)), zorder=6))

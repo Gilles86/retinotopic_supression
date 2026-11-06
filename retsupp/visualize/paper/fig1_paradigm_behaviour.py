@@ -21,7 +21,7 @@ from retsupp.visualize.paper.paper_style import DOUBLE, FG, HP, MUTED, letter, o
 from retsupp.visualize.paper.plot_fig1 import APERTURE, RING, item_positions, panel_display
 
 LEGEND = """
-**Figure 1. Paradigm and behaviour.** a, Search display with the bar in its 3.17° aperture: 8 items on a ring at 4°, with target and singleton distractor at the four diagonal positions; percentages are over all trials. b, Two trials to scale, with the bar position every 2 s below, and the HP location across blocks of runs (example order). c, Response time with the singleton distractor at the HP location, at an LP location, or absent. d, Response time with the target at the HP or an LP location, on trials with a distractor. c, d, n = 30, correct trials. Dots are subjects, triangles are subjects beyond the axis limits; large points and bars are the mean ± within-subject SEM (Cousineau-Morey). Wilcoxon signed-rank tests: *** p < .001.
+**Figure 1. Paradigm and behaviour.** a, Search display with the bar in its 3.17° aperture: 8 items on a ring at 4°, with target and distractor at the four diagonal positions; percentages are over all trials. b, Two trials to scale, with the bar position every 2 s below, and the HP location across blocks of runs (example order). c, Response time with the distractor at the HP location, at an LP location, or absent. d, Response time with the target at the HP or an LP location, on trials with a distractor. c, d, n = 30, correct trials. Dots are subjects, triangles are subjects beyond the axis limits; large points and bars are the mean ± within-subject SEM (Cousineau-Morey). Wilcoxon signed-rank tests: *** p < .001.
 """
 
 
@@ -149,7 +149,7 @@ def main(rt_table, bids, name='fig1_paradigm_behaviour'):
     ylim = (770, 1020)
     ax = fig.add_subplot(low[0])
     rt_panel(ax, d[d.contrast == 'distractor'], ['HP', 'LP', 'Absent'], [HP, FG, MUTED], [('HP', 'LP'), ('LP', 'Absent')], ylim)
-    ax.set_xlabel('Singleton distractor')
+    ax.set_xlabel('Distractor')
     ax.set_ylabel('Response time (ms)')
     letter(ax, 'c', x=-.2, y=1.2)
     ax = fig.add_subplot(low[1])

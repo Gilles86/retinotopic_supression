@@ -17,17 +17,17 @@ from retsupp.visualize.paper.paper_style import DISTRACTOR, DOUBLE, FG, HP, MUTE
 from retsupp.visualize.paper.plot_fig1 import APERTURE, display
 
 COMMON = ("A search display on screen is reduced to the model input: the bar and the eight items as patches of the "
-          "same size and orientation (their colour, and so which item is the singleton, is not in the input). The weight of the "
+          "same size and orientation (their colour, and so which items are the target and the distractor, are not in the input). The weight of the "
           "items relative to the bar is fitted per ROI. Each voxel's pRF, fixed from the mapping fit, reads this input "
           "multiplied by a gain field: 1 plus a sustained field at the four ring locations, which differs between the HP "
-          "location (g_HP) and the three LP locations (g_LP), plus transient fields at the target (g_T) and at the singleton, "
+          "location (g_HP) and the three LP locations (g_LP), plus transient fields at the target (g_T) and at the distractor, "
           "whose gain can also differ between HP and LP. Shown here is less sustained gain at HP than at LP, relative to LP. "
           "HP is at the lower right (red dashed ring). All gains are illustrative and exaggerated for clarity.")
 LEGEND = f"""
-**Figure 2. Gain-field model.** a, {COMMON} b, A schematic stretch of a run with illustrative trials: one bar sweep from left to right and four trials, with symbols above their onsets (target: diamond; singleton: dot; HP: red ring; pRF: teal circle). For three pRFs, the rows show the stimulus reaching the pRF (bar and items), the gain it sees, and the predicted BOLD response after the HRF, with and without gain. Rows share their scale across columns.
+**Figure 2. Gain-field model.** a, {COMMON} b, A schematic stretch of a run with illustrative trials: one bar sweep from left to right and four trials, with symbols above their onsets (target: diamond; distractor: dot; HP: red ring; pRF: teal circle). For three pRFs, the rows show the stimulus reaching the pRF (bar and items), the gain it sees, and the predicted BOLD response after the HRF, with and without gain. Rows share their scale across columns.
 """
 LEGEND_HP = f"""
-**Figure 2. Gain-field model.** a, {COMMON} b, A schematic stretch of a run for one pRF (teal) near a ring location, in a block with HP near it and in a block with HP at the opposite location. One bar sweep from left to right and four illustrative trials, the same in both blocks, so that only the sustained gain differs (in the experiment the singleton is also more frequent at HP). Symbols above the onsets show the screen (target: diamond; singleton: dot; HP: red ring). Rows show the stimulus reaching the pRF (bar and items), the gain it sees, and the predicted BOLD response after the HRF, with and without gain. The dotted line marks the peak response in the block with HP not near, in both blocks; with HP near, the response peaks lower (arrow). Rows share their scale across columns.
+**Figure 2. Gain-field model.** a, {COMMON} b, A schematic stretch of a run for one pRF (teal) near a ring location, in a block with HP near it and in a block with HP at the opposite location. One bar sweep from left to right and four illustrative trials, the same in both blocks, so that only the sustained gain differs (in the experiment the distractor is also more frequent at HP). Symbols above the onsets show the screen (target: diamond; distractor: dot; HP: red ring). Rows show the stimulus reaching the pRF (bar and items), the gain it sees, and the predicted BOLD response after the HRF, with and without gain. The dotted line marks the peak response in the block with HP not near, in both blocks; with HP near, the response peaks lower (arrow). Rows share their scale across columns.
 """
 LIM = 5.2
 RING = 4.
@@ -39,7 +39,7 @@ PRFS = {'pRF near HP': (2.1, -2.1, .9), 'pRF near LP': (-2.1, 2.1, .9), 'pRF nea
 DURATION = 38.
 ITEM_SCALE = 8.
 BAR_W = 2 * APERTURE / 8
-# Onset, target location, singleton location (order of POS; None: no singleton).
+# Onset, target location, distractor location (order of POS; None: no distractor).
 TRIALS = [(5, 1, 3), (14, 0, 3), (23, 3, 1), (31, 2, 3)]
 RING_PRF = (1.75, -1.75, .9)
 PRF_TEAL = '#2A9D8F'
@@ -124,7 +124,7 @@ def simulate(dt=.4, trials=None, hp_ix=None, prfs=None):
 
 
 def icon(ax, t, ti, di, contour, hp_ix=None):
-    """Symbol of the screen at one onset: bar, the four locations, target (diamond), singleton (dot), this pRF."""
+    """Symbol of the screen at one onset: bar, the four locations, target (diamond), distractor (dot), this pRF."""
     ax.add_patch(Circle((0, 0), APERTURE, fill=False, ec=MUTED, lw=.5))
     r = plt.Rectangle((bar_left(t), -APERTURE), BAR_W, 2 * APERTURE, facecolor=FG, lw=0, zorder=2)
     ax.add_patch(r)
@@ -220,7 +220,7 @@ def top_row(fig, gs, prfs=None):
     maps = [('Model input', -stimulus(), 'gray', 1, FG, True, 'Fixed pRF (teal)'),
             ('Sustained:\nless gain at HP', -sus, 'Reds', .9, HP, False, 'Whole block · g_HP vs g_LP'),
             ('Target', tgt, 'Oranges', 1.8, TARGET, False, 'During search · g_T'),
-            ('Singleton', dis, 'Blues', 1.8, DISTRACTOR, False, 'During search · HP vs LP')]
+            ('Distractor', dis, 'Blues', 1.8, DISTRACTOR, False, 'During search · HP vs LP')]
     for j, (title, im, cmap, lim, col, signed, sub) in enumerate(maps, start=1):
         ax = fig.add_subplot(a[0, j])
         show(ax, im, cmap, lim, title, col, signed)
@@ -261,7 +261,7 @@ def row_labels(fig, lab, key_hp=False):
             x = bb.x0 - .05
     key = fig.add_subplot(lab[0])
     key.set_axis_off()
-    items = [('D', 'Target'), ('o', 'Singleton')] + ([('ring', 'HP location')] if key_hp else [])
+    items = [('D', 'Target'), ('o', 'Distractor')] + ([('ring', 'HP location')] if key_hp else [])
     for k, (m, txt) in enumerate(items):
         y = .8 - k * .3
         if m == 'ring':

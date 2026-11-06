@@ -5,7 +5,7 @@ Selected for illustration; the criteria, which go in the legend, are:
 1. Fitted voxels of the full-data nested fits (m0_prf, m7_full) with cross-run reliability > 0, a pRF
    centre within 2° of a ring location, and m7 R² > ``--min-r2`` over the concatenation of all runs.
 2. Every window of ``--window`` s (one-TR steps, inside one run) that contains at least
-   ``--min-events`` target or singleton onsets at that ring location, and where m7 explains the
+   ``--min-events`` target or distractor onsets at that ring location, and where m7 explains the
    window itself with R² ≥ ``--min-local-r2`` (SST about the window mean).
 3. Score per window: local ΔR² = (SSE_m0 − SSE_m7) / SST_window. The best window per voxel and the
    best voxel per (subject, ROI) are kept. Also recorded: ΔSSE, the peak |m7 − m0| in the window

@@ -1,4 +1,4 @@
-"""Figure 4: the target and the singleton draw gain, more so higher in the hierarchy. Provisional until the final fits.
+"""Figure 4: the target and the distractor draw gain, more so higher in the hierarchy. Provisional until the final fits.
 
 Also writes ``table_parameters_2026-11.{md,tsv}`` (all terms, DoG and DN, medians, CIs, tests, Bayes factors, field sizes).
 
@@ -16,7 +16,7 @@ import pandas as pd
 from scipy import stats
 
 from retsupp.visualize.paper.fig45_common import conditional, joint, jzs_bf10, median_ci
-from retsupp.visualize.paper.paper_style import (DISTRACTOR, DOUBLE, FG, HP, MUTED, OUT, ROI_COLORS, ROI_ORDER, TARGET, letter,
+from retsupp.visualize.paper.paper_style import (SINGLE, DISTRACTOR, DOUBLE, FG, HP, MUTED, OUT, ROI_COLORS, ROI_ORDER, TARGET, letter,
                                                  offset_spines, provisional, save, stimulus_icon, ICON_PAD, ROI_X, roi_axis,
                                                  roi_icon, roi_positions, title_icon)
 
@@ -25,7 +25,10 @@ TERMS = [('T', 'Target gain', TARGET), ('D', 'Distractor gain', DISTRACTOR), ('d
          ('dD', 'Distractor gain, HP − LP', '#5E3C99')]
 FAM = {'dog': 'DoG', 'dn': 'DN'}
 LEGEND = """
-**Figure 4. The target and the singleton draw gain, increasingly along the visual hierarchy.** a, Gain at the target location while the search display is on, per ROI (m7_full, DoG pRFs): dots are subjects (n = 30; triangles, beyond the axis), points and bars are the median and bootstrapped 95% CI. Stars: Wilcoxon signed-rank test against 0, Benjamini-Hochberg across ROIs; * q < .05, ** q < .01, *** q < .001. b, The same for the singleton, averaged over its locations. c, Size of the fields as full width at half maximum (2.355 σ), median and 95% CI; dotted line, the 4° radius of the ring. Above each panel: the median over subjects of the per-subject slope of the parameter on log₂ pRF size over the nine ROIs (pRF size: group median at 1-2.5° eccentricity, from the pRF fit), Wilcoxon against 0, Benjamini-Hochberg over the eight parameters tested (hierarchy_regression_2026-11.tsv). DN pRFs, Bayes factors and all other terms are in the parameter table. Provisional: current inputs.
+**Figure 4. The target and the distractor draw gain, increasingly along the visual hierarchy.** a, Gain at the target location while the search display is on, per ROI (m7_full, DoG pRFs): dots are subjects (n = 30; triangles, beyond the axis), points and bars are the median and bootstrapped 95% CI. Stars: Wilcoxon signed-rank test against 0, Benjamini-Hochberg across ROIs; * q < .05, ** q < .01, *** q < .001. b, The same for the distractor, averaged over its locations. c, Per subject, the slope of the gain on log₂ pRF size over the nine ROIs (OLS; pRF size: group median at 1-2.5° eccentricity, from the pRF fit), so the change in gain per doubling of pRF size; median and 95% CI beside the dots; Wilcoxon against 0, Benjamini-Hochberg over the eight parameters tested (hierarchy_regression_2026-11.tsv). DN pRFs, Bayes factors and all other terms are in the parameter table. Provisional: current inputs.
+"""
+LEGEND_SIZE = """
+**Figure S. Size of the fitted gain fields.** Full width at half maximum (2.355 σ) of the sustained and transient fields per ROI (m7_full, DoG pRFs), median over subjects and bootstrapped 95% CI; dotted line, the 4° radius of the ring. Many fits sit at a bound of σ (0.5° or 8°; up to 73% for the transient field in IPS, see the parameter table): where a gain is small, its width is poorly constrained. Provisional: current inputs.
 """
 
 
@@ -118,9 +121,41 @@ def panel_size(ax, d):
     roi_axis(ax)
 
 
+def panel_slopes(ax, sl, reg):
+    """Per-subject slope of target and distractor gain on log2 pRF size: one dot per subject."""
+    rows = [('Target gain', 'Target', TARGET), ('Distractor gain', 'Distractor', DISTRACTOR)]
+    for i, (par, lab, col) in enumerate(rows):
+        v = sl[(sl.parameter == par) & (sl.rois == 'all nine')].slope.to_numpy()
+        rng = np.random.default_rng(i)
+        ax.scatter(i + rng.uniform(-.17, .17, len(v)), v, s=7, color=col, alpha=.35, lw=0, zorder=1)
+        m, lo, hi = median_ci(v)
+        ax.errorbar(i + .32, m, yerr=[[m - lo], [hi - m]], fmt='o', ms=6, color=col, mec='w', mew=.8, lw=1.6, capsize=0, zorder=4)
+        q = reg[(reg.parameter == par) & (reg.rois == 'all nine')].q.iloc[0]
+        ax.text(i + .1, .7, stars(q), ha='center', va='bottom', fontsize=6.5, color=col)
+    ax.hlines(0, -.5, 1.6, color='.7', lw=.7, ls='--', zorder=0)
+    ax.set_xticks([0.1, 1.1])
+    ax.set_xticklabels([r[1] for r in rows])
+    ax.set_xlim(-.5, 1.6)
+    ax.set_ylim(-.4, .7)
+    ax.set_yticks([-.4, -.2, 0, .2, .4, .6])
+    ax.set_ylabel('Change in gain per\ndoubling of pRF size')
+    offset_spines(ax)
+
+
 def slope_note(reg, parameter, unit=''):
     r = reg[(reg.parameter == parameter) & (reg.rois == 'all nine')].iloc[0]
     return f'{r.median_slope:+.2f}{unit} per pRF-size doubling{stars(r.q)}'.replace('+0.', '+.').replace('-0.', '−.').replace('-', '−')
+
+
+def size_figure(d):
+    fig = plt.figure(figsize=(SINGLE, 2.4))
+    ax = fig.add_axes([.17, .3, .8, .6])
+    panel_size(ax, d)
+    ax.set_title('Size of the fitted fields', fontsize=7, loc='left', color=FG, pad=6)
+    for j, (lab, col) in enumerate((('Sustained field', HP), ('Transient field', DISTRACTOR))):
+        ax.text(.98, .95 - j * .09, lab, transform=ax.transAxes, color=col, fontsize=6.5, ha='right', va='top')
+    provisional(ax, y=1.08)
+    save(fig, 'figS_field_size', LEGEND_SIZE)
 
 
 def main(gain_table, conditional_table, name='fig4_hierarchy', regression_table='notes/data/hierarchy_regression_2026-11.tsv'):
@@ -135,20 +170,21 @@ def main(gain_table, conditional_table, name='fig4_hierarchy', regression_table=
     ax = fig.add_subplot(gs[0])
     panel_gain(ax, d, t, 'T', TARGET, (-.4, 1.2), None, None)
     roi_axis(ax)
-    title_icon(ax, 'Target: more gain up the hierarchy', ('target',), TARGET, h=.24, sub=slope_note(reg, 'Target gain'))
+    title_icon(ax, 'Target: more gain up the hierarchy', ('target',), TARGET, h=.24)
     ax.set_ylabel('Gain at the field centre')
     letter(ax, 'a', x=-.2, y=1.26)
     provisional(ax, x=3.3, y=1.36)
     ax = fig.add_subplot(gs[1])
     panel_gain(ax, d, t, 'D', DISTRACTOR, (-.4, 1.2), None, None)
     roi_axis(ax)
-    title_icon(ax, 'Distractor: less gain than the target', ('distractor',), DISTRACTOR, h=.24, sub=slope_note(reg, 'Distractor gain'))
+    title_icon(ax, 'Distractor: less gain than the target', ('distractor',), DISTRACTOR, h=.24)
     letter(ax, 'b', x=-.12, y=1.26)
     ax = fig.add_subplot(gs[2])
-    panel_size(ax, d)
-    ax.text(-.15, 1.2, 'Sustained field: ' + slope_note(reg, 'Sustained field FWHM (°)', '°'), transform=ax.transAxes, fontsize=6, color=HP)
-    ax.text(-.15, 1.1, 'Transient field: ' + slope_note(reg, 'Transient field FWHM (°)', '°'), transform=ax.transAxes, fontsize=6, color=DISTRACTOR)
-    letter(ax, 'c', x=-.18, y=1.26)
+    panel_slopes(ax, pd.read_csv(regression_table.replace('regression', 'slopes'), sep='\t'), reg)
+    ax.text(0, 1.22, 'Slope over ROIs, per subject', transform=ax.transAxes, fontsize=7, color=FG, va='center', ha='left')
+    letter(ax, 'c', x=-.3, y=1.26)
+    save(fig, name, LEGEND)
+    size_figure(d)
     save(fig, name, LEGEND)
 
 

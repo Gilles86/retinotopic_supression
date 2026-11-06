@@ -9,7 +9,7 @@ pRF size); the slopes are tested against 0 across subjects (Wilcoxon signed-rank
 done within the two pathways that leave early cortex: V1-V3 then dorsal (V3AB, IPS), and V1-V3 then
 occipitotemporal (hV4, VO, LO, TO).
 
-Output: ``notes/data/hierarchy_regression_2026-11.tsv``.
+Output: ``notes/data/hierarchy_regression_2026-11.tsv`` (tests) and ``hierarchy_slopes_2026-11.tsv`` (per-subject slopes).
 
 Usage::
 
@@ -48,8 +48,8 @@ def slopes(d, col, x):
         if len(g) < 3:
             continue
         xx = np.log2(x.loc[g.roi].to_numpy())
-        out.append(np.polyfit(xx, g[col].to_numpy(), 1)[0])
-    return np.array(out)
+        out.append((s, np.polyfit(xx, g[col].to_numpy(), 1)[0]))
+    return pd.Series(dict(out), name='slope').rename_axis('subject')
 
 
 def main(gain_table, conditional_table, sigma_table, out):
@@ -63,11 +63,13 @@ def main(gain_table, conditional_table, sigma_table, out):
     sets = {'all nine': ROI_ORDER,
             'early + dorsal': list(early) + list(dict(ROI_GROUPS)['Dorsal']),
             'early + occipitotemporal': list(early) + list(dict(ROI_GROUPS)['Occipitotemporal'])}
-    rows = []
+    rows, per_sub = [], []
     for col, s, lab in PARAMS:
         for name, rois in sets.items():
             d = src[s][src[s].roi.isin(rois)]
             b = slopes(d, col, size)
+            per_sub.append(b.reset_index().assign(parameter=lab, rois=name))
+            b = b.to_numpy()
             m, lo, hi = median_ci(b)
             rows.append(dict(parameter=lab, rois=name, n=len(b), median_slope=m, ci_low=lo, ci_high=hi,
                              pct_positive=(b > 0).mean() * 100, p=stats.wilcoxon(b).pvalue))
@@ -77,6 +79,7 @@ def main(gain_table, conditional_table, sigma_table, out):
         k = t.rois == name
         t.loc[k, 'q'] = stats.false_discovery_control(t.loc[k, 'p'])
     t.to_csv(out, sep='\t', index=False)
+    pd.concat(per_sub).to_csv(out.replace('regression', 'slopes'), sep='\t', index=False)
     with pd.option_context('display.width', 200):
         print(t.round(4).to_string(index=False))
 
