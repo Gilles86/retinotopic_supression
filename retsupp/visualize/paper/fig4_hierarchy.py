@@ -89,9 +89,9 @@ def panel_gain(ax, d, t, term, col, ylim, note, note_xy):
         rng = np.random.default_rng(i)
         xx = i + rng.uniform(-.17, .17, len(v))
         ok = (v >= lo) & (v <= hi)
-        ax.scatter(xx[ok], v[ok], s=7, color=ROI_COLORS[roi], alpha=.35, lw=0, zorder=1)
-        ax.scatter(xx[v > hi], np.full((v > hi).sum(), hi), s=10, marker='^', color=ROI_COLORS[roi], alpha=.6, lw=0, clip_on=False)
-        ax.scatter(xx[v < lo], np.full((v < lo).sum(), lo), s=10, marker='v', color=ROI_COLORS[roi], alpha=.6, lw=0, clip_on=False)
+        ax.scatter(xx[ok], v[ok], s=7, color=col, alpha=.35, lw=0, zorder=1)
+        ax.scatter(xx[v > hi], np.full((v > hi).sum(), hi), s=10, marker='^', color=col, alpha=.6, lw=0, clip_on=False)
+        ax.scatter(xx[v < lo], np.full((v < lo).sum(), lo), s=10, marker='v', color=col, alpha=.6, lw=0, clip_on=False)
     r = t[(t.model == 'DoG') & (t.term == term)].set_index('roi').loc[ROI_ORDER]
     ax.errorbar(x, r['median'], yerr=[r['median'] - r.ci_low, r.ci_high - r['median']], fmt='o', ms=6, color=col, mec='w', mew=.8,
                 lw=1.6, capsize=0, zorder=4)
