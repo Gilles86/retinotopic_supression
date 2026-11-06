@@ -6,7 +6,8 @@ Stages, per ROI, on the training runs of one fold:
    (model 2 for DoG, 5 for DN), carried into the flexible-HRF model at the canonical HRF values
    (delay 4.5 s, dispersion 0.75). Checked: same predictions as the canonical model.
 2. Only the HRF free: one delay and one dispersion shared by all voxels of the ROI; every pRF
-   parameter (including amplitude and baseline) fixed.
+   parameter fixed except the per-voxel baseline (an offset; braincoder's fitter needs one free
+   voxel-specific parameter).
 3. Everything free: all pRF parameters per voxel and the shared HRF of the ROI together.
 
 After every stage: training and held-out R² per voxel, the ROI's HRF, and how far the pRFs moved from
@@ -111,7 +112,11 @@ def main(subject, fold, bids_folder, family, tag, lr2, n2, lr3, n3, min_iter=200
         mismatch = float(np.nanmax(np.abs(p_can - p_flex)) / max(np.nanmax(np.abs(p_can)), 1e-12))
         pars = {1: stage1.iloc[ix][labels].reset_index(drop=True)}
         ts = time.time()
-        pars[2] = fit_roi(f_flex, tr, train_par, pars[1], [p for p in labels if p not in HRF], lr2, n2, min_iter, atol)
+        # braincoder's fitter needs at least one voxel-specific free parameter, so the baseline (an offset per
+        # voxel, no spatial role) stays free with the shared HRF.
+        offset = 'baseline' if 'baseline' in labels else 'bold_baseline'
+        pars[2] = fit_roi(f_flex, tr, train_par, pars[1], [p for p in labels if p not in HRF and p != offset], lr2, n2, min_iter,
+                          atol)
         t2 = time.time() - ts
         ts = time.time()
         pars[3] = fit_roi(f_flex, tr, train_par, pars[2], [], lr3, n3, min_iter, atol)
