@@ -1,0 +1,5 @@
+bin	share_leverage	pct_improved	p	median_dr2_e5	own_dS	own_pct_negative	source
+0-50	0.061	60	0.9677	0.01	-0.0085	67	notes/scripts/results_overview_zoom.py, DoG, signal voxels, sensitivity percentile of a, 2026-11-05
+50-75	0.112	67	0.1347	0.06	-0.0158	73	same
+75-90	0.179	83	0.0024	0.39	-0.0169	87	same
+90-100	0.647	73	0.0093	0.82	-0.0122	77	same

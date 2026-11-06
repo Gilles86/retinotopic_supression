@@ -1,0 +1,8 @@
+planted_dS	pct_improved	p	median_dr2_e5	source
+0	0	0.0000	-7.118	notes/scripts/results_overview_cv_power.py, outlier-free DoG stats, leave one HP condition out, 2026-11-05
+-0.005	0	0.0000	-6.912	same
+-0.016	10	0.0000	-6.572	same
+-0.03	20	0.0000	-4.304	same
+-0.06	67	0.0185	3.422	same
+-0.1	90	0.0000	20.732	same
+-0.2	100	0.0000	121.895	same
