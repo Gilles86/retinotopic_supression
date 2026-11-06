@@ -1,5 +1,8 @@
 """One HRF per subject × ROI, fitted jointly with the pRFs in three stages; held-out test per stage.
 
+The flexible HRF's lower bounds are widened (delay 2 s, dispersion 0.1; braincoder's defaults are 3 s and 0.3),
+because pilot fits ended at the default dispersion bound in most ROIs.
+
 Stages, per ROI, on the training runs of one fold:
 
 1. All pRF parameters with the canonical HRF: the fold's canonical fit from ``fit_prf_cv_roi``
@@ -44,6 +47,17 @@ FAMILY = {'dog': (2, 4), 'dn': (5, 6)}           # (canonical parent, flexible-H
 CANONICAL = {'hrf_delay': 4.5, 'hrf_dispersion': 0.75}
 
 
+def flex_factory(cfg, grid, sd_min, min_delay, min_dispersion):
+    """``build_model_factory`` with wider lower bounds on the flexible HRF (braincoder default: delay 3 s, dispersion 0.3)."""
+    from braincoder.hrf import SPMHRFModel
+    hrf = SPMHRFModel(tr=1.6, delay=4.5, dispersion=0.75, min_hrf_delay=min_delay, min_dispersion=min_dispersion)
+
+    def factory(data, paradigm):
+        return cfg['cls'](grid_coordinates=grid, paradigm=paradigm, hrf_model=hrf, data=data,
+                          flexible_hrf_parameters=cfg['flex_hrf'], sd_min=sd_min)
+    return factory
+
+
 def r2(obs, pred):
     sse, sst = sse_sst(obs, pred)
     with np.errstate(divide='ignore', invalid='ignore'):
@@ -60,8 +74,8 @@ def fit_roi(factory, train, par, init, fixed, lr, n_iter, min_iter, atol):
     return pars[labels]
 
 
-def main(subject, fold, bids_folder, family, tag, lr2, n2, lr3, n3, min_iter=200, atol=1e-7, n_folds=3, resolution=50,
-         sd_min=0.2, base_subdir='prf_cv_roi', output_subdir='prf_cv_roi_jointhrf', rois=ROIS):
+def main(subject, fold, bids_folder, family, tag, lr2, n2, lr3, n3, min_iter=200, atol=1e-6, n_folds=3, resolution=50,
+         sd_min=0.2, base_subdir='prf_cv_roi', output_subdir='prf_cv_roi_jointhrf', rois=ROIS, min_delay=2., min_dispersion=.1):
     assert_gpu_available_if_expected()
     parent, flex = FAMILY[family]
     sub = Subject(subject, Path(bids_folder))
@@ -95,7 +109,7 @@ def main(subject, fold, bids_folder, family, tag, lr2, n2, lr3, n3, min_iter=200
     reliable = np.isin(vox, rel.loc[rel.reliability > 0, 'voxel_index'].to_numpy())
 
     f_canon = build_model_factory(MODEL_CFG[parent], grid, sd_min)
-    f_flex = build_model_factory(MODEL_CFG[flex], grid, sd_min)
+    f_flex = flex_factory(MODEL_CFG[flex], grid, sd_min, min_delay, min_dispersion)
     stage1 = canon.assign(**CANONICAL)
     stages = {1: stage1.copy(), 2: stage1.copy(), 3: stage1.copy()}
     rows = []
@@ -170,10 +184,12 @@ if __name__ == '__main__':
     ap.add_argument('--lr3', type=float, default=.001)
     ap.add_argument('--n3', type=int, default=2000)
     ap.add_argument('--min-iter', type=int, default=200)
-    ap.add_argument('--atol', type=float, default=1e-7)
+    ap.add_argument('--atol', type=float, default=1e-6)
+    ap.add_argument('--min-delay', type=float, default=2.)
+    ap.add_argument('--min-dispersion', type=float, default=.1)
     ap.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
     ap.add_argument('--rois', nargs='+', default=ROIS)
     ap.add_argument('--output-subdir', default='prf_cv_roi_jointhrf')
     a = ap.parse_args()
     main(a.subject, a.fold, a.bids_folder, a.family, a.tag, a.lr2, a.n2, a.lr3, a.n3, a.min_iter, a.atol,
-         rois=a.rois, output_subdir=a.output_subdir)
+         rois=a.rois, output_subdir=a.output_subdir, min_delay=a.min_delay, min_dispersion=a.min_dispersion)
