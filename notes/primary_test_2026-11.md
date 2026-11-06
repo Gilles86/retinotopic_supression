@@ -31,18 +31,21 @@ before any test was run on them; they will not be used.
   with statistic ≤ observed) / (1 + 100,000). Reported: observed value, null distribution, p, and
   the mean of the rotated values (a real effect leaks into the rotated labellings, which should lean
   positive by about a third of it).
-- **Which dS enters the null: open, needs the user's choice before any null output.**
-  (a) Joint dS from m5/m7 refitted under every rotation (the original plan; m5, m6, m7, 30 subjects ×
-  9 ROIs × 3 rotations; about 1.9 core-hours per fit on the current pipeline, so roughly 1,500
-  core-hours for DoG alone). (b) Conditional dS, the headline estimate, recomputed under each rotation
-  on the existing m4 fits (about 10 core-hours for DoG). Option (b) tests the number the paper leads
-  with.
-- **HRF rule, operationalised.** Per subject: median over the nine ROIs of held-out R² (per subject ×
+- **Which dS enters the null (user, 2026-11-06): the conditional dS**, the headline estimate. Under
+  each of the three rotations the conditional dS is recomputed on the final m4 fits with the HP label
+  moved; the joint m5/m7 refits under rotation are not run.
+- **HRF rule, operationalised.** Candidate per subject × ROI HRF: the median delay and dispersion of
+  the ROI's voxels with training R² ≥ .1 in the fold's own flexible-HRF fit, held fixed (models 14 DoG,
+  16 DN in `retsupp/modeling/cv/fit_prf_cv_roi_hrf.py`); held-out data play no part. The variant with
+  the shared HRF fitted per ROI (24, 26) is tested on sub-03 first and replaces the median variant only
+  if it predicts better there. Per subject: median over the nine ROIs of held-out R² (per subject ×
   ROI HRF) minus held-out R² (canonical HRF), DoG pRFs, reliable voxels, same folds. Rule met if more
   than 15 of 30 subjects are positive and the two-sided Wilcoxon signed-rank p < .05. Evaluated for
   DoG, which decides the HRF for all gain fits; the DN numbers are reported.
-- **Decoding test, operationalised.** Per subject and ROI: decoded bar drive at the HP location minus
-  the mean over the three LP locations, from the gainless pRF model, pRFs fitted on runs other than
+- **Decoding test, operationalised (definition of the HP location confirmed by the user, 2026-11-06).**
+  The HP ring position (4°) lies outside the bar aperture (3.17°), so "bar drive at the HP location" is
+  the decoded bar drive in the visual-field quadrant facing HP, inside the aperture; LP = the three
+  other quadrants. Per subject and ROI: HP quadrant minus the mean over the three LP quadrants, from the gainless pRF model, pRFs fitted on runs other than
   the ones decoded. Wilcoxon signed-rank across the 30 subjects, one-sided (HP < LP), Holm across V1,
   V2, V3.
 - **Secondary results, not corrected with the primary test:** dS per ROI (BH across the nine ROIs),
