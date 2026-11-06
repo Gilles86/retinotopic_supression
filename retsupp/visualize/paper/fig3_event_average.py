@@ -1,18 +1,21 @@
-"""Event-locked average of what the gain fields add, for a Figure 3 panel that a single voxel cannot make.
+"""Event-related mean time series at the voxel's ring location, data against the m0 and m7 predictions.
 
-Per subject and ROI, on the full-data nested fits (m0_prf, m7_full):
+For a Figure 3 panel that a single voxel cannot make. Per subject and ROI, on the full-data nested fits
+(m0_prf, m7_full):
 
 1. Voxels: cross-run reliability > 0 and a pRF centre within 2° of a ring location (the nearest one is
-   the voxel's location). No R² criterion, so the selection does not favour either model.
-2. Events at the voxel's location: target onsets, and distractor onsets split by whether that location
-   is HP in the run. As a control, the same events at the opposite ring location.
-3. Epochs from -3 to +15 TRs around each onset of the residual of m0 (data − m0) and of what m7 adds
-   (m7 − m0), each divided by the voxel's BOLD SD over all runs; averaged over events per voxel, then
-   over voxels.
+   the voxel's location). No R² criterion, so the selection favours neither model.
+2. Trials: every search onset. What lands at the voxel's location on that trial: the target, the
+   distractor (at HP or at an LP location), or a neutral item (at HP or at an LP location).
+3. The bar response is removed from everything: the prediction of m0 with the bar alone (m0's pRFs,
+   items left out) is subtracted from the data, from m0 and from m7. What remains is the response to
+   the search items (and noise); m0 predicts the same response whatever lands at the location, m7
+   lets it depend on the gain fields.
+4. Epochs from -2 to +12 TRs around each onset, % signal; averaged over trials per voxel, then over
+   voxels. Trials come every few seconds, so neighbouring trials overlap in every epoch; they are
+   balanced across the classes, which differ only in what lands at the voxel's location.
 
-If the gain fields capture event-locked structure that m0 misses, the two curves agree in shape.
-
-Writes ``notes/data/fig3_event_average/sub-XX_2026-11.tsv`` (one row per ROI × event type × place × lag).
+Writes ``notes/data/fig3_event_average/sub-XX_2026-11.tsv`` (one row per ROI × class × lag).
 
 Usage::
 
@@ -29,8 +32,7 @@ import pandas as pd
 from retsupp.visualize.paper.fig3_example_voxels import load_fit
 
 ROIS = ['V1', 'V2', 'V3', 'V3AB', 'IPS', 'hV4', 'VO', 'LO', 'TO']
-PRE, POST = 3, 15
-OPPOSITE = {0: 2, 1: 3, 2: 0, 3: 1}
+PRE, POST = 2, 12
 
 
 def onsets(x):
@@ -41,28 +43,33 @@ def onsets(x):
 def main(subject, rois, bids, out_dir):
     from braincoder.hrf import SPMHRFModel
     from retsupp.modeling.fit_af_prf_cv_v2 import build_data_and_paradigm, build_model, get_ring_positions
-    from retsupp.modeling.fit_cv_ladder_nested import sign_pattern_of
+    from retsupp.modeling.fit_cv_ladder_nested import bar_paradigm, sign_pattern_of
     from retsupp.utils.data import Subject
     deriv = Path(bids) / 'derivatives'
     sub = Subject(subject, bids)
     bold, par, ci, di, ti, grid, _, meta = build_data_and_paradigm(sub, resolution=50, grid_radius=5.0, item_shape='rectangle')
+    par_bar = bar_paradigm(sub, meta, 50, 5.0)
+    assert np.shape(par_bar) == np.shape(par), (np.shape(par_bar), np.shape(par))
     ring = get_ring_positions()
-    assert np.allclose(ring[OPPOSITE[0]], -ring[0]), 'ring order changed'
     hrf = SPMHRFModel(tr=sub.get_tr(session=1, run=1), delay=4.5, dispersion=0.75)
     rel_all = pd.concat([pd.read_csv(f, sep='\t') for f in sorted(
         (deriv / 'prf_cv_roi_reliability' / f'sub-{subject:02d}').glob('*_reliability.tsv.gz'))])
     rel_all = rel_all.groupby('voxel_index').reliability.mean()
-    # Onsets per run, per ring location; HP flag per run and location.
-    events = []
+    # Trials (search onsets, from the target indicator) and what lands at each ring location.
+    trials = []
     for r in meta:
         sl = slice(r.start, r.start + r.n_T)
-        for loc in range(len(ring)):
-            hp = bool(ci[r.start, loc] > 0)
-            for kind, ind in (('target', ti), ('distractor', di)):
-                for t in onsets(ind[sl, loc]):
-                    if PRE <= t < r.n_T - POST:
-                        events.append((kind, loc, hp, r.start + t))
-    ev = pd.DataFrame(events, columns=['kind', 'loc', 'hp', 't'])
+        t_on = sorted(set(np.concatenate([onsets(ti[sl, k]) for k in range(len(ring))]).tolist()))
+        for t in t_on:
+            if not PRE <= t < r.n_T - POST:
+                continue
+            tt = r.start + t
+            for loc in range(len(ring)):
+                hp = ci[tt, loc] > 0
+                what = 'target' if ti[tt, loc] > 0 else 'distractor' if di[tt, loc] > 0 else 'neutral'
+                trials.append((loc, f'{what}_{"hp" if hp else "lp"}' if what != 'target' else 'target', tt))
+    tr = pd.DataFrame(trials, columns=['loc', 'cls', 't'])
+    print(tr.groupby('cls').size().to_string(), flush=True)
     lags = np.arange(-PRE, POST + 1)
     rows = []
     for roi in rois:
@@ -73,46 +80,40 @@ def main(subject, rois, bids, out_dir):
             continue
         ids = np.asarray(fits['m7_full']['voxel_ids'])
         assert np.array_equal(ids, np.asarray(fits['m0_prf']['voxel_ids'])), 'm0 and m7 voxel sets differ'
-        preds = {}
+        pred = {}
         for name, fit in fits.items():
             p = fit['fit_pars_per_fold'][0]
             model = build_model(grid_coords=grid, paradigm=par, condition_indicator=ci, dynamic_indicator=di, target_indicator=ti,
                                 ring_positions=ring, hrf_model=hrf, sign_pattern=sign_pattern_of(name), item_scale='free')
-            preds[name] = np.asarray(model.predict(paradigm=par, parameters=p.reindex(columns=list(model.parameter_labels))))
+            pp = p.reindex(columns=list(model.parameter_labels))
+            pred[name] = np.asarray(model.predict(paradigm=par, parameters=pp))
+            if name == 'm0_prf':
+                pred['bar'] = np.asarray(model.predict(paradigm=par_bar, parameters=pp))
         p7 = fits['m7_full']['fit_pars_per_fold'][0]
-        y = bold[:, ids]
-        sd = y.std(0)
-        resid = (y - preds['m0_prf']) / sd
-        added = (preds['m7_full'] - preds['m0_prf']) / sd
         rel = rel_all.reindex(ids).to_numpy()
         dist = np.hypot(p7.x.to_numpy()[:, None] - ring[:, 0], p7.y.to_numpy()[:, None] - ring[:, 1])
         loc_v = dist.argmin(1)
         ok = (rel > 0) & (dist.min(1) < 2)
         print(f'{roi}: {ok.sum()} of {len(ids)} voxels', flush=True)
-        for place in ('here', 'opposite'):
-            for kind, hp_sel in (('target', None), ('distractor', True), ('distractor', False)):
-                acc_r, acc_a, nv, ne = np.zeros(len(lags)), np.zeros(len(lags)), 0, 0
-                for loc in range(len(ring)):
-                    vox = np.flatnonzero(ok & (loc_v == loc))
-                    if not len(vox):
-                        continue
-                    ev_loc = loc if place == 'here' else OPPOSITE[loc]
-                    e = ev[(ev.kind == kind) & (ev['loc'] == ev_loc)]
-                    if hp_sel is not None:
-                        e = e[e.hp == hp_sel]
-                    if e.empty:
-                        continue
-                    idx = e.t.to_numpy()[:, None] + lags[None, :]                     # (events, lags)
-                    acc_r += resid[idx][:, :, vox].mean(0).sum(1)
-                    acc_a += added[idx][:, :, vox].mean(0).sum(1)
-                    nv += len(vox)
-                    ne += len(e)
-                if nv == 0:
+        series = {'data': bold[:, ids] - pred['bar'], 'm0': pred['m0_prf'] - pred['bar'], 'm7': pred['m7_full'] - pred['bar']}
+        for cls in sorted(tr.cls.unique()):
+            acc = {k: np.zeros(len(lags)) for k in series}
+            nv = ne = 0
+            for loc in range(len(ring)):
+                vox = np.flatnonzero(ok & (loc_v == loc))
+                e = tr[(tr['loc'] == loc) & (tr.cls == cls)]
+                if not len(vox) or e.empty:
                     continue
-                label = kind if hp_sel is None else f'{kind}_{"hp" if hp_sel else "lp"}'
-                for lag, a, b in zip(lags, acc_r / nv, acc_a / nv):
-                    rows.append(dict(subject=subject, roi=roi, event=label, place=place, lag=int(lag), t=float(lag) * 1.6,
-                                     data_minus_m0=a, m7_minus_m0=b, n_voxels=nv, n_events=ne))
+                idx = e.t.to_numpy()[:, None] + lags[None, :]
+                for k, s in series.items():
+                    acc[k] += s[:, vox][idx].mean(0).sum(1)
+                nv += len(vox)
+                ne += len(e)
+            if nv == 0:
+                continue
+            for i, lag in enumerate(lags):
+                rows.append(dict(subject=subject, roi=roi, cls=cls, lag=int(lag), t=float(lag) * 1.6,
+                                 **{k: acc[k][i] / nv for k in series}, n_voxels=nv, n_trials=ne))
     out = Path(out_dir) / 'fig3_event_average'
     out.mkdir(parents=True, exist_ok=True)
     path = out / f'sub-{subject:02d}_2026-11.tsv'
