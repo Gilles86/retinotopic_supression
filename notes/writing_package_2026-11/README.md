@@ -15,7 +15,8 @@ Behavioural numbers are final.
 
 ## The story in one paragraph
 
-Thirty participants searched for a shape target among eight items while a colour-singleton distractor
+Thirty participants searched eight bars for the one with a different orientation (the target) and
+reported whether it contained a grey dot (two buttons: dot, no dot), while a colour-singleton distractor
 appeared more often at one location (high probability, HP). Behaviour shows the learned suppression
 clearly: responses are 28 ms faster when the distractor is at HP than at another location, in all 30
 participants. During the same 7T fMRI runs a bar swept the visual field, so each voxel's population
