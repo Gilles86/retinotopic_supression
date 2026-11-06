@@ -55,6 +55,9 @@ earlier fits of the same voxels (with ``--gd-iterations`` and ``--gd-min-iterati
 after a small change such as the HRF is cheap). ``--sigma-starts`` and ``--lbfgs-rounds`` set the
 search of the shared fits.
 
+``--models m8_full_dT`` fits the target gain split by target at HP vs elsewhere (``target_split``) from
+m7_full; all its ancestors are loaded from ``--base-root``.
+
 ``--reliable-only`` keeps the selected voxels with model-free cross-run reliability > 0 (mean over
 the ``prf_cv_reliability`` folds). The m00, m0, m1 and m3b fits come from ``--base-root``, restricted
 to those voxels, so m4 onward refit the shared terms on them. Root gets a _reliable suffix.
@@ -84,6 +87,7 @@ from braincoder.hrf import SPMHRFModel
 from braincoder.optimize import ParameterFitter
 from retsupp.modeling.cv_helpers import per_voxel_r2, write_cv_tsvs
 from retsupp.modeling.dn_attention_field import DNDynamicAttentionFieldPRF2D, init_from_m5
+from retsupp.modeling.target_split import NEW as T_HP, TargetSplitDN, TargetSplitDoG
 from retsupp.modeling.fit_af_prf_cv_v2 import (
     ALL_SHARED_PARS,
     CV_SCHEMES,
@@ -111,7 +115,10 @@ LADDER = {
     'm5_TDS_dS': ('free', 'free', 'tied', 'free', 'free', 'free', 'm4_TDS'),
     'm6_TDS_dD': ('tied', 'free', 'free', 'free', 'free', 'free', 'm4_TDS'),
     'm7_full':   ('free', 'free', 'free', 'free', 'free', 'free', 'm5_TDS_dS'),
+    'm8_full_dT': ('free', 'free', 'free', 'free', 'free', 'free', 'm7_full'),
 }
+# Models with the target gain split by target at HP vs elsewhere (``target_split``); run only when asked.
+TARGET_SPLIT = ('m8_full_dT',)
 GAINS = ['g_HP', 'g_LP', 'g_HP_dyn', 'g_LP_dyn', 'g_T_dyn']
 # Models whose fit cannot depend on which ring position is labelled HP.
 LABEL_BLIND = ('m1_T', 'm2_D', 'm3_S', 'm3b_TD', 'm4_TDS')
@@ -128,7 +135,7 @@ POLISH_ROUNDS = 3
 # trades off against pRF amplitude).
 SHARED_BOUNDS = {'sigma_AF': (0.5, 8.0), 'sigma_dyn': (0.5, 8.0),
                  'item_scale': (1e-3, 50.0),
-                 **{g: (-10.0, 10.0) for g in GAINS}}
+                 **{g: (-10.0, 10.0) for g in GAINS + [T_HP]}}
 POLISH_MAX_ITER = 3000
 SCHEMES = tuple(CV_SCHEMES) + ('full',)
 
@@ -303,6 +310,8 @@ def child_init(parent_pars, model, name):
     if init[['sigma_AF', 'sigma_dyn']].isna().any().any():
         raise ValueError('parent pars lack σ columns')
     init['sigma_T_dyn'] = init['sigma_dyn']
+    if T_HP in labels and init[T_HP].isna().all():
+        init[T_HP] = init['g_T_dyn']   # split starts unsplit
     return init
 
 
@@ -430,7 +439,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
             + (f'_hprot{hp_rotation}' if hp_rotation else '')
             + ('_reliable' if reliable_only else '')))
     polish_root = root.parent / f'{root.name}_polished'
-    models = models or list(LADDER)
+    models = models or [m for m in LADDER if m not in TARGET_SPLIT]
 
     (bold, par_items, ci, di, ti, grid_coords, _masker,
      run_meta) = build_data_and_paradigm(
@@ -543,6 +552,9 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
             cached = load(name, out_root)
             from_base = (('m00_bar', 'm0_prf') + (LABEL_BLIND if hp_rotation else ())
                          + (('m1_T', 'm3b_TD') if reliable_only else ()))
+            if any(m in TARGET_SPLIT for m in models):
+                # The split is fitted on top of finished ladders: every ancestor comes from --base-root.
+                from_base = from_base + tuple(n for n in needed if n not in TARGET_SPLIT)
             if cached is None and base_roots and name in from_base:
                 # First root holding this fit wins, so an overlay root goes first.
                 for base in base_roots:
@@ -587,9 +599,11 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                 y_tr = train['bold'][:, voxel_mask]
                 y_he = None if held is None else held['bold'][:, voxel_mask]
 
+                split_t = name in TARGET_SPLIT
+
                 def mk(d):
                     if family == 'dn':
-                        return DNDynamicAttentionFieldPRF2D(
+                        return (TargetSplitDN if split_t else DNDynamicAttentionFieldPRF2D)(
                             grid_coordinates=grid_coords, paradigm=d['paradigm'],
                             hrf_model=hrf_model,
                             condition_indicator=d['condition_indicator'],
@@ -597,13 +611,14 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                             target_indicator=d['target_indicator'],
                             ring_positions=ring_positions, sign_pattern=sp,
                             item_scale_mode=item_scale)
-                    return build_model(
-                        grid_coords=grid_coords, paradigm=d['paradigm'],
-                        condition_indicator=d['condition_indicator'],
-                        dynamic_indicator=d['dynamic_indicator'],
-                        target_indicator=d['target_indicator'],
-                        ring_positions=ring_positions, hrf_model=hrf_model,
-                        sign_pattern=sp, item_scale=item_scale)
+                    kw = dict(grid_coordinates=grid_coords, paradigm=d['paradigm'],
+                              condition_indicator=d['condition_indicator'],
+                              dynamic_indicator=d['dynamic_indicator'],
+                              target_indicator=d['target_indicator'],
+                              ring_positions=ring_positions, hrf_model=hrf_model, sign_pattern=sp)
+                    if split_t:
+                        return TargetSplitDoG(item_scale_mode=item_scale, **kw)
+                    return build_model(grid_coords=kw.pop('grid_coordinates'), item_scale=item_scale, **kw)
                 m_tr = mk(train)
                 labels = list(m_tr.parameter_labels)
 
@@ -654,7 +669,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                 else:
                     init = child_init(fits[parent][k], m_tr, name)
                     free = [p for p in shared_pars_for(sp, item_scale)
-                            if p != 'sigma_T_dyn']
+                            if p != 'sigma_T_dyn'] + ([T_HP] if split_t else [])
                     pars, info = shared_fit(m_tr, y_tr, train['paradigm'],
                                             init, free, bounded=bounded, loss=loss,
                                             sigma_starts=sigma_starts, lbfgs_rounds=lbfgs_rounds)
@@ -682,7 +697,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                 cv_r2s.append(cv_r2)
                 train_r2s.append(tr_r2)
                 shared_dicts.append(pars.reindex(
-                    columns=ALL_SHARED_PARS + ['item_scale']).iloc[0].to_dict())
+                    columns=ALL_SHARED_PARS + ['item_scale'] + ([T_HP] if split_t else [])).iloc[0].to_dict())
                 infos.append(info)
                 tr_meta.append([(r.session, r.run, r.hp) for r in train['run_meta']])
                 he_meta.append([] if held is None else
@@ -694,7 +709,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
             if pkl.exists():   # never overwrite an existing fit
                 raise FileExistsError(pkl)
             out_dir.mkdir(parents=True, exist_ok=True)
-            shared_labels = ALL_SHARED_PARS + ['item_scale']
+            shared_labels = ALL_SHARED_PARS + ['item_scale'] + ([T_HP] if name in TARGET_SPLIT else [])
             write_cv_tsvs(
                 out_dir, subject=subject, roi=roi, model=name,
                 voxel_ids=voxel_ids, cv_r2_per_fold=cv_r2s,

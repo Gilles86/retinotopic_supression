@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=fixed_mech
 #SBATCH --account=zne.uzh
-#SBATCH --partition=lowprio
+#SBATCH --partition=standard
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=8
 #SBATCH --time=01:30:00
@@ -13,6 +13,7 @@
 # Usage (from the repo root on the cluster login node):
 #   sbatch --array=1-30 retsupp/modeling/slurm_jobs/fit_fixed_group_mechanisms.sh
 #   OVERLAY_ROOT=<derivatives folder> OUTPUT_SUBDIR=<new folder> sbatch --array=1-30 ...
+#   MECHANISMS=dT runs only the listed mechanisms
 
 set -eo pipefail
 subject=${SLURM_ARRAY_TASK_ID}
@@ -32,6 +33,7 @@ echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
 "$HOME/data/conda/envs/retsupp_cuda/bin/python" -u -m retsupp.modeling.fit_fixed_group_mechanisms \
     "$subject" --bids-folder /shares/zne.uzh/gdehol/ds-retsupp ${ROIS:+--rois $ROIS} \
     ${OVERLAY_ROOT:+--overlay-root "$OVERLAY_ROOT"} ${OUTPUT_SUBDIR:+--output-subdir "$OUTPUT_SUBDIR"} \
-    ${BASE_ROOT:+--base-root "$BASE_ROOT"} ${FAMILY:+--family "$FAMILY"} ${STEP:+--step "$STEP"} ${EXACT:+--exact}
+    ${BASE_ROOT:+--base-root "$BASE_ROOT"} ${FAMILY:+--family "$FAMILY"} ${STEP:+--step "$STEP"} ${EXACT:+--exact} \
+    ${MECHANISMS:+--mechanisms $MECHANISMS}
 
 echo "Finished: $(date)"

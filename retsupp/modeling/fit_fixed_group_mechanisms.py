@@ -20,6 +20,7 @@ D          m0_prf       g_HP_dyn = g_LP_dyn (location blind)    m2_D
 S          m0_prf       g_HP = g_LP (location blind)            m3_S
 dS         m4_TDS       g_HP                                    (base)
 dD         m4_TDS       g_HP_dyn                                (base)
+dT         m4_TDS       g_T_HP_dyn (target at HP; starts at g_T_dyn)  (base)
 =========  ===========  ======================================  ==========
 
 X is a central difference with step ``H``; ``lin_err`` compares the
@@ -48,13 +49,12 @@ import numpy as np
 import pandas as pd
 
 from braincoder.hrf import SPMHRFModel
-from retsupp.modeling.dn_attention_field import DNDynamicAttentionFieldPRF2D
 from retsupp.modeling.fit_af_prf_cv_v2 import (
     build_data_and_paradigm,
-    build_model,
     get_ring_positions,
 )
 from retsupp.modeling.fit_cv_ladder_nested import TIE_PARTNER, sign_pattern_of
+from retsupp.modeling.target_split import TargetSplitDN, TargetSplitDoG
 from retsupp.utils.data import Subject
 
 ROIS = ['V1', 'V2', 'V3', 'V3AB', 'hV4', 'LO', 'TO', 'VO', 'IPS', 'SPL1', 'FEF']
@@ -70,10 +70,12 @@ MECHANISMS = {
     'S': ('m0_prf', ['g_HP', 'g_LP'], ('sigma_AF', 'm3_S')),
     'dS': ('m4_TDS', ['g_HP'], None),
     'dD': ('m4_TDS', ['g_HP_dyn'], None),
+    'dT': ('m4_TDS', ['g_T_HP_dyn'], None),
 }
 # Lower and upper δ of the --exact grid. items stops at item_scale = 0.
 EXACT_RANGE = {'items': (-1., .5), 'T': (-1.5, 1.5), 'D': (-1.5, 1.5),
-               'S': (-.4, .4), 'dS': (-.8, .8), 'dD': (-1.5, 1.5)}
+               'S': (-.4, .4), 'dS': (-.8, .8), 'dD': (-1.5, 1.5),
+               'dT': (-1.5, 1.5)}
 N_GRID = 25
 
 
@@ -117,17 +119,18 @@ def build_full_model(sub, data):
     hrf_model = SPMHRFModel(tr=sub.get_tr(session=1, run=1),
                             delay=4.5, dispersion=0.75)
     # Everything free, so each mechanism can move away from its base value.
+    # The target-split class: at g_T_HP_dyn = g_T_dyn it predicts exactly what the parent does.
     if FAMILY == 'dn':
-        return DNDynamicAttentionFieldPRF2D(
+        return TargetSplitDN(
             grid_coordinates=grid_coords, paradigm=paradigm,
             condition_indicator=ci, dynamic_indicator=di, target_indicator=ti,
             ring_positions=get_ring_positions(), hrf_model=hrf_model,
             sign_pattern=sign_pattern_of('m7_full'), item_scale_mode='free')
-    return build_model(
-        grid_coords=grid_coords, paradigm=paradigm,
+    return TargetSplitDoG(
+        grid_coordinates=grid_coords, paradigm=paradigm,
         condition_indicator=ci, dynamic_indicator=di, target_indicator=ti,
         ring_positions=get_ring_positions(), hrf_model=hrf_model,
-        sign_pattern=sign_pattern_of('m7_full'), item_scale='free')
+        sign_pattern=sign_pattern_of('m7_full'), item_scale_mode='free')
 
 
 def base_parameters(sub, model, roi, base, width, overlay_root):
@@ -144,6 +147,7 @@ def base_parameters(sub, model, roi, base, width, overlay_root):
                                         sub.subject_id, roi, overlay_root)
         pars[width[0]] = width_val
     pars['sigma_T_dyn'] = pars['sigma_dyn']
+    pars['g_T_HP_dyn'] = pars['g_T_dyn']
     assert not pars.isna().any().any(), pars.columns[pars.isna().any()]
     return fit, pars.astype(np.float32), width_val, n_width
 
@@ -226,8 +230,11 @@ def fit_roi_exact(sub, roi, data, out_path, overlay_root=None):
 
 
 def main(subject, bids_folder, rois, output_subdir='af_fixed_group_mechanisms',
-         overlay_root=None, base_root=None, family='dog', step=None, exact=False, hp_rotation=0):
-    global BASE_ROOT, FAMILY, H
+         overlay_root=None, base_root=None, family='dog', step=None, exact=False, hp_rotation=0,
+         mechanisms=None):
+    global BASE_ROOT, FAMILY, H, MECHANISMS
+    if mechanisms:
+        MECHANISMS = {m: MECHANISMS[m] for m in mechanisms}
     BASE_ROOT, FAMILY, H = base_root or BASE_ROOT, family, step or H
     sub = Subject(subject, bids_folder=Path(bids_folder))
     out_dir = Path(bids_folder) / 'derivatives' / output_subdir / f'sub-{subject:02d}'
@@ -263,6 +270,9 @@ if __name__ == '__main__':
                          'Use a matching --base-root of fits with the same relabelling.')
     ap.add_argument('--exact', action='store_true',
                     help='Save ΔSSE on a grid of δ from the actual predictions')
+    ap.add_argument('--mechanisms', nargs='+', default=None, choices=list(MECHANISMS),
+                    help='Only these mechanisms (default all)')
     args = ap.parse_args()
     main(args.subject, args.bids_folder, args.rois, args.output_subdir, args.overlay_root,
-         args.base_root, args.family, args.step, args.exact, args.hp_rotation)
+         args.base_root, args.family, args.step, args.exact, args.hp_rotation,
+         args.mechanisms)
