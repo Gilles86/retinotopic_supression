@@ -27,7 +27,7 @@ LEGEND = f"""
 **Figure 2. Gain-field model.** a, {COMMON} b, A schematic stretch of a run with illustrative trials: one bar sweep from left to right and four trials, with symbols above their onsets (target: diamond; singleton: dot; HP: red ring; pRF: teal circle). For three pRFs, the rows show the stimulus reaching the pRF (bar and items), the gain it sees, and the predicted BOLD response after the HRF, with and without gain. Rows share their scale across columns.
 """
 LEGEND_HP = f"""
-**Figure 2. Gain-field model.** a, {COMMON} b, A schematic stretch of a run for one pRF (teal) near a ring location, in a block with HP near it and in a block with HP at the opposite location. One bar sweep from left to right and four illustrative trials, the same in both blocks, so that only the sustained gain differs (in the experiment the singleton is also more frequent at HP). Symbols above the onsets show the screen (target: diamond; singleton: dot; HP: red ring). Rows show the stimulus reaching the pRF (bar and items), the gain it sees, and the predicted BOLD response after the HRF, with and without gain. Right, the two predicted responses on one axis; the shaded gap is the effect of less sustained gain at HP. Rows share their scale across columns.
+**Figure 2. Gain-field model.** a, {COMMON} b, A schematic stretch of a run for one pRF (teal) near a ring location, in a block with HP near it and in a block with HP at the opposite location. One bar sweep from left to right and four illustrative trials, the same in both blocks, so that only the sustained gain differs (in the experiment the singleton is also more frequent at HP). Symbols above the onsets show the screen (target: diamond; singleton: dot; HP: red ring). Rows show the stimulus reaching the pRF (bar and items), the gain it sees, and the predicted BOLD response after the HRF, with and without gain. The dotted line marks the peak response in the block with HP not near, in both blocks; with HP near, the response peaks lower (arrow). Rows share their scale across columns.
 """
 LIM = 5.2
 RING = 4.
@@ -73,8 +73,11 @@ def show(ax, im, cmap='RdBu_r', lim=None, title=None, color=FG, signed=True):
         ax.set_title(title, fontsize=7, color=color, pad=2)
 
 
+BAR_START = 12.   # s of the sweep already done at t = 0, so the bar crosses the ring pRF mid-window
+
+
 def bar_left(t):
-    return -APERTURE + .168 * t - BAR_W
+    return -APERTURE + .168 * (t + BAR_START) - BAR_W
 
 
 def simulate(dt=.4, trials=None, hp_ix=None, prfs=None):
@@ -279,7 +282,7 @@ def main_hp(name='fig2_model_hp_blocks'):
     fig = plt.figure(figsize=(DOUBLE, 3.75))
     outer = fig.add_gridspec(2, 1, height_ratios=[1.6, 1.95], hspace=.1, left=.012, right=.995, top=.935, bottom=.035)
     top_row(fig, outer[0])
-    low = outer[1].subgridspec(1, 4, width_ratios=[.55, 1, 1, .85], wspace=.08)
+    low = outer[1].subgridspec(1, 3, width_ratios=[.55, 1, 1], wspace=.08)
     ratios = [1.25, .8, .8, 1.15]
     lab = low[0].subgridspec(4, 1, height_ratios=ratios, hspace=.12)
     row_labels(fig, lab, key_hp=True)
@@ -288,6 +291,7 @@ def main_hp(name='fig2_model_hp_blocks'):
     g_lo = min(d['base'] for d in sim.values())
     p_hi = max(max(d['predicted'].max(), d['without'].max()) for d in sim.values())
     p_lo = min(min(d['predicted'].min(), d['without'].min()) for d in sim.values())
+    anchor = sim['HP not near this pRF']['predicted'].max()
     for k, (nm, (hp, tr)) in enumerate(blocks.items()):
         col = low[k + 1].subgridspec(4, 1, height_ratios=ratios, hspace=.12)
         d, t = sim[nm], sim[nm]['t']
@@ -323,30 +327,17 @@ def main_hp(name='fig2_model_hp_blocks'):
         g.set_ylim(g_lo * 1.2, g_hi * 1.05)
         r3 = rows[2]
         r3.plot(t, d['without'], color='.65', lw=1.1)
-        r3.plot(t, d['predicted'], color=FG, lw=1.2)
+        r3.plot(t, d['predicted'], color=HP if k == 0 else FG, lw=1.3)
         r3.set_ylim(p_lo - .05 * (p_hi - p_lo), p_hi * 1.05)
+        # Anchor: the peak response without HP near, drawn in both blocks.
+        r3.axhline(anchor, color=FG, lw=.6, ls=(0, (1.5, 1.5)), zorder=0)
         if k == 0:
             r3.plot([0, 10], [p_lo - .05 * (p_hi - p_lo)] * 2, color=FG, lw=1.1, clip_on=False, solid_capstyle='butt')
             r3.text(5, p_lo - .12 * (p_hi - p_lo), '10 s', ha='center', va='top', fontsize=6, color=FG)
-    # The two blocks on one axis.
-    col = low[3].subgridspec(4, 1, height_ratios=ratios, hspace=.12)
-    title = fig.add_subplot(col[0])
-    title.set_axis_off()
-    title.text(.5, .5, 'Same pRF,\ntwo blocks', transform=title.transAxes, ha='center', va='center', fontsize=7, color=FG)
-    ax = fig.add_subplot(col[3])
-    ax.set_axis_off()
-    t = sim['HP near this pRF']['t']
-    near, far = sim['HP near this pRF']['predicted'], sim['HP not near this pRF']['predicted']
-    ax.fill_between(t, near, far, color=HP, alpha=.18, lw=0)
-    ax.plot(t, far, color=FG, lw=1.2)
-    ax.plot(t, near, color=HP, lw=1.3)
-    note = fig.add_subplot(col[2])
-    note.set_axis_off()
-    note.text(.0, .4, 'Shaded: less sustained gain\nat HP, smaller response', transform=note.transAxes, fontsize=6, color=HP, va='center')
-    ax.set_xlim(0, DURATION)
-    ax.set_ylim(p_lo - .05 * (p_hi - p_lo), p_hi * 1.05)
-    ax.text(0, .92, 'HP near', transform=ax.transAxes, fontsize=6, color=HP, va='center')
-    ax.text(0, .72, 'HP not near', transform=ax.transAxes, fontsize=6, color=FG, va='center')
+            r3.annotate('', xy=(t[np.argmax(d['predicted'])], d['predicted'].max()), xytext=(t[np.argmax(d['predicted'])], anchor),
+                        arrowprops=dict(arrowstyle='-|>', color=HP, lw=.9, mutation_scale=6, shrinkA=0, shrinkB=0))
+        else:
+            r3.text(DURATION, anchor, 'Peak, HP not near', fontsize=5.6, color=FG, ha='right', va='bottom')
     save(fig, name, LEGEND_HP)
 
 
