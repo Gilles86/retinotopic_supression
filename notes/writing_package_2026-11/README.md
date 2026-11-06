@@ -105,8 +105,8 @@ runs, sub-20 ses-1 and sub-24 ses-2 have 5 runs).
 
 | Figure | File | Status |
 |---|---|---|
-| 1 Paradigm and behaviour | `fig1_paradigm_behaviour.pdf` | final |
-| 2 Gain-field model | `fig2_model.pdf` (alternative: `fig2_model_hp_blocks.pdf`) | final apart from choosing the version |
+| 1 Paradigm and behaviour | `fig1_paradigm_behaviour.pdf`; c, d as within-subject differences: `fig1_paradigm_behaviour_diff.pdf` | final |
+| 2 Gain-field model | `fig2_model_hp_blocks.pdf` (chosen 2026-11-06) | final |
 | 3 Model fits | `fig3_model_fits.pdf` | provisional; example voxel to be replaced |
 | 4 Target and distractor gain along the hierarchy | `fig4_hierarchy.pdf` | provisional |
 | 5 Sustained gain at HP | `fig5_sustained_hp.pdf` | provisional; null panel pending |
