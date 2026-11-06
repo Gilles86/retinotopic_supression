@@ -25,6 +25,11 @@ LEGEND = """
 """
 
 
+LEGEND_DIFF = """
+**Figure 1. Paradigm and behaviour.** a, Search display with the bar in its 3.17° aperture: 8 items on a ring at 4°, with target and distractor at the four diagonal positions; percentages are over all trials. b, Two trials to scale, with the bar position every 2 s below, and the HP location across blocks of runs (example order). c, Within-subject differences in response time: distractor at an LP location minus at the HP location, and at an LP location minus absent. d, Target at the HP location minus at an LP location, on trials with a distractor. c, d, n = 30, correct trials; dots are subjects, large points and bars the mean and 95% CI (t); counts give the subjects above 0. Wilcoxon signed-rank tests: *** p < .001.
+"""
+
+
 def build_rt(path, bids):
     from retsupp.visualize.vss2026 import plot_rt_talk as rt
     df = rt.add_condition_labels(rt.collect_trials(bids))
@@ -130,7 +135,27 @@ def rt_panel(ax, d, conds, colors, pairs, ylim):
     offset_spines(ax)
 
 
-def main(rt_table, bids, name='fig1_paradigm_behaviour'):
+def diff_panel(ax, d, pairs, colors, labels, ylim):
+    """Within-subject differences: one dot per subject, mean and 95% CI (t) beside the dots; every subject on the axis."""
+    w = d.pivot(index='subject', columns='condition', values='rt')
+    rng = np.random.default_rng(4)
+    for i, ((a, b), col) in enumerate(zip(pairs, colors)):
+        v = (w[a] - w[b]).dropna().to_numpy()
+        ax.scatter(i + rng.uniform(-.14, .14, len(v)), v, s=9, color=col, alpha=.4, lw=0, zorder=1)
+        m, h = v.mean(), stats.t.ppf(.975, len(v) - 1) * v.std(ddof=1) / np.sqrt(len(v))
+        ax.errorbar(i + .3, m, yerr=h, color=col, marker='o', ms=6, mec='w', mew=.7, lw=1.4, capsize=0, zorder=4)
+        n = int((v > 0).sum())
+        ax.text(i + .1, ylim[1], f'{n}/{len(v)} > 0 {stars(stats.wilcoxon(v).pvalue)}', ha='center', va='bottom', fontsize=6, color=FG,
+                clip_on=False)
+    ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
+    ax.set_xticks([i + .1 for i in range(len(pairs))])
+    ax.set_xticklabels(labels)
+    ax.set_xlim(-.45, len(pairs) - .35)
+    ax.set_ylim(*ylim)
+    offset_spines(ax)
+
+
+def main(rt_table, bids, name='fig1_paradigm_behaviour', diff=False):
     if not Path(rt_table).exists():
         build_rt(rt_table, bids)
     d = pd.read_csv(rt_table, sep='\t')
@@ -147,6 +172,19 @@ def main(rt_table, bids, name='fig1_paradigm_behaviour'):
     letter(ax, 'b', x=0, y=.9)
     low = gs[1, 1].subgridspec(1, 2, width_ratios=[1.45, 1], wspace=.2)
     ylim = (770, 1020)
+    if diff:
+        ax = fig.add_subplot(low[0])
+        diff_panel(ax, d[d.contrast == 'distractor'], [('LP', 'HP'), ('LP', 'Absent')], [HP, FG], ['LP − HP', 'LP − absent'], (-40, 110))
+        ax.set_xlabel('Distractor')
+        ax.set_ylabel('RT difference (ms)')
+        letter(ax, 'c', x=-.2, y=1.2)
+        ax = fig.add_subplot(low[1])
+        diff_panel(ax, d[d.contrast == 'target'], [('HP', 'LP')], [HP], ['HP − LP'], (-40, 110))
+        ax.set_xlabel('Target')
+        ax.set_yticklabels([])
+        letter(ax, 'd', x=-.1, y=1.2)
+        save(fig, name, LEGEND_DIFF)
+        return
     ax = fig.add_subplot(low[0])
     rt_panel(ax, d[d.contrast == 'distractor'], ['HP', 'LP', 'Absent'], [HP, FG, MUTED], [('HP', 'LP'), ('LP', 'Absent')], ylim)
     ax.set_xlabel('Distractor')
@@ -167,5 +205,6 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--rt-table', default='notes/data/behaviour_rt_2026-11.tsv')
     ap.add_argument('--bids-folder', default='/data/ds-retsupp')
+    ap.add_argument('--diff', action='store_true', help='Panels c, d as within-subject differences.')
     a = ap.parse_args()
-    main(a.rt_table, a.bids_folder)
+    main(a.rt_table, a.bids_folder, 'fig1_paradigm_behaviour_diff' if a.diff else 'fig1_paradigm_behaviour', a.diff)

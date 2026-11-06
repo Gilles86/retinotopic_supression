@@ -119,22 +119,22 @@ def panel_loso(ax, table):
     g = d[d.family == 'dog'].set_index('term')
     for i, (t, _) in enumerate(TERM_ORDER):
         if t not in g.index:
-            ax.add_patch(plt.Rectangle((i - .3, 50), .6, 25, facecolor='#ECEFF2', lw=0))
-            ax.text(i, 62, 'Pending', ha='center', va='center', fontsize=5.5, color='#6B7785', rotation=90)
+            ax.add_patch(plt.Rectangle((i - .3, 0), .6, 50, facecolor='#ECEFF2', lw=0))
+            ax.text(i, 25, 'Pending', ha='center', va='center', fontsize=5.5, color='#6B7785', rotation=90)
             continue
         r = g.loc[t]
-        ax.bar(i, r.pct_improved - 50, bottom=50, width=.6, color=FG if r.p < .05 else MUTED, lw=0)
+        ax.bar(i, r.pct_improved, bottom=0, width=.6, color=FG if r.p < .05 else MUTED, lw=0)
         if r.p < .05:
             ax.text(i, r.pct_improved + 1.5, '***' if r.p < .001 else '**' if r.p < .01 else '*', ha='center', va='bottom',
                     fontsize=6.5, color=FG)
     ax.axhline(50, color='.7', lw=.6, ls='--', zorder=0)
-    ax.text(len(TERM_ORDER) - .5, 51, 'Chance', fontsize=6, color='.45', ha='right', va='bottom')
+    ax.text(len(TERM_ORDER) - .35, 50, 'Chance', fontsize=6, color='.45', ha='left', va='center', clip_on=False)
     ax.set_xticks(range(len(TERM_ORDER)))
     ax.set_xticklabels([l for _, l in TERM_ORDER], fontsize=6)
     ax.tick_params(axis='x', labelrotation=90)
     ax.set_xlim(-.6, len(TERM_ORDER) - .4)
-    ax.set_ylim(40, 108)
-    ax.set_yticks([50, 75, 100])
+    ax.set_ylim(0, 108)
+    ax.set_yticks([0, 50, 100])
     ax.set_ylabel('Subjects improved (%)')
     offset_spines(ax)
 
