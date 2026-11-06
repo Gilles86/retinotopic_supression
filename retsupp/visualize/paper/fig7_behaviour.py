@@ -135,8 +135,8 @@ def panel_sources(ax):
     ring = 4. / np.sqrt(2) * np.array([[1, 1], [-1, 1], [-1, -1], [1, -1]])
     g = np.linspace(-8, 8, 241)
     xx, yy = np.meshgrid(g, g)
-    src = [('Target', 'Selected item\neach trial', TARGET, 1, 1.4), ('Distractor', 'Salient item\neach trial', DISTRACTOR, 3, 1.4),
-           ('Selection history', 'Likely distractor location\nwhole block (Fig. 5)', HP, 3, 2.)]
+    src = [('Target', 'During search', TARGET, 1, 1.4), ('Distractor', 'During search', DISTRACTOR, 3, 1.4),
+           ('HP location', 'Whole block (Fig. 5)', HP, 3, 2.)]
     for k, (title, sub, col, ix, sig) in enumerate(src):
         x0 = k * 17.
         f = np.exp(-((xx - ring[ix, 0]) ** 2 + (yy - ring[ix, 1]) ** 2) / (2 * sig ** 2))
