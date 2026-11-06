@@ -52,7 +52,7 @@ def panel_rt(ax, b, ylim=(-120, 40)):
         ax.scatter(xx[v > hi], np.full((v > hi).sum(), hi), s=10, marker='^', color=col, alpha=.6, lw=0, clip_on=False)
         m, a, c = median_ci(v)
         ax.errorbar(i + .3, m, yerr=[[m - a], [c - m]], fmt='o', ms=6, color=col, mec='w', mew=.8, lw=1.6, capsize=0, zorder=4)
-        ax.text(i + .1, hi + .03 * (hi - lo), stars(stats.wilcoxon(v).pvalue), ha='center', va='bottom', fontsize=6.5, color=col,
+        ax.text(i + .1, hi + .03 * (hi - lo), stars(stats.wilcoxon(v).pvalue), ha='center', va='bottom', fontsize=8.5, color=col,
                 clip_on=False)
     ax.hlines(0, -.4, 1.5, color='.7', lw=.7, ls='--', zorder=0)
     ax.set_xticks([.1, 1.1])
@@ -80,7 +80,7 @@ def panel_repeat(ax, rep, ylim=(-1.5, 1.)):
         ax.errorbar(ROI_X[roi], m, yerr=[[m - a], [b - m]], fmt='o', ms=6, color=TARGET, mec='w', mew=.8, lw=1.6, capsize=0, zorder=4)
         ps.append(stats.wilcoxon(v).pvalue)
     for roi, q in zip(ROI_ORDER, stats.false_discovery_control(ps)):
-        ax.text(ROI_X[roi], hi + .05 * (hi - lo), stars(q), ha='center', va='bottom', fontsize=6.5, color=TARGET, clip_on=False)
+        ax.text(ROI_X[roi], hi + .05 * (hi - lo), stars(q), ha='center', va='bottom', fontsize=8.5, color=TARGET, clip_on=False)
     ax.hlines(0, -.6, ROI_X[ROI_ORDER[-1]] + .6, color='.7', lw=.7, ls='--', zorder=0)
     ax.set_ylim(lo, hi)
     ax.set_ylabel('Target gain, repeat − switch')
@@ -93,7 +93,7 @@ def panel_amplitude(ax, mixed):
     x = [ROI_X[r] for r in ROI_ORDER]
     ax.errorbar(x, d.beta, yerr=1.96 * d.se, fmt='o', ms=5.5, color=FG, mec='w', mew=.8, lw=1.5, capsize=0)
     for xi, (_, r) in zip(x, d.iterrows()):
-        ax.text(xi, .13, stars(r.q), ha='center', va='bottom', fontsize=6.5, color=FG, clip_on=False)
+        ax.text(xi, .13, stars(r.q), ha='center', va='bottom', fontsize=8.5, color=FG, clip_on=False)
     ax.hlines(0, -.6, x[-1] + .6, color='.7', lw=.7, ls='--', zorder=0)
     ax.text(x[-1] + .6, .12, 'Larger response: slower', ha='right', va='top', fontsize=6, color='.4')
     ax.text(x[-1] + .6, -.075, 'Larger response: faster', ha='right', va='bottom', fontsize=6, color='.4')
@@ -117,8 +117,8 @@ def panel_bayes(ax, bayes, terms, ylim, ylabel, notes):
         for roi, row in r.iterrows():
             ax.errorbar(ROI_X[roi] + o, row['mean'], yerr=[[row['mean'] - row.hdi_lo], [row.hdi_hi - row['mean']]], fmt='o', ms=5,
                         color=col, mec='w', mew=.7, lw=1.4, capsize=0)
-            ax.text(ROI_X[roi] + o, ylim[1] + (.03 + .07 * k) * (ylim[1] - ylim[0]), pd_stars(row), ha='center', va='bottom',
-                    fontsize=6.5, color=col, clip_on=False)
+            ax.text(ROI_X[roi] + o, ylim[1] + (.02 + .08 * k) * (ylim[1] - ylim[0]), pd_stars(row), ha='center', va='bottom',
+                    fontsize=8.5, color=col, clip_on=False)
     ax.hlines(0, -.6, ROI_X[ROI_ORDER[-1]] + .6, color='.7', lw=.7, ls='--', zorder=0)
     x1 = ROI_X[ROI_ORDER[-1]] + .6
     ax.text(x1, ylim[1], notes[0], ha='right', va='top', fontsize=6, color='.4')
