@@ -147,13 +147,17 @@ def trial_table(trials: pd.DataFrame) -> pd.DataFrame:
     d = df['g_D_HP'].where(df['trial_type'] == 'HP', df['g_D_LP'])
     out['D'] = d.groupby([df[c] for c in CELL]).transform(_z).fillna(0.0)
     out['HP'] = (df['trial_type'] == 'HP').astype(float)
+    if 'g_H' in df:
+        # Gain at HP when it holds a neutral item (0 where HP holds the target or the distractor).
+        out['H'] = df.groupby(CELL)['g_H'].transform(_z).fillna(0.0)
+        out['target_at_hp'] = (df['target_ch'] == df['hp_ch']).astype(float)
     for cov in COVARIATES:
         out[cov] = df[cov] - df.groupby(CELL)[cov].transform('mean')
     return out
 
 
-def collect(bids_folder: Path, prefix: Path):
-    root = bids_folder / 'derivatives' / 'af_trialwise_gains'
+def collect(bids_folder: Path, prefix: Path, subdir='af_trialwise_gains'):
+    root = bids_folder / 'derivatives' / subdir
     prefix.parent.mkdir(parents=True, exist_ok=True)
     for name in ('cv', 'bins', 'check', 'parametric', 'runfit'):
         files = sorted(root.glob(f'sub-*/sub-*_roi-*_{name}.tsv'))
@@ -741,9 +745,10 @@ if __name__ == '__main__':
     parser.add_argument('--bids-folder', type=Path, default=Path('/data/ds-retsupp'))
     parser.add_argument('--prefix', type=Path, default=Path('notes/data/trialwise_af'))
     parser.add_argument('--fig-dir', type=Path, default=Path('notes/figures'))
+    parser.add_argument('--subdir', default='af_trialwise_gains')
     args = parser.parse_args()
     if args.step == 'collect':
-        collect(args.bids_folder, args.prefix)
+        collect(args.bids_folder, args.prefix, args.subdir)
     elif args.step == 'plot':
         plot(args.prefix, args.fig_dir)
     elif args.step == 'summary':

@@ -40,6 +40,12 @@ run-level brain–behaviour analyses, and with inter-trial history bins:
 ``repeat`` / ``switch``) and ``tprime`` (target ``repeat`` /
 ``at_prev_dist`` / ``other``).
 
+With ``--hp-neutral``, a fifth kind, ``H``, is the gain at the run's HP
+location when it holds a neutral item on the current trial (neither target
+nor distractor; prior 0): trial-to-trial gain at HP without a singleton
+response in it. ``P`` is then left out on trials where the previous
+distractor location is the HP location, so the two never share a regressor.
+
 A fourth regressor kind, ``P``, is the gain at the PREVIOUS trial's
 distractor location when it holds a neutral item on the current trial
 (prior 0; no canonical counterpart) — intertrial inhibition at a
@@ -156,7 +162,7 @@ def build_trials(sub: Subject):
                     session=session, run=run, trial_nr=int(trial['trial_nr']),
                     onset=t_on, hp_location=hp,
                     distractor_location=d_loc, target_location=t_loc,
-                    dist_ch=d_ch, target_ch=t_ch, trial_type=ttype,
+                    dist_ch=d_ch, target_ch=t_ch, hp_ch=hp_ch, trial_type=ttype,
                     rt=rt, correct=correct,
                 ))
             offset += n_vol
@@ -287,7 +293,7 @@ def convolve_cols(x, kern, amp):
 # ---------------------------------------------------------------------------
 # Per-trial design (windowed, never materialised as T × K × V)
 # ---------------------------------------------------------------------------
-def trial_regressors(trials, u, D, D_glob, kern, amp):
+def trial_regressors(trials, u, D, D_glob, kern, amp, hp_neutral=False):
     """Return list of regressors (start, window (W, V)) and their meta."""
     n_t = u.shape[0]
     L = kern.shape[0]
@@ -307,8 +313,12 @@ def trial_regressors(trials, u, D, D_glob, kern, amp):
         # Previous trial's distractor location, when it holds a neutral
         # item now (not this trial's target or distractor).
         p_ch = row['prev_dist_ch']
-        if p_ch >= 0 and p_ch not in (row['target_ch'], row['dist_ch']):
+        h_ch = row['hp_ch'] if hp_neutral else -1
+        if p_ch >= 0 and p_ch not in (row['target_ch'], row['dist_ch'], h_ch):
             specs.append(('P', D[p_ch]))
+        # HP location holding a neutral item on this trial.
+        if h_ch >= 0 and h_ch not in (row['target_ch'], row['dist_ch']):
+            specs.append(('H', D[h_ch]))
         for kind, drive in specs:
             z = u[t0:t1, k][:, np.newaxis] * drive[t0:t1]           # (P, V)
             win = np.zeros((W, D.shape[2]), dtype=np.float32)
@@ -356,7 +366,7 @@ def sse(g, XtX, Xtr, rtr):
 # ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
-def fit_roi(sub, roi, data, trials, u, out_dir, seed=0):
+def fit_roi(sub, roi, data, trials, u, out_dir, seed=0, hp_neutral=False):
     bold, paradigm, cond_ind, dyn_ind, grid, tgt_ind = data
     pkl = (sub.bids_folder / 'derivatives' / AF_SUBDIR
            / f'sub-{sub.subject_id:02d}'
@@ -454,9 +464,9 @@ def fit_roi(sub, roi, data, trials, u, out_dir, seed=0):
     sets = [np.ones(len(vox), dtype=bool), half, ~half]
 
     trial_rows, cv_rows, bin_rows = [], [], []
-    regs, meta = trial_regressors(trials, u, D, D_glob, kern, amp)
+    regs, meta = trial_regressors(trials, u, D, D_glob, kern, amp, hp_neutral)
     g0 = meta['kind'].map({'T': g_T, 'D_HP': g_HP, 'D_LP': g_LP,
-                           'G': 0.0, 'P': 0.0}).values.astype(np.float64)
+                           'G': 0.0, 'P': 0.0, 'H': 0.0}).values.astype(np.float64)
     (M, b, c), (MA, bA, cA), (MB, bB, cB) = normal_equations(
         regs, resid0, w, sets)
 
@@ -468,7 +478,7 @@ def fit_roi(sub, roi, data, trials, u, out_dir, seed=0):
         row = dict(alpha=alpha,
                    heldout_gain=0.5 * ((sse_A0 - sse(gA, MB, bB, cB)) / sse_A0
                                        + (sse_B0 - sse(gB, MA, bA, cA)) / sse_B0))
-        for kind in ('T', 'D_HP', 'D_LP', 'G', 'P'):
+        for kind in ('T', 'D_HP', 'D_LP', 'G', 'P', 'H'):
             sel = (meta['kind'] == kind).values
             dA, dB = gA[sel] - g0[sel], gB[sel] - g0[sel]
             row[f'splithalf_r_{kind}'] = (float(np.corrcoef(dA, dB)[0, 1])
@@ -576,7 +586,7 @@ def fit_roi(sub, roi, data, trials, u, out_dir, seed=0):
     print(f'Saved {out_dir}/{stem}_*.tsv')
 
 
-def main(subject, bids_folder, rois, output_subdir='af_trialwise_gains'):
+def main(subject, bids_folder, rois, output_subdir='af_trialwise_gains', hp_neutral=False):
     sub = Subject(subject, bids_folder=Path(bids_folder))
     out_dir = (Path(bids_folder) / 'derivatives' / output_subdir
                / f'sub-{subject:02d}')
@@ -596,7 +606,7 @@ def main(subject, bids_folder, rois, output_subdir='af_trialwise_gains'):
     data = (bold, paradigm, cond_ind, dyn_ind, grid, tgt_ind)
     for roi in rois:
         print(f'\n===== sub-{subject:02d} {roi} =====')
-        fit_roi(sub, roi, data, trials, u, out_dir)
+        fit_roi(sub, roi, data, trials, u, out_dir, hp_neutral=hp_neutral)
 
 
 if __name__ == '__main__':
@@ -605,5 +615,7 @@ if __name__ == '__main__':
     parser.add_argument('--bids-folder', default='/data/ds-retsupp')
     parser.add_argument('--rois', nargs='+', default=ROIS)
     parser.add_argument('--output-subdir', default='af_trialwise_gains')
+    parser.add_argument('--hp-neutral', action='store_true',
+                        help='Add the H regressor: gain at HP when it holds a neutral item.')
     args = parser.parse_args()
-    main(args.subject, args.bids_folder, args.rois, args.output_subdir)
+    main(args.subject, args.bids_folder, args.rois, args.output_subdir, args.hp_neutral)

@@ -11,6 +11,7 @@
 # pSig0.5 AF fit (all 11 ROIs per subject; data loaded once).
 #
 #   sbatch --array=1-30 retsupp/modeling/slurm_jobs/fit_trialwise_af_gains.sh
+#   HP_NEUTRAL=1 sbatch --partition=standard --array=1-30 retsupp/modeling/slurm_jobs/fit_trialwise_af_gains.sh
 #   ROIS="V1 V3" sbatch --array=5 retsupp/modeling/slurm_jobs/fit_trialwise_af_gains.sh
 #
 # Output: derivatives/af_trialwise_gains/sub-XX/
@@ -34,10 +35,17 @@ echo "Host: $(hostname)  Job: ${SLURM_JOB_ID}  sub: ${subject}  Started: $(date)
 
 ROI_ARGS=""
 [[ -n "${ROIS:-}" ]] && ROI_ARGS="--rois ${ROIS}"
+# HP_NEUTRAL=1: add the gain at HP when it holds a neutral item (output to af_trialwise_gains_hp unless OUTPUT_SUBDIR is set).
+EXTRA=""
+if [[ "${HP_NEUTRAL:-0}" == "1" ]]; then
+    EXTRA="--hp-neutral --output-subdir ${OUTPUT_SUBDIR:-af_trialwise_gains_hp}"
+elif [[ -n "${OUTPUT_SUBDIR:-}" ]]; then
+    EXTRA="--output-subdir ${OUTPUT_SUBDIR}"
+fi
 
-cd "$HOME/git/retsupp"
+cd ""
 "$HOME/data/conda/envs/retsupp_cuda/bin/python" -u \
     -m retsupp.modeling.fit_trialwise_af_gains "$subject" \
-    --bids-folder /shares/zne.uzh/gdehol/ds-retsupp $ROI_ARGS
+    --bids-folder /shares/zne.uzh/gdehol/ds-retsupp $ROI_ARGS $EXTRA
 
 echo "Finished: $(date)"
