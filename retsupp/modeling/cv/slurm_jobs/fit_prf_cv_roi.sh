@@ -3,8 +3,8 @@
 #SBATCH --account=zne.uzh
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=16
-#SBATCH --mem=48G
-#SBATCH --time=08:00:00
+#SBATCH --mem=28G   # peak RSS 22 GB (sub-03 fold 0, models 13/14/16, 2026-11-06)
+#SBATCH --time=02:00:00   # 77 min for models 13/14/16 on 16 CPUs (90% CPU use)
 #
 # Cross-validated m0..m6 pRF comparison inside the ROIs (fit_prf_cv_roi.py).
 # One array task per (subject, fold): task id = 10*subject + fold,
