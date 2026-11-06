@@ -1,8 +1,10 @@
 # retsupp paper: writing package (2026-11-06)
 
 For the writing agent. Read this file first, then `key_numbers.md`, then the figure legends in
-`/Users/gdehol/git/retsupp/notes/figures/paper_2026-11/*.md`. All figures are in
-`all_figures_2026-11.pdf` in this folder. Background: `notes/paper_plan_2026-11.md` (plan and rules),
+`figures/` in this folder: one PNG per figure with its legend (`.md`) beside it, plus Table 1 and the
+parameter table. These are a snapshot of 2026-11-06; the live versions are in
+`/Users/gdehol/git/retsupp/notes/figures/paper_2026-11/`. All figures as one PDF:
+`all_figures_2026-11.pdf` in this folder (local only, not in git). Background: `notes/paper_plan_2026-11.md` (plan and rules),
 `notes/results_overview_2026-11.md` (every result with a grade), `notes/fitting_lessons_2026-11.md`
 (methods details). Where those older notes disagree with this package, this package wins.
 
@@ -98,7 +100,7 @@ trial-wise analyses on earlier fits.
 `CLAUDE.md` (TR 1.6 s, 258 volumes, ring at 4°, item size 1.5°, bar aperture 3.17°, 2 sessions × 6
 runs, sub-20 ses-1 and sub-24 ses-2 have 5 runs).
 
-## Figures (all in `all_figures_2026-11.pdf`; legends in `notes/figures/paper_2026-11/*.md`)
+## Figures (PNG and legend for each in `figures/`)
 
 | Figure | File | Status |
 |---|---|---|
