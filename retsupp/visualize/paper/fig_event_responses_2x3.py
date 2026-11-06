@@ -56,6 +56,18 @@ def load(folder):
     return p
 
 
+def load_deconv(folder):
+    """nideconv responses (deconvolve_location_responses.py), pooled over ROIs and locations weighted by voxel count."""
+    d = pd.concat([pd.read_csv(f, sep='\t') for f in sorted(Path(folder).glob('sub-*_2026-11.tsv'))])
+    d = d[d.roi.isin(ROI_ORDER)].copy()
+    d['t'] = d.t.round(2)
+    d['w'] = d.response * d.n_voxels
+    g = d.groupby(['subject', 'cls', 't'])
+    p = (g.w.sum() / g.n_voxels.sum()).rename('data').reset_index()
+    p[['item', 'loc']] = p.cls.str.rsplit('_', n=1, expand=True)
+    return p
+
+
 def schematic(ax):
     from matplotlib.patches import Circle
     ring = 4. / np.sqrt(2) * np.array([[1, 1], [-1, 1], [-1, -1], [1, -1]])
@@ -176,8 +188,10 @@ def bar_panels(ax, ax2, p):
     return rel, w.pvalue
 
 
-def main(folder, name='fig_event_responses_2x3', bar_folder='notes/data/bar_pass_average_2026-11'):
-    d = load(folder)
+def main(folder, name='fig_event_responses_2x3', bar_folder='notes/data/bar_pass_average_2026-11', deconv=None):
+    d = load_deconv(deconv) if deconv else load(folder)
+    if deconv:
+        name = f'{name}_deconv'
     n = d.subject.nunique()
     fig = plt.figure(figsize=(DOUBLE, 5.0))
     gs = fig.add_gridspec(1, 5, width_ratios=[.85, 1, 1, 1, 1.15], left=.005, right=.99, top=.86, bottom=.6, wspace=.42)
@@ -226,5 +240,6 @@ def main(folder, name='fig_event_responses_2x3', bar_folder='notes/data/bar_pass
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--folder', default='notes/data/event_average_2026-11')
+    ap.add_argument('--deconv', default=None, help='Folder of nideconv responses; used instead of the event averages.')
     a = ap.parse_args()
-    main(a.folder)
+    main(a.folder, deconv=a.deconv)
