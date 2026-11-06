@@ -76,13 +76,63 @@ def key(ax, x=.04, y=.95, dy=.13):
     ax.text(x + .09, y - 2 * dy, 'm0, no gain', transform=tf, fontsize=6, va='center', color=FG)
 
 
-def main(folder, name='fig3_event_timecourses'):
+VARIANTS = {  # name: (columns of PANELS, pathways, figure size)
+    'a': ([0, 1, 2], ['Early', 'Dorsal', 'Occipitotemporal'], (DOUBLE, 5.0)),
+    'b': ([0, 1], ['Early', 'Dorsal', 'Occipitotemporal'], (5.0, 5.0)),
+    'c': ([0, 1, 2], ['Dorsal', 'Occipitotemporal'], (DOUBLE, 3.6)),
+    'd': ([0, 1], ['Dorsal', 'Occipitotemporal'], (5.0, 3.6)),
+}
+
+
+DIFFS = [('Target − neutral item', ('target', 'neutral_lp'), TARGET, ('target',)),
+         ('Distractor: at HP − elsewhere', ('distractor_hp', 'distractor_lp'), HP, ('distractor', 'hp'))]
+
+
+def main_diff(folder, name='fig3_event_timecourses_e', groups=('Early', 'Dorsal', 'Occipitotemporal')):
+    """Difference waves per subject (within-subject SEM): data as points, m7 solid, m0 dashed."""
     d = load(folder)
     n = d.subject.nunique()
-    groups = [g for g, _ in ROI_GROUPS]
-    fig, axes = plt.subplots(len(groups), len(PANELS), figsize=(DOUBLE, 5.0), sharex=True,
-                             gridspec_kw=dict(left=.09, right=.99, top=.86, bottom=.09, hspace=.35, wspace=.28))
-    for j, (title, classes, colors, labels, marks) in enumerate(PANELS):
+    fig, axes = plt.subplots(1, len(DIFFS), figsize=(5.0, 2.3), squeeze=False,
+                             gridspec_kw=dict(left=.13, right=.99, top=.74, bottom=.2, wspace=.3))
+    shades = {'Early': .45, 'Dorsal': .75, 'Occipitotemporal': 1.}
+    for j, (title, (a, b), col, marks) in enumerate(DIFFS):
+        ax = axes[0, j]
+        for k, grp in enumerate(groups):
+            x = d[d.group == grp].pivot_table(index=['subject', 't'], columns='cls', values=['data', 'm0', 'm7'])
+            diff = {m: (x[(m, a)] - x[(m, b)]).unstack('t') for m in ('data', 'm0', 'm7')}
+            t = diff['data'].columns.to_numpy() + (k - 1) * .25
+            alpha = shades[grp]
+            ax.errorbar(t, diff['data'].mean(), yerr=diff['data'].sem(), fmt='o', ms=3, color=col, alpha=alpha, mec='w', mew=.3,
+                        lw=.8, capsize=0, zorder=3)
+            ax.plot(diff['m7'].columns, diff['m7'].mean(), color=col, alpha=alpha, lw=1.3, zorder=2)
+        ax.plot(diff['m0'].columns, diff['m0'].mean(), color=FG, lw=.8, ls=(0, (3, 1.5)), zorder=1)
+        ax.axhline(0, color='.75', lw=.6, zorder=0)
+        ax.axvline(0, color='.75', lw=.6, zorder=0)
+        ax.set_xlabel('Time from search onset (s)')
+        offset_spines(ax)
+        title_icon(ax, title, marks, col, y=1.08, h=.3)
+        letter(ax, 'ab'[j], x=-.2, y=1.15)
+        lx, ha = (.98, 'right') if j == 0 else (.04, 'left')
+        for k, grp in enumerate(groups):
+            ax.text(lx, .97 - k * .1, grp, transform=ax.transAxes, color=col, alpha=shades[grp], fontsize=6, ha=ha, va='top')
+    axes[0, 0].set_ylabel('Difference (% signal)')
+    key(axes[0, 0], x=.04, y=.95)
+    provisional(axes[0, -1], y=1.38)
+    save(fig, name, LEGEND.format(n=n))
+
+
+def main(folder, name='fig3_event_timecourses', variant='a'):
+    if variant == 'e':
+        return main_diff(folder)
+    d = load(folder)
+    n = d.subject.nunique()
+    cols, groups, size = VARIANTS[variant]
+    panels = [PANELS[c] for c in cols]
+    top = 1 - .62 / size[1]
+    fig, axes = plt.subplots(len(groups), len(panels), figsize=size, sharex=True, squeeze=False,
+                             gridspec_kw=dict(left=.6 / size[0] + .02, right=.99, top=top, bottom=.45 / size[1],
+                                              hspace=.35, wspace=.28))
+    for j, (title, classes, colors, labels, marks) in enumerate(panels):
         lims = []
         for i, grp in enumerate(groups):
             ax = axes[i, j]
@@ -101,12 +151,13 @@ def main(folder, name='fig3_event_timecourses'):
             ax.text(.98, .95 - k * .13, lab, transform=ax.transAxes, color=col, fontsize=6.5, ha='right', va='top')
         letter(ax, 'abc'[j], x=-.18, y=1.18)
     key(axes[0, 0], x=.04, y=.95)
-    provisional(axes[0, 2], y=1.42)
-    save(fig, name, LEGEND.format(n=n))
+    provisional(axes[0, -1], y=1.42)
+    save(fig, name if variant == 'a' else f'{name}_{variant}', LEGEND.format(n=n))
 
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--folder', default='notes/data/fig3_event_average')
+    ap.add_argument('--variant', choices=list(VARIANTS) + ['e'], default='a')
     a = ap.parse_args()
-    main(a.folder)
+    main(a.folder, variant=a.variant)
