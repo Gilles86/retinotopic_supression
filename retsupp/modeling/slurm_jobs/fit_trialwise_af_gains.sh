@@ -43,7 +43,7 @@ elif [[ -n "${OUTPUT_SUBDIR:-}" ]]; then
     EXTRA="--output-subdir ${OUTPUT_SUBDIR}"
 fi
 
-cd ""
+cd "${REPO:-$HOME/git/retsupp}"
 "$HOME/data/conda/envs/retsupp_cuda/bin/python" -u \
     -m retsupp.modeling.fit_trialwise_af_gains "$subject" \
     --bids-folder /shares/zne.uzh/gdehol/ds-retsupp $ROI_ARGS $EXTRA
