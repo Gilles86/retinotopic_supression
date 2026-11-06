@@ -5,7 +5,11 @@ held fixed. Those are the medians over the ROI's voxels with training R² >= ``M
 fold's own flexible fit, so held-out data play no part. A ROI with too few such voxels takes the
 median over all ROIs. The pRF parameters then continue from that fit, on the training runs.
 
-Models are numbered 10 above their flexible parent: 13 (Gaussian), 14 (DoG), 16 (DN).
+Models are numbered 10 above their flexible parent: 13 (Gaussian), 14 (DoG), 16 (DN). Models 23,
+24 and 26 fit the shared HRF instead: per ROI, braincoder's ``shared_pars`` gives all voxels of the ROI one
+delay and one dispersion, fitted together with each voxel's amplitude and baseline, starting from those
+medians; then the pRF parameters are refit with that HRF fixed. Spatial and HRF parameters are never free
+in the same stage, as in ``fit_prf``.
 Outputs as in ``fit_prf_cv_roi``, under ``derivatives/<output_subdir>/sub-XX/``, plus
 ``sub-XX_fold-K_model-N_hrf.tsv`` with the HRF used per ROI. Existing outputs are not overwritten.
 
@@ -30,10 +34,34 @@ from retsupp.modeling.fit_prf import HRF, MODEL_CFG, build_model_factory, gd_fit
 from retsupp.utils.data import Subject
 from retsupp.utils.sentinels import assert_gpu_available_if_expected
 
-PARENT = {13: 3, 14: 4, 16: 6}
+PARENT = {13: 3, 14: 4, 16: 6, 23: 3, 24: 4, 26: 6}
+SCALE = ('amplitude', 'baseline', 'rf_amplitude', 'bold_baseline')
+SHARED_STAGE = (.005, 1000, 1e-6)
 MIN_R2 = .1
 MIN_VOXELS = 20
 STAGE = [(HRF, 0.001, 1500, 1e-5)]
+
+
+def fit_shared_hrf(factory, data, paradigm, init, roi, chunk_size):
+    """Per ROI: one delay and dispersion for all its voxels, fitted with their amplitude and baseline."""
+    from braincoder.optimize import ParameterFitter
+    out = init.copy()
+    rows = []
+    for r in np.unique(roi):
+        ix = np.where((roi == r) & init.notna().all(axis=1).to_numpy())[0]
+        if len(ix) < 2:
+            continue
+        model = factory(data[:, ix], paradigm)
+        labels = list(model.parameter_labels)
+        fixed = [p for p in labels if p not in HRF and p not in SCALE]
+        lr, n_iter, atol = SHARED_STAGE
+        fitter = ParameterFitter(model, data[:, ix], paradigm)
+        pars = fitter.fit(init_pars=init.iloc[ix][labels].reset_index(drop=True), max_n_iterations=n_iter, learning_rate=lr,
+                          fixed_pars=fixed, shared_pars=list(HRF), r2_atol=atol, progressbar=False)
+        out.iloc[ix, [out.columns.get_loc(c) for c in labels]] = pars[labels].to_numpy()
+        rows.append(dict(roi=r, n_voxels=len(ix), **{h: float(pars[h].iloc[0]) for h in HRF}))
+        print(f'  {r}: shared HRF {rows[-1]}', flush=True)
+    return out, pd.DataFrame(rows)
 
 
 def shared_hrf(pars, r2_train, roi):
@@ -56,7 +84,7 @@ def shared_hrf(pars, r2_train, roi):
 def main(subject, fold, bids_folder, n_folds=3, resolution=50, voxel_chunk_size=10000, sd_min=0.2,
          models=None, base_subdir='prf_cv_roi', output_subdir='prf_cv_roi_sharedhrf'):
     assert_gpu_available_if_expected()
-    models = models or list(PARENT)
+    models = models or [m for m in PARENT if m < 20]
     sub = Subject(subject, Path(bids_folder))
     deriv = Path(bids_folder) / 'derivatives'
     out_dir = deriv / output_subdir / f'sub-{subject:02d}'
@@ -88,10 +116,11 @@ def main(subject, fold, bids_folder, n_folds=3, resolution=50, voxel_chunk_size=
         pars = pd.read_pickle(base_dir / f'{stem}_model-{parent}_pars.pkl.gz')
         pars = pars.drop(columns=DERIVED, errors='ignore').reset_index(drop=True)
         init, table = shared_hrf(pars, base.r2_train.to_numpy(), roi)
+        factory = build_model_factory(MODEL_CFG[parent], grid, sd_min)
+        if m >= 20:
+            init, table = fit_shared_hrf(factory, train_bold, train_par, init, roi, voxel_chunk_size)
         table.to_csv(out_dir / f'{stem}_model-{m}_hrf.tsv', sep='\t', index=False)
         print(f'm{m}: HRF per ROI\n{table.round(3).to_string(index=False)}')
-
-        factory = build_model_factory(MODEL_CFG[parent], grid, sd_min)
         fit = gd_fit_scheduled(factory, train_bold, train_par, init, voxel_chunk_size, STAGE)
         fit = fit.drop(columns=DERIVED, errors='ignore').reset_index(drop=True)
         sse_tr, sst_tr = sse_sst(train_bold, np.asarray(factory(train_bold, train_par).predict(parameters=fit)))
