@@ -37,6 +37,18 @@ seconds, so each epoch also contains neighbouring trials, equally for every clas
 """
 
 
+LEGEND_DATA = """
+**Figure 3 (candidate panel). Responses to the search items at a pRF's ring location.** Voxels with cross-run
+reliability > 0 and a pRF centre within 2° of a ring location; no R² criterion and no gain-field model. Each search
+onset is classed by what appears at the voxel's location: a, the target or a neutral item (outside HP); b, the
+distractor at the HP location or elsewhere. The response to the bar (the pRF prediction for the bar alone) is removed;
+time series are averaged over trials and voxels per subject, ROIs pooled per pathway weighted by voxel count, and
+baselined on −3.2 to 0 s. Left of each pair: the two classes; right: their difference per subject. Lines and bands:
+mean ± SEM across subjects (n = {n}). Trials follow each other every few seconds, so each epoch also contains
+neighbouring trials, equally for every class.
+"""
+
+
 def load(folder):
     d = pd.concat([pd.read_csv(f, sep='\t') for f in sorted(Path(folder).glob('sub-*_2026-11.tsv'))])
     group = {r: g for g, rois in ROI_GROUPS for r in rois}
@@ -121,9 +133,54 @@ def main_diff(folder, name='fig3_event_timecourses_e', groups=('Early', 'Dorsal'
     save(fig, name, LEGEND.format(n=n))
 
 
+def main_data(folder, name='fig3_event_timecourses_f', groups=('Early', 'Dorsal', 'Occipitotemporal')):
+    """Data only. Per pathway (rows): the two time courses of a comparison, then their difference per subject."""
+    d = load(folder)
+    n = d.subject.nunique()
+    comps = [(PANELS[0], DIFFS[0]), (PANELS[1], DIFFS[1])]
+    fig = plt.figure(figsize=(DOUBLE, 4.6))
+    outer = fig.add_gridspec(1, 2, left=.08, right=.99, top=.84, bottom=.1, wspace=.22)
+    for j, ((title, classes, colors, labels, marks), (dtitle, (a, b), dcol, _)) in enumerate(comps):
+        g = outer[j].subgridspec(len(groups), 2, wspace=.38, hspace=.3)
+        axs = np.array([[fig.add_subplot(g[i, k]) for k in range(2)] for i in range(len(groups))])
+        for i, grp in enumerate(groups):
+            x = d[d.group == grp]
+            ax = axs[i, 0]
+            for cls, col in zip(classes, colors):
+                m = x[x.cls == cls].groupby('t').data
+                ax.fill_between(m.mean().index, m.mean() - m.sem(), m.mean() + m.sem(), color=col, alpha=.25, lw=0)
+                ax.plot(m.mean().index, m.mean(), color=col, lw=1.3)
+            w = x.pivot_table(index=['subject', 't'], columns='cls', values='data')
+            diff = (w[a] - w[b]).unstack('t')
+            ax = axs[i, 1]
+            ax.fill_between(diff.columns, diff.mean() - diff.sem(), diff.mean() + diff.sem(), color=dcol, alpha=.25, lw=0)
+            ax.plot(diff.columns, diff.mean(), color=dcol, lw=1.3)
+            for ax in axs[i]:
+                ax.axhline(0, color='.75', lw=.6, zorder=0)
+                ax.axvline(0, color='.75', lw=.6, zorder=0)
+                offset_spines(ax)
+                if i < len(groups) - 1:
+                    ax.set_xticklabels([])
+            if j == 0:
+                axs[i, 0].set_ylabel(f'{grp}\n% signal')
+        for k in range(2):
+            lims = [axs[i, k].get_ylim() for i in range(len(groups))]
+            for i in range(len(groups)):
+                axs[i, k].set_ylim(min(l[0] for l in lims), max(l[1] for l in lims))
+            axs[-1, k].set_xlabel('Time from onset (s)')
+        title_icon(axs[0, 0], title, marks, FG, y=1.18, h=.42)
+        axs[0, 1].set_title('Difference', fontsize=7, color=dcol, loc='left', pad=4)
+        for k, (lab, col) in enumerate(zip(labels, colors)):
+            axs[0, 0].text(.98, .97 - k * .17, lab, transform=axs[0, 0].transAxes, color=col, fontsize=6, ha='right', va='top')
+        letter(axs[0, 0], 'ab'[j], x=-.42, y=1.3)
+    save(fig, name, LEGEND_DATA.format(n=n))
+
+
 def main(folder, name='fig3_event_timecourses', variant='a'):
     if variant == 'e':
         return main_diff(folder)
+    if variant == 'f':
+        return main_data(folder)
     d = load(folder)
     n = d.subject.nunique()
     cols, groups, size = VARIANTS[variant]
@@ -158,6 +215,6 @@ def main(folder, name='fig3_event_timecourses', variant='a'):
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--folder', default='notes/data/fig3_event_average')
-    ap.add_argument('--variant', choices=list(VARIANTS) + ['e'], default='a')
+    ap.add_argument('--variant', choices=list(VARIANTS) + ['e', 'f'], default='a')
     a = ap.parse_args()
     main(a.folder, variant=a.variant)
