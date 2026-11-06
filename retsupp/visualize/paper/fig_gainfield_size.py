@@ -15,7 +15,7 @@ import pandas as pd
 from matplotlib.patches import Circle
 
 from retsupp.visualize.paper.fig45_common import joint
-from retsupp.visualize.paper.paper_style import DISTRACTOR, DOUBLE, FG, HP, MUTED, TARGET, letter, provisional, save
+from retsupp.visualize.paper.paper_style import DISTRACTOR, DOUBLE, FG, HP, MUTED, TARGET, letter, provisional, save, stimulus_icon
 
 FWHM = 2 * np.sqrt(2 * np.log(2))
 RING, APERTURE = 4., 3.17
@@ -75,6 +75,7 @@ def main(gain_table, family='dog', name='figS_gainfield_size'):
         ax2.set_xticklabels(['LP', 'HP', 'LP', 'LP'], fontsize=6.5)
         ax2.set_xlim(-180, 180)
         ax2.set_ylim(-.15, .45)
+        stimulus_icon(ax2, (.82, .55, .18, .45), ('target', 'hp'))
         if j == 0:
             ax2.set_ylabel('Gain on the ring')
             ax2.text(.02, .97, 'Target, transient', transform=ax2.transAxes, fontsize=6.5, color=TARGET, va='top')

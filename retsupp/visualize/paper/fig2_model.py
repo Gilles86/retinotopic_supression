@@ -246,7 +246,7 @@ def top_row(fig, gs, prfs=None):
 
 def row_labels(fig, lab, key_hp=False):
     """Row names in the left column, each with its own key, so the data area stays clean."""
-    keys = {1: [('Items', '.25'), ('Bar', '.6')], 2: [('Target', TARGET), ('Singleton', DISTRACTOR), ('Sustained', HP)],
+    keys = {1: [('Items', '.25'), ('Bar', '.6')], 2: [('Target', TARGET), ('Distractor', DISTRACTOR), ('Sustained', HP)],
             3: [('With gain', FG), ('without', '.55')]}
     names = {1: 'Stimulus in pRF', 2: 'Gain', 3: 'Predicted BOLD'}
     for r in (1, 2, 3):

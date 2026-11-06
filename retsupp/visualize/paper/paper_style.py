@@ -52,3 +52,33 @@ def save(fig, name, legend):
     fig.savefig(OUT / f'{name}.png', dpi=200)
     (OUT / f'{name}.md').write_text(legend.strip() + '\n')
     print('Saved', OUT / f'{name}.pdf')
+
+
+def stimulus_icon(ax, bounds=(.78, .7, .22, .3), marks=('target',), hp_ix=3, t_ix=1):
+    """Small outline of the display in a panel corner, marking what the panel is about.
+
+    marks: any of 'target' (orange diamond), 'distractor' (blue dot at HP), 'hp' (red dashed ring at HP),
+    'lp' (grey rings at the three LP locations), 'fields' (outlines only)."""
+    import numpy as np
+    from matplotlib.patches import Circle
+    ins = ax.inset_axes(list(bounds))
+    ring = 4. / np.sqrt(2) * np.array([[1, 1], [-1, 1], [-1, -1], [1, -1]])
+    ins.add_patch(Circle((0, 0), 3.17, fill=False, ec=MUTED, lw=.5))
+    for i, p in enumerate(ring):
+        ins.add_patch(Circle(p, .55, facecolor='w', ec=MUTED, lw=.5))
+    if 'lp' in marks:
+        for i, p in enumerate(ring):
+            if i != hp_ix:
+                ins.add_patch(Circle(p, 1.15, fill=False, ec='.5', lw=.8, ls=(0, (2, 1.2))))
+    if 'hp' in marks:
+        ins.add_patch(Circle(ring[hp_ix], 1.15, fill=False, ec=HP, lw=1., ls=(0, (2, 1.2))))
+    if 'target' in marks:
+        ins.scatter(*ring[t_ix], marker='D', s=12, color=TARGET, lw=0, zorder=4)
+    if 'distractor' in marks:
+        ins.scatter(*ring[hp_ix], marker='o', s=16, color=DISTRACTOR, lw=0, zorder=4)
+    ins.plot(0, 0, '+', color=FG, ms=3, mew=.5)
+    ins.set_xlim(-5.2, 5.2)
+    ins.set_ylim(-5.2, 5.2)
+    ins.set_aspect('equal')
+    ins.set_axis_off()
+    return ins

@@ -17,11 +17,11 @@ from scipy import stats
 
 from retsupp.visualize.paper.fig45_common import conditional, joint, jzs_bf10, median_ci
 from retsupp.visualize.paper.paper_style import (DISTRACTOR, DOUBLE, FG, HP, MUTED, OUT, ROI_COLORS, ROI_ORDER, TARGET, letter,
-                                                 offset_spines, provisional, save)
+                                                 offset_spines, provisional, save, stimulus_icon)
 
 FWHM = 2 * np.sqrt(2 * np.log(2))
-TERMS = [('T', 'Target gain', TARGET), ('D', 'Singleton gain', DISTRACTOR), ('dS', 'Sustained gain, HP − LP', HP),
-         ('dD', 'Singleton gain, HP − LP', '#5E3C99')]
+TERMS = [('T', 'Target gain', TARGET), ('D', 'Distractor gain', DISTRACTOR), ('dS', 'Sustained gain, HP − LP', HP),
+         ('dD', 'Distractor gain, HP − LP', '#5E3C99')]
 FAM = {'dog': 'DoG', 'dn': 'DN'}
 LEGEND = """
 **Figure 4. The target and the singleton draw gain, increasingly along the visual hierarchy.** a, Gain at the target location while the search display is on, per ROI (m7_full, DoG pRFs): dots are subjects (n = 30; triangles, beyond the axis), points and bars are the median and bootstrapped 95% CI. Stars: Wilcoxon signed-rank test against 0, Benjamini-Hochberg across ROIs; * q < .05, ** q < .01, *** q < .001. b, The same for the singleton, averaged over its locations. c, Size of the fields as full width at half maximum (2.355 σ), median and 95% CI; dotted line, the 4° radius of the ring. DN pRFs, Bayes factors and all other terms are in the parameter table. Provisional: current inputs.
@@ -134,11 +134,13 @@ def main(gain_table, conditional_table, name='fig4_hierarchy'):
     gs = fig.add_gridspec(1, 3, wspace=.38, left=.07, right=.99, top=.86, bottom=.2)
     ax = fig.add_subplot(gs[0])
     panel_gain(ax, d, t, 'T', TARGET, (-.4, 1.2), 'Target: more gain,\nrising after V1', (.04, .98))
+    stimulus_icon(ax, (.8, .74, .2, .26), ('target',))
     ax.set_ylabel('Gain at the field centre')
     letter(ax, 'a', x=-.2, y=1.05)
     provisional(ax, y=1.1)
     ax = fig.add_subplot(gs[1])
-    panel_gain(ax, d, t, 'D', DISTRACTOR, (-.4, 1.2), 'Singleton: less gain\nthan the target', (.04, .98))
+    panel_gain(ax, d, t, 'D', DISTRACTOR, (-.4, 1.2), 'Distractor: less gain\nthan the target', (.04, .98))
+    stimulus_icon(ax, (.8, .74, .2, .26), ('distractor',))
     letter(ax, 'b', x=-.12, y=1.05)
     ax = fig.add_subplot(gs[2])
     panel_size(ax, d)

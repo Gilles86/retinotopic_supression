@@ -14,7 +14,7 @@ import pandas as pd
 from scipy import stats
 
 from retsupp.visualize.paper.fig45_common import conditional, joint, median_ci
-from retsupp.visualize.paper.paper_style import DOUBLE, FG, HP, MUTED, ROI_COLORS, ROI_ORDER, letter, offset_spines, pending, provisional, save
+from retsupp.visualize.paper.paper_style import DOUBLE, FG, HP, MUTED, ROI_COLORS, ROI_ORDER, letter, offset_spines, pending, provisional, save, stimulus_icon
 
 LEGEND = """
 **Figure 5. Less sustained gain at the location where the singleton is likely.** a, dS = g_HP − g_LP per ROI, each term estimated alone on m4 (conditional, DoG pRFs): dots are subjects (n = 30; triangles, beyond the axis), points and bars the median and bootstrapped 95% CI. Stars: Wilcoxon signed-rank test against 0, Benjamini-Hochberg across ROIs. b, Each subject's dS, median over the nine ROIs, as the conditional estimate and from the joint m7 fit (DoG pRFs); the share of negative subjects and the Wilcoxon p are given above. DN pRFs: supplementary figure. c, The observed group dS against a null from relabelling the HP location (pending). d, Why within-subject cross-validation cannot test dS: when a known dS is put into the data (x-axis), the share of subjects whose held-out prediction improves (y-axis) passes 50% only near −.05, about three times the estimate (dashed). Provisional: current inputs.
@@ -104,10 +104,12 @@ def main(gain_table, conditional_table, power_table, name='fig5_sustained_hp'):
     gs = fig.add_gridspec(2, 3, width_ratios=[1.6, 1, 1], height_ratios=[1, 1], hspace=.6, wspace=.45, left=.08, right=.99, top=.9, bottom=.1)
     ax = fig.add_subplot(gs[0, :2])
     panel_roi(ax, cond)
+    stimulus_icon(ax, (.855, .0, .145, .36), ('hp', 'lp'))
     letter(ax, 'a', x=-.08, y=1.04)
     provisional(ax, y=1.1)
     ax = fig.add_subplot(gs[0, 2])
     panel_pooled(ax, cond, js)
+    stimulus_icon(ax, (.0, .66, .3, .34), ('hp', 'lp'))
     letter(ax, 'b', x=-.25, y=1.04)
     ax = fig.add_subplot(gs[1, 0])
     pending(ax, 'observed dS against the HP-rotation null, DoG and DN')
