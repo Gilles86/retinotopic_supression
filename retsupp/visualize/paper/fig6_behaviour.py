@@ -1,10 +1,13 @@
-"""Figure 6 (prototype): trial history and trial-by-trial behaviour in the gains.
+"""Figure 6 (prototype): the three sources of gain and behaviour.
 
-a  Behaviour: repeating the target location speeds responses, repeating the distractor location less so.
-b  Target gain on target-repeat minus target-switch trials, per ROI (joint fits with the target gain split by repeat).
-c  Trial by trial, within subjects: the overall trial response vs RT, per ROI (linear mixed models).
+a  Illustration: gain at the target (each trial), at the distractor (each trial) and at the learned HP
+   location (whole block; Fig. 5).
+b  Behaviour: repeating the target location speeds responses, repeating the distractor location less so.
+c  Target gain on target-repeat minus target-switch trials, per ROI (joint fits with the target gain split by repeat).
+d  Trial by trial: target and distractor-at-HP gain as predictors of log RT (Bayesian hierarchical model per ROI).
+e  The same model: the trial's global gain, whose sign flips along the hierarchy.
 
-b and c come from the October trial-wise analysis on the earlier attention-field fits (pSig0.5) and are
+c-e come from the October trial-wise analysis on the earlier attention-field fits (pSig0.5) and are
 stamped as such until they are redone on the ladder fits. Null results (between-subject brain-behaviour
 correlations, distractor-repeat gain) stay out of this main figure; they are reported in the text.
 
@@ -16,20 +19,21 @@ from __future__ import annotations
 
 import argparse
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy import stats
 
 from retsupp.visualize.paper.fig45_common import median_ci
-from retsupp.visualize.paper.paper_style import (DISTRACTOR, DOUBLE, FG, MUTED, ROI_ORDER, ROI_X, TARGET, letter, offset_spines,
+from retsupp.visualize.paper.paper_style import (HP, DISTRACTOR, DOUBLE, FG, MUTED, ROI_ORDER, ROI_X, TARGET, letter, offset_spines,
                                                  roi_axis, save, title_icon)
 from retsupp.visualize.paper.plot_trialwise_story import behaviour
 
 LEGEND = """
-**Figure 6 (prototype). Trial history and trial-by-trial behaviour.** a, Response time on trials where the target (or the distractor) appears at the same location as on the previous trial, minus trials where it switches; distractor repeats are compared within HP and within LP trials and averaged. Dots are subjects (n = 30), points and bars the median and bootstrapped 95% CI; Wilcoxon signed-rank test against 0. b, Target gain on target-repeat minus target-switch trials, from fits with the target gain split by repeat; dots are subjects, points and bars the median and bootstrapped 95% CI; Wilcoxon against 0, Benjamini-Hochberg across ROIs. The distractor gain did not differ between distractor repeats and switches (text). c, Within subjects, trial by trial: the change in RT (z within subject) per unit of the overall trial response (z), from linear mixed models per ROI with random intercepts and slopes per subject; bars are 95% CIs; Benjamini-Hochberg over the eleven ROIs fitted (two not shown). b and c use the earlier attention-field fits (October 2026) and will be redone on the final fits. * q < .05, ** q < .01, *** q < .001.
+**Figure 6 (prototype). Three sources of gain, and behaviour.** a, Gain fields (illustrative) at the target and at the distractor during search, and at the HP location over a whole block (Fig. 5). b, Response time on trials where the target (or the distractor) appears at the same location as on the previous trial, minus trials where it switches; distractor repeats are compared within HP and within LP trials and averaged. Dots are subjects (n = 30), points and bars the median and bootstrapped 95% CI; Wilcoxon signed-rank test against 0. c, Target gain on target-repeat minus target-switch trials, from fits with the target gain split by repeat; dots are subjects, points and bars the median and bootstrapped 95% CI; Wilcoxon against 0, Benjamini-Hochberg across ROIs. The distractor gain did not differ between distractor repeats and switches (text). d, e, Within subjects, trial by trial: Bayesian hierarchical linear model of log RT (z within subject) per ROI on the per-trial target gain, distractor gain on HP and on LP trials, and global gain (each z-scored within run and trial type), with trial number, target repeat, distractor repeat and target-at-previous-distractor as covariates, and random intercepts and gain slopes per subject (bambi, 4 × 1000 draws, no divergences, R̂ ≤ 1.01). Points are posterior means, bars 95% HDIs; filled where the HDI excludes 0. The distractor gain on LP trials and the HP − LP difference are in the table. c-e use the earlier attention-field fits (October 2026) and will be redone on the final fits. * q < .05, ** q < .01, *** q < .001.
 """
-EARLIER = 'Earlier fits (Oct 2026)'
+EARLIER = 'c-e: earlier fits (Oct 2026)'
 
 
 def stars(q):
@@ -99,28 +103,97 @@ def panel_amplitude(ax, mixed):
     roi_axis(ax)
 
 
+def panel_bayes(ax, bayes, terms, ylim, ylabel, notes):
+    d = bayes[bayes.roi.isin(ROI_ORDER)]
+    off = np.linspace(-.17, .17, len(terms)) if len(terms) > 1 else [0]
+    for o, (term, col) in zip(off, terms):
+        r = d[d.term == term].set_index('roi').loc[ROI_ORDER]
+        for roi, row in r.iterrows():
+            filled = row.hdi_lo > 0 or row.hdi_hi < 0
+            ax.errorbar(ROI_X[roi] + o, row['mean'], yerr=[[row['mean'] - row.hdi_lo], [row.hdi_hi - row['mean']]], fmt='o', ms=5,
+                        color=col, mfc=col if filled else 'w', mec=col, mew=1., lw=1.4, capsize=0)
+    ax.hlines(0, -.6, ROI_X[ROI_ORDER[-1]] + .6, color='.7', lw=.7, ls='--', zorder=0)
+    x1 = ROI_X[ROI_ORDER[-1]] + .6
+    ax.text(x1, ylim[1], notes[0], ha='right', va='top', fontsize=6, color='.4')
+    ax.text(x1, ylim[0], notes[1], ha='right', va='bottom', fontsize=6, color='.4')
+    ax.set_ylim(*ylim)
+    ax.set_ylabel(ylabel)
+    offset_spines(ax)
+    roi_axis(ax)
+
+
+def hdi_key(ax, x=.02, y=1.02):
+    ax.plot(x + .02, y, 'o', ms=4.5, color=FG, transform=ax.transAxes, clip_on=False)
+    ax.plot(x + .12, y, 'o', ms=4.5, mfc='w', mec=FG, mew=1, transform=ax.transAxes, clip_on=False)
+    ax.text(x + .16, y, '95% HDI excludes 0 / includes 0', transform=ax.transAxes, fontsize=6, color='.35', va='center')
+
+
+def panel_sources(ax):
+    """Three displays, each with one gain field: target, distractor, learned HP location."""
+    from matplotlib.patches import Circle
+    ring = 4. / np.sqrt(2) * np.array([[1, 1], [-1, 1], [-1, -1], [1, -1]])
+    g = np.linspace(-8, 8, 241)
+    xx, yy = np.meshgrid(g, g)
+    src = [('Target', 'Selected item\neach trial', TARGET, 1, 1.4), ('Distractor', 'Salient item\neach trial', DISTRACTOR, 3, 1.4),
+           ('Selection history', 'Likely distractor location\nwhole block (Fig. 5)', HP, 3, 2.)]
+    for k, (title, sub, col, ix, sig) in enumerate(src):
+        x0 = k * 17.
+        f = np.exp(-((xx - ring[ix, 0]) ** 2 + (yy - ring[ix, 1]) ** 2) / (2 * sig ** 2))
+        rgba = np.zeros(f.shape + (4,))
+        rgba[..., :3] = mpl.colors.to_rgb(col)
+        rgba[..., 3] = .75 * f
+        ax.imshow(rgba, extent=(x0 - 8, x0 + 8, -8, 8), origin='lower', zorder=1)
+        ax.add_patch(Circle((x0, 0), 3.17, fill=False, ec=MUTED, lw=.6, zorder=2))
+        for i, p in enumerate(ring):
+            ax.add_patch(Circle((x0 + p[0], p[1]), .55, facecolor='w', ec=MUTED, lw=.6, zorder=2))
+        ax.add_patch(Circle((x0 + ring[3, 0], ring[3, 1]), 1.15, fill=False, ec=HP, lw=.9, ls=(0, (2, 1.2)), zorder=3))
+        if k == 0:
+            ax.scatter(x0 + ring[1, 0], ring[1, 1], marker='D', s=18, color=TARGET, lw=0, zorder=4)
+        if k == 1:
+            ax.scatter(x0 + ring[3, 0], ring[3, 1], marker='o', s=22, color=DISTRACTOR, lw=0, zorder=4)
+        ax.plot(x0, 0, '+', color=FG, ms=4, mew=.6, zorder=4)
+        ax.text(x0, 7.2, title, ha='center', va='bottom', fontsize=7, color=col)
+        ax.text(x0, -6.8, sub, ha='center', va='top', fontsize=6, color='.35', linespacing=1.2)
+    ax.set_xlim(-8, 42)
+    ax.set_ylim(-10.5, 9)
+    ax.set_aspect('equal')
+    ax.set_axis_off()
+
+
 def stamp(ax):
     ax.text(1., 1.36, EARLIER, transform=ax.transAxes, fontsize=5.5, color=MUTED, ha='right', va='bottom')
 
 
-def main(trial_table, mixed_table, repeat_table, name='fig6_behaviour'):
+def main(trial_table, mixed_table, repeat_table, bayes_table, name='fig6_behaviour'):
     tt = pd.read_csv(trial_table, sep='\t')
-    fig = plt.figure(figsize=(DOUBLE, 2.75))
-    gs = fig.add_gridspec(1, 3, width_ratios=[1, 2, 2], wspace=.42, left=.075, right=.99, top=.74, bottom=.22)
-    ax = fig.add_subplot(gs[0])
+    bayes = pd.read_csv(bayes_table, sep='\t')
+    fig = plt.figure(figsize=(DOUBLE, 5.0))
+    top = fig.add_gridspec(1, 2, width_ratios=[2.1, 1.3], wspace=.3, left=.02, right=.99, top=.92, bottom=.64)
+    bot = fig.add_gridspec(1, 3, wspace=.42, left=.075, right=.99, top=.4, bottom=.12)
+    ax = fig.add_subplot(top[0])
+    panel_sources(ax)
+    letter(ax, 'a', x=.02, y=.97)
+    ax = fig.add_subplot(top[1])
     panel_rt(ax, behaviour(tt))
-    ax.text(0, 1.22, 'Repeats speed search', transform=ax.transAxes, fontsize=7, color=FG, va='center')
-    letter(ax, 'a', x=-.42, y=1.26)
-    ax = fig.add_subplot(gs[1])
+    ax.text(0, 1.12, 'Repeats speed search', transform=ax.transAxes, fontsize=7, color=FG, va='center')
+    letter(ax, 'b', x=-.42, y=1.08)
+    ax = fig.add_subplot(bot[0])
     panel_repeat(ax, pd.read_csv(repeat_table, sep='\t'))
-    title_icon(ax, 'Repeated target: less target gain', ('target',), TARGET, h=.24)
-    stamp(ax)
-    letter(ax, 'b', x=-.2, y=1.26)
-    ax = fig.add_subplot(gs[2])
-    panel_amplitude(ax, pd.read_csv(mixed_table, sep='\t'))
-    ax.text(0, 1.22, 'Trial by trial: the sign flips along the hierarchy', transform=ax.transAxes, fontsize=7, color=FG, va='center')
-    stamp(ax)
+    title_icon(ax, 'Repeated target: less gain', ('target',), TARGET, h=.24)
     letter(ax, 'c', x=-.2, y=1.26)
+    ax = fig.add_subplot(bot[1])
+    panel_bayes(ax, bayes, [('T', TARGET), ('D_HP', DISTRACTOR)], (-.075, .065), 'Log RT per unit gain (z)',
+                ('Slower', 'Faster'))
+    ax.text(0, 1.22, 'Per trial: target vs distractor gain', transform=ax.transAxes, fontsize=7, color=FG, va='center')
+    hdi_key(ax, y=1.08)
+    ax.text(ROI_X['V3AB'] - .4, .058, 'Target', color=TARGET, fontsize=6.5, ha='right', va='center')
+    ax.text(ROI_X['V3'] - .2, -.062, 'Distractor, HP trials', color=DISTRACTOR, fontsize=6.5, ha='left', va='center')
+    letter(ax, 'd', x=-.2, y=1.26)
+    ax = fig.add_subplot(bot[2])
+    panel_bayes(ax, bayes, [('G', FG)], (-.07, .14), 'Log RT per unit gain (z)', ('Slower', 'Faster'))
+    ax.text(0, 1.22, 'Per trial: global gain flips sign', transform=ax.transAxes, fontsize=7, color=FG, va='center')
+    stamp(ax)
+    letter(ax, 'e', x=-.2, y=1.26)
     save(fig, name, LEGEND)
 
 
@@ -129,5 +202,6 @@ if __name__ == '__main__':
     ap.add_argument('--trial-table', default='notes/data/trialwise_af_trial_table.tsv.gz')
     ap.add_argument('--mixed-table', default='notes/data/trialwise_af_mixed_stats.tsv')
     ap.add_argument('--repeat-table', default='notes/data/repeat_af_fits_params.tsv')
+    ap.add_argument('--bayes-table', default='notes/data/trialwise_rt_bayes_summary.tsv')
     a = ap.parse_args()
-    main(a.trial_table, a.mixed_table, a.repeat_table)
+    main(a.trial_table, a.mixed_table, a.repeat_table, a.bayes_table)
