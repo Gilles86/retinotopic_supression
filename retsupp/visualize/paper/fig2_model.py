@@ -217,7 +217,7 @@ def top_row(fig, gs, prfs=None):
     sus = sum((GAINS['hp'] if i == HP_IX else GAINS['lp']) * gauss(*p, SIGMA['sus']) for i, p in enumerate(POS))
     tgt = GAINS['t'] * gauss(*POS[T_IX], SIGMA['dyn'])
     dis = GAINS['d'] * gauss(*POS[HP_IX], SIGMA['dyn'])
-    maps = [('Model input', stimulus(), 'gray', 1, FG, True, 'Fixed pRF (teal)'),
+    maps = [('Model input', stimulus(), 'magma', 2.6, FG, False, 'Fixed pRF (teal)'),
             ('Sustained:\nless gain at HP', -sus, 'Reds', .9, HP, False, 'Whole block · g_HP vs g_LP'),
             ('Target', tgt, 'Oranges', 1.8, TARGET, False, 'During search · g_T'),
             ('Distractor', dis, 'Blues', 1.8, DISTRACTOR, False, 'During search · HP vs LP')]
