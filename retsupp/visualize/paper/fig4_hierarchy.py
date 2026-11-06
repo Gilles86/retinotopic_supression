@@ -1,6 +1,6 @@
-"""Figure 4: gain terms across the visual hierarchy, and the full parameter table. Provisional until the final fits.
+"""Figure 4: the target and the singleton draw gain, more so higher in the hierarchy. Provisional until the final fits.
 
-Writes the figure and ``table_parameters_2026-11.{md,tsv}`` (medians, CIs, tests and Bayes factors).
+Also writes ``table_parameters_2026-11.{md,tsv}`` (all terms, DoG and DN, medians, CIs, tests, Bayes factors, field sizes).
 
 Usage::
 
@@ -16,15 +16,15 @@ import pandas as pd
 from scipy import stats
 
 from retsupp.visualize.paper.fig45_common import conditional, joint, jzs_bf10, median_ci
-from retsupp.visualize.paper.paper_style import (DISTRACTOR, DOUBLE, FG, HP, MUTED, OUT, ROI_ORDER, TARGET, letter, offset_spines,
-                                                 pending, provisional, save)
+from retsupp.visualize.paper.paper_style import (DISTRACTOR, DOUBLE, FG, HP, MUTED, OUT, ROI_COLORS, ROI_ORDER, TARGET, letter,
+                                                 offset_spines, provisional, save)
 
 FWHM = 2 * np.sqrt(2 * np.log(2))
 TERMS = [('T', 'Target gain', TARGET), ('D', 'Singleton gain', DISTRACTOR), ('dS', 'Sustained gain, HP − LP', HP),
          ('dD', 'Singleton gain, HP − LP', '#5E3C99')]
 FAM = {'dog': 'DoG', 'dn': 'DN'}
 LEGEND = """
-**Figure 4. Gain terms across the visual hierarchy.** a-d, Median across subjects (n = 30) per ROI of the target gain, the singleton gain (averaged over locations), and the HP − LP differences of the sustained and the singleton gain, from m7_full under DoG (filled) and DN (open); bars are bootstrapped 95% confidence intervals. Stars: Wilcoxon signed-rank test against 0, Benjamini-Hochberg across the 9 ROIs per term and model; * q < .05, ** q < .01, *** q < .001. e, Size of the sustained and transient fields (DoG) as full width at half maximum (2.355 σ), median with bootstrapped 95% CI, and the share of fits at a bound (σ = .5° or 8°) under each ROI; dotted line, the 4° radius of the ring. f, Term × ROI hierarchical model, pending. Bayes factors and all values are in the parameter table. All values provisional: current inputs.
+**Figure 4. The target and the singleton draw gain, increasingly along the visual hierarchy.** a, Gain at the target location while the search display is on, per ROI (m7_full, DoG pRFs): dots are subjects (n = 30; triangles, beyond the axis), points and bars are the median and bootstrapped 95% CI. Stars: Wilcoxon signed-rank test against 0, Benjamini-Hochberg across ROIs; * q < .05, ** q < .01, *** q < .001. b, The same for the singleton, averaged over its locations. c, Size of the fields as full width at half maximum (2.355 σ), median and 95% CI; dotted line, the 4° radius of the ring. DN pRFs, Bayes factors and all other terms are in the parameter table. Provisional: current inputs.
 """
 
 
@@ -47,17 +47,17 @@ def summarise(js, cond):
                                  pct_negative=(v < 0).mean() * 100, p=p, bf10=jzs_bf10(v),
                                  conditional_median=c.median() if len(c) else np.nan,
                                  conditional_p=stats.wilcoxon(c).pvalue if len(c) > 5 else np.nan))
-            q = stats.false_discovery_control(ps)
-            for r, qq in zip(rows[-len(ROI_ORDER):], q):
+            for r, qq in zip(rows[-len(ROI_ORDER):], stats.false_discovery_control(ps)):
                 r['q'] = qq
     return pd.DataFrame(rows)
 
 
-def write_table(t):
+def write_table(t, js):
     t.to_csv(OUT / 'table_parameters_2026-11.tsv', sep='\t', index=False)
     fmt = lambda r: f"{r['median']:+.3f} [{r.ci_low:+.3f}, {r.ci_high:+.3f}]"
     lines = ['**Table S. Gain-field parameters per ROI (m7_full, n = 30).** Median [bootstrapped 95% CI], Wilcoxon p, BH q '
-             'across 9 ROIs, JZS Bayes factor BF10 (r = .707), and for DoG the conditional median. Provisional: current inputs.', '']
+             'across 9 ROIs, JZS Bayes factor BF10 (r = .707), and for DoG the conditional median. Gains are the fractional '
+             'change in drive at the centre of a field (+0.30: 30% more). Provisional: current inputs.', '']
     for term, lab, _ in TERMS:
         lines += [f'**{lab}**', '', '| ROI | DoG median [CI] | p | q | BF10 | DoG conditional | DN median [CI] | p | q | BF10 |',
                   '|---|---|---|---|---|---|---|---|---|---|']
@@ -74,80 +74,75 @@ def write_table(t):
         cells = []
         for fam in ('dog', 'dn'):
             for par in ('sigma_AF', 'sigma_dyn'):
-                v = JS[fam][JS[fam].roi == roi][par].dropna()
+                v = js[fam][js[fam].roi == roi][par].dropna()
                 m, lo, hi = (FWHM * x for x in median_ci(v))
                 cells += [f'{m:.1f} [{lo:.1f}, {hi:.1f}]', f'{((v < .51) | (v > 7.9)).mean() * 100:.0f}%']
         lines.append(f'| {roi} | ' + ' | '.join(cells) + ' |')
-    lines += ['', 'Gain values are the fractional change in the drive at the centre of a field: +0.30 means 30% more drive '
-              'there during the event, −0.05 means 5% less throughout the block.', '']
-    (OUT / 'table_parameters_2026-11.md').write_text('\n'.join(lines))
+    (OUT / 'table_parameters_2026-11.md').write_text('\n'.join(lines) + '\n')
 
 
-def panel_term(ax, t, term, lab, col):
+def panel_gain(ax, d, t, term, col, ylim, note, note_xy):
     x = np.arange(len(ROI_ORDER))
-    for j, name in enumerate(('DoG', 'DN')):
-        d = t[(t.model == name) & (t.term == term)].set_index('roi').loc[ROI_ORDER]
-        xx = x + (j - .5) * .3
-        ax.errorbar(xx, d['median'], yerr=[d['median'] - d.ci_low, d.ci_high - d['median']], fmt='o', ms=5, mfc=col if j == 0 else 'w',
-                    mec=col, mew=1.2, color=col, lw=1.3, capsize=0)
-        for xi, (_, r) in zip(xx, d.iterrows()):
-            s = stars(r.q)
-            if s:
-                ax.text(xi, r.ci_high, s, ha='center', va='bottom', fontsize=7, color=col)
+    lo, hi = ylim
+    for i, roi in enumerate(ROI_ORDER):
+        v = d[d.roi == roi][term].dropna().to_numpy()
+        rng = np.random.default_rng(i)
+        xx = i + rng.uniform(-.17, .17, len(v))
+        ok = (v >= lo) & (v <= hi)
+        ax.scatter(xx[ok], v[ok], s=7, color=ROI_COLORS[roi], alpha=.35, lw=0, zorder=1)
+        ax.scatter(xx[v > hi], np.full((v > hi).sum(), hi), s=10, marker='^', color=ROI_COLORS[roi], alpha=.6, lw=0, clip_on=False)
+        ax.scatter(xx[v < lo], np.full((v < lo).sum(), lo), s=10, marker='v', color=ROI_COLORS[roi], alpha=.6, lw=0, clip_on=False)
+    r = t[(t.model == 'DoG') & (t.term == term)].set_index('roi').loc[ROI_ORDER]
+    ax.errorbar(x, r['median'], yerr=[r['median'] - r.ci_low, r.ci_high - r['median']], fmt='o', ms=6, color=col, mec='w', mew=.8,
+                lw=1.6, capsize=0, zorder=4)
+    for xi, (_, row) in zip(x, r.iterrows()):
+        ax.text(xi, hi + .03 * (hi - lo), stars(row.q), ha='center', va='bottom', fontsize=8, color=col, clip_on=False)
     ax.axhline(0, color='.7', lw=.7, ls='--', zorder=0)
     ax.set_xticks(x)
     ax.set_xticklabels(ROI_ORDER, fontsize=6.5)
     ax.tick_params(axis='x', labelrotation=90)
-    ax.set_title(lab, fontsize=7.5, color=col, pad=4)
+    ax.set_ylim(lo, hi)
+    ax.text(*note_xy, note, transform=ax.transAxes, fontsize=7, color=col, va='top')
     offset_spines(ax)
 
 
-def panel_widths(ax, js):
+def panel_size(ax, d):
     x = np.arange(len(ROI_ORDER))
-    d = js['dog']
-    for j, (par, lab, col) in enumerate((('sigma_AF', 'Sustained', HP), ('sigma_dyn', 'Transient', DISTRACTOR))):
+    for j, (par, lab, col) in enumerate((('sigma_AF', 'Sustained field', HP), ('sigma_dyn', 'Transient field', DISTRACTOR))):
         m = FWHM * np.array([median_ci(d[d.roi == r][par]) for r in ROI_ORDER])
-        ax.errorbar(x + (j - .5) * .3, m[:, 0], yerr=[m[:, 0] - m[:, 1], m[:, 2] - m[:, 0]], fmt='o', ms=5, color=col, lw=1.3, capsize=0)
-        at_bound = [((d[d.roi == r][par] < .51) | (d[d.roi == r][par] > 7.9)).mean() * 100 for r in ROI_ORDER]
-        for xi, b in zip(x, at_bound):
-            ax.text(xi + (j - .5) * .3, -.8 - j * 2.1, f'{b:.0f}', fontsize=5.5, color=col, ha='center', va='top')
-        ax.text(.02, .97 - j * .1, lab, transform=ax.transAxes, color=col, fontsize=7, va='top')
+        ax.errorbar(x + (j - .5) * .28, m[:, 0], yerr=[m[:, 0] - m[:, 1], m[:, 2] - m[:, 0]], fmt='o', ms=5.5, color=col, mec='w',
+                    mew=.8, lw=1.5, capsize=0)
+        ax.text(.03, .97 - j * .1, lab, transform=ax.transAxes, color=col, fontsize=7, va='top')
+    ax.axhline(4, color='.6', lw=.7, ls=':', zorder=0)
+    ax.text(len(ROI_ORDER) - .4, 4.3, 'Ring radius', fontsize=6, color='.45', ha='right', va='bottom')
     ax.set_xticks(x)
     ax.set_xticklabels(ROI_ORDER, fontsize=6.5)
     ax.tick_params(axis='x', labelrotation=90)
-    ax.set_ylim(-5, 19.5)
-    ax.set_yticks([0, 4, 8, 12, 16])
-    ax.axhline(4, color='.7', lw=.6, ls=':', zorder=0)
-    ax.text(len(ROI_ORDER) - .5, 4, 'Ring radius', fontsize=5.5, color='.5', ha='right', va='bottom')
-    ax.set_ylabel('Field FWHM (°)')
-    ax.text(-.02, .05, '% at\nbound', transform=ax.transAxes, fontsize=5.5, color=MUTED, ha='right')
-    ax.set_title('Field widths, DoG', fontsize=7.5, color=FG, pad=10)
+    ax.set_ylim(0, 20)
+    ax.set_yticks([0, 4, 8, 12, 16, 20])
+    ax.set_ylabel('Field size, FWHM (°)')
     offset_spines(ax)
 
 
 def main(gain_table, conditional_table, name='fig4_hierarchy'):
-    global JS
     js = {f: joint(gain_table, f) for f in FAM}
-    JS = js
     t = summarise(js, conditional(conditional_table))
     OUT.mkdir(parents=True, exist_ok=True)
-    write_table(t)
-    fig = plt.figure(figsize=(DOUBLE, 4.9))
-    gs = fig.add_gridspec(2, 3, hspace=.75, wspace=.35, left=.075, right=.99, top=.9, bottom=.1)
-    for k, (term, lab, col) in enumerate(TERMS):
-        ax = fig.add_subplot(gs[k // 2, k % 2] if k < 2 else gs[1, k - 2])
-        panel_term(ax, t, term, lab, col)
-        if k in (0, 2):
-            ax.set_ylabel('Gain (m7)')
-        letter(ax, 'abcd'[k], x=-.12, y=1.06)
-        provisional(ax, y=1.2)
-    ax = fig.add_subplot(gs[0, 2])
-    panel_widths(ax, js)
-    letter(ax, 'e', x=-.15, y=1.06)
-    ax = fig.add_subplot(gs[1, 2])
-    pending(ax, 'term × ROI hierarchical model')
-    letter(ax, 'f', x=-.02, y=1.06)
-    fig.text(.075, .965, '●  DoG     ○  DN', fontsize=7.5, color=FG)
+    write_table(t, js)
+    d = js['dog']
+    fig = plt.figure(figsize=(DOUBLE, 2.55))
+    gs = fig.add_gridspec(1, 3, wspace=.38, left=.07, right=.99, top=.86, bottom=.2)
+    ax = fig.add_subplot(gs[0])
+    panel_gain(ax, d, t, 'T', TARGET, (-.4, 1.2), 'Target: more gain,\nrising after V1', (.04, .98))
+    ax.set_ylabel('Gain at the field centre')
+    letter(ax, 'a', x=-.2, y=1.05)
+    provisional(ax, y=1.1)
+    ax = fig.add_subplot(gs[1])
+    panel_gain(ax, d, t, 'D', DISTRACTOR, (-.4, 1.2), 'Singleton: less gain\nthan the target', (.04, .98))
+    letter(ax, 'b', x=-.12, y=1.05)
+    ax = fig.add_subplot(gs[2])
+    panel_size(ax, d)
+    letter(ax, 'c', x=-.18, y=1.05)
     save(fig, name, LEGEND)
 
 

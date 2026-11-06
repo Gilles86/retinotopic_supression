@@ -1,4 +1,4 @@
-**Table S. Gain-field parameters per ROI (m7_full, n = 30).** Median [bootstrapped 95% CI], Wilcoxon p, BH q across 9 ROIs, JZS Bayes factor BF10 (r = .707), and for DoG the conditional median. Provisional: current inputs.
+**Table S. Gain-field parameters per ROI (m7_full, n = 30).** Median [bootstrapped 95% CI], Wilcoxon p, BH q across 9 ROIs, JZS Bayes factor BF10 (r = .707), and for DoG the conditional median. Gains are the fractional change in drive at the centre of a field (+0.30: 30% more). Provisional: current inputs.
 
 **Target gain**
 
@@ -69,5 +69,3 @@
 | TO | 3.7 [3.2, 4.4] | 0% | 11.5 [6.5, 18.8] | 50% | 4.3 [3.8, 4.9] | 7% | 8.4 [5.9, 12.7] | 27% |
 | V3AB | 4.6 [4.0, 5.8] | 13% | 6.8 [5.3, 7.4] | 30% | 3.9 [3.5, 4.5] | 3% | 6.2 [5.3, 7.4] | 27% |
 | IPS | 6.6 [5.4, 8.6] | 13% | 18.8 [18.8, 18.8] | 73% | 5.6 [4.6, 6.2] | 10% | 18.8 [18.8, 18.8] | 73% |
-
-Gain values are the fractional change in the drive at the centre of a field: +0.30 means 30% more drive there during the event, −0.05 means 5% less throughout the block.
