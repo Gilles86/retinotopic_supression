@@ -3,9 +3,9 @@
 #SBATCH --account=zne.uzh
 #SBATCH --partition=standard
 #SBATCH --output=/dev/null
-#SBATCH --cpus-per-task=8
-#SBATCH --time=08:00:00  # m00+m0 long GD ~3.5h + gain models ~1h on 8 CPUs (resumable)
-#SBATCH --mem=48G  # large-brain subjects (e.g. sub-08) OOM at 16G loading full BOLD
+#SBATCH --cpus-per-task=4   # tasks used ~45-60% of 8 CPUs (sacct TotalCPU, 2026-11-06)
+#SBATCH --time=08:00:00
+#SBATCH --mem=28G            # peak RSS 8-23 GB in recent tasks
 #
 # Nested CV ladder (fit_cv_ladder_nested): one array task per (subject, ROI)
 # runs the whole m00 -> m0 -> gain-field chain. CPU only. Resumable: models
@@ -23,6 +23,8 @@
 #   FAMILY=dn uses the divisive-normalization pRF (root gets a _dn suffix)
 #   HP_ROTATION=K relabels HP K ring steps away (root gets a _hprot<K> suffix), needs BASE_ROOT
 #   MODELS="m5_TDS_dS m7_full" fits only these models and their ancestors
+#   PER_SUBJECT=1: array index = subject, all ROIS in one task (data loaded once)
+#   WARM_ROOT="<path> ..." starts m00/m0 from earlier fits; GD_ITER, GD_MIN_ITER, SIGMA_STARTS, LBFGS_ROUNDS tune the search
 #   RELIABLE_ONLY=1 keeps voxels with cross-run reliability > 0 (root gets a _reliable suffix), needs BASE_ROOT
 # Task index -> (subject, ROI): idx0 = task-1; subject = idx0/11 + 1; roi = ROIS[idx0%11].
 
@@ -38,18 +40,23 @@ HP_ROTATION="${HP_ROTATION:-0}"
 MODELS="${MODELS:-}"
 TAG="${CV_SCHEME}${BOUNDED:+_bounded}${POLISH:+_polish}${MAX_BOLD_SD:+_maxsd$MAX_BOLD_SD}_${LOSS}_${FAMILY}_hprot${HP_ROTATION}${RELIABLE_ONLY:+_reliable}"
 ROIS=(V1 V2 V3 V3AB hV4 LO TO VO IPS SPL1 FEF)
-idx0=$(( SLURM_ARRAY_TASK_ID - 1 ))
-subject=$(( idx0 / ${#ROIS[@]} + 1 ))
-roi="${ROIS[$(( idx0 % ${#ROIS[@]} ))]}"
+if [[ -n "${PER_SUBJECT:-}" ]]; then
+    subject=$SLURM_ARRAY_TASK_ID
+    roi="${ROIS[*]}"
+else
+    idx0=$(( SLURM_ARRAY_TASK_ID - 1 ))
+    subject=$(( idx0 / ${#ROIS[@]} + 1 ))
+    roi="${ROIS[$(( idx0 % ${#ROIS[@]} ))]}"
+fi
 
-LOGFILE="$HOME/logs/cvl_nested_${TAG}_sub-$(printf %02d "$subject")_${roi}_${SLURM_JOB_ID}.txt"
+LOGFILE="$HOME/logs/cvl_nested_${TAG}_sub-$(printf %02d "$subject")_${roi// /-}_${SLURM_JOB_ID}.txt"
 mkdir -p "$HOME/logs"
 exec >"$LOGFILE" 2>&1
 echo "Host: $(hostname) | job ${SLURM_JOB_ID} task ${SLURM_ARRAY_TASK_ID} | sub-${subject} ${roi} | cv=${CV_SCHEME} polish=${POLISH:-0} | $(date)"
 scontrol update jobid="${SLURM_JOB_ID}" name="cvl_nested_${TAG}" 2>/dev/null || true
 
 export CUDA_VISIBLE_DEVICES=""
-export TF_NUM_INTRAOP_THREADS="${SLURM_CPUS_PER_TASK:-8}"
+export TF_NUM_INTRAOP_THREADS="${SLURM_CPUS_PER_TASK:-4}"
 export TF_NUM_INTEROP_THREADS=2
 export PYTHONUNBUFFERED=1
 CODE_DIR="${CODE_DIR:-$(cd "${SLURM_SUBMIT_DIR}" && git rev-parse --show-toplevel)}"
@@ -57,11 +64,14 @@ export PYTHONPATH="${CODE_DIR}${PYTHONPATH:+:$PYTHONPATH}"
 echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
 
 "$HOME/data/conda/envs/retsupp_cuda/bin/python" -u -m retsupp.modeling.fit_cv_ladder_nested \
-    "$subject" --roi "$roi" \
+    "$subject" --roi $roi \
     --bids-folder /shares/zne.uzh/gdehol/ds-retsupp \
     --cv-scheme "$CV_SCHEME" ${POLISH:+--polish} ${BOUNDED:+--bounded} \
     ${MAX_BOLD_SD:+--max-bold-sd "$MAX_BOLD_SD"} --loss "$LOSS" \
     ${BASE_ROOT:+--base-root $BASE_ROOT} --family "$FAMILY" --hp-rotation "$HP_ROTATION" \
-    ${MODELS:+--models $MODELS} ${RELIABLE_ONLY:+--reliable-only}
+    ${MODELS:+--models $MODELS} ${RELIABLE_ONLY:+--reliable-only} \
+    ${WARM_ROOT:+--warm-root $WARM_ROOT} ${GD_ITER:+--gd-iterations $GD_ITER} \
+    ${GD_MIN_ITER:+--gd-min-iterations $GD_MIN_ITER} ${SIGMA_STARTS:+--sigma-starts $SIGMA_STARTS} \
+    ${LBFGS_ROUNDS:+--lbfgs-rounds $LBFGS_ROUNDS}
 
 echo "Finished: $(date)"

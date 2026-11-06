@@ -226,7 +226,7 @@ def fit_roi_exact(sub, roi, data, out_path, overlay_root=None):
 
 
 def main(subject, bids_folder, rois, output_subdir='af_fixed_group_mechanisms',
-         overlay_root=None, base_root=None, family='dog', step=None, exact=False):
+         overlay_root=None, base_root=None, family='dog', step=None, exact=False, hp_rotation=0):
     global BASE_ROOT, FAMILY, H
     BASE_ROOT, FAMILY, H = base_root or BASE_ROOT, family, step or H
     sub = Subject(subject, bids_folder=Path(bids_folder))
@@ -240,6 +240,7 @@ def main(subject, bids_folder, rois, output_subdir='af_fixed_group_mechanisms',
     (bold, paradigm, ci, di, ti, grid_coords, _masker,
      run_meta) = build_data_and_paradigm(sub, resolution=50, grid_radius=5.0,
                                          item_shape='rectangle')
+    ci = np.roll(ci, hp_rotation, axis=1)   # relabel HP, as in fit_cv_ladder_nested --hp-rotation
     data = (bold, paradigm, ci, di, ti, grid_coords, run_meta)
     for roi, path in todo.items():
         (fit_roi_exact if exact else fit_roi)(sub, roi, data, path, overlay_root)
@@ -257,8 +258,11 @@ if __name__ == '__main__':
     ap.add_argument('--family', choices=['dog', 'dn'], default='dog')
     ap.add_argument('--step', type=float, default=None,
                     help='Central-difference step; DN is less linear in the gains')
+    ap.add_argument('--hp-rotation', type=int, choices=[0, 1, 2, 3], default=0,
+                    help='Relabel HP K ring steps away, for a null of the conditional dS and dD. '
+                         'Use a matching --base-root of fits with the same relabelling.')
     ap.add_argument('--exact', action='store_true',
                     help='Save ΔSSE on a grid of δ from the actual predictions')
     args = ap.parse_args()
     main(args.subject, args.bids_folder, args.rois, args.output_subdir, args.overlay_root,
-         args.base_root, args.family, args.step, args.exact)
+         args.base_root, args.family, args.step, args.exact, args.hp_rotation)

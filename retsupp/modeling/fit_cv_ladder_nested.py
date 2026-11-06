@@ -50,6 +50,11 @@ the data, stimulus and distractor and target events stay as they were. Models wi
 tied gains do not depend on the labels, so with ``--base-root`` they are loaded from
 there. Root gets a _hprot<K> suffix.
 
+``--roi`` takes several ROIs; the data are then loaded once. ``--warm-root`` starts m00 and m0 from
+earlier fits of the same voxels (with ``--gd-iterations`` and ``--gd-min-iterations`` set low, a refit
+after a small change such as the HRF is cheap). ``--sigma-starts`` and ``--lbfgs-rounds`` set the
+search of the shared fits.
+
 ``--reliable-only`` keeps the selected voxels with model-free cross-run reliability > 0 (mean over
 the ``prf_cv_reliability`` folds). The m00, m0, m1 and m3b fits come from ``--base-root``, restricted
 to those voxels, so m4 onward refit the shared terms on them. Root gets a _reliable suffix.
@@ -67,6 +72,7 @@ from __future__ import annotations
 import argparse
 import pickle
 import time
+import traceback
 from pathlib import Path
 
 import numpy as np
@@ -133,14 +139,14 @@ def sign_pattern_of(name):
 
 
 def gd_fit(model, bold_train, paradigm, init_pars, sign_pattern, item_scale,
-           max_n_iterations, learning_rate):
+           max_n_iterations, learning_rate, min_n_iterations=1000):
     """Full per-voxel gradient descent (m00 / m0), run to a plateau."""
     fitter = ParameterFitter(model, pd.DataFrame(bold_train), paradigm)
     t0 = time.time()
     fit_pars = fitter.fit(
         init_pars=init_pars,
         max_n_iterations=max_n_iterations,
-        min_n_iterations=1000,
+        min_n_iterations=min_n_iterations,
         lag=200,
         r2_atol=1e-7,
         shared_pars=shared_pars_for(sign_pattern, item_scale),
@@ -212,7 +218,8 @@ def raw_bounds(model, init_pars, cols):
 
 
 def shared_fit(model, bold_train, paradigm, init_pars, free_shared,
-               max_iter=2000, bounded=False, loss='sse'):
+               max_iter=2000, bounded=False, loss='sse', sigma_starts=SIGMA_STARTS,
+               lbfgs_rounds=LBFGS_ROUNDS):
     """L-BFGS-B over the shared parameters, per-voxel pRFs frozen.
 
     Starts from ``init_pars`` (the parent optimum, new terms at null) and
@@ -238,7 +245,7 @@ def shared_fit(model, bold_train, paradigm, init_pars, free_shared,
     f_parent, _ = fun(clip(raw0[0, free_ix].astype(np.float64)))
     best = None
     starts = []
-    for s in SIGMA_STARTS:
+    for s in sigma_starts:
         x0 = raw0[0, free_ix].astype(np.float64).copy()
         if s is not None:
             if not sigma_ix:
@@ -254,7 +261,7 @@ def shared_fit(model, bold_train, paradigm, init_pars, free_shared,
         x0 = clip(x0)
         f_start, _ = fun(x0)
         f_end, x_end, nit = f_start, x0, 0
-        for _round in range(LBFGS_ROUNDS):
+        for _round in range(lbfgs_rounds):
             res = minimize(fun, x_end, jac=True, method='L-BFGS-B',
                            bounds=bnds,
                            options=dict(maxiter=max_iter, maxfun=4 * max_iter,
@@ -394,11 +401,12 @@ def bar_paradigm(sub, run_meta, resolution, grid_radius):
         for rm in run_meta])
 
 
-def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
+def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
          grid_radius=5.0, max_voxels=500, p_signal_thr=0.5,
          gd_iterations=8000, learning_rate=0.01, models=None,
          output_root=None, polish=False, bounded=False, max_bold_sd=None,
-         loss='sse', base_roots=(), family='dog', hp_rotation=0, reliable_only=False):
+         loss='sse', base_roots=(), family='dog', hp_rotation=0, reliable_only=False,
+         warm_roots=(), gd_min_iterations=1000, sigma_starts=SIGMA_STARTS, lbfgs_rounds=LBFGS_ROUNDS):
     if cv_scheme not in SCHEMES:
         raise ValueError(f'cv_scheme must be in {SCHEMES}')
     if hp_rotation and not base_roots:
@@ -433,263 +441,300 @@ def main(subject, bids_folder, roi, cv_scheme='loco', resolution=50,
 
     prf_pars = pd.DataFrame(
         sub.get_prf_parameters_volume(model=4, return_images=False))
-    voxel_mask, descr = choose_voxel_mask(
-        sub, roi, prf_pars, use_psignal=True, p_signal_thr=p_signal_thr,
-        r2_thr=0.05, model_label=4, max_voxels=max_voxels)
-    print(f'{descr}: {voxel_mask.sum()} voxels')
-    if max_bold_sd:
-        # Applied after the top-N ranking, so the result is a strict subset of
-        # the voxels of the fit without this limit.
-        sd = bold.std(0)
-        drop = voxel_mask & (sd > max_bold_sd)
-        voxel_mask = voxel_mask & ~drop
-        print(f'BOLD SD > {max_bold_sd:g}: dropped {drop.sum()} voxels '
-              f'{np.where(drop)[0].tolist()}, {voxel_mask.sum()} left')
-    if reliable_only:
-        rel = pd.concat([pd.read_csv(f, sep='\t') for f in sorted(
-            (bids_folder / 'derivatives' / 'prf_cv_roi_reliability' / f'sub-{subject:02d}').glob(
-                f'sub-{subject:02d}_fold-*_reliability.tsv.gz'))])
-        rel = rel.groupby('voxel_index').reliability.mean()
-        reliable = np.zeros(voxel_mask.size, dtype=bool)
-        reliable[rel.index[rel > 0]] = True
-        print(f'Reliability > 0: {(voxel_mask & reliable).sum()} of {voxel_mask.sum()} voxels')
-        voxel_mask = voxel_mask & reliable
-    voxel_ids = np.where(voxel_mask)[0]
-    ring_positions = get_ring_positions()
-    hrf_model = SPMHRFModel(tr=sub.get_tr(session=1, run=1),
-                            delay=4.5, dispersion=0.75)
-    if cv_scheme == 'full':
-        def whole(par):
-            return dict(train=dict(
-                bold=bold, paradigm=par, condition_indicator=ci,
-                dynamic_indicator=di, target_indicator=ti,
-                run_meta=run_meta), held=None)
-        folds = []
-        splits = [(whole(par_items), whole(par_bar))]
-    else:
-        folds = make_folds(run_meta, cv_scheme)
-        splits = []
-    for _label, held_runs in folds:
-        kw = dict(bold=bold, condition_indicator=ci, dynamic_indicator=di,
-                  target_indicator=ti, run_meta=run_meta,
-                  held_out_runs=held_runs)
-        try:
-            s_items = split_by_condition_with_target(paradigm=par_items, **kw)
-            s_bar = split_by_condition_with_target(paradigm=par_bar, **kw)
-        except RuntimeError as e:
-            print(f'skipping fold {_label}: {e}')
-            splits.append(None)
-            continue
-        splits.append((s_items, s_bar))
-
-    fits: dict[str, list] = {}
-
-    def load(name, root):
-        pkl = root / name / f'sub-{subject:02d}' / \
-            f'sub-{subject:02d}_roi-{roi}_cv-fits.pkl'
-        if pkl.exists():
-            with open(pkl, 'rb') as f:
-                return pickle.load(f)['fit_pars_per_fold']
-        return None
-
-    # Resolve the ancestors every requested model needs.
-    needed = []
-    for name in models:
-        chain, n = [], name
-        while n is not None:
-            chain.append(n)
-            n = LADDER[n][6]
-        for n in reversed(chain):
-            if n not in needed:
-                needed.append(n)
-
-    stages = [('clamped', n) for n in needed]
-    if polish:
-        stages += [('polish', n) for n in needed]
-    polished: dict[str, list] = {}
-    for stage, name in stages:
-        out_root = root if stage == 'clamped' else polish_root
-        store = fits if stage == 'clamped' else polished
-        cached = load(name, out_root)
-        from_base = (('m00_bar', 'm0_prf') + (LABEL_BLIND if hp_rotation else ())
-                     + (('m1_T', 'm3b_TD') if reliable_only else ()))
-        if cached is None and base_roots and name in from_base:
-            # First root holding this fit wins, so an overlay root goes first.
-            for base in base_roots:
-                cached = load(name, Path(base))
-                if cached is not None:
-                    break
-            if cached is None:
-                raise FileNotFoundError(f'{name} not in {base_roots}')
-            if reliable_only:
-                pkl = Path(base) / name / f'sub-{subject:02d}' / f'sub-{subject:02d}_roi-{roi}_cv-fits.pkl'
-                with open(pkl, 'rb') as f:
-                    base_ids = np.asarray(pickle.load(f)['voxel_ids'])
-                keep = np.isin(base_ids, voxel_ids)
-                if keep.sum() != voxel_ids.size:
-                    raise ValueError(f'{name} in {base}: lacks {voxel_ids.size - keep.sum()} voxels')
-                cached = [None if p is None else p.loc[keep].reset_index(drop=True) for p in cached]
-            if any(p is not None and len(p) != voxel_ids.size for p in cached):
-                raise ValueError(f'{name} in {base}: voxel set differs')
-        if cached is not None:
-            print(f'== {name} [{stage}]: loaded existing fit')
-            store[name] = cached
-            continue
-        sus_hp, sus_lp, dyn_hp, dyn_lp, tgt, item_scale, parent = LADDER[name]
-        sp = sign_pattern_of(name)
-        if family == 'dn' and item_scale == 'none':
-            item_scale = 'fixed'   # one class; the bar paradigm has no item pixels
-        print(f'\n===== {name} [{stage}] (parent {parent}) =====')
-        fold_pars, cv_r2s, train_r2s, shared_dicts, infos = [], [], [], [], []
-        tr_meta, he_meta = [], []
-        for k, split in enumerate(splits):
-            if split is None:
-                nan = np.full(voxel_ids.size, np.nan, dtype=np.float32)
-                for lst in (cv_r2s, train_r2s):
-                    lst.append(nan.copy())
-                for lst in (fold_pars, shared_dicts, infos):
-                    lst.append(None)
-                tr_meta.append([])
-                he_meta.append([])
+    def fit_one(roi):
+        voxel_mask, descr = choose_voxel_mask(
+            sub, roi, prf_pars, use_psignal=True, p_signal_thr=p_signal_thr,
+            r2_thr=0.05, model_label=4, max_voxels=max_voxels)
+        print(f'{descr}: {voxel_mask.sum()} voxels')
+        if max_bold_sd:
+            # Applied after the top-N ranking, so the result is a strict subset of
+            # the voxels of the fit without this limit.
+            sd = bold.std(0)
+            drop = voxel_mask & (sd > max_bold_sd)
+            voxel_mask = voxel_mask & ~drop
+            print(f'BOLD SD > {max_bold_sd:g}: dropped {drop.sum()} voxels '
+                  f'{np.where(drop)[0].tolist()}, {voxel_mask.sum()} left')
+        if reliable_only:
+            rel = pd.concat([pd.read_csv(f, sep='\t') for f in sorted(
+                (bids_folder / 'derivatives' / 'prf_cv_roi_reliability' / f'sub-{subject:02d}').glob(
+                    f'sub-{subject:02d}_fold-*_reliability.tsv.gz'))])
+            rel = rel.groupby('voxel_index').reliability.mean()
+            reliable = np.zeros(voxel_mask.size, dtype=bool)
+            reliable[rel.index[rel > 0]] = True
+            print(f'Reliability > 0: {(voxel_mask & reliable).sum()} of {voxel_mask.sum()} voxels')
+            voxel_mask = voxel_mask & reliable
+        voxel_ids = np.where(voxel_mask)[0]
+        ring_positions = get_ring_positions()
+        hrf_model = SPMHRFModel(tr=sub.get_tr(session=1, run=1),
+                                delay=4.5, dispersion=0.75)
+        if cv_scheme == 'full':
+            def whole(par):
+                return dict(train=dict(
+                    bold=bold, paradigm=par, condition_indicator=ci,
+                    dynamic_indicator=di, target_indicator=ti,
+                    run_meta=run_meta), held=None)
+            folds = []
+            splits = [(whole(par_items), whole(par_bar))]
+        else:
+            folds = make_folds(run_meta, cv_scheme)
+            splits = []
+        for _label, held_runs in folds:
+            kw = dict(bold=bold, condition_indicator=ci, dynamic_indicator=di,
+                      target_indicator=ti, run_meta=run_meta,
+                      held_out_runs=held_runs)
+            try:
+                s_items = split_by_condition_with_target(paradigm=par_items, **kw)
+                s_bar = split_by_condition_with_target(paradigm=par_bar, **kw)
+            except RuntimeError as e:
+                print(f'skipping fold {_label}: {e}')
+                splits.append(None)
                 continue
-            s = split[1] if LADDER[name][5] == 'none' else split[0]
-            train, held = s['train'], s['held']
-            y_tr = train['bold'][:, voxel_mask]
-            y_he = None if held is None else held['bold'][:, voxel_mask]
+            splits.append((s_items, s_bar))
 
-            def mk(d):
-                if family == 'dn':
-                    return DNDynamicAttentionFieldPRF2D(
-                        grid_coordinates=grid_coords, paradigm=d['paradigm'],
-                        hrf_model=hrf_model,
+        fits: dict[str, list] = {}
+
+        def warm(name, k, init):
+            """Start from an earlier fit of the same model and voxels where one exists."""
+            for wr in warm_roots:
+                pkl = Path(wr) / name / f'sub-{subject:02d}' / f'sub-{subject:02d}_roi-{roi}_cv-fits.pkl'
+                if not pkl.exists():
+                    continue
+                with open(pkl, 'rb') as f:
+                    old = pickle.load(f)
+                folds_old = old['fit_pars_per_fold']
+                p_old = folds_old[min(k, len(folds_old) - 1)]
+                if p_old is None:
+                    continue
+                p_old = p_old.set_index(pd.Index(np.asarray(old['voxel_ids'])))
+                hit = np.isin(voxel_ids, p_old.index)
+                cols = [c for c in init.columns if c in p_old.columns]
+                out = init.copy()
+                out.loc[hit, cols] = p_old.loc[voxel_ids[hit], cols].to_numpy()
+                print(f'  warm start {name} fold {k}: {hit.sum()} of {len(hit)} voxels from {wr}')
+                return out
+            return init
+
+        def load(name, root):
+            pkl = root / name / f'sub-{subject:02d}' / \
+                f'sub-{subject:02d}_roi-{roi}_cv-fits.pkl'
+            if pkl.exists():
+                with open(pkl, 'rb') as f:
+                    return pickle.load(f)['fit_pars_per_fold']
+            return None
+
+        # Resolve the ancestors every requested model needs.
+        needed = []
+        for name in models:
+            chain, n = [], name
+            while n is not None:
+                chain.append(n)
+                n = LADDER[n][6]
+            for n in reversed(chain):
+                if n not in needed:
+                    needed.append(n)
+
+        stages = [('clamped', n) for n in needed]
+        if polish:
+            stages += [('polish', n) for n in needed]
+        polished: dict[str, list] = {}
+        for stage, name in stages:
+            out_root = root if stage == 'clamped' else polish_root
+            store = fits if stage == 'clamped' else polished
+            cached = load(name, out_root)
+            from_base = (('m00_bar', 'm0_prf') + (LABEL_BLIND if hp_rotation else ())
+                         + (('m1_T', 'm3b_TD') if reliable_only else ()))
+            if cached is None and base_roots and name in from_base:
+                # First root holding this fit wins, so an overlay root goes first.
+                for base in base_roots:
+                    cached = load(name, Path(base))
+                    if cached is not None:
+                        break
+                if cached is None:
+                    raise FileNotFoundError(f'{name} not in {base_roots}')
+                if reliable_only:
+                    pkl = Path(base) / name / f'sub-{subject:02d}' / f'sub-{subject:02d}_roi-{roi}_cv-fits.pkl'
+                    with open(pkl, 'rb') as f:
+                        base_ids = np.asarray(pickle.load(f)['voxel_ids'])
+                    keep = np.isin(base_ids, voxel_ids)
+                    if keep.sum() != voxel_ids.size:
+                        raise ValueError(f'{name} in {base}: lacks {voxel_ids.size - keep.sum()} voxels')
+                    cached = [None if p is None else p.loc[keep].reset_index(drop=True) for p in cached]
+                if any(p is not None and len(p) != voxel_ids.size for p in cached):
+                    raise ValueError(f'{name} in {base}: voxel set differs')
+            if cached is not None:
+                print(f'== {name} [{stage}]: loaded existing fit')
+                store[name] = cached
+                continue
+            sus_hp, sus_lp, dyn_hp, dyn_lp, tgt, item_scale, parent = LADDER[name]
+            sp = sign_pattern_of(name)
+            if family == 'dn' and item_scale == 'none':
+                item_scale = 'fixed'   # one class; the bar paradigm has no item pixels
+            print(f'\n===== {name} [{stage}] (parent {parent}) =====')
+            fold_pars, cv_r2s, train_r2s, shared_dicts, infos = [], [], [], [], []
+            tr_meta, he_meta = [], []
+            for k, split in enumerate(splits):
+                if split is None:
+                    nan = np.full(voxel_ids.size, np.nan, dtype=np.float32)
+                    for lst in (cv_r2s, train_r2s):
+                        lst.append(nan.copy())
+                    for lst in (fold_pars, shared_dicts, infos):
+                        lst.append(None)
+                    tr_meta.append([])
+                    he_meta.append([])
+                    continue
+                s = split[1] if LADDER[name][5] == 'none' else split[0]
+                train, held = s['train'], s['held']
+                y_tr = train['bold'][:, voxel_mask]
+                y_he = None if held is None else held['bold'][:, voxel_mask]
+
+                def mk(d):
+                    if family == 'dn':
+                        return DNDynamicAttentionFieldPRF2D(
+                            grid_coordinates=grid_coords, paradigm=d['paradigm'],
+                            hrf_model=hrf_model,
+                            condition_indicator=d['condition_indicator'],
+                            dynamic_indicator=d['dynamic_indicator'],
+                            target_indicator=d['target_indicator'],
+                            ring_positions=ring_positions, sign_pattern=sp,
+                            item_scale_mode=item_scale)
+                    return build_model(
+                        grid_coords=grid_coords, paradigm=d['paradigm'],
                         condition_indicator=d['condition_indicator'],
                         dynamic_indicator=d['dynamic_indicator'],
                         target_indicator=d['target_indicator'],
-                        ring_positions=ring_positions, sign_pattern=sp,
-                        item_scale_mode=item_scale)
-                return build_model(
-                    grid_coords=grid_coords, paradigm=d['paradigm'],
-                    condition_indicator=d['condition_indicator'],
-                    dynamic_indicator=d['dynamic_indicator'],
-                    target_indicator=d['target_indicator'],
-                    ring_positions=ring_positions, hrf_model=hrf_model,
-                    sign_pattern=sp, item_scale=item_scale)
-            m_tr = mk(train)
-            labels = list(m_tr.parameter_labels)
+                        ring_positions=ring_positions, hrf_model=hrf_model,
+                        sign_pattern=sp, item_scale=item_scale)
+                m_tr = mk(train)
+                labels = list(m_tr.parameter_labels)
 
-            if stage == 'polish':
-                fixed = fixed_pars_for(sp, item_scale) or []
-                shared = shared_pars_for(sp, item_scale)
-                free_sh = [p for p in shared if p != 'sigma_T_dyn']
-                free_pv = [p for p in labels
-                           if p not in shared and p not in fixed]
-                init = fits[name][k].reindex(columns=labels)
-                pars, info = polish_fit(m_tr, y_tr, train['paradigm'], init,
-                                        free_sh, free_pv, bounded=bounded)
-                print(f'  fold {k}: SSE clamped {info["sse_clamped"]:.2f}'
-                      f' -> {info["sse_final"]:.2f} | nit {info["nit"]} | '
-                      f'|grad| {info["grad_norm"]:.3g} (shared '
-                      f'{info["grad_norm_shared"]:.3g}) | '
-                      f'{info["seconds"]:.0f}s')
-            elif name == 'm00_bar' and family == 'dn':
-                m5 = init_from_m5(sub, voxel_mask)
-                init = make_init_pars(m5, np.ones(len(m5), dtype=bool), sp,
-                                      sigma_af_init=2.0, sigma_dyn_init=2.0,
-                                      item_scale=item_scale)
-                init['neural_baseline'] = m5['neural_baseline'].values
-                init['surround_baseline'] = m5['surround_baseline'].values
-                init = init.reindex(columns=labels)
-                pars, info = gd_fit(m_tr, y_tr, train['paradigm'], init, sp,
-                                    item_scale, gd_iterations, learning_rate)
-            elif name == 'm00_bar':
-                init = make_init_pars(prf_pars, voxel_mask, sp,
-                                      sigma_af_init=2.0, sigma_dyn_init=2.0,
-                                      item_scale=item_scale)
-                init = init.reindex(columns=labels)
-                init = ParameterFitter(m_tr, pd.DataFrame(y_tr),
-                                       train['paradigm']
-                                       ).refine_baseline_and_amplitude(
-                    init, l2_alpha=1e-3)
-                pars, info = gd_fit(m_tr, y_tr, train['paradigm'], init, sp,
-                                    item_scale, gd_iterations, learning_rate)
-            elif name == 'm0_prf':
-                init = fits['m00_bar'][k].copy()
-                init['item_scale'] = 1.0
-                init = init.reindex(columns=labels)
-                pars, info = gd_fit(m_tr, y_tr, train['paradigm'], init, sp,
-                                    item_scale, gd_iterations, learning_rate)
-            else:
-                init = child_init(fits[parent][k], m_tr, name)
-                free = [p for p in shared_pars_for(sp, item_scale)
-                        if p != 'sigma_T_dyn']
-                pars, info = shared_fit(m_tr, y_tr, train['paradigm'],
-                                        init, free, bounded=bounded, loss=loss)
-                print(f'  fold {k}: SSE parent-start {info["sse_parent_start"]:.2f}'
-                      f' -> {info["sse_final"]:.2f} | |grad| '
-                      f'{info["grad_norm"]:.3g} | {info["seconds"]:.0f}s')
+                if stage == 'polish':
+                    fixed = fixed_pars_for(sp, item_scale) or []
+                    shared = shared_pars_for(sp, item_scale)
+                    free_sh = [p for p in shared if p != 'sigma_T_dyn']
+                    free_pv = [p for p in labels
+                               if p not in shared and p not in fixed]
+                    init = fits[name][k].reindex(columns=labels)
+                    pars, info = polish_fit(m_tr, y_tr, train['paradigm'], init,
+                                            free_sh, free_pv, bounded=bounded)
+                    print(f'  fold {k}: SSE clamped {info["sse_clamped"]:.2f}'
+                          f' -> {info["sse_final"]:.2f} | nit {info["nit"]} | '
+                          f'|grad| {info["grad_norm"]:.3g} (shared '
+                          f'{info["grad_norm_shared"]:.3g}) | '
+                          f'{info["seconds"]:.0f}s')
+                elif name == 'm00_bar' and family == 'dn':
+                    m5 = init_from_m5(sub, voxel_mask)
+                    init = make_init_pars(m5, np.ones(len(m5), dtype=bool), sp,
+                                          sigma_af_init=2.0, sigma_dyn_init=2.0,
+                                          item_scale=item_scale)
+                    init['neural_baseline'] = m5['neural_baseline'].values
+                    init['surround_baseline'] = m5['surround_baseline'].values
+                    init = init.reindex(columns=labels)
+                    init = warm(name, k, init)
+                    pars, info = gd_fit(m_tr, y_tr, train['paradigm'], init, sp,
+                                        item_scale, gd_iterations, learning_rate, gd_min_iterations)
+                elif name == 'm00_bar':
+                    init = make_init_pars(prf_pars, voxel_mask, sp,
+                                          sigma_af_init=2.0, sigma_dyn_init=2.0,
+                                          item_scale=item_scale)
+                    init = init.reindex(columns=labels)
+                    init = ParameterFitter(m_tr, pd.DataFrame(y_tr),
+                                           train['paradigm']
+                                           ).refine_baseline_and_amplitude(
+                        init, l2_alpha=1e-3)
+                    init = warm(name, k, init)
+                    pars, info = gd_fit(m_tr, y_tr, train['paradigm'], init, sp,
+                                        item_scale, gd_iterations, learning_rate, gd_min_iterations)
+                elif name == 'm0_prf':
+                    init = fits['m00_bar'][k].copy()
+                    init['item_scale'] = 1.0
+                    init = init.reindex(columns=labels)
+                    init = warm(name, k, init)
+                    pars, info = gd_fit(m_tr, y_tr, train['paradigm'], init, sp,
+                                        item_scale, gd_iterations, learning_rate, gd_min_iterations)
+                else:
+                    init = child_init(fits[parent][k], m_tr, name)
+                    free = [p for p in shared_pars_for(sp, item_scale)
+                            if p != 'sigma_T_dyn']
+                    pars, info = shared_fit(m_tr, y_tr, train['paradigm'],
+                                            init, free, bounded=bounded, loss=loss,
+                                            sigma_starts=sigma_starts, lbfgs_rounds=lbfgs_rounds)
+                    print(f'  fold {k}: SSE parent-start {info["sse_parent_start"]:.2f}'
+                          f' -> {info["sse_final"]:.2f} | |grad| '
+                          f'{info["grad_norm"]:.3g} | {info["seconds"]:.0f}s')
 
-            if pars[labels].isna().any().any():
-                raise ValueError(f'{name} fold {k}: NaN in the fitted parameters')
-            tr_r2 = per_voxel_r2(y_tr, np.asarray(
-                m_tr.predict(paradigm=train['paradigm'], parameters=pars)))
-            if held is None:
-                cv_r2 = np.full(voxel_ids.size, np.nan, dtype=np.float32)
-            else:
-                m_he = mk(held)
-                cv_r2 = per_voxel_r2(y_he, np.asarray(
-                    m_he.predict(paradigm=held['paradigm'],
-                                 parameters=pars)))
-            print(f'  fold {k}: train R² mean {np.nanmean(tr_r2):.5f} | '
-                  f'CV-R² median {np.nanmedian(cv_r2):.5f}')
-            info['train_sse_total'] = float(
-                ((y_tr - np.asarray(m_tr.predict(
-                    paradigm=train['paradigm'], parameters=pars))) ** 2).sum())
-            fold_pars.append(pars)
-            cv_r2s.append(cv_r2)
-            train_r2s.append(tr_r2)
-            shared_dicts.append(pars.reindex(
-                columns=ALL_SHARED_PARS + ['item_scale']).iloc[0].to_dict())
-            infos.append(info)
-            tr_meta.append([(r.session, r.run, r.hp) for r in train['run_meta']])
-            he_meta.append([] if held is None else
-                           [(r.session, r.run, r.hp) for r in held['run_meta']])
+                if pars[labels].isna().any().any():
+                    raise ValueError(f'{name} fold {k}: NaN in the fitted parameters')
+                tr_r2 = per_voxel_r2(y_tr, np.asarray(
+                    m_tr.predict(paradigm=train['paradigm'], parameters=pars)))
+                if held is None:
+                    cv_r2 = np.full(voxel_ids.size, np.nan, dtype=np.float32)
+                else:
+                    m_he = mk(held)
+                    cv_r2 = per_voxel_r2(y_he, np.asarray(
+                        m_he.predict(paradigm=held['paradigm'],
+                                     parameters=pars)))
+                print(f'  fold {k}: train R² mean {np.nanmean(tr_r2):.5f} | '
+                      f'CV-R² median {np.nanmedian(cv_r2):.5f}')
+                info['train_sse_total'] = float(
+                    ((y_tr - np.asarray(m_tr.predict(
+                        paradigm=train['paradigm'], parameters=pars))) ** 2).sum())
+                fold_pars.append(pars)
+                cv_r2s.append(cv_r2)
+                train_r2s.append(tr_r2)
+                shared_dicts.append(pars.reindex(
+                    columns=ALL_SHARED_PARS + ['item_scale']).iloc[0].to_dict())
+                infos.append(info)
+                tr_meta.append([(r.session, r.run, r.hp) for r in train['run_meta']])
+                he_meta.append([] if held is None else
+                               [(r.session, r.run, r.hp) for r in held['run_meta']])
 
-        store[name] = fold_pars
-        out_dir = out_root / name / f'sub-{subject:02d}'
-        pkl = out_dir / f'sub-{subject:02d}_roi-{roi}_cv-fits.pkl'
-        if pkl.exists():   # never overwrite an existing fit
-            raise FileExistsError(pkl)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        shared_labels = ALL_SHARED_PARS + ['item_scale']
-        write_cv_tsvs(
-            out_dir, subject=subject, roi=roi, model=name,
-            voxel_ids=voxel_ids, cv_r2_per_fold=cv_r2s,
-            train_r2_per_fold=train_r2s,
-            fit_pars_per_fold=[None if p is None else
-                               p.reindex(columns=per_voxel_cols + shared_labels)
-                               for p in fold_pars],
-            shared_pars_per_fold=shared_dicts,
-            shared_par_labels=shared_labels,
-            per_voxel_par_cols=per_voxel_cols,
-            train_run_meta_per_fold=tr_meta, held_run_meta_per_fold=he_meta,
-            selector='psignal', p_signal_thr=p_signal_thr,
-            extra_meta=dict(parent=parent, sign_pattern=sp,
-                            item_scale=item_scale, cv_scheme=cv_scheme,
-                            max_voxels=max_voxels,
-                            gd_iterations=gd_iterations, stage=stage,
-                            bounded=bounded, loss=loss, hp_rotation=hp_rotation,
-                            optimizer_info=infos))
-        with open(pkl, 'wb') as f:
-            pickle.dump(dict(fit_pars_per_fold=fold_pars, parent=parent,
-                             optimizer_info=infos, voxel_ids=voxel_ids,
-                             cv_scheme=cv_scheme, stage=stage, loss=loss), f)
-        print(f'Saved {name} [{stage}] -> {out_dir}')
+            store[name] = fold_pars
+            out_dir = out_root / name / f'sub-{subject:02d}'
+            pkl = out_dir / f'sub-{subject:02d}_roi-{roi}_cv-fits.pkl'
+            if pkl.exists():   # never overwrite an existing fit
+                raise FileExistsError(pkl)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            shared_labels = ALL_SHARED_PARS + ['item_scale']
+            write_cv_tsvs(
+                out_dir, subject=subject, roi=roi, model=name,
+                voxel_ids=voxel_ids, cv_r2_per_fold=cv_r2s,
+                train_r2_per_fold=train_r2s,
+                fit_pars_per_fold=[None if p is None else
+                                   p.reindex(columns=per_voxel_cols + shared_labels)
+                                   for p in fold_pars],
+                shared_pars_per_fold=shared_dicts,
+                shared_par_labels=shared_labels,
+                per_voxel_par_cols=per_voxel_cols,
+                train_run_meta_per_fold=tr_meta, held_run_meta_per_fold=he_meta,
+                selector='psignal', p_signal_thr=p_signal_thr,
+                extra_meta=dict(parent=parent, sign_pattern=sp,
+                                item_scale=item_scale, cv_scheme=cv_scheme,
+                                max_voxels=max_voxels,
+                                gd_iterations=gd_iterations, stage=stage,
+                                bounded=bounded, loss=loss, hp_rotation=hp_rotation,
+                                optimizer_info=infos))
+            with open(pkl, 'wb') as f:
+                pickle.dump(dict(fit_pars_per_fold=fold_pars, parent=parent,
+                                 optimizer_info=infos, voxel_ids=voxel_ids,
+                                 cv_scheme=cv_scheme, stage=stage, loss=loss), f)
+            print(f'Saved {name} [{stage}] -> {out_dir}')
+
+    failed = []
+    for roi in ([rois] if isinstance(rois, str) else list(rois)):
+        print(f'\n########## {roi} ##########', flush=True)
+        try:
+            fit_one(roi)
+        except Exception:
+            traceback.print_exc()
+            failed.append(roi)
+    if failed:
+        raise RuntimeError(f'failed ROIs: {failed}')
 
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('subject', type=int)
-    ap.add_argument('--roi', required=True)
+    ap.add_argument('--roi', nargs='+', required=True, help='One or more ROIs; the data are loaded once.')
     ap.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
     ap.add_argument('--cv-scheme', choices=list(SCHEMES), default='loco')
     ap.add_argument('--gd-iterations', type=int, default=8000)
@@ -719,10 +764,18 @@ if __name__ == '__main__':
                     help='Relabel HP as the ring position this many steps away.')
     ap.add_argument('--reliable-only', action='store_true',
                     help='Keep selected voxels with cross-run reliability > 0, frozen pRFs from --base-root.')
+    ap.add_argument('--warm-root', nargs='+', default=[],
+                    help='Start m00 and m0 from earlier fits in these roots (same voxels where present).')
+    ap.add_argument('--gd-min-iterations', type=int, default=1000)
+    ap.add_argument('--sigma-starts', nargs='+', default=None,
+                    help="σ starts of the shared fits; 'parent' is the parent's σ. Default: parent .5 1 2 4.")
+    ap.add_argument('--lbfgs-rounds', type=int, default=LBFGS_ROUNDS)
     a = ap.parse_args()
+    starts = SIGMA_STARTS if a.sigma_starts is None else tuple(None if v == 'parent' else float(v) for v in a.sigma_starts)
     main(a.subject, a.bids_folder, a.roi, cv_scheme=a.cv_scheme,
          gd_iterations=a.gd_iterations, learning_rate=a.learning_rate,
          models=a.models, max_voxels=a.max_voxels,
          output_root=a.output_root, polish=a.polish, bounded=a.bounded,
          max_bold_sd=a.max_bold_sd, loss=a.loss, base_roots=a.base_root, family=a.family,
-         hp_rotation=a.hp_rotation, reliable_only=a.reliable_only)
+         hp_rotation=a.hp_rotation, reliable_only=a.reliable_only, warm_roots=a.warm_root,
+         gd_min_iterations=a.gd_min_iterations, sigma_starts=starts, lbfgs_rounds=a.lbfgs_rounds)
