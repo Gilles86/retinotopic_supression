@@ -95,16 +95,17 @@ def simulate(dt=.4, trials=None, hp_ix=None, prfs=None):
         w = gauss(x, y, sd)
         w = w / w.sum()
         at = (A_d * w).sum((1, 2))
-        stim, drive = np.zeros_like(t), np.zeros_like(t)
+        stim, stim_items, drive = np.zeros_like(t), np.zeros_like(t), np.zeros_like(t)
         for i, ti in enumerate(t):
             st = ((X >= bar_left(ti)) & (X < bar_left(ti) + BAR_W) & in_ap).astype(float)
             if tgt[i].any():
+                stim_items[i] = (ITEM_SCALE * items * w).sum()
                 st = st + ITEM_SCALE * items
             field = 1 + field_s + GAINS['t'] * (tgt[i, :, None, None] * A_d).sum(0) + GAINS['d'] * (dis[i, :, None, None] * A_d).sum(0)
             stim[i] = (st * w).sum()
             drive[i] = (st * field * w).sum()
         base = (field_s * w).sum()
-        out[name] = dict(t=t, stimulus=stim, base=base, target=GAINS['t'] * tgt @ at, distractor=GAINS['d'] * dis @ at,
+        out[name] = dict(t=t, stimulus=stim, items=stim_items, base=base, target=GAINS['t'] * tgt @ at, distractor=GAINS['d'] * dis @ at,
                          without=np.convolve(stim, h)[:len(t)], predicted=np.convolve(drive, h)[:len(t)])
     return out
 
@@ -115,6 +116,10 @@ def icon(ax, t, ti, di, contour, hp_ix=None):
     r = plt.Rectangle((bar_left(t), -APERTURE), BAR_W, 2 * APERTURE, facecolor=FG, lw=0, zorder=2)
     ax.add_patch(r)
     r.set_clip_path(Circle((0, 0), APERTURE, transform=ax.transData))
+    for a in np.deg2rad(np.arange(8) * 45):
+        cx, cy = RING * np.cos(a), RING * np.sin(a)
+        if not any(np.hypot(cx - p[0], cy - p[1]) < .1 for p in POS):
+            ax.add_patch(plt.Rectangle((cx - .45, cy - .12), .9, .24, facecolor='.25', lw=0, zorder=3))
     for i, p in enumerate(POS):
         ax.add_patch(Circle(p, .55, facecolor='w', ec=FG if i == hp_ix else MUTED, lw=1.2 if i == hp_ix else .5, zorder=3))
     ax.scatter(*POS[ti], marker='D', s=9, color=FG, lw=0, zorder=4)
@@ -195,12 +200,15 @@ def main(name='fig2_model'):
             inset = top.inset_axes([(onset + .75) / DURATION - w_ax / 2, (1 - h_ax) / 2, w_ax, h_ax])
             icon(inset, onset, ti, di, p)
         rows = [fig.add_subplot(col[r]) for r in (1, 2, 3)]
+        for onset in [o for o, _, _ in (tr if 'tr' in dir() else TRIALS)]:
+            top.plot([onset + .75] * 2, [0, (1 - h_ax) / 2], color='#C9CED4', lw=.5, zorder=0)
         for ax in rows:
             ax.set_axis_off()
             ax.set_xlim(0, DURATION)
             for onset, _, _ in TRIALS:
                 ax.axvspan(onset, onset + 1.5, color='#F1F3F5', lw=0, zorder=0)
-        rows[0].fill_between(t, 0, d['stimulus'], color='.45', lw=0)
+        rows[0].fill_between(t, 0, d['stimulus'] - d['items'], color='.72', lw=0)
+        rows[0].fill_between(t, d['stimulus'] - d['items'], d['stimulus'], color='.25', lw=0)
         rows[0].set_ylim(0, s_hi * 1.05)
         g = rows[1]
         g.axhline(0, color='#B8C0C8', lw=.5, ls=(0, (2, 2)))
@@ -218,6 +226,8 @@ def main(name='fig2_model'):
             g.text(.0, .86, 'Target', transform=g.transAxes, fontsize=6, color=TARGET, va='center')
             g.text(.0, .62, 'Singleton', transform=g.transAxes, fontsize=6, color=DISTRACTOR, va='center')
             g.text(.0, .38, 'Sustained', transform=g.transAxes, fontsize=6, color=HP, va='center')
+            rows[0].text(.0, .92, 'Items', transform=rows[0].transAxes, fontsize=6, color='.25', va='center')
+            rows[0].text(.0, .7, 'Bar', transform=rows[0].transAxes, fontsize=6, color='.55', va='center')
             r3.text(.0, .92, 'With gain', transform=r3.transAxes, fontsize=6, color=FG, va='center')
             r3.text(.0, .72, 'Without gain', transform=r3.transAxes, fontsize=6, color='.5', va='center')
     save(fig, name, LEGEND)
@@ -299,12 +309,15 @@ def main_hp(name='fig2_model_hp_blocks'):
             inset = top.inset_axes([(onset + .75) / DURATION - w_ax / 2, (1 - h_ax) / 2, w_ax, h_ax])
             icon(inset, onset, ti, di, RING_PRF, hp)
         rows = [fig.add_subplot(col[r]) for r in (1, 2, 3)]
+        for onset in [o for o, _, _ in (tr if 'tr' in dir() else TRIALS)]:
+            top.plot([onset + .75] * 2, [0, (1 - h_ax) / 2], color='#C9CED4', lw=.5, zorder=0)
         for ax in rows:
             ax.set_axis_off()
             ax.set_xlim(0, DURATION)
             for onset, _, _ in tr:
                 ax.axvspan(onset, onset + 1.5, color='#F1F3F5', lw=0, zorder=0)
-        rows[0].fill_between(t, 0, d['stimulus'], color='.45', lw=0)
+        rows[0].fill_between(t, 0, d['stimulus'] - d['items'], color='.72', lw=0)
+        rows[0].fill_between(t, d['stimulus'] - d['items'], d['stimulus'], color='.25', lw=0)
         rows[0].set_ylim(0, s_hi * 1.05)
         g = rows[1]
         g.axhline(0, color='#B8C0C8', lw=.5, ls=(0, (2, 2)))
@@ -319,6 +332,8 @@ def main_hp(name='fig2_model_hp_blocks'):
         if k == 0:
             r3.plot([0, 10], [p_lo - .05 * (p_hi - p_lo)] * 2, color=FG, lw=1.1, clip_on=False, solid_capstyle='butt')
             r3.text(5, p_lo - .12 * (p_hi - p_lo), '10 s', ha='center', va='top', fontsize=6, color=FG)
+            rows[0].text(.0, .92, 'Items', transform=rows[0].transAxes, fontsize=6, color='.25', va='center')
+            rows[0].text(.0, .7, 'Bar', transform=rows[0].transAxes, fontsize=6, color='.55', va='center')
             r3.text(.0, .92, 'With gain', transform=r3.transAxes, fontsize=6, color=FG, va='center')
             r3.text(.0, .72, 'Without gain', transform=r3.transAxes, fontsize=6, color='.5', va='center')
     # The two blocks on one axis.
