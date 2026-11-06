@@ -1,7 +1,7 @@
 #!/bin/bash -l
 #SBATCH --job-name=fig3_scan
 #SBATCH --account=zne.uzh
-#SBATCH --partition=lowprio
+#SBATCH --partition=standard
 #SBATCH --exclude=u24-chaihm0-651,u24-chaihm0-636
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=48G
