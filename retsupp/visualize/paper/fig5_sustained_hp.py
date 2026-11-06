@@ -14,10 +14,13 @@ import pandas as pd
 from scipy import stats
 
 from retsupp.visualize.paper.fig45_common import conditional, joint, median_ci
-from retsupp.visualize.paper.paper_style import DISTRACTOR, DOUBLE, FG, HP, MUTED, ROI_COLORS, ROI_ORDER, letter, offset_spines, pending, provisional, save, stimulus_icon
+from retsupp.visualize.paper.paper_style import SINGLE, DISTRACTOR, DOUBLE, FG, HP, MUTED, ROI_COLORS, ROI_ORDER, letter, ROI_X, title_icon, offset_spines, pending, provisional, roi_axis, roi_icon, save
 
 LEGEND = """
-**Figure 5. Less sustained gain at the location where the distractor is likely.** a, dS = g_HP − g_LP per ROI, each term estimated alone on m4 (conditional, DoG pRFs): dots are subjects (n = 30; triangles, beyond the axis), points and bars the median and bootstrapped 95% CI. Stars: Wilcoxon signed-rank test against 0, Benjamini-Hochberg across ROIs. b, Each subject's dS, median over the nine ROIs, as the conditional estimate and from the joint m7 fit (DoG pRFs); the share of negative subjects and the Wilcoxon p are given above. DN pRFs: supplementary figure. c, d, The same for dD = g_HP_dyn − g_LP_dyn, the transient gain when the distractor appears at the HP location minus when it appears elsewhere. The conditional estimate is negative, but the joint m7 estimate is not: once dS and the other terms are fitted together, dD is not distinguishable from 0, so dD is not a robust result. e, The observed group dS against a null from relabelling the HP location (pending). f, Why within-subject cross-validation cannot test dS: when a known dS is put into the data (x-axis), the share of subjects whose held-out prediction improves (y-axis) passes 50% only near −.05, about three times the estimate (dashed). Provisional: current inputs.
+**Figure 5. Less sustained gain at the location where the distractor is likely.** a, dS = g_HP − g_LP per ROI, each term estimated alone on m4 (conditional, DoG pRFs): dots are subjects (n = 30; triangles, beyond the axis), points and bars the median and bootstrapped 95% CI. Stars: Wilcoxon signed-rank test against 0, Benjamini-Hochberg across ROIs. b, Each subject's dS, median over the nine ROIs, as the conditional estimate and from the joint m7 fit (DoG pRFs); the share of negative subjects and the Wilcoxon p are given above. DN pRFs: supplementary figure. c, d, The same for dD = g_HP_dyn − g_LP_dyn, the transient gain when the distractor appears at the HP location minus when it appears elsewhere. The conditional estimate is negative, but the joint m7 estimate is not: once dS and the other terms are fitted together, dD is not distinguishable from 0, so dD is not a robust result. Provisional: current inputs.
+"""
+POWER_LEGEND = """
+**Figure S. Within-subject cross-validation cannot test dS.** When a known dS is put into the data (x-axis), the share of subjects whose held-out prediction improves (y-axis) passes 50% only near −.05, about three times the estimate (dashed). Provisional: current inputs.
 """
 
 
@@ -31,25 +34,23 @@ def panel_roi(ax, cond, term='dS', color=HP, ylim=(-.12, .06), ylabel='dS: HP �
     for i, roi in enumerate(ROI_ORDER):
         v = cond[cond.roi == roi][term].dropna().to_numpy()
         rng = np.random.default_rng(i)
-        xx = i + rng.uniform(-.17, .17, len(v))
+        xx = ROI_X[roi] + rng.uniform(-.17, .17, len(v))
         ok = (v >= lo) & (v <= hi)
         ax.scatter(xx[ok], v[ok], s=7, color=color, alpha=.35, lw=0, zorder=1)
         ax.scatter(xx[v > hi], np.full((v > hi).sum(), hi), s=10, marker='^', color=color, alpha=.6, lw=0, clip_on=False)
         ax.scatter(xx[v < lo], np.full((v < lo).sum(), lo), s=10, marker='v', color=color, alpha=.6, lw=0, clip_on=False)
         m, a, b = median_ci(v)
-        ax.errorbar(i, m, yerr=[[m - a], [b - m]], fmt='o', ms=6, color=color, mec='w', mew=.8, lw=1.6, capsize=0, zorder=4)
+        ax.errorbar(ROI_X[roi], m, yerr=[[m - a], [b - m]], fmt='o', ms=6, color=color, mec='w', mew=.8, lw=1.6, capsize=0, zorder=4)
         ps.append(stats.wilcoxon(v).pvalue)
     for i, q in enumerate(stats.false_discovery_control(ps)):
-        ax.text(i, hi + .03 * (hi - lo), stars(q), ha='center', va='bottom', fontsize=8, color=color, clip_on=False)
-    ax.axhline(0, color='.6', lw=.8, ls='--', zorder=0)
+        ax.text(ROI_X[ROI_ORDER[i]], hi + .03 * (hi - lo), stars(q), ha='center', va='bottom', fontsize=8, color=color, clip_on=False)
+    ax.hlines(0, -.6, ROI_X[ROI_ORDER[-1]] + .6, color='.6', lw=.8, ls='--', zorder=0)
     ax.annotate(annot[0], xy=annot[1], xytext=annot[2], fontsize=7, color=color, ha='left', va='center',
                 arrowprops=dict(arrowstyle='-|>', color=color, lw=1., mutation_scale=7, shrinkA=2, shrinkB=4))
-    ax.set_xticks(range(len(ROI_ORDER)))
-    ax.set_xticklabels(ROI_ORDER, fontsize=6.5)
-    ax.tick_params(axis='x', labelrotation=90)
     ax.set_ylim(lo, hi)
     ax.set_ylabel(ylabel)
     offset_spines(ax)
+    roi_axis(ax)
 
 
 def panel_pooled(ax, cond, js, term='dS', color=HP, ylim=(-.12, .06)):
@@ -100,33 +101,29 @@ def panel_power(ax, table, estimate=-.016):
 def main(gain_table, conditional_table, power_table, name='fig5_sustained_hp'):
     cond = conditional(conditional_table)
     js = {f: joint(gain_table, f) for f in ('dog', 'dn')}
-    fig = plt.figure(figsize=(DOUBLE, 6.6))
-    gs = fig.add_gridspec(3, 3, width_ratios=[1.6, 1, 1], hspace=.75, wspace=.45, left=.08, right=.99, top=.93, bottom=.07)
-    ax = fig.add_subplot(gs[0, :2])
+    fig = plt.figure(figsize=(DOUBLE, 5.0))
+    gs = fig.add_gridspec(2, 2, width_ratios=[2.6, 1], hspace=1.05, wspace=.3, left=.08, right=.99, top=.86, bottom=.12)
+    ax = fig.add_subplot(gs[0, 0])
     panel_roi(ax, cond)
-    stimulus_icon(ax, (.855, .0, .145, .36), ('hp', 'lp'))
-    letter(ax, 'a', x=-.08, y=1.04)
-    provisional(ax, y=1.17)
-    ax = fig.add_subplot(gs[0, 2])
+    title_icon(ax, 'Sustained gain: less at the likely distractor location', ('hp', 'lp'), HP)
+    letter(ax, 'a', x=-.06, y=1.12)
+    provisional(ax, y=1.42)
+    ax = fig.add_subplot(gs[0, 1])
     panel_pooled(ax, cond, js)
-    stimulus_icon(ax, (.0, .66, .3, .34), ('hp', 'lp'))
-    letter(ax, 'b', x=-.25, y=1.04)
+    letter(ax, 'b', x=-.3, y=1.12)
     dd_lim = (-.3, .2)
-    ax = fig.add_subplot(gs[1, :2])
+    ax = fig.add_subplot(gs[1, 0])
     panel_roi(ax, cond, 'dD', DISTRACTOR, dd_lim, 'dD: HP − LP transient gain',
-              ('Less transient gain\nat HP (alone)', (3, -.052), (1.2, -.24)))
-    stimulus_icon(ax, (.855, .0, .145, .36), ('distractor', 'lp'))
-    letter(ax, 'c', x=-.08, y=1.04)
-    ax = fig.add_subplot(gs[1, 2])
+              ('Less transient gain at HP\nwhen estimated alone', (ROI_X['IPS'], -.04), (1.2, -.24)))
+    title_icon(ax, 'Transient gain at the distractor: HP vs LP', ('distractor', 'lp'), DISTRACTOR)
+    letter(ax, 'c', x=-.06, y=1.12)
+    ax = fig.add_subplot(gs[1, 1])
     panel_pooled(ax, cond, js, 'dD', DISTRACTOR, dd_lim)
-    letter(ax, 'd', x=-.25, y=1.04)
-    ax = fig.add_subplot(gs[2, 0])
-    pending(ax, 'observed dS against the HP-rotation null, DoG and DN')
-    letter(ax, 'e', x=-.02, y=1.04)
-    ax = fig.add_subplot(gs[2, 1:])
-    panel_power(ax, power_table)
-    letter(ax, 'f', x=-.1, y=1.04)
+    letter(ax, 'd', x=-.3, y=1.12)
     save(fig, name, LEGEND)
+    fig, ax = plt.subplots(figsize=(SINGLE, 2.2), gridspec_kw=dict(left=.17, right=.97, top=.92, bottom=.2))
+    panel_power(ax, power_table)
+    save(fig, 'figS_cv_power', POWER_LEGEND)
 
 
 if __name__ == '__main__':

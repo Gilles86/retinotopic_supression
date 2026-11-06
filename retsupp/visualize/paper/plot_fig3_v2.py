@@ -59,12 +59,12 @@ def panel_voxel(ax_main, ax_ev, ax_bar, path):
     ax_main.spines['bottom'].set_visible(False)
     ax_main.set_xticks([])
     y = ax_main.get_ylim()[1]
-    for x, lab, col in ((.0, 'Data', '.45'), (.06, 'm0: pRF + items', STIM), (.2, 'm7: + gain fields', HP)):
+    for x, lab, col in ((.0, 'Data', '.45'), (.065, 'm0: pRF + items', STIM), (.3, 'm7: + gain fields', HP)):
         ax_main.text(x, 1.0, lab, transform=ax_main.transAxes, fontsize=6.5, color=col, va='bottom')
     r = d.iloc[0]
     ax_main.text(1., 1.0, f'sub-{int(r.subject):02d}, {r.roi}, pRF at ({r.x:.1f}°, {r.y:.1f}°), R² = {r.r2_m7:.2f}', transform=ax_main.transAxes,
                  fontsize=6, color=FG, ha='right', va='bottom')
-    rows = [('target_here', TARGET, 'Target here', 3), ('singleton_here', DISTRACTOR, 'Singleton here', 2), ('target_any', '#F5C89A', 'Target anywhere', 1), ('singleton_any', '#A6CFE3', 'Singleton anywhere', 0)]
+    rows = [('target_here', TARGET, 'Target here', 3), ('singleton_here', DISTRACTOR, 'Distractor here', 2), ('target_any', '#F5C89A', 'Target anywhere', 1), ('singleton_any', '#A6CFE3', 'Distractor anywhere', 0)]
     for c, col, lab, row in rows:
         on = t[(d[c].to_numpy() > 0)]
         ax_ev.vlines(on, row + .1, row + .9, color=col, lw=1.1)
