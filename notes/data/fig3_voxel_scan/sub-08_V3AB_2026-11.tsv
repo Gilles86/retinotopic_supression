@@ -1,0 +1,2 @@
+session	run	hp	start_tr	start_s	run_start	local_dr2	dsse	local_r2_m7	local_r2_m0	peak_diff_sd	n_target_here	n_singleton_here	n_valid_windows	frac_valid_m7_better	subject	roi	voxel_id	x	y	sd	r2_m7	r2_m0	global_dr2	reliability	ring_x	ring_y	n_candidates	root
+2	1	lower_left	201	321.6	1548	0.04653595270608948	15.89971923828125	0.30133403956058447	0.254798086854495	0.12644786	3.0	1.0	114	0.7456140350877193	8	V3AB	121863	1.0692233	-2.3308287	1.4756714	0.21264684	0.21124303	0.0014038086	0.16021830175702956	2.828427	-2.828427	1	af_prf_cv_ladder_nested_full_bounded
