@@ -5,8 +5,8 @@ For a Figure 3 panel that a single voxel cannot make. Per subject and ROI, on th
 
 1. Voxels: cross-run reliability > 0 and a pRF centre within 2° of a ring location (the nearest one is
    the voxel's location). No R² criterion, so the selection favours neither model.
-2. Trials: every search onset. What lands at the voxel's location on that trial: the target, the
-   distractor (at HP or at an LP location), or a neutral item (at HP or at an LP location).
+2. Trials: every search onset, classed 2 × 3: whether the voxel's location is the run's HP location or an
+   LP location, and what lands there on that trial (the target, the distractor or a neutral item).
 3. The bar response is removed from everything: the prediction of m0 with the bar alone (m0's pRFs,
    items left out) is subtracted from the data, from m0 and from m7. What remains is the response to
    the search items (and noise); m0 predicts the same response whatever lands at the location, m7
@@ -67,7 +67,7 @@ def main(subject, rois, bids, out_dir):
             for loc in range(len(ring)):
                 hp = ci[tt, loc] > 0
                 what = 'target' if ti[tt, loc] > 0 else 'distractor' if di[tt, loc] > 0 else 'neutral'
-                trials.append((loc, f'{what}_{"hp" if hp else "lp"}' if what != 'target' else 'target', tt))
+                trials.append((loc, f'{what}_{"hp" if hp else "lp"}', tt))
     tr = pd.DataFrame(trials, columns=['loc', 'cls', 't'])
     print(tr.groupby('cls').size().to_string(), flush=True)
     lags = np.arange(-PRE, POST + 1)
@@ -126,6 +126,6 @@ if __name__ == '__main__':
     ap.add_argument('subject', type=int)
     ap.add_argument('--rois', nargs='+', default=ROIS)
     ap.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
-    ap.add_argument('--out-dir', default='notes/data')
+    ap.add_argument('--out-dir', default='/shares/zne.uzh/gdehol/ds-retsupp/derivatives/paper_2026-11')
     a = ap.parse_args()
     main(a.subject, a.rois, a.bids_folder, a.out_dir)
