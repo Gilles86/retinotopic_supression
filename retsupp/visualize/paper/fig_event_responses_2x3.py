@@ -64,6 +64,8 @@ def load_deconv(folder):
     d['w'] = d.response * d.n_voxels
     g = d.groupby(['subject', 'cls', 't'])
     p = (g.w.sum() / g.n_voxels.sum()).rename('data').reset_index()
+    base = p[p.t < 0].groupby('subject').data.mean()
+    p['data'] -= p.subject.map(base)
     p[['item', 'loc']] = p.cls.str.rsplit('_', n=1, expand=True)
     return p
 
@@ -77,11 +79,11 @@ def schematic(ax):
     ax.add_patch(Circle(ring[1], 1.2, fill=False, ec=PRF_TEAL, lw=1.4))
     ax.add_patch(Circle(ring[3], 1.15, fill=False, ec=HP, lw=1., ls=(0, (2, 1.2))))
     ax.plot(0, 0, '+', color=FG, ms=4, mew=.6)
-    ax.annotate('pRF on an\nitem location', xy=ring[1] + [.75, .95], xytext=(-.4, 7.4), fontsize=6.5, color=PRF_TEAL, ha='left',
+    ax.annotate('pRF on an\nitem location', xy=ring[1] + [.75, .95], xytext=(-2.2, 7.6), fontsize=6.5, color=PRF_TEAL, ha='left',
                 va='center', arrowprops=dict(arrowstyle='-|>', color=PRF_TEAL, lw=1., mutation_scale=7, shrinkA=1, shrinkB=2,
                                              relpos=(0, .5)))
     ax.text(ring[3, 0], ring[3, 1] - 1.9, 'HP', color=HP, fontsize=6.5, ha='center', va='top')
-    ax.text(0, -6.6, 'Response after each\nsearch onset, by item\nand by HP location',
+    ax.text(0, -6.6, 'Its response after\neach search onset',
             ha='center', va='top', fontsize=6.5, color=FG, linespacing=1.25)
     ax.set_xlim(-5.8, 5.8)
     ax.set_ylim(-11.5, 8.8)
@@ -132,7 +134,7 @@ def peaks(ax, d):
         st = '***' if p < .001 else '**' if p < .01 else '*' if p < .05 else ''
         ax.text(i, max(m) + max(e) + .015, st, ha='center', va='bottom', fontsize=7, color=HP)
     ax.set_xticks(range(len(ITEMS)))
-    ax.set_xticklabels(['Target', 'Distractor', 'Neutral'])
+    ax.set_xticklabels(['Target', 'Distractor', 'Neutral'], fontsize=6.5)
     for t, (_, _, col, _) in zip(ax.get_xticklabels(), ITEMS):
         t.set_color(col)
     ax.set_xlim(-.5, len(ITEMS) - .5)
@@ -170,7 +172,7 @@ def bar_panels(ax, ax2, p):
     ax.text(.98, .97, 'At HP', transform=ax.transAxes, color=HP, fontsize=6.5, ha='right', va='top')
     ax.text(.98, .87, 'Elsewhere', transform=ax.transAxes, color=LP_GREY, fontsize=6.5, ha='right', va='top')
     ax.set_xlabel('Time from bar crossing the pRF (s)')
-    ax.set_ylabel('Response at the pRF (% signal)')
+    ax.set_ylabel('Response (% signal)')
     offset_spines(ax)
     pk = p[p.t.between(*BAR_PEAK)].groupby(['subject', 'cls']).data.mean().unstack()
     rel = 100 * (pk.hp - pk.lp) / pk.lp
@@ -181,7 +183,7 @@ def bar_panels(ax, ax2, p):
     ax2.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
     ax2.set_xlim(-.5, .7)
     ax2.set_xticks([])
-    ax2.set_ylabel('At HP vs elsewhere (%)')
+    ax2.set_ylabel('At HP vs elsewhere (% change)')
     offset_spines(ax2)
     ax2.spines['bottom'].set_visible(False)
     w = stats.wilcoxon(rel)
@@ -192,9 +194,11 @@ def main(folder, name='fig_event_responses_2x3', bar_folder='notes/data/bar_pass
     d = load_deconv(deconv) if deconv else load(folder)
     if deconv:
         name = f'{name}_deconv'
+        global PEAK
+        PEAK = (3.2, 6.4)
     n = d.subject.nunique()
     fig = plt.figure(figsize=(DOUBLE, 5.0))
-    gs = fig.add_gridspec(1, 5, width_ratios=[.85, 1, 1, 1, 1.15], left=.005, right=.99, top=.86, bottom=.6, wspace=.42)
+    gs = fig.add_gridspec(1, 5, width_ratios=[.8, 1, 1, 1, 1.25], left=.0, right=.99, top=.86, bottom=.6, wspace=.55)
     ax = fig.add_subplot(gs[0])
     schematic(ax)
     letter(ax, 'a', x=.08, y=1.1)
@@ -206,7 +210,7 @@ def main(folder, name='fig_event_responses_2x3', bar_folder='notes/data/bar_pass
         letter(ax, 'bcd'[j], x=-.3 if j == 0 else -.15, y=1.18)
         ax.set_xlabel('Time from onset (s)')
         if j == 0:
-            ax.set_ylabel('Response at the pRF (% signal)')
+            ax.set_ylabel('Response (% signal)')
             ax.text(.98, .97, 'At HP', transform=ax.transAxes, color=HP, fontsize=6.5, ha='right', va='top')
             ax.text(.98, .87, 'Elsewhere', transform=ax.transAxes, color=LP_GREY, fontsize=6.5, ha='right', va='top')
         else:
@@ -217,14 +221,15 @@ def main(folder, name='fig_event_responses_2x3', bar_folder='notes/data/bar_pass
     ax = fig.add_subplot(gs[4])
     tests = peaks(ax, d)
     ax.text(0, 1.2, 'Peak response', transform=ax.transAxes, fontsize=7, color=FG, va='center')
-    letter(ax, 'e', x=-.33, y=1.18)
+    ax.set_ylabel('Peak (% signal)')
+    letter(ax, 'e', x=-.4, y=1.18)
     bar = ''
     if Path(bar_folder).exists():
-        g2 = fig.add_gridspec(1, 3, width_ratios=[.85, 2.2, .7], left=.005, right=.75, top=.4, bottom=.1, wspace=.45)
+        g2 = fig.add_gridspec(1, 3, width_ratios=[.8, 2.2, .7], left=.0, right=.72, top=.4, bottom=.1, wspace=.55)
         ax = fig.add_subplot(g2[1])
         ax2 = fig.add_subplot(g2[2])
         rel, pv = bar_panels(ax, ax2, load_bar(bar_folder))
-        title_icon(ax, 'The bar passing the pRF: slightly less response at HP', ('hp', 'lp'), HP, y=1.08, h=.32)
+        title_icon(ax, 'Bar passing the pRF: less response at HP', ('hp', 'lp'), HP, y=1.08, h=.32)
         letter(ax, 'f', x=-.13, y=1.15)
         letter(ax2, 'g', x=-.55, y=1.15)
         bar = (f' f, Response locked to the moment the bar centre crosses the pRF centre (along the direction of the bar motion), for the '
