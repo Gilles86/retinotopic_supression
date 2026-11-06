@@ -2,6 +2,8 @@
 
 Results lead with group-level gain parameters, LOSO is the model-comparison metric, and the selection-history claim rests on dS = g_HP − g_LP against the HP-rotation null. Within-subject CV is reported as underpowered, not as evidence against dS. Scope is gain-field models, plus the gain-free decoding test below as converging evidence; pRF-shift analyses are archived. All gain numbers are provisional until Phase C.
 
+**Framing (user, 2026-11-06).** The paper says explicitly that with n = 30 and gain fields this wide (FWHM several degrees, often wider than the 4° ring), differences between conditions at the group level are hard to detect: dS is tiny relative to between-subject variance, and per-subject dS is too unreliable for brain-behaviour correlations across subjects. That is why the behavioural analyses use trial-to-trial fluctuations within subjects (Fig. 7), not individual differences. Between-subject null results go in the text, not in main figures.
+
 **Rules.** Nothing overwritten; new outputs carry a 2026-11 suffix. Commit only own new files, on a branch. Before any cluster submission, list models, subjects × ROIs, tasks and core-hours, and wait for OK. n = 30. DoG and DN both. Never call the R² mixture "FDR-corrected".
 
 ## Phase A: inputs to the gain fits, then stop for a decision
@@ -34,6 +36,7 @@ Results lead with group-level gain parameters, LOSO is the model-comparison metr
 
 - **D1** D on top of T: LOSO for m3b_TD vs m1_T.
 - **D2** Target gain split by target at HP vs LP: parameter difference and LOSO against m7.
+- **D4** Trial-to-trial gain at the HP location, split by what HP holds on that trial: the distractor (existing D_HP), the target (T on target-at-HP trials), or a neutral item (new regressor H, like the existing P). Each z-scored and entered in the Bayesian log-RT model. Prediction: less gain at HP goes with faster responses when the distractor is there and slower when the target is. Linear on the fixed fit, so cheap; on the Phase C fits.
 - **D3** Hierarchy profile: per-ROI table, joint and conditional; hierarchical term × ROI model, ordered by hierarchy and by pRF size; per-ROI Bayes factors or equivalence bounds for dS.
 
 ## Phase E: figure prototypes, in parallel with Phase A
@@ -45,10 +48,11 @@ From current fits, gain panels stamped "Provisional: current inputs", input fits
 - **Fig. 3** pRF maps, held-out R² per ROI, σ vs eccentricity and % contralateral, example voxel, LOSO per step.
 - **Fig. 4** Hierarchy profile: terms over ROIs, term × ROI, Bayes factors, σ_AF and σ_dyn.
 - **Fig. 5** Sustained gain at HP: a dS per ROI; b dS against the null; c dS and LOSO by sensitivity bin; d power simulation.
+- **Fig. 7** Behaviour, trial to trial: the gain terms, repeats in RT and target gain, and per-trial gains vs log RT (Bayesian hierarchical model). Prototype `fig7_behaviour.py`.
 - **Fig. 6** Decoding with a gainless pRF model: actual decoded stimulus frames, then decoded intensity at HP vs LP. Design to settle: see C6.
 - **Table 1** The ladder.
 - **Supplement** S2 outlier voxels; S4 dD per ROI; S8 σ vs eccentricity across pRF models and HRFs; S9 contralaterality by R² bin.
 
 ## Phase F: optional
 
-Simulate a known dS in the BOLD and recover it; trial-wise gain vs RT on the Phase C fits; whole-brain DN maps (19 of 30, avoid nodes u24-chaihm0-651 and -636).
+Simulate a known dS in the BOLD and recover it; whole-brain DN maps (19 of 30, avoid nodes u24-chaihm0-651 and -636).
