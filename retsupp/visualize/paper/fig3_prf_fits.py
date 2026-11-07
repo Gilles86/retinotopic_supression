@@ -32,9 +32,10 @@ LEGEND = """
 surface of one subject (sub-23, posterior view; voxels with R² above the R² mixture threshold). Polar-angle key: the visual
 field, coloured as mapped on the contralateral hemisphere. b, Share of pRF centres in the contralateral visual field per ROI,
 voxels with R² ≥ .1 inside the bar aperture; dots are subjects, lines medians; numbers give the subjects per ROI. c, Held-out
-R² gained by the pRF model used for the gain fits (difference-of-Gaussians pRF, one HRF per subject × ROI) over a Gaussian pRF
-with the canonical HRF, per ROI: three folds of runs, voxels with cross-run reliability > 0 in the training runs, median over
-voxels, mean over folds; dots are subjects (n = 30), lines medians. d, Response to a neutral item (at an LP location) against the distance of the pRF centre from that item: deconvolved
+R² gained per ROI over a Gaussian pRF with the canonical HRF by a difference-of-Gaussians pRF (teal), by one HRF per subject
+× ROI on top of the DoG pRF (grey), and by both together, the model used for the gain fits (black): three folds of runs,
+voxels with cross-run reliability > 0 in the training runs, median over voxels, mean over folds; points and bars, median
+over subjects (n = 30) and bootstrapped 95% CI. d, Response to a neutral item (at an LP location) against the distance of the pRF centre from that item: deconvolved
 response (nideconv), mean over 3.2-6.4 s minus −4 to 0 s, reliable voxels binned by distance (1° bins), pooled per pathway
 weighted by voxel count; lines and bands, mean ± SEM across subjects. Items appear at all eight ring positions at once,
 so pRFs far from this item lie near the opposite ones and the response rises again; between the items, near fixation, it
@@ -119,23 +120,38 @@ def panel_contra(ax):
     roi_axis(ax)
 
 
+PRF_TEAL = '#2A9D8F'
+STEPS = [('DoG pRF', 'dog', PRF_TEAL), ('HRF per ROI', 'hrf', '#8D99A6'), ('Both', 'both', FG)]
+
+
 def gain_r2(cv_table, hrf_table):
-    """Per subject × ROI: held-out R² of DoG with the per-ROI HRF (model 14) minus Gaussian with the canonical HRF (model 1)."""
+    """Per subject × ROI, held-out R² gained over a Gaussian pRF with the canonical HRF (model 1) by: the DoG pRF (model 2),
+    the per-ROI HRF on top of the DoG pRF (model 14 − model 2), and both (model 14 − model 1)."""
     a = pd.read_csv(cv_table, sep='\t')
-    a = a[(a.selection == 'reliable') & (a.model == 1) & a.roi.isin(ROI_ORDER)].groupby(['subject', 'roi']).median_r2.mean()
+    a = a[(a.selection == 'reliable') & a.roi.isin(ROI_ORDER)].groupby(['subject', 'roi', 'model']).median_r2.mean().unstack()
     b = pd.read_csv(hrf_table, sep='\t')
     b = b[(b.model == 14) & b.roi.isin(ROI_ORDER)].groupby(['subject', 'roi']).median_r2.mean()
-    return (b - a).dropna().rename('d').reset_index(), a
+    out = pd.DataFrame(dict(dog=a[2] - a[1], hrf=b - a[2], both=b - a[1])).dropna().reset_index()
+    return out, a[1]
 
 
 def panel_r2(ax, d):
-    for i, roi in enumerate(ROI_ORDER):
-        v = d[d.roi == roi].d.to_numpy()
-        rng = np.random.default_rng(i)
-        ax.scatter(ROI_X[roi] + rng.uniform(-.2, .2, len(v)), v, s=5, color=ROI_COLORS[roi], alpha=.6, lw=0)
-        ax.plot([ROI_X[roi] - .3, ROI_X[roi] + .3], [np.median(v)] * 2, color=FG, lw=1.4, solid_capstyle='butt')
+    """Median over subjects per ROI and its bootstrapped 95% CI, one line per comparison."""
+    from retsupp.visualize.paper.fig45_common import median_ci
+    offs = dict(zip([k for _, k, _ in STEPS], (-.22, 0., .22)))
+    for lab, key, col in STEPS:
+        for grp, rois in ROI_GROUPS:
+            xs, ms = [], []
+            for roi in rois:
+                m, lo, hi = median_ci(d[d.roi == roi][key].to_numpy())
+                x = ROI_X[roi] + offs[key]
+                ax.plot([x, x], [lo, hi], color=col, lw=1.1, zorder=2)
+                xs.append(x)
+                ms.append(m)
+            ax.plot(xs, ms, 'o-', color=col, ms=3.5, lw=1.1, mec='w', mew=.5, zorder=3)
+    for k, (lab, _, col) in enumerate(STEPS):
+        ax.text(.99, .97 - k * .1, lab, transform=ax.transAxes, color=col, fontsize=6.5, ha='right', va='top')
     ax.axhline(0, color='.7', lw=.6, ls='--', zorder=0)
-    ax.set_yticks([0, .05, .1])
     ax.set_ylabel('Held-out R² gained')
     offset_spines(ax)
     roi_axis(ax)
