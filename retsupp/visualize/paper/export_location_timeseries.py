@@ -82,13 +82,15 @@ def main(subject, rois, bids, out_dir, subdir='location_timeseries', distance_bi
                     vox = np.flatnonzero(rel_ok & (dist[:, loc] >= lo_) & (dist[:, loc] < hi_))
                     if len(vox) < 5:
                         continue
-                    sig = (bold[:, ids[vox]] - bar[:, vox]).mean(1)
+                    raw = bold[:, ids[vox]].mean(1)
+                    bar_m = bar[:, vox].mean(1)
                     for r in meta:
                         tr = sub.get_tr(r.session, r.run)
                         k = np.arange(r.n_T)
                         rows.append(pd.DataFrame(dict(subject=subject, roi=roi, loc=loc, dbin=lo_, n_voxels=len(vox),
-                                                      session=r.session, run=r.run, tr_index=k, time=(k + .5) * tr,
-                                                      signal=sig[r.start + k])))
+                                                      session=r.session, run=r.run, hp=int(np.argmax(ci[r.start]) == loc),
+                                                      tr_index=k, time=(k + .5) * tr, signal=raw[r.start + k] - bar_m[r.start + k],
+                                                      raw=raw[r.start + k], bar=bar_m[r.start + k])))
             print(roi, 'done', flush=True)
             continue
         for loc in range(len(ring)):

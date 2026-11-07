@@ -16,13 +16,14 @@ set -eo pipefail
 subject=${SLURM_ARRAY_TASK_ID:?submit with --array}
 CODE_DIR="${CODE_DIR:-$HOME/retsupp_plan}"
 D=/shares/zne.uzh/gdehol/ds-retsupp/derivatives/paper_2026-11
-mkdir -p "$HOME/logs" "$D/bar_items_joint"
+TS="${TS_SUBDIR:-location_timeseries_joint}"; OUTD="${OUT_SUBDIR:-bar_items_joint}"
+mkdir -p "$HOME/logs" "$D/$OUTD"
 exec >"$HOME/logs/bar_items_sub-${subject}_${SLURM_JOB_ID}.txt" 2>&1
 echo "Host $(hostname) sub-${subject} $(date)"
 cd "$CODE_DIR"
 export CUDA_VISIBLE_DEVICES= PYTHONUNBUFFERED=1 OMP_NUM_THREADS=1
 PY="$HOME/data/conda/envs/retsupp_cuda/bin/python"
-PYTHONPATH="$CODE_DIR" "$PY" -m retsupp.visualize.paper.export_location_timeseries "$subject" --subdir location_timeseries_joint
+PYTHONPATH="$CODE_DIR" "$PY" -m retsupp.visualize.paper.export_location_timeseries "$subject" --subdir "$TS" ${EXPORT_ARGS:-}
 PYTHONPATH="$CODE_DIR:$HOME/pylibs/nideconv" "$PY" -m retsupp.visualize.paper.deconvolve_bar_items \
-    --folder "$D/location_timeseries_joint" --subject "$subject" --out "$D/bar_items_joint/sub-$(printf %02d $subject)_2026-11.tsv"
+    --folder "$D/$TS" --subject "$subject" --out "$D/$OUTD/sub-$(printf %02d $subject)_2026-11.tsv"
 echo "Finished $(date)"

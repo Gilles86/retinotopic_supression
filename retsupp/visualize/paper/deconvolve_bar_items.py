@@ -86,11 +86,15 @@ def main(folder, out, subject=None):
         s = int(f.name[4:6])
         ts = pd.read_csv(f, sep='\t')
         trials = pd.read_csv(f.with_name(f'sub-{s:02d}_trials.tsv'), sep='\t')
-        for (roi, loc), x in ts.groupby(['roi', 'loc']):
-            tc, bar = fit_location(x, trials[trials['loc'] == loc])
+        keys = ['roi', 'loc'] + (['dbin'] if 'dbin' in ts else [])
+        for key, x in ts.groupby(keys):
+            kd = dict(zip(keys, key))
+            if x.hp.nunique() < 2:
+                continue        # this location is never (or always) HP for this subject: no bar contrast
+            tc, bar = fit_location(x, trials[trials['loc'] == kd['loc']])
             nv = int(x.n_voxels.iloc[0])
-            rows.append(tc.assign(subject=s, roi=roi, loc=loc, n_voxels=nv))
-            bars.append(dict(subject=s, roi=roi, loc=loc, n_voxels=nv, **bar))
+            rows.append(tc.assign(subject=s, n_voxels=nv, **kd))
+            bars.append(dict(subject=s, n_voxels=nv, **kd, **bar))
         print(f.name, flush=True)
     pd.concat(rows).to_csv(out, sep='\t', index=False, float_format='%.5g')
     pd.DataFrame(bars).to_csv(str(out).replace('.tsv', '_bar.tsv'), sep='\t', index=False, float_format='%.6g')
