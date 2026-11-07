@@ -17,7 +17,7 @@ from retsupp.visualize.paper.fig45_common import generalization_row, conditional
 from retsupp.visualize.paper.paper_style import PROVISIONAL, SINGLE, DISTRACTOR, DOUBLE, FG, HP, MUTED, ROI_COLORS, ROI_ORDER, letter, ROI_X, title_icon, offset_spines, pending, provisional, roi_axis, roi_icon, save
 
 LEGEND = """
-**Figure 5. Less sustained gain at the location where the distractor is likely.** a, Sketch of the result: the sustained gain field over the search display (red shading, gain) with less gain at the high-probability (HP, dashed ring) than at the low-probability (LP) locations; the difference is exaggerated for display. b, dS = g_HP − g_LP, the sustained gain at the HP location minus that at the LP locations, per ROI, each term estimated alone on m4 (conditional estimate, DoG pRFs): dots are subjects (n = 30; triangles, beyond the axis), points and bars the median and bootstrapped 95% CI. Stars: Wilcoxon signed-rank test against 0, Benjamini-Hochberg across ROIs; * q < .05, ** q < .01, *** q < .001. Squares under the data (New subjects): leave-one-subject-out test per ROI, the term added with the size estimated from the other 29 subjects (+δ) vs the opposite size (−δ); filled, a majority of subjects predicted better with +δ (one-sided Wilcoxon signed-rank test, Benjamini-Hochberg q < .05 across ROIs); open, not significant. c, The same for dD = g_HP_dyn − g_LP_dyn, the transient gain when the distractor appears at the HP location minus when it appears elsewhere. The conditional estimate is negative, but once dS and the other terms are fitted together (joint m7 fit, supplementary figure) dD is not distinguishable from 0, so dD is not a robust result. Provisional: current inputs.
+**Figure 5. Less sustained gain at the location where the distractor is likely.** a, Sketch of the result: the sustained gain field over the search display (red shading, gain) with less gain at the high-probability (HP, dashed ring) than at the low-probability (LP) locations; the difference is exaggerated for display. b, dS = g_HP − g_LP, the sustained gain at the HP location minus that at the LP locations, per ROI, each term estimated alone on m4 (conditional estimate, DoG pRFs): dots are subjects (n = 30; triangles, beyond the axis), points and bars the median and bootstrapped 95% CI. Stars: Wilcoxon signed-rank test against 0, Benjamini-Hochberg across ROIs; * q < .05, ** q < .01, *** q < .001. Squares under the data (New subjects): leave-one-subject-out test per ROI, the term added with the size estimated from the other 29 subjects (+δ) vs the opposite size (−δ); filled, a majority of subjects predicted better with +δ (one-sided Wilcoxon signed-rank test, Benjamini-Hochberg q < .05 across ROIs); open, not significant. c, The same in the measured responses, without a model: deconvolved response (nideconv) of voxels whose pRF centre lies within 2° of an item location, when that location is HP (red) vs LP (grey), all items (target, distractor, neutral) and all nine ROIs pooled (weighted by voxel count); mean ± SEM over subjects. Stars: the HP − LP difference averaged over the shaded window (3.2–6.4 s), Wilcoxon signed-rank test against 0: {c_diff:+.3f}% signal, {c_rel:.0f}% of the LP response, p = {c_p:.3f}, n = {c_n}. d, The transient distractor gain, dD = g_HP_dyn − g_LP_dyn: the gain the distractor draws when it appears at the HP location minus when it appears at an LP location, estimated alone as in b. It is negative in V3AB, IPS, hV4 and VO. But when dD is fitted together with dS and the other terms (joint m7 fit), it is close to 0 (median over ROIs, 57% of subjects below 0, p = .44; supplementary figure): the lower distractor response at HP is accounted for by the lower sustained gain there, which applies to every item at that location. Provisional: current inputs.
 """
 POOLED_LEGEND = """
 **Figure S. dS and dD per subject, median over the nine ROIs.** a, dS as the conditional estimate (each term alone on m4) and from the joint m7 fit (DoG pRFs); the share of negative subjects and the Wilcoxon p are given above. b, The same for dD: negative when estimated alone, not distinguishable from 0 in the joint fit. Points and bars: median and bootstrapped 95% CI; n = 30. Provisional: current inputs.
@@ -133,37 +133,76 @@ def panel_sketch(ax, g_lp=1., g_hp=.35, sigma=1.2, hp_ix=3):
     ax.set_axis_off()
 
 
+def panel_hp_tc(ax, window=(3.2, 6.4)):
+    """Measured response at an item location when it is the HP vs an LP location, all items and nine ROIs pooled."""
+    from retsupp.visualize.paper.fig45_common import item_timecourses
+    p = item_timecourses()
+    w = p.pivot_table(index=['subject', 't'], columns='cls', values='r')
+    x = pd.DataFrame({'hp': w[['target_hp', 'distractor_hp', 'neutral_hp']].mean(1),
+                      'lp': w[['target_lp', 'distractor_lp', 'neutral_lp']].mean(1)})
+    ax.axvspan(*window, color='.93', lw=0, zorder=0)
+    for k, (c, col, lab) in enumerate((('lp', '#7B8794', 'LP location'), ('hp', HP, 'HP location'))):
+        g = x[c].unstack('t')
+        m, se = g.mean(), g.sem()
+        ax.fill_between(m.index, m - se, m + se, color=col, alpha=.18, lw=0)
+        ax.plot(m.index, m.values, color=col, lw=1.4)
+        ax.text(.98, .95 - k * .12, lab, transform=ax.transAxes, color=col, fontsize=6.5, ha='right', va='top')
+    d = (x.hp - x.lp).unstack('t')
+    v = d.loc[:, (d.columns >= window[0]) & (d.columns <= window[1])].mean(1)
+    pv = stats.wilcoxon(v).pvalue
+    st = '***' if pv < .001 else '**' if pv < .01 else '*' if pv < .05 else ''
+    top = x.lp.unstack('t').mean().max()
+    ax.text(np.mean(window), top + .08, st, ha='center', va='bottom', fontsize=6.5, color=HP)
+    rel = 100 * v.mean() / x.lp.unstack('t').loc[:, (d.columns >= window[0]) & (d.columns <= window[1])].mean(1).mean()
+    ax.text(window[1] + .6, top - .05, f'{rel:.0f}%'.replace('-', '−'), ha='left', va='center', fontsize=6.5, color=HP)
+    ax.axhline(0, color='.75', lw=.6, zorder=0)
+    ax.axvline(0, color='.75', lw=.6, zorder=0)
+    ax.set_xticks([0, 10, 20])
+    ax.set_yticks([0, .5, 1])
+    ax.set_xlabel('Time from search onset (s)')
+    ax.set_ylabel('Response (% signal)')
+    offset_spines(ax)
+    rel = 100 * v.mean() / x.lp.unstack('t').loc[:, (d.columns >= window[0]) & (d.columns <= window[1])].mean(1).mean()
+    return dict(diff=v.mean(), p=pv, rel=rel, n=len(v))
+
+
 def main(gain_table, conditional_table, power_table, name='fig5_sustained_hp'):
     cond = conditional(conditional_table)
     js = {f: joint(gain_table, f) for f in ('dog', 'dn')}
     # a: what dS means; b: dS per ROI (the result); c: the transient counterpart, dD (secondary).
-    W, H = DOUBLE, 2.45
+    W, H = DOUBLE, 4.95
     fig = plt.figure(figsize=(W, H))
-    ax = fig.add_axes([.1 / W, .56 / H, 1.35 / W, 1.35 / H])
+    # Row 1: a sketch, b dS per ROI (the result). Row 2: c the same in the measured responses, d dD (secondary).
+    ax = fig.add_axes([.1 / W, 3.0 / H, 1.35 / W, 1.35 / H])
     panel_sketch(ax)
     ax.text(.05, 1.215, 'Sustained gain field', transform=ax.transAxes, fontsize=7, color=FG, va='center')
     ax.text(.5, -.04, 'Less gain where the\ndistractor is likely', transform=ax.transAxes, fontsize=6.5, color=HP,
             ha='center', va='top')
     letter(ax, 'a', x=-.02, y=1.18)
-    ax = fig.add_axes([2.3 / W, .6 / H, 2.3 / W, 1.3 / H])
+    ax = fig.add_axes([2.3 / W, 3.05 / H, 4.7 / W, 1.3 / H])
     panel_roi(ax, cond, ylabel='Sustained gain, HP − LP', annot=('Less gain at HP', (ROI_X['V3'], -.016), (3.0, -.1)))
     title_icon(ax, 'Less sustained gain at HP', ('hp', 'lp'), HP, h=.27, y=1.1)
-    letter(ax, 'b', x=-.33, y=1.19)
-    ax = fig.add_axes([5.15 / W, .6 / H, 1.88 / W, 1.3 / H])
+    letter(ax, 'b', x=-.16, y=1.19)
+    ax = fig.add_axes([.48 / W, .5 / H, 1.45 / W, 1.15 / H])
+    tc = panel_hp_tc(ax)
+    ax.text(-.3, 1.22, 'Items at HP evoke less response', transform=ax.transAxes, fontsize=7, color=HP, va='center')
+    letter(ax, 'c', x=-.3, y=1.3)
+    ax = fig.add_axes([2.85 / W, .6 / H, 4.15 / W, 1.15 / H])
     panel_roi(ax, cond, 'dD', DISTRACTOR, (-.3, .2), 'Transient gain, HP − LP',
               ('Less at HP', (ROI_X['V3AB'] - .1, -.045), (1.4, -.26)), band_label=False)
-    title_icon(ax, 'Transient distractor gain', ('distractor', 'lp'), DISTRACTOR, h=.27, y=1.1,
-               sub='Not robust in the joint fit')
-    letter(ax, 'c', x=-.33, y=1.19)
+    title_icon(ax, 'Transient distractor gain, HP − LP', ('distractor', 'lp'), DISTRACTOR, h=.3, y=1.08,
+               sub='Estimated alone; close to 0 when fitted together with the sustained gain')
+    letter(ax, 'd', x=-.13, y=1.22)
     fig.text(.005, .005, PROVISIONAL, fontsize=5.5, color=MUTED, ha='left', va='bottom')
-    save(fig, name, LEGEND)
+    save(fig, name, LEGEND.format(c_diff=tc['diff'], c_rel=tc['rel'], c_p=tc['p'], c_n=tc['n']))
+    print('c:', tc)
     fig = plt.figure(figsize=(SINGLE, 2.3))
     gs = fig.add_gridspec(1, 2, wspace=.6, left=.17, right=.98, top=.8, bottom=.15)
     ax = fig.add_subplot(gs[0])
     panel_pooled(ax, cond, js)
     letter(ax, 'a', x=-.35, y=1.12)
     ax = fig.add_subplot(gs[1])
-    panel_pooled(ax, cond, js, 'dD', DISTRACTOR, dd_lim)
+    panel_pooled(ax, cond, js, 'dD', DISTRACTOR, (-.3, .2))
     letter(ax, 'b', x=-.35, y=1.12)
     save(fig, 'figS_pooled_dS_dD', POOLED_LEGEND)
     fig, ax = plt.subplots(figsize=(SINGLE, 2.2), gridspec_kw=dict(left=.17, right=.97, top=.92, bottom=.2))

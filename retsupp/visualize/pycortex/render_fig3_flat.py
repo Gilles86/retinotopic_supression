@@ -117,7 +117,13 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('subject', type=int)
     ap.add_argument('--out-dir', default='notes/figures/fig1_r2low')
+    ap.add_argument('--r2-ramp', type=float, nargs=2, default=None,
+                    help='R² at which the colour starts and reaches full opacity (default: render_fig1_prf.R2_RAMP).')
     a = ap.parse_args()
+    if a.r2_ramp:
+        import retsupp.visualize.pycortex.render_fig1_prf as r1
+        r1.R2_RAMP = tuple(a.r2_ramp)
+    Path(a.out_dir).mkdir(parents=True, exist_ok=True)
     main(a.subject, a.out_dir)
     for side in ('lateral', 'medial'):
         if not (Path(a.out_dir) / f'sub-{a.subject:02d}_flatwindow_{side}.png').exists():

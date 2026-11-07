@@ -3,7 +3,7 @@
 Per subject, ROI and ring location: the mean time series of the voxels on that location (bar response removed;
 ``export_location_timeseries.py``), runs concatenated with one intercept per run. Six event types, one per class of
 what appears at that location on a trial; every trial is one of the six, so overlapping neighbouring trials are
-separated by the regression instead of averaged into each epoch. Fourier basis over -4 to 20 s, OLS
+separated by the regression instead of averaged into each epoch. Fourier basis (or ``--basis dct``) over -4 to 20 s, OLS
 (``nideconv.ResponseFitter``), time courses read out at 0.4 s.
 
 Writes ``notes/data/event_deconv_2026-11.tsv``: subject, roi, loc, n_voxels, cls, t, response.
@@ -26,7 +26,7 @@ N_REGRESSORS = 13
 CLASSES = [f'{w}_{h}' for w in ('target', 'distractor', 'neutral') for h in ('hp', 'lp')]
 
 
-def deconvolve(ts, trials, tr=1.6, oversample=4):
+def deconvolve(ts, trials, tr=1.6, oversample=4, basis='fourier'):
     from nideconv import ResponseFitter
     runs = ts[['session', 'run']].drop_duplicates().sort_values(['session', 'run']).to_records(index=False)
     classes = [c for c in CLASSES if c in set(trials.cls)] or sorted(trials.cls.unique())
@@ -49,7 +49,7 @@ def deconvolve(ts, trials, tr=1.6, oversample=4):
     for cls in classes:
         on = np.concatenate(onsets[cls])
         if len(on):
-            rf.add_event(cls, onsets=on, interval=INTERVAL, basis_set='fourier', n_regressors=N_REGRESSORS)
+            rf.add_event(cls, onsets=on, interval=INTERVAL, basis_set=basis, n_regressors=N_REGRESSORS)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         rf.fit()
@@ -59,7 +59,7 @@ def deconvolve(ts, trials, tr=1.6, oversample=4):
     return tc[['event_type', 'time', 'response']].rename(columns={'event_type': 'cls', 'time': 't'})
 
 
-def main(folder, out, subject=None):
+def main(folder, out, subject=None, basis='fourier'):
     rows = []
     pattern = f'sub-{subject:02d}_timeseries.tsv.gz' if subject else 'sub-*_timeseries.tsv.gz'
     for f in sorted(Path(folder).glob(pattern)):
@@ -68,7 +68,7 @@ def main(folder, out, subject=None):
         trials = pd.read_csv(f.with_name(f'sub-{subject:02d}_trials.tsv'), sep='\t')
         keys = ['roi', 'loc'] + (['dbin'] if 'dbin' in ts else [])
         for key, x in ts.groupby(keys):
-            tc = deconvolve(x, trials[trials['loc'] == key[1]])
+            tc = deconvolve(x, trials[trials['loc'] == key[1]], basis=basis)
             rows.append(tc.assign(subject=subject, n_voxels=int(x.n_voxels.iloc[0]), **dict(zip(keys, key))))
         print(f.name, flush=True)
     d = pd.concat(rows)
@@ -81,5 +81,7 @@ if __name__ == '__main__':
     ap.add_argument('--folder', default='notes/data/location_timeseries_2026-11')
     ap.add_argument('--out', default='notes/data/event_deconv_2026-11.tsv')
     ap.add_argument('--subject', type=int, default=None, help='Only this subject (cluster array task).')
+    ap.add_argument('--basis', default='fourier', choices=['fourier', 'dct', 'fir'],
+                    help="nideconv basis set; 'dct' needs nideconv with the oversampling fix (branch dct-oversample-fix).")
     a = ap.parse_args()
-    main(a.folder, a.out, a.subject)
+    main(a.folder, a.out, a.subject, a.basis)
