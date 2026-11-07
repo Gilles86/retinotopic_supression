@@ -23,7 +23,7 @@ from scipy import stats
 
 from retsupp.visualize.paper.paper_style import (DOUBLE, FG, MUTED, ROI_COLORS, ROI_GROUPS, ROI_ORDER, ROI_X, letter, offset_spines,
                                                  provisional, roi_axis, save)
-from retsupp.visualize.paper.plot_fig1 import COVER_TSV, contralateral, panel_coverage
+from retsupp.visualize.paper.plot_fig1 import COVER_TSV, contralateral
 
 MAP_DIR = Path('notes/figures/fig1_r2low')
 TERMS = [('T', 'Target'), ('D', 'Distractor'), ('S', 'Sustained'), ('dS', 'Sustained, HP − LP'), ('dD', 'Distractor, HP − LP')]
@@ -34,8 +34,11 @@ field, coloured as mapped on the contralateral hemisphere. b, Share of pRF centr
 voxels with R² ≥ .1 inside the bar aperture; dots are subjects, lines medians; numbers give the subjects per ROI. c, Held-out
 R² gained by the pRF model used for the gain fits (difference-of-Gaussians pRF, one HRF per subject × ROI) over a Gaussian pRF
 with the canonical HRF, per ROI: three folds of runs, voxels with cross-run reliability > 0 in the training runs, median over
-voxels, mean over folds; dots are subjects (n = 30), lines medians. d, Visual-field coverage: density of pRF centres of the left (one colour) and right hemisphere (the other) for four ROIs,
-each subject weighted equally, inside the bar aperture; title, median percentage of contralateral centres. Provisional: c uses the per-ROI HRF from the median of the voxels' own HRF fits until the jointly fitted HRF is in.
+voxels, mean over folds; dots are subjects (n = 30), lines medians. d, Response to a neutral item (at an LP location) against the distance of the pRF centre from that item: deconvolved
+response (nideconv), mean over 3.2-6.4 s minus −4 to 0 s, reliable voxels binned by distance (1° bins), pooled per pathway
+weighted by voxel count; lines and bands, mean ± SEM across subjects. Items appear at all eight ring positions at once,
+so pRFs far from this item lie near the opposite ones and the response rises again; between the items, near fixation, it
+is close to 0 in early visual cortex. Provisional: c uses the per-ROI HRF from the median of the voxels' own HRF fits until the jointly fitted HRF is in.
 """
 
 
@@ -162,13 +165,47 @@ def panel_loso(ax, table):
     roi_axis(ax)
 
 
+DIST_DIR = 'notes/data/event_deconv_distance_2026-11'
+PATHWAY = {'Early': ('V1', 'V2', 'V3'), 'Dorsal': ('V3AB', 'IPS'), 'Occipitotemporal': ('hV4', 'VO', 'LO', 'TO')}
+PATHWAY_COL = {'Early': ROI_COLORS['V1'], 'Dorsal': ROI_COLORS['V3AB'], 'Occipitotemporal': ROI_COLORS['LO']}
+
+
+def panel_distance(ax, folder=DIST_DIR, cls='neutral_lp'):
+    """Deconvolved response to an item against the distance of the pRF centre from that item, per pathway."""
+    import glob
+    d = pd.concat([pd.read_csv(f, sep='\t') for f in sorted(glob.glob(f'{folder}/sub-*_2026-11.tsv'))])
+    grp = {r: g for g, rois in PATHWAY.items() for r in rois}
+    d = d[d.roi.isin(grp)].assign(grp=lambda x: x.roi.map(grp), t=lambda x: x.t.round(2))
+    d['w'] = d.response * d.n_voxels
+    def pooled(x):
+        g = x.groupby(['subject', 'grp', 'dbin'])
+        return g.w.sum() / g.n_voxels.sum()
+    x = d[d.cls == cls]
+    r = (pooled(x[x.t.between(3.2, 6.4)]) - pooled(x[x.t < 0])).rename('r').reset_index()
+    for grp_name, col in PATHWAY_COL.items():
+        g = r[r.grp == grp_name].groupby('dbin').r
+        m, se = g.mean(), g.sem()
+        xs = m.index + .5
+        ax.fill_between(xs, m - se, m + se, color=col, alpha=.2, lw=0)
+        ax.plot(xs, m, 'o-', color=col, ms=3, lw=1.3)
+        dy = {'Early': 0, 'Dorsal': -.06, 'Occipitotemporal': .07}[grp_name]
+        ax.text(xs[-1] + .2, m.iloc[-1] + dy, grp_name if grp_name != 'Occipitotemporal' else 'Occ.-temp.', color=col,
+                fontsize=6, va='center', ha='left')
+    ax.axhline(0, color='.7', lw=.6, ls='--', zorder=0)
+    ax.set_xlim(0, 8.6)
+    ax.set_xticks([0, 2, 4, 6, 8])
+    ax.set_xlabel('pRF distance from the item (°)')
+    ax.set_ylabel('Response (% signal)')
+    offset_spines(ax)
+
+
 def main(cv_table, hrf_table, loso_table, name='fig3_prf_fits'):
     d, base = gain_r2(cv_table, hrf_table)
     fig = plt.figure(figsize=(DOUBLE, 4.6))
     top = fig.add_gridspec(1, 1, left=.01, right=.99, top=.95, bottom=.6)
     first = panel_maps(fig, top[0])
     letter(first, 'a', x=.0, y=1.05)
-    bot = fig.add_gridspec(1, 3, width_ratios=[1, 1, .62], left=.075, right=.99, top=.4, bottom=.17, wspace=.3)
+    bot = fig.add_gridspec(1, 3, width_ratios=[1, 1, .8], left=.075, right=.95, top=.4, bottom=.17, wspace=.38)
     ax = fig.add_subplot(bot[0])
     panel_contra(ax)
     ax.text(0, 1.16, 'pRFs sit in the contralateral field', transform=ax.transAxes, fontsize=7, color=FG, va='center')
@@ -178,9 +215,11 @@ def main(cv_table, hrf_table, loso_table, name='fig3_prf_fits'):
     ax.text(0, 1.2, 'Held-out fit: DoG pRF + HRF per ROI\nvs Gaussian pRF + canonical HRF',
             transform=ax.transAxes, fontsize=6.5, color=FG, va='center', linespacing=1.2)
     letter(ax, 'c', x=-.22, y=1.12)
-    provisional(ax, y=1.38)
-    first = panel_coverage(fig, bot[2])
-    letter(first, 'd', x=-.05, y=1.4)
+    fig.text(.99, .995, 'Provisional: current inputs', fontsize=5.5, color=MUTED, ha='right', va='top')
+    ax = fig.add_subplot(bot[2])
+    panel_distance(ax)
+    ax.text(0, 1.16, 'Item responses are local', transform=ax.transAxes, fontsize=7, color=FG, va='center')
+    letter(ax, 'd', x=-.3, y=1.12)
     save(fig, name, LEGEND)
     print('median gain per ROI:', d.groupby('roi').d.median().round(4).to_dict())
 
