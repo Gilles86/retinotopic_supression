@@ -8,7 +8,9 @@ estimate b / a per subject × ROI × mechanism (dS, dD) for the true labels (rot
 ``test`` (local), as pre-specified in ``notes/primary_test_2026-11.md``: subject value = median over V1, V2, V3,
 V3AB, IPS, hV4, VO, LO, TO; group statistic = median over subjects; null = every subject one of its four labellings
 at random (100,000 draws); one-sided p = (1 + #draws ≤ observed) / (1 + draws). Also the split-half (session 1 vs
-2) correlation of the subject values, Spearman with a bootstrap 95% CI.
+2, and odd vs even runs) correlation of the subject values, Spearman with a bootstrap 95% CI. The session split
+confounds a session-wide gain change with dS (each session holds two HP locations; the m4 base is fitted on both),
+which drives the two halves apart; odd and even runs each hold all four HP locations.
 
 Usage::
 
@@ -47,6 +49,9 @@ def collect(bids, out_dir):
     rot.to_csv(out_dir / 'conditional_dS_rotation_null_2026-11.tsv', sep='\t', index=False)
     ses = pd.concat([estimates(bids, f'{REAL}_ses{s}').assign(session=s) for s in (1, 2)])
     ses.to_csv(out_dir / 'conditional_dS_sessions_2026-11.tsv', sep='\t', index=False)
+    if Path(f'{bids}/derivatives/{REAL}_odd').exists():
+        par = pd.concat([estimates(bids, f'{REAL}_{h}').assign(half=i) for i, h in enumerate(('odd', 'even'), 1)])
+        par.to_csv(out_dir / 'conditional_dS_oddeven_2026-11.tsv', sep='\t', index=False)
     print(rot.groupby(['rotation', 'mech']).size().unstack(), ses.groupby(['session', 'mech']).size().unstack(), sep='\n')
 
 
@@ -55,7 +60,20 @@ def subject_values(d, mech, by):
     return d.groupby(['subject', by]).estimate.median().unstack(by)
 
 
-def test(rot_table, ses_table, n_draws=100_000, seed=20261107):
+def split_half(table, by, label, rng):
+    d = pd.read_csv(table, sep='\t')
+    for mech in ('dS', 'dD'):
+        v = subject_values(d, mech, by).dropna()
+        x = v.to_numpy()
+        r = stats.spearmanr(x[:, 0], x[:, 1]).statistic
+        boots = [stats.spearmanr(*x[rng.integers(0, len(x), len(x))].T).statistic for _ in range(10_000)]
+        lo, hi = np.nanpercentile(boots, [2.5, 97.5])
+        print(f'{mech} split-half ({label}): n = {len(v)}, Spearman ρ = {r:+.3f} [{lo:+.3f}, {hi:+.3f}], '
+              f'Pearson r = {stats.pearsonr(x[:, 0], x[:, 1]).statistic:+.3f}; half medians {np.median(x[:, 0]):+.4f}, '
+              f'{np.median(x[:, 1]):+.4f}')
+
+
+def test(rot_table, ses_table, n_draws=100_000, seed=20261107, oddeven_table='notes/data/conditional_dS_oddeven_2026-11.tsv'):
     rot = pd.read_csv(rot_table, sep='\t')
     rng = np.random.default_rng(seed)
     for mech in ('dS', 'dD'):
@@ -68,19 +86,9 @@ def test(rot_table, ses_table, n_draws=100_000, seed=20261107):
               f'[2.5%, 97.5%: {np.percentile(null, 2.5):+.4f}, {np.percentile(null, 97.5):+.4f}]; one-sided p = {p:.4g}; '
               f'mean of rotated subject values {v[[1, 2, 3]].to_numpy().mean():+.4f}; '
               f'rotations 1-3 group medians {v[1].median():+.4f}, {v[2].median():+.4f}, {v[3].median():+.4f}')
-    ses = pd.read_csv(ses_table, sep='\t')
-    for mech in ('dS', 'dD'):
-        v = subject_values(ses, mech, 'session').dropna()
-        r = stats.spearmanr(v[1], v[2]).statistic
-        boots = []
-        x = v.to_numpy()
-        for _ in range(10_000):
-            i = rng.integers(0, len(x), len(x))
-            boots.append(stats.spearmanr(x[i, 0], x[i, 1]).statistic)
-        lo, hi = np.nanpercentile(boots, [2.5, 97.5])
-        print(f'{mech} split-half (session 1 vs 2): n = {len(v)}, Spearman ρ = {r:+.3f} [{lo:+.3f}, {hi:+.3f}], '
-              f'Pearson r = {stats.pearsonr(v[1], v[2]).statistic:+.3f}; session medians {v[1].median():+.4f}, {v[2].median():+.4f}')
-
+    split_half(ses_table, 'session', 'session 1 vs 2', rng)
+    if Path(oddeven_table).exists():
+        split_half(oddeven_table, 'half', 'odd vs even runs', rng)
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

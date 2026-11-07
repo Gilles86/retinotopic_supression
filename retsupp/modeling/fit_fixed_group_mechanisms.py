@@ -156,7 +156,7 @@ def base_parameters(sub, model, roi, base, width, overlay_root):
     return fit, pars.astype(np.float32), width_val, n_width
 
 
-def fit_roi(sub, roi, data, out_path, overlay_root=None, sessions=None):
+def fit_roi(sub, roi, data, out_path, overlay_root=None, sessions=None, run_parity=None):
     bold, paradigm, _ci, _di, _ti, _grid, run_meta = data
     model = build_full_model(sub, data, roi)
 
@@ -165,7 +165,8 @@ def fit_roi(sub, roi, data, out_path, overlay_root=None, sessions=None):
                           dtype=np.float64)
 
     # Sufficient statistics only over the runs of the requested sessions (the fits stay as they are).
-    used = [rm for rm in run_meta if sessions is None or rm.session in sessions]
+    used = [rm for rm in run_meta if (sessions is None or rm.session in sessions)
+            and (run_parity is None or rm.run % 2 == (1 if run_parity == 'odd' else 0))]
     conds = {hp: np.concatenate([np.arange(rm.start, rm.stop) for rm in used if rm.hp == hp])
              for hp in sorted({rm.hp for rm in used})}
     out = []
@@ -237,7 +238,7 @@ def fit_roi_exact(sub, roi, data, out_path, overlay_root=None):
 
 def main(subject, bids_folder, rois, output_subdir='af_fixed_group_mechanisms',
          overlay_root=None, base_root=None, family='dog', step=None, exact=False, hp_rotation=0,
-         mechanisms=None, sessions=None, hrf_table=None):
+         mechanisms=None, sessions=None, hrf_table=None, run_parity=None):
     global BASE_ROOT, FAMILY, H, MECHANISMS, HRF_TABLE
     HRF_TABLE = load_hrf_table(hrf_table)
     if mechanisms:
@@ -261,7 +262,7 @@ def main(subject, bids_folder, rois, output_subdir='af_fixed_group_mechanisms',
             assert sessions is None, '--sessions is not implemented with --exact'
             fit_roi_exact(sub, roi, data, path, overlay_root)
         else:
-            fit_roi(sub, roi, data, path, overlay_root, sessions)
+            fit_roi(sub, roi, data, path, overlay_root, sessions, run_parity)
 
 
 if __name__ == '__main__':
@@ -281,7 +282,10 @@ if __name__ == '__main__':
                          '(m4_TDS) ties HP and LP gains, so its fits do not depend on the labels and need no '
                          'relabelled base root; mechanisms on label-dependent bases would.')
     ap.add_argument('--sessions', type=int, nargs='+', choices=[1, 2], default=None,
-                    help='Sufficient statistics from these sessions only (split-half reliability)')
+                    help='Sufficient statistics from these sessions only')
+    ap.add_argument('--run-parity', choices=['odd', 'even'], default=None,
+                    help='Sufficient statistics from odd or even runs only: each half holds every HP location '
+                         '(split-half reliability; a session split confounds session-wide gain with dS)')
     ap.add_argument('--exact', action='store_true',
                     help='Save ΔSSE on a grid of δ from the actual predictions')
     ap.add_argument('--mechanisms', nargs='+', default=None, choices=list(MECHANISMS),
@@ -291,4 +295,4 @@ if __name__ == '__main__':
     args = ap.parse_args()
     main(args.subject, args.bids_folder, args.rois, args.output_subdir, args.overlay_root,
          args.base_root, args.family, args.step, args.exact, args.hp_rotation,
-         args.mechanisms, args.sessions, hrf_table=args.hrf_table)
+         args.mechanisms, args.sessions, hrf_table=args.hrf_table, run_parity=args.run_parity)
