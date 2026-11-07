@@ -292,6 +292,26 @@ def panel_distance_tc(fig, gs, folder=NEAREST_DIR):
     return axes[0]
 
 
+def distance_icon(fig, x0, y0, size, n_bins=8):
+    """The display's eight items with pRFs (filled circles) stepping from an item to fixation, coloured as in panel e."""
+    from matplotlib.patches import Circle
+    w, h = fig.get_size_inches()
+    ins = fig.add_axes([x0, y0, size / w, size / h])
+    ins.add_patch(Circle((0, 0), 4., fill=False, ec=MUTED, lw=.4, ls=(0, (1.5, 1.5))))
+    for a in np.deg2rad(np.arange(8) * 45.):
+        ins.add_patch(Circle((4 * np.cos(a), 4 * np.sin(a)), .55, facecolor='w', ec=FG, lw=.6, zorder=3))
+    cmap = mpl.colormaps['viridis']
+    u = np.array([np.cos(np.pi / 4), np.sin(np.pi / 4)])
+    for k, dist in enumerate((0., 1.35, 2.7, 4.)):
+        ins.add_patch(Circle((4 - dist) * u, 1.05, facecolor=cmap(.9 * k / 3), ec='none', alpha=.75, zorder=2 if k else 4))
+    ins.plot(0, 0, '+', color=FG, ms=3, mew=.5, zorder=5)
+    ins.set_xlim(-5, 5)
+    ins.set_ylim(-5, 5)
+    ins.set_aspect('equal')
+    ins.axis('off')
+    return ins
+
+
 def main(cv_table, hrf_table, loso_table, name='fig3_prf_fits'):
     d, base = gain_r2(cv_table, hrf_table)
     fig = plt.figure(figsize=(DOUBLE, 6.4))
@@ -316,9 +336,12 @@ def main(cv_table, hrf_table, loso_table, name='fig3_prf_fits'):
     low = fig.add_gridspec(1, 1, left=.075, right=.9, top=.2, bottom=.06)
     first = panel_distance_tc(fig, low[0])
     if first is not None:
-        first.text(0, 1.3, 'Responses to the search display fall off with distance from the nearest item', transform=first.transAxes,
-                   fontsize=7, color=FG, va='center')
-        letter(first, 'e', x=-.2, y=1.26)
+        bb = first.get_position()
+        size = .55
+        distance_icon(fig, bb.x0 - .01, bb.y1 + .02, size)
+        fig.text(bb.x0 + (size + .06) / fig.get_size_inches()[0], bb.y1 + .02 + size / 2 / fig.get_size_inches()[1],
+                 'Responses to the search display fall off with distance from the nearest item', fontsize=7, color=FG, va='center')
+        letter(first, 'e', x=-.2, y=1.5)
     save(fig, name, LEGEND)
 
 
