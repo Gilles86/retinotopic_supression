@@ -23,7 +23,7 @@ from scipy import stats
 
 from retsupp.visualize.paper.paper_style import (DOUBLE, FG, MUTED, ROI_COLORS, ROI_GROUPS, ROI_ORDER, ROI_X, letter, offset_spines,
                                                  provisional, roi_axis, save)
-from retsupp.visualize.paper.plot_fig1 import COVER_TSV, contralateral
+from retsupp.visualize.paper.plot_fig1 import COVER_TSV, contralateral, panel_coverage
 
 MAP_DIR = Path('notes/figures/fig1_r2low')
 TERMS = [('T', 'Target'), ('D', 'Distractor'), ('S', 'Sustained'), ('dS', 'Sustained, HP − LP'), ('dD', 'Distractor, HP − LP')]
@@ -34,7 +34,8 @@ field, coloured as mapped on the contralateral hemisphere. b, Share of pRF centr
 voxels with R² ≥ .1 inside the bar aperture; dots are subjects, lines medians; numbers give the subjects per ROI. c, Held-out
 R² gained by the pRF model used for the gain fits (difference-of-Gaussians pRF, one HRF per subject × ROI) over a Gaussian pRF
 with the canonical HRF, per ROI: three folds of runs, voxels with cross-run reliability > 0 in the training runs, median over
-voxels, mean over folds; dots are subjects (n = 30), lines medians. Provisional: c uses the per-ROI HRF from the median of the voxels' own HRF fits until the jointly fitted HRF is in.
+voxels, mean over folds; dots are subjects (n = 30), lines medians. d, Visual-field coverage: density of pRF centres of the left (one colour) and right hemisphere (the other) for four ROIs,
+each subject weighted equally, inside the bar aperture; title, median percentage of contralateral centres. Provisional: c uses the per-ROI HRF from the median of the voxels' own HRF fits until the jointly fitted HRF is in.
 """
 
 
@@ -167,7 +168,7 @@ def main(cv_table, hrf_table, loso_table, name='fig3_prf_fits'):
     top = fig.add_gridspec(1, 1, left=.01, right=.99, top=.95, bottom=.6)
     first = panel_maps(fig, top[0])
     letter(first, 'a', x=.0, y=1.05)
-    bot = fig.add_gridspec(1, 2, left=.075, right=.97, top=.4, bottom=.17, wspace=.25)
+    bot = fig.add_gridspec(1, 3, width_ratios=[1, 1, .62], left=.075, right=.99, top=.4, bottom=.17, wspace=.3)
     ax = fig.add_subplot(bot[0])
     panel_contra(ax)
     ax.text(0, 1.16, 'pRFs sit in the contralateral field', transform=ax.transAxes, fontsize=7, color=FG, va='center')
@@ -177,7 +178,9 @@ def main(cv_table, hrf_table, loso_table, name='fig3_prf_fits'):
     ax.text(0, 1.2, 'Held-out fit: DoG pRF + HRF per ROI\nvs Gaussian pRF + canonical HRF',
             transform=ax.transAxes, fontsize=6.5, color=FG, va='center', linespacing=1.2)
     letter(ax, 'c', x=-.22, y=1.12)
-    provisional(ax, y=1.3)
+    provisional(ax, y=1.38)
+    first = panel_coverage(fig, bot[2])
+    letter(first, 'd', x=-.05, y=1.4)
     save(fig, name, LEGEND)
     print('median gain per ROI:', d.groupby('roi').d.median().round(4).to_dict())
 

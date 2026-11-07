@@ -4,4 +4,5 @@ field, coloured as mapped on the contralateral hemisphere. b, Share of pRF centr
 voxels with R² ≥ .1 inside the bar aperture; dots are subjects, lines medians; numbers give the subjects per ROI. c, Held-out
 R² gained by the pRF model used for the gain fits (difference-of-Gaussians pRF, one HRF per subject × ROI) over a Gaussian pRF
 with the canonical HRF, per ROI: three folds of runs, voxels with cross-run reliability > 0 in the training runs, median over
-voxels, mean over folds; dots are subjects (n = 30), lines medians. Provisional: c uses the per-ROI HRF from the median of the voxels' own HRF fits until the jointly fitted HRF is in.
+voxels, mean over folds; dots are subjects (n = 30), lines medians. d, Visual-field coverage: density of pRF centres of the left (one colour) and right hemisphere (the other) for four ROIs,
+each subject weighted equally, inside the bar aperture; title, median percentage of contralateral centres. Provisional: c uses the per-ROI HRF from the median of the voxels' own HRF fits until the jointly fitted HRF is in.
