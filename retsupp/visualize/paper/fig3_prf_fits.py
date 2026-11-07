@@ -26,7 +26,7 @@ from retsupp.visualize.paper.paper_style import (DOUBLE, FG, MUTED, ROI_COLORS, 
 from retsupp.visualize.paper.plot_fig1 import COVER_TSV, contralateral
 
 MAP_DIR = Path('notes/figures/fig1_r2low')
-TERMS = [('T', 'Target'), ('D', 'Distractor'), ('S', 'Sustained'), ('dS', 'Sust. HP−LP'), ('dD', 'Distr. HP−LP')]
+TERMS = [('T', 'Target'), ('D', 'Distractor'), ('S', 'Sustained'), ('dS', 'Sustained, HP − LP'), ('dD', 'Distractor, HP − LP')]
 LEGEND = """
 **Figure 3. The pRF fits.** a, Visual areas (neuropythy atlas), polar angle and eccentricity of the pRF fit on the inflated
 surface of one subject (sub-23, posterior view; voxels with R² above the R² mixture threshold). Polar-angle key: the visual
@@ -34,9 +34,10 @@ field, coloured as mapped on the contralateral hemisphere. b, Share of pRF centr
 voxels with R² ≥ .1 inside the bar aperture; dots are subjects, lines medians; numbers give the subjects per ROI. c, Held-out
 R² gained by the pRF model used for the gain fits (difference-of-Gaussians pRF, one HRF per subject × ROI) over a Gaussian pRF
 with the canonical HRF, per ROI: three folds of runs, voxels with cross-run reliability > 0 in the training runs, median over
-voxels, mean over folds; dots are subjects (n = 30), lines medians. d, Leave-one-subject-out test of each gain term: share of
-subjects whose held-out prediction improves when the term is added with the size estimated from the other 29 subjects (median
-over ROIs); Wilcoxon signed-rank test on ΔR²: * p < .05, ** p < .01, *** p < .001. Provisional: c uses the per-ROI HRF from the
+voxels, mean over folds; dots are subjects (n = 30), lines medians. d, Leave-one-subject-out test of each gain term per ROI:
+percentage of subjects whose held-out prediction improves when the term is added with the size estimated from the other 29
+subjects (blue below, red above 50%); bold, Wilcoxon signed-rank test on ΔR² with Benjamini-Hochberg q < .05 across the nine
+ROIs. The distractor term is tested on the model without the target term; tested on top of the target term is pending. Provisional: c uses the per-ROI HRF from the
 median of the voxels' own HRF fits until the jointly fitted HRF is in; d uses the current gain fits.
 """
 
@@ -137,22 +138,27 @@ def panel_r2(ax, d):
 
 
 def panel_loso(ax, table):
+    """Per ROI and gain term: share of subjects whose held-out prediction improves (leave-one-subject-out)."""
     d = pd.read_csv(table, sep='\t')
-    g = d[d.family == 'dog'].set_index('term')
+    d = d[(d.family == 'dog') & d.roi.isin(ROI_ORDER)]
+    xs = [ROI_X[r] for r in ROI_ORDER]
+    cmap = mpl.colormaps['RdBu_r']
     for i, (t, lab) in enumerate(TERMS):
-        r = g.loc[t]
-        ax.bar(i, r.pct_improved, width=.62, color=FG if r.p < .05 else MUTED, lw=0)
-        st = '***' if r.p < .001 else '**' if r.p < .01 else '*' if r.p < .05 else ''
-        ax.text(i, r.pct_improved + 1.5, st, ha='center', va='bottom', fontsize=7, color=FG)
-    ax.axhline(50, color='.6', lw=.7, ls='--', zorder=0)
-    ax.set_xticks(range(len(TERMS)))
-    ax.set_xticklabels([l for _, l in TERMS], fontsize=6.5)
-    ax.tick_params(axis='x', labelrotation=90)
-    ax.set_xlim(-.6, len(TERMS) - .4)
-    ax.set_ylim(0, 105)
-    ax.set_yticks([0, 50, 100])
-    ax.set_ylabel('Subjects improved (%)')
-    offset_spines(ax)
+        x = d[d.mech == t]
+        pct = [(x[x.roi == r].dr2 > 0).mean() * 100 for r in ROI_ORDER]
+        ps = [stats.wilcoxon(x[x.roi == r].dr2.dropna()).pvalue for r in ROI_ORDER]
+        qs = stats.false_discovery_control(ps)
+        for xx, v, q in zip(xs, pct, qs):
+            ax.add_patch(plt.Rectangle((xx - .46, i - .46), .92, .92, color=cmap(.5 + (v - 50) / 100), lw=0))
+            ax.text(xx, i, f'{v:.0f}', ha='center', va='center', fontsize=5.5,
+                    color='w' if abs(v - 50) > 30 else FG, fontweight='bold' if q < .05 else 'normal')
+    ax.set_yticks(range(len(TERMS)))
+    ax.set_yticklabels([l for _, l in TERMS], fontsize=6.5)
+    ax.set_ylim(len(TERMS) - .5, -.5)
+    for sp in ('left',):
+        ax.spines[sp].set_visible(False)
+    ax.tick_params(axis='y', length=0)
+    roi_axis(ax)
 
 
 def main(cv_table, hrf_table, loso_table, name='fig3_prf_fits'):
@@ -161,19 +167,20 @@ def main(cv_table, hrf_table, loso_table, name='fig3_prf_fits'):
     top = fig.add_gridspec(1, 1, left=.01, right=.99, top=.95, bottom=.6)
     first = panel_maps(fig, top[0])
     letter(first, 'a', x=.0, y=1.05)
-    bot = fig.add_gridspec(1, 3, width_ratios=[1, 1, .85], left=.075, right=.99, top=.4, bottom=.17, wspace=.42)
+    bot = fig.add_gridspec(1, 3, width_ratios=[1, 1, 1.15], left=.075, right=.99, top=.4, bottom=.17, wspace=.62)
     ax = fig.add_subplot(bot[0])
     panel_contra(ax)
     ax.text(0, 1.16, 'pRFs sit in the contralateral field', transform=ax.transAxes, fontsize=7, color=FG, va='center')
     letter(ax, 'b', x=-.22, y=1.12)
     ax = fig.add_subplot(bot[1])
     panel_r2(ax, d)
-    ax.text(0, 1.16, 'Better than the simplest pRF', transform=ax.transAxes, fontsize=7, color=FG, va='center')
+    ax.text(0, 1.2, 'Held-out fit: DoG pRF + HRF per ROI\nvs Gaussian pRF + canonical HRF',
+            transform=ax.transAxes, fontsize=6.5, color=FG, va='center', linespacing=1.2)
     letter(ax, 'c', x=-.22, y=1.12)
     ax = fig.add_subplot(bot[2])
     panel_loso(ax, loso_table)
-    ax.text(0, 1.16, 'Gain terms predict new subjects', transform=ax.transAxes, fontsize=7, color=FG, va='center')
-    letter(ax, 'd', x=-.3, y=1.12)
+    ax.text(.04, 1.16, 'Subjects predicted better (%)', transform=ax.transAxes, fontsize=7, color=FG, va='center')
+    letter(ax, 'd', x=0, y=1.12)
     provisional(ax, y=1.3)
     save(fig, name, LEGEND)
     print('median gain per ROI:', d.groupby('roi').d.median().round(4).to_dict())
@@ -183,6 +190,6 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--cv-table', default='notes/data/prf_cv_roi_summary.tsv')
     ap.add_argument('--hrf-table', default='notes/data/hrf_comparison_2026-11.tsv')
-    ap.add_argument('--loso-table', default='notes/data/loso_per_step_2026-11.tsv')
+    ap.add_argument('--loso-table', default='notes/data/loso_per_roi_2026-11.tsv')
     a = ap.parse_args()
     main(a.cv_table, a.hrf_table, a.loso_table)

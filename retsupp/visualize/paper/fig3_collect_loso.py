@@ -22,15 +22,17 @@ def main(bids, folders, out):
                        usecols=['subject', 'roi', 'voxel_id', 'cv_r2_null'])
     null = null.groupby(['subject', 'roi', 'voxel_id']).cv_r2_null.mean().reset_index()
     null = null[null.cv_r2_null > 0].groupby(['subject', 'roi']).voxel_id.apply(set).to_dict()
-    rows = []
+    rows, per_roi = [], []
     for spec in folders:
         family, folder = spec.split('=')
         a = loso(load(deriv, folder, null))
+        per_roi.append(a[['subject', 'roi', 'mech', 'dr2']].assign(family=family))
         for m in MECH:
             x = a[a.mech == m].pivot(index='subject', columns='roi', values='dr2').median(axis=1).dropna()
             rows.append(dict(family=family, term=m, n=len(x), pct_improved=(x > 0).mean() * 100, p=wilcoxon(x).pvalue, median_dr2_e5=x.median()))
     d = pd.DataFrame(rows)
     d.to_csv(out, sep='\t', index=False)
+    pd.concat(per_roi).to_csv(out.replace('per_step', 'per_roi'), sep='\t', index=False)
     print(d.round(4).to_string(index=False))
 
 
