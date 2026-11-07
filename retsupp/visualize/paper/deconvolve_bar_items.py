@@ -54,8 +54,11 @@ def fit_location(ts, trials, tr=1.6, oversample=4):
     y = np.concatenate(sig)
     time = np.arange(len(y)) * tr
     cols = [f'run{k}' for k in range(1, len(runs))] + ['bar_hp', 'bar_lp']
+    X = pd.DataFrame(np.vstack(conf), index=time, columns=cols)
+    # A location that is never (or always) HP in this subject has an all-zero bar column; leave it out.
+    X = X.loc[:, (X != 0).any()]
     rf = ResponseFitter(pd.DataFrame({'signal': y}, index=pd.Index(time, name='time')), sample_rate=1 / tr)
-    rf.add_confounds('nuisance', pd.DataFrame(np.vstack(conf), index=time, columns=cols))
+    rf.add_confounds('nuisance', X)
     for cls in CLASSES:
         on = np.concatenate(onsets[cls])
         if len(on):
@@ -65,8 +68,8 @@ def fit_location(ts, trials, tr=1.6, oversample=4):
         rf.fit()
         tc = rf.get_timecourses(oversample=oversample)
     b = rf.betas['signal']
-    bar = dict(beta_bar_hp=float(b.loc[('confounds', 'nuisance', 'bar_hp')]),
-               beta_bar_lp=float(b.loc[('confounds', 'nuisance', 'bar_lp')]))
+    get = lambda c: float(b.loc[('confounds', 'nuisance', c)]) if c in X.columns else np.nan  # noqa: E731
+    bar = dict(beta_bar_hp=get('bar_hp'), beta_bar_lp=get('bar_lp'))
     tc = tc.reset_index()
     tc.columns = ['event_type', 'covariate', 'time', 'response']
     return tc[['event_type', 'time', 'response']].rename(columns={'event_type': 'cls', 'time': 't'}), bar
