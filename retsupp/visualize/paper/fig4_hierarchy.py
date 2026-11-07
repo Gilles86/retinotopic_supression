@@ -178,7 +178,7 @@ def main(gain_table, conditional_table, name='fig4_hierarchy', regression_table=
     ax = fig.add_subplot(gs[1])
     panel_gain(ax, d, t, 'D', DISTRACTOR, (-.4, 1.2), None, None)
     roi_axis(ax)
-    title_icon(ax, 'Distractor: less gain than the target', ('distractor',), DISTRACTOR, h=.24)
+    title_icon(ax, 'Distractor: gain peaks mid-hierarchy, none in LO and TO', ('distractor',), DISTRACTOR, h=.24)
     letter(ax, 'b', x=-.12, y=1.26)
     ax = fig.add_subplot(gs[2])
     panel_slopes(ax, pd.read_csv(regression_table.replace('regression', 'slopes'), sep='\t'), reg)

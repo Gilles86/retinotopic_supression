@@ -23,7 +23,7 @@ from scipy import stats
 
 from retsupp.visualize.paper.paper_style import (DOUBLE, FG, MUTED, ROI_COLORS, ROI_GROUPS, ROI_ORDER, ROI_X, letter, offset_spines,
                                                  provisional, roi_axis, save)
-from retsupp.visualize.paper.plot_fig1 import COVER_TSV, contralateral
+from retsupp.visualize.paper.plot_fig1 import COVER_TSV, SIGMA_TSV, contralateral
 
 MAP_DIR = Path('notes/figures/fig1_r2low')
 TERMS = [('T', 'Target'), ('D', 'Distractor'), ('S', 'Sustained'), ('dS', 'Sustained, HP − LP'), ('dD', 'Distractor, HP − LP')]
@@ -215,27 +215,110 @@ def panel_distance(ax, folder=DIST_DIR, cls='neutral_lp'):
     offset_spines(ax)
 
 
+def panel_size(ax, rois=('V1', 'V2', 'V3', 'V3AB', 'hV4', 'LO')):
+    """pRF size against eccentricity per ROI: mean ± SEM across subjects of each subject's voxel-weighted mean."""
+    d = pd.read_csv(SIGMA_TSV, sep='\t')
+    d = d[d.n >= 5]
+    ends = []
+    for roi in rois:
+        g = d[d.roi == roi].pivot(index='subject', columns='ecc', values='sd')
+        g = g.loc[:, g.notna().sum() >= 10]
+        m, se = g.mean(), g.sem()
+        ax.fill_between(m.index, m - se, m + se, color=ROI_COLORS[roi], alpha=.22, lw=0)
+        ax.plot(m.index, m.values, color=ROI_COLORS[roi], lw=1.3)
+        ends.append([m.values[-1], m.index[-1], roi])
+    ends.sort()
+    for i in range(1, len(ends)):  # keep end labels at least 0.12 deg apart
+        ends[i][0] = max(ends[i][0], ends[i - 1][0] + .12)
+    for y, x, roi in ends:
+        ax.text(x + .07, y, roi, color=ROI_COLORS[roi], fontsize=6, va='center')
+    ax.set_xlim(0, 3.6)
+    ax.set_xticks([0, 1, 2, 3])
+    ax.set_ylim(0, 2)
+    ax.set_yticks([0, 1, 2])
+    ax.set_xlabel('Eccentricity (°)')
+    ax.set_ylabel('pRF size σ (°)')
+    offset_spines(ax)
+
+
+NEAREST_DIR = 'notes/data/event_deconv_nearest_2026-11'
+
+
+def panel_distance_tc(fig, gs, folder=NEAREST_DIR):
+    """Deconvolved response to the search display per pathway, one line per distance of the pRF from the nearest item."""
+    import glob
+    files = sorted(glob.glob(f'{folder}/sub-*_2026-11.tsv'))
+    sub = gs.subgridspec(1, 3, wspace=.18)
+    if not files:
+        return None
+    d = pd.concat([pd.read_csv(f, sep='\t') for f in files])
+    grp = {r: g for g, rois in PATHWAY.items() for r in rois}
+    d = d[d.roi.isin(grp)].assign(grp=lambda x: x.roi.map(grp), t=lambda x: x.t.round(2))
+    d['w'] = d.response * d.n_voxels
+    g = d.groupby(['subject', 'grp', 'dbin', 't'])
+    p = (g.w.sum() / g.n_voxels.sum()).rename('r').reset_index()
+    base = p[p.t < 0].groupby(['subject', 'grp', 'dbin']).r.mean()
+    p['r'] -= p.set_index(['subject', 'grp', 'dbin']).index.map(base)
+    bins = sorted(p.dbin.unique())
+    cmap = mpl.colormaps['viridis']
+    cols = {b: cmap(.9 * i / max(len(bins) - 1, 1)) for i, b in enumerate(bins)}
+    axes = []
+    for j, grp_name in enumerate(PATHWAY):
+        ax = fig.add_subplot(sub[j], sharey=axes[0] if axes else None)
+        for b in bins:
+            m = p[(p.grp == grp_name) & (p.dbin == b)].groupby('t').r.mean()
+            ax.plot(m.index, m.values, color=cols[b], lw=1.2)
+        ax.axhline(0, color='.75', lw=.6, zorder=0)
+        ax.axvline(0, color='.75', lw=.6, zorder=0)
+        ax.set_title(grp_name, fontsize=7, color=FG, pad=2)
+        ax.set_xticks([0, 10, 20])
+        ax.set_xlabel('Time from search onset (s)')
+        if j:
+            ax.tick_params(labelleft=False)
+        else:
+            ax.set_ylabel('Response (% signal)')
+        offset_spines(ax)
+        axes.append(ax)
+    # Colour key: distance of the pRF centre from the nearest item.
+    cax = axes[-1].inset_axes([1.06, .1, .05, .8])
+    edges = list(bins) + [bins[-1] + (bins[-1] - bins[-2])]
+    norm = mpl.colors.BoundaryNorm(edges, cmap.N)
+    cb = mpl.colorbar.ColorbarBase(cax, cmap=mpl.colors.ListedColormap([cols[b] for b in bins]),
+                                   norm=mpl.colors.BoundaryNorm(edges, len(bins)), orientation='vertical')
+    cb.set_ticks([edges[0], edges[len(edges) // 2], edges[-1]])
+    cb.ax.tick_params(labelsize=6, length=2, width=.6)
+    cb.outline.set_visible(False)
+    cax.set_ylabel('Distance from\nnearest item (°)', fontsize=6, labelpad=2)
+    return axes[0]
+
+
 def main(cv_table, hrf_table, loso_table, name='fig3_prf_fits'):
     d, base = gain_r2(cv_table, hrf_table)
-    fig = plt.figure(figsize=(DOUBLE, 4.6))
-    top = fig.add_gridspec(1, 1, left=.01, right=.99, top=.95, bottom=.6)
+    fig = plt.figure(figsize=(DOUBLE, 6.4))
+    top = fig.add_gridspec(1, 1, left=.01, right=.99, top=.96, bottom=.69)
     first = panel_maps(fig, top[0])
     letter(first, 'a', x=.0, y=1.05)
-    bot = fig.add_gridspec(1, 3, width_ratios=[1, 1, .8], left=.075, right=.95, top=.4, bottom=.17, wspace=.38)
-    ax = fig.add_subplot(bot[0])
+    mid = fig.add_gridspec(1, 3, width_ratios=[1, .7, 1], left=.075, right=.99, top=.55, bottom=.38, wspace=.38)
+    ax = fig.add_subplot(mid[0])
     panel_contra(ax)
     ax.text(0, 1.16, 'pRFs sit in the contralateral field', transform=ax.transAxes, fontsize=7, color=FG, va='center')
     letter(ax, 'b', x=-.22, y=1.12)
-    ax = fig.add_subplot(bot[1])
+    ax = fig.add_subplot(mid[1])
+    panel_size(ax)
+    ax.text(0, 1.16, 'pRFs grow with eccentricity', transform=ax.transAxes, fontsize=7, color=FG, va='center')
+    letter(ax, 'c', x=-.3, y=1.12)
+    ax = fig.add_subplot(mid[2])
     panel_r2(ax, d)
-    ax.text(0, 1.2, 'Held-out fit: DoG pRF + HRF per ROI\nvs Gaussian pRF + canonical HRF',
-            transform=ax.transAxes, fontsize=6.5, color=FG, va='center', linespacing=1.2)
-    letter(ax, 'c', x=-.22, y=1.12)
+    ax.text(0, 1.2, 'Held-out R² gained over a Gaussian pRF\nwith the canonical HRF', transform=ax.transAxes, fontsize=6.5,
+            color=FG, va='center', linespacing=1.2)
+    letter(ax, 'd', x=-.22, y=1.12)
     fig.text(.99, .995, 'Provisional: current inputs', fontsize=5.5, color=MUTED, ha='right', va='top')
-    ax = fig.add_subplot(bot[2])
-    panel_distance(ax)
-    ax.text(0, 1.16, 'Item responses are local', transform=ax.transAxes, fontsize=7, color=FG, va='center')
-    letter(ax, 'd', x=-.3, y=1.12)
+    low = fig.add_gridspec(1, 1, left=.075, right=.9, top=.2, bottom=.06)
+    first = panel_distance_tc(fig, low[0])
+    if first is not None:
+        first.text(0, 1.3, 'Responses to the search display fall off with distance from the nearest item', transform=first.transAxes,
+                   fontsize=7, color=FG, va='center')
+        letter(first, 'e', x=-.2, y=1.26)
     save(fig, name, LEGEND)
 
 
