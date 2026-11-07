@@ -1,5 +1,7 @@
-**Figure 3. The pRF fits.** a, Visual areas (neuropythy atlas), polar angle and eccentricity of the pRF fit on the inflated
-surface of one subject (sub-23, posterior view; voxels with R² above the R² mixture threshold). Polar-angle key: the visual
+**Figure 3. The pRF fits.** a, Visual areas (neuropythy atlas), polar angle and eccentricity of the pRF fit on the flattened
+cortex of one subject (sub-23; left hemisphere on the left; colour fades in from R² = .05 to .20). Left: the inflated
+surface turned to show its lateral and medial walls, visual areas in their colours; black lines mark the edge of the
+flattened window and, in the medial view, the cut along the calcarine sulcus made to flatten the surface. Polar-angle key: the visual
 field, coloured as mapped on the contralateral hemisphere. b, Share of pRF centres in the contralateral visual field per ROI,
 voxels with R² ≥ .1 inside the bar aperture; dots are subjects, lines medians; numbers give the subjects per ROI. c, Held-out
 R² gained per ROI over a Gaussian pRF with the canonical HRF by a difference-of-Gaussians pRF (teal), by one HRF per subject

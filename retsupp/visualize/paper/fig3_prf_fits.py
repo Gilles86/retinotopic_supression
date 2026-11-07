@@ -1,6 +1,7 @@
 """Figure 3 (redesign): the pRF fits are retinotopic, predict held-out runs, and carry the gain terms to new subjects.
 
-a, One subject's visual areas, polar angle and eccentricity on the inflated surface (pole view), with keys.
+a, One subject's visual areas, polar angle and eccentricity on the flattened occipital cortex, with keys; insets show
+where the flattened window lies on the inflated surface.
 b, pRF centres in the contralateral field per ROI (subject dots, n per ROI).
 c, Held-out R² gained over the simplest pRF (Gaussian, canonical HRF) by the model used for the gain fits.
 d, Leave-one-subject-out test of the gain terms.
@@ -28,8 +29,10 @@ from retsupp.visualize.paper.plot_fig1 import COVER_TSV, SIGMA_TSV, contralatera
 MAP_DIR = Path('notes/figures/fig1_r2low')
 TERMS = [('T', 'Target'), ('D', 'Distractor'), ('S', 'Sustained'), ('dS', 'Sustained, HP − LP'), ('dD', 'Distractor, HP − LP')]
 LEGEND = """
-**Figure 3. The pRF fits.** a, Visual areas (neuropythy atlas), polar angle and eccentricity of the pRF fit on the inflated
-surface of one subject (sub-23, posterior view; voxels with R² above the R² mixture threshold). Polar-angle key: the visual
+**Figure 3. The pRF fits.** a, Visual areas (neuropythy atlas), polar angle and eccentricity of the pRF fit on the flattened
+cortex of one subject (sub-23; left hemisphere on the left; colour fades in from R² = .05 to .20). Left: the inflated
+surface turned to show its lateral and medial walls, visual areas in their colours; black lines mark the edge of the
+flattened window and, in the medial view, the cut along the calcarine sulcus made to flatten the surface. Polar-angle key: the visual
 field, coloured as mapped on the contralateral hemisphere. b, Share of pRF centres in the contralateral visual field per ROI,
 voxels with R² ≥ .1 inside the bar aperture; dots are subjects, lines medians; numbers give the subjects per ROI. c, Held-out
 R² gained per ROI over a Gaussian pRF with the canonical HRF by a difference-of-Gaussians pRF (teal), by one HRF per subject
@@ -78,12 +81,33 @@ def show_map(ax, path):
     ax.set_axis_off()
 
 
-def panel_maps(fig, gs, subject=23, view='pole'):
+def show_flat(ax, path):
+    im = Image.open(path).convert('RGBA')
+    bg = Image.new('RGBA', im.size, 'white')
+    bg.alpha_composite(im)
+    ax.imshow(np.asarray(bg.convert('RGB')), interpolation='antialiased')
+    ax.set_axis_off()
+
+
+def panel_flat_window(fig, gs, subject=23):
+    """Where the flat maps come from: the inflated surface with the flat-map window outlined, lateral and medial."""
+    sub = gs.subgridspec(2, 1, hspace=.25)
+    axes = []
+    for j, (side, lab) in enumerate([('lateral', 'Lateral'), ('medial', 'Medial')]):
+        ax = fig.add_subplot(sub[j])
+        show_flat(ax, MAP_DIR / f'sub-{subject:02d}_flatwindow_{side}.png')
+        ax.set_title(lab, fontsize=6, color=FG, pad=1)
+        axes.append(ax)
+    return axes[0]
+
+
+def panel_maps(fig, gs, subject=23, view='flat'):
     sub = gs.subgridspec(1, 3, wspace=.03)
     axes = []
     for j, (p, title) in enumerate([('areas', 'Visual areas'), ('angle', 'Polar angle'), ('ecc', 'Eccentricity')]):
         ax = fig.add_subplot(sub[j])
-        show_map(ax, MAP_DIR / f'sub-{subject:02d}_{p}_{view}.png')
+        fn = MAP_DIR / f'sub-{subject:02d}_{p}_{view}.png'
+        (show_flat if view == 'flat' else show_map)(ax, fn)
         ax.set_title(title, fontsize=7, color=FG, pad=2)
         axes.append(ax)
     # Keys under the maps.
@@ -314,11 +338,12 @@ def distance_icon(fig, x0, y0, size, n_bins=8):
 
 def main(cv_table, hrf_table, loso_table, name='fig3_prf_fits'):
     d, base = gain_r2(cv_table, hrf_table)
-    fig = plt.figure(figsize=(DOUBLE, 6.4))
-    top = fig.add_gridspec(1, 1, left=.01, right=.99, top=.96, bottom=.69)
-    first = panel_maps(fig, top[0])
-    letter(first, 'a', x=.0, y=1.05)
-    mid = fig.add_gridspec(1, 3, width_ratios=[1, .7, 1], left=.075, right=.99, top=.55, bottom=.38, wspace=.38)
+    fig = plt.figure(figsize=(DOUBLE, 6.8))
+    top = fig.add_gridspec(1, 2, width_ratios=[.27, 1], left=.01, right=.99, top=0.963, bottom=0.651, wspace=.03)
+    first = panel_flat_window(fig, top[0])
+    letter(first, 'a', x=.04, y=1.12)
+    panel_maps(fig, top[1])
+    mid = fig.add_gridspec(1, 3, width_ratios=[1, .7, 1], left=.075, right=.99, top=0.519, bottom=0.360, wspace=.38)
     ax = fig.add_subplot(mid[0])
     panel_contra(ax)
     ax.text(0, 1.16, 'pRFs sit in the contralateral field', transform=ax.transAxes, fontsize=7, color=FG, va='center')
@@ -333,7 +358,7 @@ def main(cv_table, hrf_table, loso_table, name='fig3_prf_fits'):
             color=FG, va='center', linespacing=1.2)
     letter(ax, 'd', x=-.22, y=1.12)
     fig.text(.99, .995, 'Provisional: current inputs', fontsize=5.5, color=MUTED, ha='right', va='top')
-    low = fig.add_gridspec(1, 1, left=.075, right=.9, top=.2, bottom=.06)
+    low = fig.add_gridspec(1, 1, left=.075, right=.9, top=0.191, bottom=0.058)
     first = panel_distance_tc(fig, low[0])
     if first is not None:
         bb = first.get_position()
