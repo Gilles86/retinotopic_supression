@@ -3,9 +3,9 @@
 #SBATCH --account=hare.econ.uzh
 #SBATCH --partition=standard
 #SBATCH --exclude=u24-chaihm0-651,u24-chaihm0-636
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=16G
-#SBATCH --time=00:45:00
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=12G
+#SBATCH --time=00:30:00
 #SBATCH --output=/dev/null
 
 # Gain-free decoding for the paper (decode_final.py): one task = one subject × run, V1-V3 × both decoders.
@@ -13,7 +13,7 @@
 # session = k / 6 + 1; run = k % 6 + 1 (subjects with 5 runs in a session exit cleanly for run 6).
 #   cd ~/retsupp_plan && sbatch --array=1-360 retsupp/decode/slurm_jobs/decode_final.sh
 #   PRF_SOURCE=jointhrf sbatch ...   (default canonical);  EXTRA_ARGS="--rois V1 --decoders outline"
-# Resources: May decode.py tasks (one ROI, one decoder) took ~1.4 min on 8 CPUs, 16 GB.
+# Resources: canary sub-23 ses-1 run-1 V1, both decoders: 57 s, ~2.3 CPUs busy, 8 GB peak (2026-11-07).
 
 set -eo pipefail
 idx0=$(( ${SLURM_ARRAY_TASK_ID:?submit with --array} - 1 ))
