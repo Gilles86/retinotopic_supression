@@ -28,7 +28,7 @@ ROIS = ['V1', 'V2', 'V3', 'V3AB', 'IPS', 'hV4', 'VO', 'LO', 'TO']
 LOC = {1.0: 0, 3.0: 1, 5.0: 2, 7.0: 3}   # events' location codes -> ring channel (upper right, upper left, lower left, lower right)
 
 
-def main(subject, rois, bids, out_dir, subdir='location_timeseries', distance_bins=None):
+def main(subject, rois, bids, out_dir, subdir='location_timeseries', distance_bins=None, nearest_item_bins=None):
     from braincoder.hrf import SPMHRFModel
     from retsupp.modeling.fit_af_prf_cv_v2 import build_data_and_paradigm, build_model, get_ring_positions
     from retsupp.modeling.fit_cv_ladder_nested import bar_paradigm, sign_pattern_of
@@ -56,6 +56,12 @@ def main(subject, rois, bids, out_dir, subdir='location_timeseries', distance_bi
                 what = 'target' if loc == t_ch else 'distractor' if loc == d_ch else 'neutral'
                 trials.append(dict(session=r.session, run=r.run, onset=float(e.onset), loc=loc,
                                    cls=f'{what}_{"hp" if loc == hp else "lp"}'))
+    if nearest_item_bins:
+        # Every search onset once, as one event type: the display drives all eight item positions at the same time.
+        for r in meta:
+            ev = sub.get_onsets(r.session, r.run)
+            for on in ev[ev.event_type == 'target'].onset:
+                trials.append(dict(session=r.session, run=r.run, onset=float(on), loc=-1, cls='search'))
     pd.DataFrame(trials).to_csv(out / f'sub-{subject:02d}_trials.tsv', sep='\t', index=False)
 
     rows = []
@@ -74,6 +80,25 @@ def main(subject, rois, bids, out_dir, subdir='location_timeseries', distance_bi
         dist = np.hypot(p7.x.to_numpy()[:, None] - ring[:, 0], p7.y.to_numpy()[:, None] - ring[:, 1])
         loc_v = dist.argmin(1)
         ok = (rel_all.reindex(ids).to_numpy() > 0) & (dist.min(1) < 2)
+        if nearest_item_bins:
+            # Every reliable voxel, binned by the distance of its pRF centre from the nearest of the eight items.
+            rel_ok = rel_all.reindex(ids).to_numpy() > 0
+            ang = np.deg2rad(np.arange(8) * 45.)
+            items8 = 4. * np.stack([np.cos(ang), np.sin(ang)], 1)
+            near = np.hypot(p7.x.to_numpy()[:, None] - items8[:, 0], p7.y.to_numpy()[:, None] - items8[:, 1]).min(1)
+            for lo_, hi_ in zip(nearest_item_bins[:-1], nearest_item_bins[1:]):
+                vox = np.flatnonzero(rel_ok & (near >= lo_) & (near < hi_))
+                if len(vox) < 5:
+                    continue
+                sig = (bold[:, ids[vox]] - bar[:, vox]).mean(1)
+                for r in meta:
+                    tr = sub.get_tr(r.session, r.run)
+                    k = np.arange(r.n_T)
+                    rows.append(pd.DataFrame(dict(subject=subject, roi=roi, loc=-1, dbin=lo_, n_voxels=len(vox),
+                                                  session=r.session, run=r.run, tr_index=k, time=(k + .5) * tr,
+                                                  signal=sig[r.start + k])))
+            print(roi, 'done', flush=True)
+            continue
         if distance_bins:
             # Every reliable voxel, binned by the distance of its pRF centre from each item location in turn.
             rel_ok = rel_all.reindex(ids).to_numpy() > 0
@@ -118,7 +143,9 @@ if __name__ == '__main__':
     ap.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
     ap.add_argument('--out-dir', default='/shares/zne.uzh/gdehol/ds-retsupp/derivatives/paper_2026-11')
     ap.add_argument('--subdir', default='location_timeseries')
+    ap.add_argument('--nearest-item-bins', type=float, nargs='+', default=None,
+                    help='Bin edges (deg) of pRF-centre distance from the nearest of the eight items; one search-onset event.')
     ap.add_argument('--distance-bins', type=float, nargs='+', default=None,
                     help='Bin edges (deg) of pRF-centre distance from each item location; writes one series per bin.')
     a = ap.parse_args()
-    main(a.subject, a.rois, a.bids_folder, a.out_dir, a.subdir, a.distance_bins)
+    main(a.subject, a.rois, a.bids_folder, a.out_dir, a.subdir, a.distance_bins, a.nearest_item_bins)

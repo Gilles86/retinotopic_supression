@@ -29,7 +29,8 @@ CLASSES = [f'{w}_{h}' for w in ('target', 'distractor', 'neutral') for h in ('hp
 def deconvolve(ts, trials, tr=1.6, oversample=4):
     from nideconv import ResponseFitter
     runs = ts[['session', 'run']].drop_duplicates().sort_values(['session', 'run']).to_records(index=False)
-    offset, sig, conf, onsets = 0., [], [], {c: [] for c in CLASSES}
+    classes = [c for c in CLASSES if c in set(trials.cls)] or sorted(trials.cls.unique())
+    offset, sig, conf, onsets = 0., [], [], {c: [] for c in classes}
     for k, (s, r) in enumerate(runs):
         x = ts[(ts.session == s) & (ts.run == r)].sort_values('tr_index')
         sig.append(x.signal.to_numpy())
@@ -38,14 +39,14 @@ def deconvolve(ts, trials, tr=1.6, oversample=4):
             c[:, k - 1] = 1
         conf.append(c)
         t = trials[(trials.session == s) & (trials.run == r)]
-        for cls in CLASSES:
+        for cls in classes:
             onsets[cls].append(t[t.cls == cls].onset.to_numpy() + offset)
         offset += len(x) * tr
     y = np.concatenate(sig)
     time = np.arange(len(y)) * tr
     rf = ResponseFitter(pd.DataFrame({'signal': y}, index=pd.Index(time, name='time')), sample_rate=1 / tr)
     rf.add_confounds('run', pd.DataFrame(np.vstack(conf), index=time))
-    for cls in CLASSES:
+    for cls in classes:
         on = np.concatenate(onsets[cls])
         if len(on):
             rf.add_event(cls, onsets=on, interval=INTERVAL, basis_set='fourier', n_regressors=N_REGRESSORS)
