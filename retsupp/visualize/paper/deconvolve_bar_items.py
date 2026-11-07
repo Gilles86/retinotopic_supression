@@ -69,7 +69,11 @@ def fit_location(ts, trials, tr=1.6, oversample=4):
         tc = rf.get_timecourses(oversample=oversample)
     b = rf.betas['signal']
     get = lambda c: float(b.loc[('confounds', 'nuisance', c)]) if c in X.columns else np.nan  # noqa: E731
-    bar = dict(beta_bar_hp=get('bar_hp'), beta_bar_lp=get('bar_lp'))
+    bar = dict(beta_bar_hp=get('bar_hp'), beta_bar_lp=get('bar_lp'),
+               # Size of the bar regressor in each kind of run: locations whose pRFs the bar barely reaches carry
+               # little information about the betas, so pooling weights them by this.
+               bar_sd_hp=float(ts.loc[ts.hp == 1, 'bar'].std()) if (ts.hp == 1).any() else np.nan,
+               bar_sd_lp=float(ts.loc[ts.hp == 0, 'bar'].std()) if (ts.hp == 0).any() else np.nan)
     tc = tc.reset_index()
     tc.columns = ['event_type', 'covariate', 'time', 'response']
     return tc[['event_type', 'time', 'response']].rename(columns={'event_type': 'cls', 'time': 't'}), bar
