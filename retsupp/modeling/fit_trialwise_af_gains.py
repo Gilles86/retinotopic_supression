@@ -242,6 +242,35 @@ def build_model(paradigm, grid_coords, cond_ind, dyn_ind, tgt_ind, tr):
     )
 
 
+LADDER_ROOTS = ()   # set by --ladder-root: use the gain-model ladder's m7_full fits instead of the October fits
+HRF_TABLE = None    # one HRF per subject x ROI (roi_hrf.load_table) for the ladder fits
+
+
+def load_ladder_fit(sub, roi, data):
+    """The ladder's m7_full fit of this subject x ROI (first root holding it) and its model (items, fixed HRF)."""
+    from retsupp.modeling.fit_af_prf_cv_v2 import build_model as build_items_model
+    from retsupp.modeling.fit_cv_ladder_nested import sign_pattern_of
+    from retsupp.modeling.roi_hrf import hrf_model as roi_hrf_model
+    bold, paradigm, cond_ind, dyn_ind, grid, tgt_ind = data
+    tail = Path('m7_full') / f'sub-{sub.subject_id:02d}' / f'sub-{sub.subject_id:02d}_roi-{roi}_cv-fits.pkl'
+    for root in LADDER_ROOTS:
+        pkl = Path(root) / tail
+        if pkl.exists():
+            break
+    else:
+        raise FileNotFoundError(f'm7_full sub-{sub.subject_id:02d} {roi} in {LADDER_ROOTS}')
+    with open(pkl, 'rb') as f:
+        fit = pickle.load(f)
+    print(f'm7_full from {pkl}', flush=True)
+    model = build_items_model(grid_coords=grid, paradigm=paradigm, condition_indicator=cond_ind, dynamic_indicator=dyn_ind,
+                              target_indicator=tgt_ind, ring_positions=get_ring_positions(),
+                              hrf_model=roi_hrf_model(sub, roi, HRF_TABLE), sign_pattern=sign_pattern_of('m7_full'),
+                              item_scale='free')
+    pars = fit['fit_pars_per_fold'][0].reindex(columns=list(model.parameter_labels)).astype(np.float32).reset_index(drop=True)
+    af = dict(voxel_mask_indices=np.asarray(fit['voxel_ids']), r2=np.asarray(fit.get('r2_train', [np.nan]), dtype=float))
+    return af, model, pars
+
+
 def voxel_kernels(model, pars: pd.DataFrame, n_t: int, length: int):
     """Per-voxel impulse response of the model's own HRF convolution,
     measured with a delta so shift / flip conventions can't drift.
@@ -249,11 +278,14 @@ def voxel_kernels(model, pars: pd.DataFrame, n_t: int, length: int):
     t0 = 40
     delta = np.zeros((1, n_t, len(pars)), dtype=np.float32)
     delta[0, t0] = 1.0
-    out = model.hrf_model.convolve(
-        tf.constant(delta),
-        hrf_delay=tf.constant(pars['hrf_delay'].values[np.newaxis].astype(np.float32)),
-        hrf_dispersion=tf.constant(pars['hrf_dispersion'].values[np.newaxis].astype(np.float32)),
-    ).numpy()[0]
+    if 'hrf_delay' in pars:
+        out = model.hrf_model.convolve(
+            tf.constant(delta),
+            hrf_delay=tf.constant(pars['hrf_delay'].values[np.newaxis].astype(np.float32)),
+            hrf_dispersion=tf.constant(pars['hrf_dispersion'].values[np.newaxis].astype(np.float32)),
+        ).numpy()[0]
+    else:   # fixed HRF (ladder fits)
+        out = model.hrf_model.convolve(tf.constant(delta)).numpy()[0]
     assert np.abs(out[:t0]).max() < 1e-6, 'HRF convolution is not causal'
     return out[t0:t0 + length]
 
@@ -368,16 +400,23 @@ def sse(g, XtX, Xtr, rtr):
 # ---------------------------------------------------------------------------
 def fit_roi(sub, roi, data, trials, u, out_dir, seed=0, hp_neutral=False):
     bold, paradigm, cond_ind, dyn_ind, grid, tgt_ind = data
-    pkl = (sub.bids_folder / 'derivatives' / AF_SUBDIR
-           / f'sub-{sub.subject_id:02d}'
-           / f'sub-{sub.subject_id:02d}_roi-{roi}_mode-signed_{AF_TAG}-af-prf-fit.pkl')
-    with open(pkl, 'rb') as f:
-        af = pickle.load(f)
-    vox = af['voxel_mask_indices']
-    Y = bold[:, vox]
     tr = sub.get_tr(1, 1)
-    model = build_model(paradigm, grid, cond_ind, dyn_ind, tgt_ind, tr)
-    pars = af['fit_pars'][model.parameter_labels].astype(np.float32)
+    if LADDER_ROOTS:
+        af, model, pars = load_ladder_fit(sub, roi, data)
+        vox = af['voxel_mask_indices']
+        # The gain fields act on the paradigm with the items scaled by item_scale (β).
+        beta = float(pars['item_scale'].iloc[0])
+        paradigm = paradigm * (1.0 + (beta - 1.0) * model._tf_item_mask.numpy())[np.newaxis, :]
+    else:
+        pkl = (sub.bids_folder / 'derivatives' / AF_SUBDIR
+               / f'sub-{sub.subject_id:02d}'
+               / f'sub-{sub.subject_id:02d}_roi-{roi}_mode-signed_{AF_TAG}-af-prf-fit.pkl')
+        with open(pkl, 'rb') as f:
+            af = pickle.load(f)
+        vox = af['voxel_mask_indices']
+        model = build_model(paradigm, grid, cond_ind, dyn_ind, tgt_ind, tr)
+        pars = af['fit_pars'][model.parameter_labels].astype(np.float32)
+    Y = bold[:, vox]
     g_HP, g_LP, g_T = (float(pars[c].iloc[0]) for c in
                        ('g_HP_dyn', 'g_LP_dyn', 'g_T_dyn'))
     sigma_dyn = float(pars['sigma_dyn'].iloc[0])
@@ -586,17 +625,29 @@ def fit_roi(sub, roi, data, trials, u, out_dir, seed=0, hp_neutral=False):
     print(f'Saved {out_dir}/{stem}_*.tsv')
 
 
-def main(subject, bids_folder, rois, output_subdir='af_trialwise_gains', hp_neutral=False):
+def main(subject, bids_folder, rois, output_subdir='af_trialwise_gains', hp_neutral=False, ladder_roots=(),
+         hrf_table=None):
+    global LADDER_ROOTS, HRF_TABLE
+    from retsupp.modeling.roi_hrf import load_table
+    LADDER_ROOTS = tuple(Path(bids_folder) / 'derivatives' / r if not str(r).startswith('/') else Path(r) for r in ladder_roots)
+    HRF_TABLE = load_table(hrf_table)
     sub = Subject(subject, bids_folder=Path(bids_folder))
     out_dir = (Path(bids_folder) / 'derivatives' / output_subdir
                / f'sub-{subject:02d}')
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    (bold_df, paradigm, cond_ind, dyn_ind, grid, _masker, tgt_ind,
-     *_rest) = build_data_and_paradigm(sub, resolution=50, grid_radius=5.0,
-                                       with_target=True)
-    bold = bold_df.values
-    del bold_df
+    if LADDER_ROOTS:
+        # The ladder fits use the 8-item rectangle paradigm and their own data builder.
+        from retsupp.modeling.fit_af_prf_cv_v2 import build_data_and_paradigm as build_items_data
+        (bold, paradigm, cond_ind, dyn_ind, tgt_ind, grid, _masker, _meta) = build_items_data(
+            sub, resolution=50, grid_radius=5.0, item_shape='rectangle')
+        paradigm, grid = np.asarray(paradigm), np.asarray(grid)
+    else:
+        (bold_df, paradigm, cond_ind, dyn_ind, grid, _masker, tgt_ind,
+         *_rest) = build_data_and_paradigm(sub, resolution=50, grid_radius=5.0,
+                                           with_target=True)
+        bold = bold_df.values
+        del bold_df
     trials, u, n_t = build_trials(sub)
     assert n_t == paradigm.shape[0], (n_t, paradigm.shape)
     trials = add_rt_bins(trials)
@@ -617,5 +668,10 @@ if __name__ == '__main__':
     parser.add_argument('--output-subdir', default='af_trialwise_gains')
     parser.add_argument('--hp-neutral', action='store_true',
                         help='Add the H regressor: gain at HP when it holds a neutral item.')
+    parser.add_argument('--ladder-root', nargs='+', default=[],
+                        help='Use the m7_full fits of the gain-model ladder in these roots (first hit wins) '
+                             'instead of the October fits.')
+    parser.add_argument('--hrf-table', default=None, help='One HRF per subject x ROI (with --ladder-root)')
     args = parser.parse_args()
-    main(args.subject, args.bids_folder, args.rois, args.output_subdir, args.hp_neutral)
+    main(args.subject, args.bids_folder, args.rois, args.output_subdir, args.hp_neutral, args.ladder_root,
+         args.hrf_table)
