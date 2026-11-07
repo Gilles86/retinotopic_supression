@@ -14,10 +14,13 @@ import pandas as pd
 from scipy import stats
 
 from retsupp.visualize.paper.fig45_common import generalization_row, conditional, joint, median_ci
-from retsupp.visualize.paper.paper_style import SINGLE, DISTRACTOR, DOUBLE, FG, HP, MUTED, ROI_COLORS, ROI_ORDER, letter, ROI_X, title_icon, offset_spines, pending, provisional, roi_axis, roi_icon, save
+from retsupp.visualize.paper.paper_style import PROVISIONAL, SINGLE, DISTRACTOR, DOUBLE, FG, HP, MUTED, ROI_COLORS, ROI_ORDER, letter, ROI_X, title_icon, offset_spines, pending, provisional, roi_axis, roi_icon, save
 
 LEGEND = """
-**Figure 5. Less sustained gain at the location where the distractor is likely.** a, dS = g_HP − g_LP per ROI, each term estimated alone on m4 (conditional, DoG pRFs): dots are subjects (n = 30; triangles, beyond the axis), points and bars the median and bootstrapped 95% CI. Stars: Wilcoxon signed-rank test against 0, Benjamini-Hochberg across ROIs. b, Each subject's dS, median over the nine ROIs, as the conditional estimate and from the joint m7 fit (DoG pRFs); the share of negative subjects and the Wilcoxon p are given above. DN pRFs: supplementary figure. c, d, The same for dD = g_HP_dyn − g_LP_dyn, the transient gain when the distractor appears at the HP location minus when it appears elsewhere. The conditional estimate is negative, but the joint m7 estimate is not: once dS and the other terms are fitted together, dD is not distinguishable from 0, so dD is not a robust result. Squares under the data (New subjects): leave-one-subject-out test per ROI, the term added with the size estimated from the other 29 subjects (+δ) vs the opposite size (−δ); filled, a majority of subjects predicted better with +δ (one-sided Wilcoxon signed-rank test, Benjamini-Hochberg q < .05 across ROIs); open, not significant. Provisional: current inputs.
+**Figure 5. Less sustained gain at the location where the distractor is likely.** a, Sketch of the result: the sustained gain field over the search display (red shading, gain) with less gain at the high-probability (HP, dashed ring) than at the low-probability (LP) locations; the difference is exaggerated for display. b, dS = g_HP − g_LP, the sustained gain at the HP location minus that at the LP locations, per ROI, each term estimated alone on m4 (conditional estimate, DoG pRFs): dots are subjects (n = 30; triangles, beyond the axis), points and bars the median and bootstrapped 95% CI. Stars: Wilcoxon signed-rank test against 0, Benjamini-Hochberg across ROIs; * q < .05, ** q < .01, *** q < .001. Squares under the data (New subjects): leave-one-subject-out test per ROI, the term added with the size estimated from the other 29 subjects (+δ) vs the opposite size (−δ); filled, a majority of subjects predicted better with +δ (one-sided Wilcoxon signed-rank test, Benjamini-Hochberg q < .05 across ROIs); open, not significant. c, The same for dD = g_HP_dyn − g_LP_dyn, the transient gain when the distractor appears at the HP location minus when it appears elsewhere. The conditional estimate is negative, but once dS and the other terms are fitted together (joint m7 fit, supplementary figure) dD is not distinguishable from 0, so dD is not a robust result. Provisional: current inputs.
+"""
+POOLED_LEGEND = """
+**Figure S. dS and dD per subject, median over the nine ROIs.** a, dS as the conditional estimate (each term alone on m4) and from the joint m7 fit (DoG pRFs); the share of negative subjects and the Wilcoxon p are given above. b, The same for dD: negative when estimated alone, not distinguishable from 0 in the joint fit. Points and bars: median and bootstrapped 95% CI; n = 30. Provisional: current inputs.
 """
 POWER_LEGEND = """
 **Figure S. Within-subject cross-validation cannot test dS.** When a known dS is put into the data (x-axis), the share of subjects whose held-out prediction improves (y-axis) passes 50% only near −.05, about three times the estimate (dashed). Provisional: current inputs.
@@ -28,7 +31,7 @@ def stars(q):
     return '***' if q < .001 else '**' if q < .01 else '*' if q < .05 else ''
 
 
-def panel_roi(ax, cond, term='dS', color=HP, ylim=(-.12, .06), ylabel='dS: HP − LP sustained gain', annot=('Less gain at HP', (2, -.016), (3.2, -.095))):
+def panel_roi(ax, cond, term='dS', color=HP, ylim=(-.12, .06), ylabel='dS: HP − LP sustained gain', annot=('Less gain at HP', (2, -.016), (3.2, -.095)), band_label=True):
     lo, hi = ylim
     ps, med = [], []
     for i, roi in enumerate(ROI_ORDER):
@@ -43,14 +46,14 @@ def panel_roi(ax, cond, term='dS', color=HP, ylim=(-.12, .06), ylabel='dS: HP �
         ax.errorbar(ROI_X[roi], m, yerr=[[m - a], [b - m]], fmt='o', ms=6, color=color, mec='w', mew=.8, lw=1.6, capsize=0, zorder=4)
         ps.append(stats.wilcoxon(v).pvalue)
     for i, q in enumerate(stats.false_discovery_control(ps)):
-        ax.text(ROI_X[ROI_ORDER[i]], hi + .03 * (hi - lo), stars(q), ha='center', va='bottom', fontsize=8, color=color, clip_on=False)
+        ax.text(ROI_X[ROI_ORDER[i]], hi + .03 * (hi - lo), stars(q), ha='center', va='bottom', fontsize=6.5, color=color, clip_on=False)
     ax.hlines(0, -.6, ROI_X[ROI_ORDER[-1]] + .6, color='.6', lw=.8, ls='--', zorder=0)
     ax.annotate(annot[0], xy=annot[1], xytext=annot[2], fontsize=7, color=color, ha='left', va='center',
                 arrowprops=dict(arrowstyle='-|>', color=color, lw=1., mutation_scale=7, shrinkA=2, shrinkB=4))
     ax.set_ylim(lo, hi)
     ax.set_ylabel(ylabel)
     offset_spines(ax)
-    generalization_row(ax, term, color, lo, hi)
+    generalization_row(ax, term, color, lo, hi, label=band_label)
     roi_axis(ax)
 
 
@@ -99,69 +102,70 @@ def panel_power(ax, table, estimate=-.016):
     offset_spines(ax)
 
 
-def panel_hp_timeseries(fig, gs_cell):
-    """e: deconvolved response at the HP location minus at LP locations, per item type, all nine ROIs pooled."""
-    from retsupp.visualize.paper.fig45_common import item_timecourses
-    from retsupp.visualize.paper.fig_event_responses_2x3 import NEUTRAL
-    from retsupp.visualize.paper.paper_style import TARGET
-    p = item_timecourses()
-    w = p.pivot_table(index=['subject', 't'], columns='cls', values='r')
-    ax = fig.add_subplot(gs_cell)
-    pk = {}
-    for k, (it, lab, col) in enumerate((('target', 'Target', TARGET), ('distractor', 'Distractor', DISTRACTOR),
-                                         ('neutral', 'Neutral item', NEUTRAL))):
-        x = (w[f'{it}_hp'] - w[f'{it}_lp']).rename('r').reset_index().pivot(index='subject', columns='t', values='r')
-        m, se = x.mean(), x.sem()
-        ax.fill_between(m.index, m - se, m + se, color=col, alpha=.16, lw=0)
-        ax.plot(m.index, m.values, color=col, lw=1.4)
-        v = x.loc[:, (x.columns >= 3.2) & (x.columns <= 6.4)].mean(1)
-        p_ = stats.wilcoxon(v).pvalue
-        st = '***' if p_ < .001 else '**' if p_ < .01 else '*' if p_ < .05 else 'n.s.'
-        ax.text(1.02, .82 - k * .13, f'{lab} {st}', transform=ax.transAxes, color=col, fontsize=6.5, va='center')
-        pk[lab] = (v.mean(), p_)
-    ax.axvspan(3.2, 6.4, color='.93', lw=0, zorder=0)
-    ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
-    ax.axvline(0, color='.75', lw=.6, zorder=0)
-    ax.set_xticks([0, 10, 20])
-    ax.set_xlabel('Time from search onset (s)')
-    ax.set_ylabel('HP − LP response (% signal)')
-    offset_spines(ax)
-    title_icon(ax, 'In the data: items at the HP location respond less', ('hp', 'lp'), HP, h=.24, y=1.08)
-    print('HP-LP peak', pk)
-    return ax
+def panel_sketch(ax, g_lp=1., g_hp=.35, sigma=1.2, hp_ix=3):
+    """What dS means: the sustained gain field over the display, weaker at the HP location (exaggerated)."""
+    from matplotlib.colors import LinearSegmentedColormap
+    from matplotlib.patches import Circle
+    ring = 4. / np.sqrt(2) * np.array([[1, 1], [-1, 1], [-1, -1], [1, -1]])
+    xy = np.linspace(-5.9, 5.9, 300)
+    X, Y = np.meshgrid(xy, xy)
+    G = sum((g_hp if i == hp_ix else g_lp) * np.exp(-((X - p[0]) ** 2 + (Y - p[1]) ** 2) / (2 * sigma ** 2))
+            for i, p in enumerate(ring))
+    cmap = LinearSegmentedColormap.from_list('gain', ['#FFFFFF', HP])
+    im = ax.imshow(G, extent=(-5.9, 5.9, -5.9, 5.9), origin='lower', cmap=cmap, vmin=0, vmax=1.15, alpha=.85, zorder=0)
+    edge = Circle((0, 0), 5.85, fill=False, ec='none', lw=0)
+    ax.add_patch(edge)
+    im.set_clip_path(edge)
+    ax.add_patch(Circle((0, 0), 3.17, fill=False, ec=MUTED, lw=.6))
+    for i, p in enumerate(ring):
+        ax.add_patch(Circle(p, .55, facecolor='w', ec=MUTED, lw=.6, zorder=2))
+    ax.plot(0, 0, '+', color=FG, ms=4, mew=.6)
+    hp = ring[hp_ix]
+    ax.add_patch(Circle(hp, 1.15, fill=False, ec=HP, lw=1., ls=(0, (2, 1.2)), zorder=3))
+    ax.text(hp[0], hp[1] - 1.9, 'HP', color=HP, fontsize=6.5, ha='center', va='top', fontweight='bold')
+    for i, p in enumerate(ring):
+        if i != hp_ix:
+            ax.text(p[0], p[1] + (1.9 if p[1] > 0 else -1.9), 'LP', color='.4', fontsize=6.5, ha='center',
+                    va='bottom' if p[1] > 0 else 'top')
+    ax.set_xlim(-6, 6)
+    ax.set_ylim(-6, 6)
+    ax.set_aspect('equal')
+    ax.set_axis_off()
 
 
-def main(gain_table, conditional_table, power_table, name='fig5_sustained_hp', timeseries=False):
+def main(gain_table, conditional_table, power_table, name='fig5_sustained_hp'):
     cond = conditional(conditional_table)
     js = {f: joint(gain_table, f) for f in ('dog', 'dn')}
-    fig = plt.figure(figsize=(DOUBLE, 6.9 if timeseries else 5.0))
-    if timeseries:
-        gs = fig.add_gridspec(2, 2, width_ratios=[2.6, 1], hspace=1.05, wspace=.3, left=.115, right=.99, top=.9, bottom=.38)
-    else:
-        gs = fig.add_gridspec(2, 2, width_ratios=[2.6, 1], hspace=1.05, wspace=.3, left=.115, right=.99, top=.86, bottom=.12)
-    ax = fig.add_subplot(gs[0, 0])
-    panel_roi(ax, cond)
-    title_icon(ax, 'Sustained gain: less at the likely distractor location', ('hp', 'lp'), HP)
-    letter(ax, 'a', x=-.06, y=1.12)
-    provisional(ax, y=1.42)
-    ax = fig.add_subplot(gs[0, 1])
-    panel_pooled(ax, cond, js)
-    letter(ax, 'b', x=-.3, y=1.12)
-    dd_lim = (-.3, .2)
-    ax = fig.add_subplot(gs[1, 0])
-    panel_roi(ax, cond, 'dD', DISTRACTOR, dd_lim, 'dD: HP − LP transient gain',
-              ('Less transient gain at HP\nwhen estimated alone', (ROI_X['IPS'], -.04), (1.2, -.24)))
-    title_icon(ax, 'Transient gain at the distractor: HP vs LP', ('distractor', 'lp'), DISTRACTOR)
-    letter(ax, 'c', x=-.06, y=1.12)
-    ax = fig.add_subplot(gs[1, 1])
-    panel_pooled(ax, cond, js, 'dD', DISTRACTOR, dd_lim)
-    letter(ax, 'd', x=-.3, y=1.12)
-    if timeseries:
-        low = fig.add_gridspec(1, 2, width_ratios=[1.4, 1], left=.115, right=.99, top=.24, bottom=.06)
-        ax = panel_hp_timeseries(fig, low[0])
-        letter(ax, 'e', x=-.12, y=1.12)
-        name += '_ts_proto'
+    # a: what dS means; b: dS per ROI (the result); c: the transient counterpart, dD (secondary).
+    W, H = DOUBLE, 2.45
+    fig = plt.figure(figsize=(W, H))
+    ax = fig.add_axes([.1 / W, .56 / H, 1.35 / W, 1.35 / H])
+    panel_sketch(ax)
+    ax.text(.05, 1.215, 'Sustained gain field', transform=ax.transAxes, fontsize=7, color=FG, va='center')
+    ax.text(.5, -.04, 'Less gain where the\ndistractor is likely', transform=ax.transAxes, fontsize=6.5, color=HP,
+            ha='center', va='top')
+    letter(ax, 'a', x=-.02, y=1.18)
+    ax = fig.add_axes([2.3 / W, .6 / H, 2.3 / W, 1.3 / H])
+    panel_roi(ax, cond, ylabel='Sustained gain, HP − LP', annot=('Less gain at HP', (ROI_X['V3'], -.016), (3.0, -.1)))
+    title_icon(ax, 'Less sustained gain at HP', ('hp', 'lp'), HP, h=.27, y=1.1)
+    letter(ax, 'b', x=-.33, y=1.19)
+    ax = fig.add_axes([5.15 / W, .6 / H, 1.88 / W, 1.3 / H])
+    panel_roi(ax, cond, 'dD', DISTRACTOR, (-.3, .2), 'Transient gain, HP − LP',
+              ('Less at HP', (ROI_X['V3AB'] - .1, -.045), (1.4, -.26)), band_label=False)
+    title_icon(ax, 'Transient distractor gain', ('distractor', 'lp'), DISTRACTOR, h=.27, y=1.1,
+               sub='Not robust in the joint fit')
+    letter(ax, 'c', x=-.33, y=1.19)
+    fig.text(.005, .005, PROVISIONAL, fontsize=5.5, color=MUTED, ha='left', va='bottom')
     save(fig, name, LEGEND)
+    fig = plt.figure(figsize=(SINGLE, 2.3))
+    gs = fig.add_gridspec(1, 2, wspace=.6, left=.17, right=.98, top=.8, bottom=.15)
+    ax = fig.add_subplot(gs[0])
+    panel_pooled(ax, cond, js)
+    letter(ax, 'a', x=-.35, y=1.12)
+    ax = fig.add_subplot(gs[1])
+    panel_pooled(ax, cond, js, 'dD', DISTRACTOR, dd_lim)
+    letter(ax, 'b', x=-.35, y=1.12)
+    save(fig, 'figS_pooled_dS_dD', POOLED_LEGEND)
     fig, ax = plt.subplots(figsize=(SINGLE, 2.2), gridspec_kw=dict(left=.17, right=.97, top=.92, bottom=.2))
     panel_power(ax, power_table)
     save(fig, 'figS_cv_power', POWER_LEGEND)
@@ -172,6 +176,5 @@ if __name__ == '__main__':
     ap.add_argument('--gain-table', default='notes/data/gain_field_parameters.tsv')
     ap.add_argument('--conditional-table', default='notes/data/conditional_estimates_dog_2026-11.tsv')
     ap.add_argument('--power-table', default='notes/data/cv_power_simulation_2026-11.tsv')
-    ap.add_argument('--timeseries', action='store_true', help='Prototype with the deconvolved HP − LP time courses (e).')
     a = ap.parse_args()
-    main(a.gain_table, a.conditional_table, a.power_table, timeseries=a.timeseries)
+    main(a.gain_table, a.conditional_table, a.power_table)

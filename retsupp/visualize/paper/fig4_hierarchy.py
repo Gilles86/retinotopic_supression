@@ -25,7 +25,7 @@ TERMS = [('T', 'Target gain', TARGET), ('D', 'Distractor gain', DISTRACTOR), ('d
          ('dD', 'Distractor gain, HP − LP', '#5E3C99')]
 FAM = {'dog': 'DoG', 'dn': 'DN'}
 LEGEND = """
-**Figure 4. The target and the distractor draw gain, increasingly along the visual hierarchy.** a, Gain at the target location while the search display is on, per ROI (m7_full, DoG pRFs): dots are subjects (n = 30; triangles, beyond the axis), points and bars are the median and bootstrapped 95% CI. Stars: Wilcoxon signed-rank test against 0, Benjamini-Hochberg across ROIs; * q < .05, ** q < .01, *** q < .001. b, The same for the distractor, averaged over its locations. c, Per subject, the slope of the gain on log₂ pRF size over the nine ROIs (OLS; pRF size: group median at 1-2.5° eccentricity, from the pRF fit), so the change in gain per doubling of pRF size; median and 95% CI beside the dots; Wilcoxon against 0, Benjamini-Hochberg over the eight parameters tested (hierarchy_regression_2026-11.tsv). DN pRFs, Bayes factors and all other terms are in the parameter table. Squares under the data (New subjects): leave-one-subject-out test per ROI, the term added with the size estimated from the other 29 subjects (+δ) vs the opposite size (−δ); filled, a majority of subjects predicted better with +δ (one-sided Wilcoxon signed-rank test, Benjamini-Hochberg q < .05 across ROIs); open, not significant; for the distractor (b), its gain added on top of the target term (m3b vs m1). Provisional: current inputs.
+**Figure 4. The target and, less so, the distractor draw gain, increasingly along the visual hierarchy.** Rows: target (a-c) and distractor (d-f); columns: the gain-field model (a, d), the measured responses (b, e) and their difference from a neutral item (c, f). a, Gain at the target location while the search display is on, per ROI (m7_full, DoG pRFs): dots are subjects (n = 30; triangles, beyond the axis), points and bars are the median and bootstrapped 95% CI. Stars: Wilcoxon signed-rank test against 0, Benjamini-Hochberg across ROIs; * q < .05, ** q < .01, *** q < .001. The target gain rises with pRF size: per subject, the OLS slope of the gain on log₂ pRF size over the nine ROIs (pRF size: group median at 1-2.5° eccentricity) has a median of +0.24 per doubling of pRF size (95% CI [+0.15, +0.27], 90% of subjects positive; Wilcoxon p < .001, Benjamini-Hochberg over the eight parameters tested, q < .001). Squares under the data (New subjects): leave-one-subject-out test per ROI, the term added with the size estimated from the other 29 subjects (+δ) vs the opposite size (−δ); filled, a majority of subjects predicted better with +δ (one-sided Wilcoxon signed-rank test, Benjamini-Hochberg q < .05 across ROIs); open, not significant. b, Deconvolved response at a pRF's item location (ROIs pooled weighted by voxel count; mean over subjects ± SEM; each subject's pre-onset mean, −4 to 0 s, subtracted) when the target is there and when a neutral item is there, both averaged over HP and LP locations; dark lines, higher areas (V3AB, IPS, hV4, VO, LO, TO); pale lines, early areas (V1-V3). c, Target minus neutral item per pathway, mean ± SEM over subjects. Stars: the mean over 3.2-6.4 s (grey band) against 0, Wilcoxon signed-rank test, Benjamini-Hochberg over the three pathways (all q < 10⁻⁸). d, As a, for the distractor gain averaged over its locations; for the New-subjects test, the distractor gain added on top of the target term (m3b vs m1). Its slope on log₂ pRF size is +0.06 per doubling (95% CI [+0.03, +0.11], 77% of subjects positive; p = .005, q = .010). e, f, As b, c, for the distractor at LP locations against a neutral item at LP locations (all q < .001). The measured distractor response exceeds the neutral item's in the occipitotemporal pathway as a whole, including LO and TO, where the model's distractor gain is not significant (d). DN pRFs, Bayes factors and all other terms are in the parameter table. Provisional: current inputs.
 """
 LEGEND_SIZE = """
 **Figure S. Size of the fitted gain fields.** Full width at half maximum (2.355 σ) of the sustained and transient fields per ROI (m7_full, DoG pRFs), median over subjects and bootstrapped 95% CI; dotted line, the 4° radius of the ring. Many fits sit at a bound of σ (0.5° or 8°; up to 73% for the transient field in IPS, see the parameter table): where a gain is small, its width is poorly constrained. Provisional: current inputs.
@@ -122,32 +122,6 @@ def panel_size(ax, d):
     roi_axis(ax)
 
 
-def panel_slopes(ax, sl, reg):
-    """Per-subject slope of target and distractor gain on log2 pRF size: one dot per subject."""
-    rows = [('Target gain', 'Target', TARGET), ('Distractor gain', 'Distractor', DISTRACTOR)]
-    for i, (par, lab, col) in enumerate(rows):
-        v = sl[(sl.parameter == par) & (sl.rois == 'all nine')].slope.to_numpy()
-        rng = np.random.default_rng(i)
-        ax.scatter(i + rng.uniform(-.17, .17, len(v)), v, s=7, color=col, alpha=.35, lw=0, zorder=1)
-        m, lo, hi = median_ci(v)
-        ax.errorbar(i + .32, m, yerr=[[m - lo], [hi - m]], fmt='o', ms=6, color=col, mec='w', mew=.8, lw=1.6, capsize=0, zorder=4)
-        q = reg[(reg.parameter == par) & (reg.rois == 'all nine')].q.iloc[0]
-        ax.text(i + .1, .7, stars(q), ha='center', va='bottom', fontsize=6.5, color=col)
-    ax.hlines(0, -.5, 1.6, color='.7', lw=.7, ls='--', zorder=0)
-    ax.set_xticks([0.1, 1.1])
-    ax.set_xticklabels([r[1] for r in rows])
-    ax.set_xlim(-.5, 1.6)
-    ax.set_ylim(-.4, .7)
-    ax.set_yticks([-.4, -.2, 0, .2, .4, .6])
-    ax.set_ylabel('Change in gain per\ndoubling of pRF size')
-    offset_spines(ax)
-
-
-def slope_note(reg, parameter, unit=''):
-    r = reg[(reg.parameter == parameter) & (reg.rois == 'all nine')].iloc[0]
-    return f'{r.median_slope:+.2f}{unit} per pRF-size doubling{stars(r.q)}'.replace('+0.', '+.').replace('-0.', '−.').replace('-', '−')
-
-
 def size_figure(d):
     fig = plt.figure(figsize=(SINGLE, 2.4))
     ax = fig.add_axes([.17, .3, .8, .6])
@@ -159,81 +133,136 @@ def size_figure(d):
     save(fig, 'figS_field_size', LEGEND_SIZE)
 
 
-def panel_timeseries(fig):
-    """d, e: deconvolved extra response at a pRF's item location, target and distractor minus a neutral item, per pathway."""
-    from retsupp.visualize.paper.fig3_prf_fits import PATHWAY, PATHWAY_COL
-    from retsupp.visualize.paper.fig45_common import item_timecourses
-    p = item_timecourses(groups={r: g for g, rs in PATHWAY.items() for r in rs})
+
+PEAK = (3.2, 6.4)   # s after search onset: the window tested in the difference time courses
+
+
+def pstars(p):
+    return '***' if p < .001 else '**' if p < .01 else '*' if p < .05 else 'n.s.'
+
+
+def item_pair(p, term):
+    """Per subject and time: the item's response and the neutral item's, matched as in the difference (c, f)."""
     w = p.pivot_table(index=['subject', 'grp', 't'], columns='cls', values='r')
-    diffs = {'T': (w.target_hp + w.target_lp) / 2 - (w.neutral_hp + w.neutral_lp) / 2,   # same mix of HP and LP locations
-             'D': w.distractor_lp - w.neutral_lp}                                          # LP locations only
-    sub = fig.add_gridspec(1, 3, wspace=.45, left=.11, right=.99, top=.36, bottom=.1)
-    axes = []
-    for j, (term, col, title, icon) in enumerate((('T', TARGET, 'Target minus neutral item', ('target',)),
-                                                  ('D', DISTRACTOR, 'Distractor minus neutral item', ('distractor',)))):
-        ax = fig.add_subplot(sub[j], sharey=axes[0] if axes else None)
-        x = diffs[term].rename('r').reset_index()
-        for k, grp in enumerate(PATHWAY):
-            g = x[x.grp == grp].pivot(index='subject', columns='t', values='r')
-            m, se = g.mean(), g.sem()
-            ax.fill_between(m.index, m - se, m + se, color=PATHWAY_COL[grp], alpha=.18, lw=0)
-            ax.plot(m.index, m.values, color=PATHWAY_COL[grp], lw=1.4)
-            if j == 0:
-                ax.text(.98, .95 - k * .11, grp, transform=ax.transAxes, color=PATHWAY_COL[grp], fontsize=6.5, ha='right', va='top')
-        ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
-        ax.axvline(0, color='.75', lw=.6, zorder=0)
-        ax.set_xticks([0, 10, 20])
-        ax.set_xlabel('Time from search onset (s)')
-        ax.set_ylabel('Extra response (% signal)' if j == 0 else '')
-        offset_spines(ax)
-        title_icon(ax, title, icon, col, h=.24, y=1.08)
-        letter(ax, 'de'[j], x=-.2 if j == 0 else -.12, y=1.12)
-        axes.append(ax)
-    axes[0].set_ylim(-.12, .38)
+    if term == 'T':   # same mix of HP and LP locations for the target and the neutral item
+        item, neutral = (w.target_hp + w.target_lp) / 2, (w.neutral_hp + w.neutral_lp) / 2
+    else:             # the distractor at LP locations only, against the neutral item at LP locations
+        item, neutral = w.distractor_lp, w.neutral_lp
+    return item, neutral
 
 
-def main(gain_table, conditional_table, name='fig4_hierarchy', regression_table='notes/data/hierarchy_regression_2026-11.tsv',
-         timeseries=False):
-    reg = pd.read_csv(regression_table, sep='\t')
+def long(s):
+    return s.rename('r').reset_index()
+
+
+def panel_raw(ax, raw, term, col, lab):
+    """Measured response at the item's location vs a neutral item's, in early and in higher areas."""
+    from retsupp.visualize.paper.fig45_common import tc_line
+    from retsupp.visualize.paper.fig_event_responses_2x3 import NEUTRAL
+    item, neutral = item_pair(raw, term)
+    x = pd.concat([long(item).assign(cls='item'), long(neutral).assign(cls='neutral')])
+    peaks = {}
+    for grp, alpha, lw in (('Early areas', .5, 1.), ('Higher areas', 1., 1.4)):
+        g = x[x.grp == grp]
+        for cls, c in (('neutral', NEUTRAL), ('item', col)):
+            q = g[g.cls == cls].pivot(index='subject', columns='t', values='r')
+            m, se = q.mean(), q.sem()
+            ax.fill_between(m.index, m - se, m + se, color=c, alpha=.15 * alpha, lw=0)
+            ax.plot(m.index, m.values, color=c, lw=lw, alpha=alpha)
+            if cls == 'item':
+                peaks[grp] = (m.idxmax(), m.max())
+    for grp, (t, v) in peaks.items():
+        ax.text(t + 1.8, v, grp, fontsize=6, color='.35' if grp.startswith('Early') else FG, va='bottom', ha='left')
+    ax.text(1., .41, lab, transform=ax.transAxes, color=col, fontsize=6.5, ha='right', va='center')
+    ax.text(1., .31, 'Neutral item', transform=ax.transAxes, color=NEUTRAL, fontsize=6.5, ha='right', va='center')
+    ax.axhline(0, color='.75', lw=.6, zorder=0)
+    ax.axvline(0, color='.75', lw=.6, zorder=0)
+    ax.set_ylim(-.3, 1.4)
+    ax.set_yticks([0, .5, 1])
+    ax.set_xticks([0, 10, 20])
+    ax.set_ylabel('Response (% signal)')
+    ax.set_xlabel('Time from search onset (s)')
+    offset_spines(ax)
+
+
+def panel_diff(ax, p, term, window_label=False):
+    """Item minus neutral item per pathway, mean ± SEM; stars: the peak window (grey) against 0."""
+    from retsupp.visualize.paper.fig3_prf_fits import PATHWAY, PATHWAY_COL
+    item, neutral = item_pair(p, term)
+    x = long(item - neutral)
+    ps, out = [], {}
+    for grp in PATHWAY:
+        g = x[x.grp == grp].pivot(index='subject', columns='t', values='r')
+        m, se = g.mean(), g.sem()
+        ax.fill_between(m.index, m - se, m + se, color=PATHWAY_COL[grp], alpha=.18, lw=0)
+        ax.plot(m.index, m.values, color=PATHWAY_COL[grp], lw=1.4)
+        v = g.loc[:, (g.columns >= PEAK[0]) & (g.columns <= PEAK[1])].mean(1)
+        ps.append(stats.wilcoxon(v).pvalue)
+        out[grp] = v.mean()
+    qs = stats.false_discovery_control(ps)
+    for k, (grp, q) in enumerate(zip(PATHWAY, qs)):
+        print(f'{term} - neutral, {grp}: mean {out[grp]:+.3f}, p = {ps[k]:.2g}, q = {q:.2g}')
+        lab = f'{grp} {stars(q) or "n.s."}'
+        ax.text(1.02, .99 - k * .11, lab, transform=ax.transAxes, color=PATHWAY_COL[grp], fontsize=6.5, ha='right', va='top')
+    ax.axvspan(*PEAK, color='.93', lw=0, zorder=0)
+    if window_label:
+        ax.text(sum(PEAK) / 2, -.105, 'Tested', fontsize=5.5, color='.45', ha='center', va='bottom')
+    ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
+    ax.axvline(0, color='.75', lw=.6, zorder=0)
+    ax.set_xticks([0, 10, 20])
+    ax.set_ylim(-.12, .4)
+    ax.set_yticks([-.1, 0, .1, .2, .3])
+    ax.set_xlabel('Time from search onset (s)')
+    ax.set_ylabel('Extra response (% signal)')
+    offset_spines(ax)
+    return ps, qs
+
+
+def main(gain_table, conditional_table, name='fig4_hierarchy'):
+    from retsupp.visualize.paper.fig3_prf_fits import PATHWAY
+    from retsupp.visualize.paper.fig45_common import item_timecourses
     js = {f: joint(gain_table, f) for f in FAM}
     t = summarise(js, conditional(conditional_table))
     OUT.mkdir(parents=True, exist_ok=True)
     write_table(t, js)
     d = js['dog']
-    fig = plt.figure(figsize=(DOUBLE, 4.9 if timeseries else 2.75))
-    if timeseries:
-        gs = fig.add_gridspec(1, 3, wspace=.45, left=.11, right=.99, top=.85, bottom=.56)
-    else:
-        gs = fig.add_gridspec(1, 3, wspace=.45, left=.11, right=.99, top=.74, bottom=.22)
-    ax = fig.add_subplot(gs[0])
-    panel_gain(ax, d, t, 'T', TARGET, (-.4, 1.2), None, None)
-    roi_axis(ax)
-    title_icon(ax, 'Target: more gain up the hierarchy', ('target',), TARGET, h=.24)
-    ax.set_ylabel('Gain at the field centre')
-    letter(ax, 'a', x=-.2, y=1.26)
-    provisional(ax, x=3.3, y=1.36)
-    ax = fig.add_subplot(gs[1])
-    panel_gain(ax, d, t, 'D', DISTRACTOR, (-.4, 1.2), None, None)
-    roi_axis(ax)
-    title_icon(ax, 'Distractor: less gain than the target' if timeseries else 'Distractor: gain peaks mid-hierarchy, none in LO and TO',
-               ('distractor',), DISTRACTOR, h=.24)
-    letter(ax, 'b', x=-.12, y=1.26)
-    ax = fig.add_subplot(gs[2])
-    panel_slopes(ax, pd.read_csv(regression_table.replace('regression', 'slopes'), sep='\t'), reg)
-    ax.text(0, 1.22, 'Slope over ROIs, per subject', transform=ax.transAxes, fontsize=7, color=FG, va='center', ha='left')
-    letter(ax, 'c', x=-.3, y=1.26)
-    if timeseries:
-        panel_timeseries(fig)
-        name += '_ts_proto'
+    raw = item_timecourses(groups={r: ('Early areas' if r in PATHWAY['Early'] else 'Higher areas') for r in ROI_ORDER})
+    pw = item_timecourses(groups={r: g for g, rs in PATHWAY.items() for r in rs})
+
+    # Rows tell one story each (target, distractor); columns: model gain | measured response | difference.
+    W, H = DOUBLE, 5.0
+    cols = [(.62, 2.2), (3.42, 1.55), (5.5, 1.5)]   # (left, width) in inches
+    rows = [(3.05, 1.35), (.67, 1.35)]                # (bottom, height) in inches
+    ax_at = lambda r, c: fig.add_axes([cols[c][0] / W, rows[r][0] / H, cols[c][1] / W, rows[r][1] / H])
+    fig = plt.figure(figsize=(W, H))
+    spec = (('T', TARGET, 'Target', 'Target: more gain up the hierarchy', 'Target minus neutral item', ('target',)),
+            ('D', DISTRACTOR, 'Distractor', 'Distractor: less gain than the target', 'Distractor minus neutral item',
+             ('distractor',)))
+    first = []
+    for r, (term, col, lab, title, dtitle, icon) in enumerate(spec):
+        ax = ax_at(r, 0)
+        panel_gain(ax, d, t, term, col, (-.4, 1.2), None, None)
+        roi_axis(ax)
+        ax.set_ylabel('Gain at the field centre')
+        title_icon(ax, title, icon, col, h=.26, y=1.1)
+        letter(ax, 'ad'[r], x=-.2, y=1.19)
+        ax = ax_at(r, 1)
+        panel_raw(ax, raw, term, col, lab)
+        ax.text(0, 1.23, f'{lab} vs neutral item', transform=ax.transAxes, fontsize=7, color=FG, va='center')
+        letter(ax, 'be'[r], x=-.3, y=1.19)
+        ax = ax_at(r, 2)
+        panel_diff(ax, pw, term, window_label=r == 0)
+        ax.text(0, 1.23, dtitle, transform=ax.transAxes, fontsize=7, color=col, va='center')
+        letter(ax, 'cf'[r], x=-.3, y=1.19)
+        if r == 0:
+            provisional(ax, x=1.05, y=1.36)
     save(fig, name, LEGEND)
     size_figure(d)
-    save(fig, name, LEGEND)
 
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--gain-table', default='notes/data/gain_field_parameters.tsv')
     ap.add_argument('--conditional-table', default='notes/data/conditional_estimates_dog_2026-11.tsv')
-    ap.add_argument('--timeseries', action='store_true', help='Prototype with the deconvolved time courses (d).')
     a = ap.parse_args()
-    main(a.gain_table, a.conditional_table, timeseries=a.timeseries)
+    main(a.gain_table, a.conditional_table)
