@@ -34,34 +34,39 @@ field, coloured as mapped on the contralateral hemisphere. b, Share of pRF centr
 voxels with R² ≥ .1 inside the bar aperture; dots are subjects, lines medians; numbers give the subjects per ROI. c, Held-out
 R² gained by the pRF model used for the gain fits (difference-of-Gaussians pRF, one HRF per subject × ROI) over a Gaussian pRF
 with the canonical HRF, per ROI: three folds of runs, voxels with cross-run reliability > 0 in the training runs, median over
-voxels, mean over folds; dots are subjects (n = 30), lines medians. d, Leave-one-subject-out test of each gain term per ROI:
-percentage of subjects whose held-out prediction improves when the term is added with the size estimated from the other 29
-subjects (blue below, red above 50%). 50% is not the chance level: without a true effect, adding a term whose size comes
-from other subjects makes prediction worse on average, so the null lies below 50%. Bold, Wilcoxon signed-rank test of ΔR²
-against 0 (conservative for the same reason), Benjamini-Hochberg q < .05 across the nine ROIs. The distractor term is tested on the model without the target term; tested on top of the target term is pending. Provisional: c uses the per-ROI HRF from the
+voxels, mean over folds; dots are subjects (n = 30), lines medians. d, Leave-one-subject-out test of each gain term per ROI: the term is added to each subject's model with the size
+estimated from the other 29 subjects (δ), and with the opposite size (−δ); the cell gives the percentage of subjects whose
+held-out prediction is better with +δ than with −δ. Adding any term costs the same for +δ and −δ, so this comparison keeps
+only whether a subject's data move the way the other subjects predict, and its null is 50% (blue below, red above). Bold,
+Wilcoxon signed-rank test of the difference against 0 with Benjamini-Hochberg q < .05 across the nine ROIs; subject × ROI
+cells with fewer than 20 signal voxels are left out. The distractor term is tested on the model without the target term; tested on top of the target term is pending. Provisional: c uses the per-ROI HRF from the
 median of the voxels' own HRF fits until the jointly fitted HRF is in; d uses the current gain fits.
 """
 
 
-def angle_key(ax):
-    """Disk keyed like the polar-angle map: right field as on the left hemisphere, left field as on the right."""
+def angle_key(ax_l, ax_r):
+    """Two 270° wedges keyed like the polar-angle map: each hemisphere's contralateral field plus 45° past the meridians."""
     n = 201
     g = np.linspace(-1, 1, n)
     x, y = np.meshgrid(g, g)
     th = np.arctan2(y, x)
-    v = np.where(x >= 0, 1. - np.clip((np.mod(th + np.pi, 2 * np.pi) - .25 * np.pi) / (1.5 * np.pi), 0, 1),
-                 np.clip((np.mod(th, 2 * np.pi) - .25 * np.pi) / (1.5 * np.pi), 0, 1))
-    rgba = mpl.colormaps['hsv'](v)
-    rgba[..., 3] = (np.hypot(x, y) <= 1).astype(float)
-    ax.imshow(rgba, extent=(-1, 1, -1, 1), origin='lower')
-    ax.plot([-1, 1], [0, 0], color='w', lw=.5)
-    ax.plot([0, 0], [-1, 1], color='w', lw=.5)
-    ax.plot(0, 0, '+', color=FG, ms=3, mew=.5)
-    ax.text(0, -1.15, 'Visual field', ha='center', va='top', fontsize=6, color=FG)
-    ax.set_xlim(-1.05, 1.05)
-    ax.set_ylim(-1.05, 1.05)
-    ax.set_aspect('equal')
-    ax.set_axis_off()
+    for ax, hemi, lab in ((ax_l, 'L', 'Left hemisphere'), (ax_r, 'R', 'Right hemisphere')):
+        if hemi == 'R':
+            u = (np.mod(th, 2 * np.pi) - .25 * np.pi) / (1.5 * np.pi)
+            v = u
+        else:
+            u = (np.mod(th + np.pi, 2 * np.pi) - .25 * np.pi) / (1.5 * np.pi)
+            v = 1. - u
+        rgba = mpl.colormaps['hsv'](np.clip(v, 0, 1))
+        rgba[..., 3] = ((np.hypot(x, y) <= 1) & (u >= 0) & (u <= 1)).astype(float)
+        ax.imshow(rgba, extent=(-1, 1, -1, 1), origin='lower')
+        ax.plot([-1, 1], [0, 0], color='.6', lw=.4)
+        ax.plot([0, 0], [-1, 1], color='.6', lw=.4)
+        ax.text(0, -1.2, lab, ha='center', va='top', fontsize=5.5, color=FG)
+        ax.set_xlim(-1.05, 1.05)
+        ax.set_ylim(-1.05, 1.05)
+        ax.set_aspect('equal')
+        ax.set_axis_off()
 
 
 def show_map(ax, path):
@@ -88,7 +93,7 @@ def panel_maps(fig, gs, subject=23, view='pole'):
     for k, roi in enumerate(names):
         ax.text(.02 + (k % 5) * .2, -.06 - (k // 5) * .12, roi, transform=ax.transAxes, color=ROI_COLORS[roi], fontsize=6.5,
                 fontweight='bold', va='top', ha='left')
-    angle_key(axes[1].inset_axes([.4, -.33, .2, .27]))
+    angle_key(axes[1].inset_axes([.2, -.33, .2, .27]), axes[1].inset_axes([.6, -.33, .2, .27]))
     ax = axes[2]
     cax = ax.inset_axes([.2, -.12, .6, .05])
     cb = mpl.colorbar.ColorbarBase(cax, cmap=mpl.colormaps['nipy_spectral'], norm=mpl.colors.Normalize(0, 4), orientation='horizontal')
@@ -146,8 +151,8 @@ def panel_loso(ax, table):
     cmap = mpl.colormaps['RdBu_r']
     for i, (t, lab) in enumerate(TERMS):
         x = d[d.mech == t]
-        pct = [(x[x.roi == r].dr2 > 0).mean() * 100 for r in ROI_ORDER]
-        ps = [stats.wilcoxon(x[x.roi == r].dr2.dropna()).pvalue for r in ROI_ORDER]
+        pct = [(x[x.roi == r].dr2_sign.dropna() > 0).mean() * 100 for r in ROI_ORDER]
+        ps = [stats.wilcoxon(x[x.roi == r].dr2_sign.dropna()).pvalue for r in ROI_ORDER]
         qs = stats.false_discovery_control(ps)
         for xx, v, q in zip(xs, pct, qs):
             ax.add_patch(plt.Rectangle((xx - .46, i - .46), .92, .92, color=cmap(.5 + (v - 50) / 100), lw=0))

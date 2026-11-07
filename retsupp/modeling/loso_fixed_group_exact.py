@@ -54,6 +54,12 @@ def loso(d):
     d = d[d.nvox >= 20].copy()
     d['dr2'] = [-float(CubicSpline(g, c)(x)) / sst * 1e5
                 for g, c, x, sst in zip(d.grid, d.curve, d.delta, d.sst)]
+    # The same with the sign of δ flipped. The penalty for adding a term that is not there (a·δ²) is the same for
+    # +δ and -δ, so half their difference keeps only whether the subject's data move the way the other subjects
+    # predict: symmetric around 0 without an effect, a true 50% null. NaN where -δ lies outside the curve's grid.
+    d['dr2_flip'] = [-float(CubicSpline(g, c)(-x)) / sst * 1e5 if g.min() <= -x <= g.max() else np.nan
+                     for g, c, x, sst in zip(d.grid, d.curve, d.delta, d.sst)]
+    d['dr2_sign'] = (d.dr2 - d.dr2_flip) / 2
     return d
 
 

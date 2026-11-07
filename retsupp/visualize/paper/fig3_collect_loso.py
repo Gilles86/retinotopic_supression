@@ -26,7 +26,7 @@ def main(bids, folders, out):
     for spec in folders:
         family, folder = spec.split('=')
         a = loso(load(deriv, folder, null))
-        per_roi.append(a[['subject', 'roi', 'mech', 'dr2']].assign(family=family))
+        per_roi.append(a[['subject', 'roi', 'mech', 'delta', 'dr2', 'dr2_flip', 'dr2_sign']].assign(family=family))
         for m in MECH:
             x = a[a.mech == m].pivot(index='subject', columns='roi', values='dr2').median(axis=1).dropna()
             rows.append(dict(family=family, term=m, n=len(x), pct_improved=(x > 0).mean() * 100, p=wilcoxon(x).pvalue, median_dr2_e5=x.median()))
