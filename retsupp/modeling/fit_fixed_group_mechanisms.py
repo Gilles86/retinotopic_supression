@@ -30,6 +30,9 @@ DN responses curve with the gains, so this approximation fails there. ``--exact`
 evaluates the actual predictions on a grid of δ instead and saves each voxel's
 ΔSSE(δ); ``loso_fixed_group_exact`` does the test from those curves.
 
+``--hp-rotation K`` relabels HP K ring steps (null for the conditional dS and dD); ``--sessions S`` uses only
+session S's runs for a and b (split-half reliability of per-subject estimates).
+
 Outputs (never overwritten) under
 ``derivatives/af_fixed_group_mechanisms/sub-XX/sub-XX_roi-R_stats.tsv.gz``, or
 ``sub-XX_roi-R_curves.npz`` with ``--exact``.
@@ -152,7 +155,7 @@ def base_parameters(sub, model, roi, base, width, overlay_root):
     return fit, pars.astype(np.float32), width_val, n_width
 
 
-def fit_roi(sub, roi, data, out_path, overlay_root=None):
+def fit_roi(sub, roi, data, out_path, overlay_root=None, sessions=None):
     bold, paradigm, _ci, _di, _ti, _grid, run_meta = data
     model = build_full_model(sub, data)
 
@@ -160,9 +163,10 @@ def fit_roi(sub, roi, data, out_path, overlay_root=None):
         return np.asarray(model.predict(paradigm=paradigm, parameters=p),
                           dtype=np.float64)
 
-    conds = {hp: np.concatenate([np.arange(rm.start, rm.stop)
-                                 for rm in run_meta if rm.hp == hp])
-             for hp in sorted({rm.hp for rm in run_meta})}
+    # Sufficient statistics only over the runs of the requested sessions (the fits stay as they are).
+    used = [rm for rm in run_meta if sessions is None or rm.session in sessions]
+    conds = {hp: np.concatenate([np.arange(rm.start, rm.stop) for rm in used if rm.hp == hp])
+             for hp in sorted({rm.hp for rm in used})}
     out = []
     for mech, (base, perturb, width) in MECHANISMS.items():
         fit, pars, width_val, n_width = base_parameters(sub, model, roi, base, width, overlay_root)
@@ -231,7 +235,7 @@ def fit_roi_exact(sub, roi, data, out_path, overlay_root=None):
 
 def main(subject, bids_folder, rois, output_subdir='af_fixed_group_mechanisms',
          overlay_root=None, base_root=None, family='dog', step=None, exact=False, hp_rotation=0,
-         mechanisms=None):
+         mechanisms=None, sessions=None):
     global BASE_ROOT, FAMILY, H, MECHANISMS
     if mechanisms:
         MECHANISMS = {m: MECHANISMS[m] for m in mechanisms}
@@ -250,7 +254,11 @@ def main(subject, bids_folder, rois, output_subdir='af_fixed_group_mechanisms',
     ci = np.roll(ci, hp_rotation, axis=1)   # relabel HP, as in fit_cv_ladder_nested --hp-rotation
     data = (bold, paradigm, ci, di, ti, grid_coords, run_meta)
     for roi, path in todo.items():
-        (fit_roi_exact if exact else fit_roi)(sub, roi, data, path, overlay_root)
+        if exact:
+            assert sessions is None, '--sessions is not implemented with --exact'
+            fit_roi_exact(sub, roi, data, path, overlay_root)
+        else:
+            fit_roi(sub, roi, data, path, overlay_root, sessions)
 
 
 if __name__ == '__main__':
@@ -266,8 +274,11 @@ if __name__ == '__main__':
     ap.add_argument('--step', type=float, default=None,
                     help='Central-difference step; DN is less linear in the gains')
     ap.add_argument('--hp-rotation', type=int, choices=[0, 1, 2, 3], default=0,
-                    help='Relabel HP K ring steps away, for a null of the conditional dS and dD. '
-                         'Use a matching --base-root of fits with the same relabelling.')
+                    help='Relabel HP K ring steps away, for a null of the conditional dS and dD. Their base '
+                         '(m4_TDS) ties HP and LP gains, so its fits do not depend on the labels and need no '
+                         'relabelled base root; mechanisms on label-dependent bases would.')
+    ap.add_argument('--sessions', type=int, nargs='+', choices=[1, 2], default=None,
+                    help='Sufficient statistics from these sessions only (split-half reliability)')
     ap.add_argument('--exact', action='store_true',
                     help='Save ΔSSE on a grid of δ from the actual predictions')
     ap.add_argument('--mechanisms', nargs='+', default=None, choices=list(MECHANISMS),
@@ -275,4 +286,4 @@ if __name__ == '__main__':
     args = ap.parse_args()
     main(args.subject, args.bids_folder, args.rois, args.output_subdir, args.overlay_root,
          args.base_root, args.family, args.step, args.exact, args.hp_rotation,
-         args.mechanisms)
+         args.mechanisms, args.sessions)
