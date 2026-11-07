@@ -90,3 +90,31 @@ def generalization_row(ax, term, color, lo, hi, label=True):
         tl.set_color('.4')
         ax.yaxis.get_major_ticks()[-1].tick1line.set_visible(False)
     return g
+
+
+def item_timecourses(folder='notes/data/event_deconv_2026-11', groups=None):
+    """Deconvolved responses at the item locations (deconvolve_location_responses.py), per subject, group and class.
+
+    groups: {roi: group name}; None pools all ROIs. ROIs are pooled weighted by voxel count; each subject's
+    pre-onset mean (-4 to 0 s) per group and class is subtracted."""
+    from pathlib import Path
+    d = pd.concat([pd.read_csv(f, sep='\t') for f in sorted(Path(folder).glob('sub-*_2026-11.tsv'))])
+    d = d[d.roi.isin(ROI_ORDER)].copy()
+    d['grp'] = d.roi.map(groups) if groups else 'All'
+    d = d.dropna(subset=['grp'])
+    d['t'] = d.t.round(2)
+    d['w'] = d.response * d.n_voxels
+    g = d.groupby(['subject', 'grp', 'cls', 't'])
+    p = (g.w.sum() / g.n_voxels.sum()).rename('r').reset_index()
+    base = p[p.t < 0].groupby(['subject', 'grp', 'cls']).r.mean()
+    p['r'] -= p.set_index(['subject', 'grp', 'cls']).index.map(base)
+    return p
+
+
+def tc_line(ax, p, cls, color, label=None, ls='-'):
+    """Mean over subjects ± SEM band of one class's time course."""
+    x = p[p.cls == cls].pivot(index='subject', columns='t', values='r')
+    m, se = x.mean(), x.sem()
+    ax.fill_between(m.index, m - se, m + se, color=color, alpha=.18, lw=0)
+    ax.plot(m.index, m.values, color=color, lw=1.3, ls=ls, label=label)
+    return m

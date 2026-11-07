@@ -159,15 +159,52 @@ def size_figure(d):
     save(fig, 'figS_field_size', LEGEND_SIZE)
 
 
-def main(gain_table, conditional_table, name='fig4_hierarchy', regression_table='notes/data/hierarchy_regression_2026-11.tsv'):
+def panel_timeseries(fig):
+    """d, e: deconvolved extra response at a pRF's item location, target and distractor minus a neutral item, per pathway."""
+    from retsupp.visualize.paper.fig3_prf_fits import PATHWAY, PATHWAY_COL
+    from retsupp.visualize.paper.fig45_common import item_timecourses
+    p = item_timecourses(groups={r: g for g, rs in PATHWAY.items() for r in rs})
+    w = p.pivot_table(index=['subject', 'grp', 't'], columns='cls', values='r')
+    diffs = {'T': (w.target_hp + w.target_lp) / 2 - (w.neutral_hp + w.neutral_lp) / 2,   # same mix of HP and LP locations
+             'D': w.distractor_lp - w.neutral_lp}                                          # LP locations only
+    sub = fig.add_gridspec(1, 3, wspace=.45, left=.11, right=.99, top=.36, bottom=.1)
+    axes = []
+    for j, (term, col, title, icon) in enumerate((('T', TARGET, 'Target minus neutral item', ('target',)),
+                                                  ('D', DISTRACTOR, 'Distractor minus neutral item', ('distractor',)))):
+        ax = fig.add_subplot(sub[j], sharey=axes[0] if axes else None)
+        x = diffs[term].rename('r').reset_index()
+        for k, grp in enumerate(PATHWAY):
+            g = x[x.grp == grp].pivot(index='subject', columns='t', values='r')
+            m, se = g.mean(), g.sem()
+            ax.fill_between(m.index, m - se, m + se, color=PATHWAY_COL[grp], alpha=.18, lw=0)
+            ax.plot(m.index, m.values, color=PATHWAY_COL[grp], lw=1.4)
+            if j == 0:
+                ax.text(.98, .95 - k * .11, grp, transform=ax.transAxes, color=PATHWAY_COL[grp], fontsize=6.5, ha='right', va='top')
+        ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
+        ax.axvline(0, color='.75', lw=.6, zorder=0)
+        ax.set_xticks([0, 10, 20])
+        ax.set_xlabel('Time from search onset (s)')
+        ax.set_ylabel('Extra response (% signal)' if j == 0 else '')
+        offset_spines(ax)
+        title_icon(ax, title, icon, col, h=.24, y=1.08)
+        letter(ax, 'de'[j], x=-.2 if j == 0 else -.12, y=1.12)
+        axes.append(ax)
+    axes[0].set_ylim(-.12, .38)
+
+
+def main(gain_table, conditional_table, name='fig4_hierarchy', regression_table='notes/data/hierarchy_regression_2026-11.tsv',
+         timeseries=False):
     reg = pd.read_csv(regression_table, sep='\t')
     js = {f: joint(gain_table, f) for f in FAM}
     t = summarise(js, conditional(conditional_table))
     OUT.mkdir(parents=True, exist_ok=True)
     write_table(t, js)
     d = js['dog']
-    fig = plt.figure(figsize=(DOUBLE, 2.75))
-    gs = fig.add_gridspec(1, 3, wspace=.45, left=.11, right=.99, top=.74, bottom=.22)
+    fig = plt.figure(figsize=(DOUBLE, 4.9 if timeseries else 2.75))
+    if timeseries:
+        gs = fig.add_gridspec(1, 3, wspace=.45, left=.11, right=.99, top=.85, bottom=.56)
+    else:
+        gs = fig.add_gridspec(1, 3, wspace=.45, left=.11, right=.99, top=.74, bottom=.22)
     ax = fig.add_subplot(gs[0])
     panel_gain(ax, d, t, 'T', TARGET, (-.4, 1.2), None, None)
     roi_axis(ax)
@@ -178,12 +215,16 @@ def main(gain_table, conditional_table, name='fig4_hierarchy', regression_table=
     ax = fig.add_subplot(gs[1])
     panel_gain(ax, d, t, 'D', DISTRACTOR, (-.4, 1.2), None, None)
     roi_axis(ax)
-    title_icon(ax, 'Distractor: gain peaks mid-hierarchy, none in LO and TO', ('distractor',), DISTRACTOR, h=.24)
+    title_icon(ax, 'Distractor: less gain than the target' if timeseries else 'Distractor: gain peaks mid-hierarchy, none in LO and TO',
+               ('distractor',), DISTRACTOR, h=.24)
     letter(ax, 'b', x=-.12, y=1.26)
     ax = fig.add_subplot(gs[2])
     panel_slopes(ax, pd.read_csv(regression_table.replace('regression', 'slopes'), sep='\t'), reg)
     ax.text(0, 1.22, 'Slope over ROIs, per subject', transform=ax.transAxes, fontsize=7, color=FG, va='center', ha='left')
     letter(ax, 'c', x=-.3, y=1.26)
+    if timeseries:
+        panel_timeseries(fig)
+        name += '_ts_proto'
     save(fig, name, LEGEND)
     size_figure(d)
     save(fig, name, LEGEND)
@@ -193,5 +234,6 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--gain-table', default='notes/data/gain_field_parameters.tsv')
     ap.add_argument('--conditional-table', default='notes/data/conditional_estimates_dog_2026-11.tsv')
+    ap.add_argument('--timeseries', action='store_true', help='Prototype with the deconvolved time courses (d).')
     a = ap.parse_args()
-    main(a.gain_table, a.conditional_table)
+    main(a.gain_table, a.conditional_table, timeseries=a.timeseries)

@@ -99,11 +99,46 @@ def panel_power(ax, table, estimate=-.016):
     offset_spines(ax)
 
 
-def main(gain_table, conditional_table, power_table, name='fig5_sustained_hp'):
+def panel_hp_timeseries(fig, gs_cell):
+    """e: deconvolved response at the HP location minus at LP locations, per item type, all nine ROIs pooled."""
+    from retsupp.visualize.paper.fig45_common import item_timecourses
+    from retsupp.visualize.paper.fig_event_responses_2x3 import NEUTRAL
+    from retsupp.visualize.paper.paper_style import TARGET
+    p = item_timecourses()
+    w = p.pivot_table(index=['subject', 't'], columns='cls', values='r')
+    ax = fig.add_subplot(gs_cell)
+    pk = {}
+    for k, (it, lab, col) in enumerate((('target', 'Target', TARGET), ('distractor', 'Distractor', DISTRACTOR),
+                                         ('neutral', 'Neutral item', NEUTRAL))):
+        x = (w[f'{it}_hp'] - w[f'{it}_lp']).rename('r').reset_index().pivot(index='subject', columns='t', values='r')
+        m, se = x.mean(), x.sem()
+        ax.fill_between(m.index, m - se, m + se, color=col, alpha=.16, lw=0)
+        ax.plot(m.index, m.values, color=col, lw=1.4)
+        v = x.loc[:, (x.columns >= 3.2) & (x.columns <= 6.4)].mean(1)
+        p_ = stats.wilcoxon(v).pvalue
+        st = '***' if p_ < .001 else '**' if p_ < .01 else '*' if p_ < .05 else 'n.s.'
+        ax.text(1.02, .82 - k * .13, f'{lab} {st}', transform=ax.transAxes, color=col, fontsize=6.5, va='center')
+        pk[lab] = (v.mean(), p_)
+    ax.axvspan(3.2, 6.4, color='.93', lw=0, zorder=0)
+    ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
+    ax.axvline(0, color='.75', lw=.6, zorder=0)
+    ax.set_xticks([0, 10, 20])
+    ax.set_xlabel('Time from search onset (s)')
+    ax.set_ylabel('HP − LP response (% signal)')
+    offset_spines(ax)
+    title_icon(ax, 'In the data: items at the HP location respond less', ('hp', 'lp'), HP, h=.24, y=1.08)
+    print('HP-LP peak', pk)
+    return ax
+
+
+def main(gain_table, conditional_table, power_table, name='fig5_sustained_hp', timeseries=False):
     cond = conditional(conditional_table)
     js = {f: joint(gain_table, f) for f in ('dog', 'dn')}
-    fig = plt.figure(figsize=(DOUBLE, 5.0))
-    gs = fig.add_gridspec(2, 2, width_ratios=[2.6, 1], hspace=1.05, wspace=.3, left=.115, right=.99, top=.86, bottom=.12)
+    fig = plt.figure(figsize=(DOUBLE, 6.9 if timeseries else 5.0))
+    if timeseries:
+        gs = fig.add_gridspec(2, 2, width_ratios=[2.6, 1], hspace=1.05, wspace=.3, left=.115, right=.99, top=.9, bottom=.38)
+    else:
+        gs = fig.add_gridspec(2, 2, width_ratios=[2.6, 1], hspace=1.05, wspace=.3, left=.115, right=.99, top=.86, bottom=.12)
     ax = fig.add_subplot(gs[0, 0])
     panel_roi(ax, cond)
     title_icon(ax, 'Sustained gain: less at the likely distractor location', ('hp', 'lp'), HP)
@@ -121,6 +156,11 @@ def main(gain_table, conditional_table, power_table, name='fig5_sustained_hp'):
     ax = fig.add_subplot(gs[1, 1])
     panel_pooled(ax, cond, js, 'dD', DISTRACTOR, dd_lim)
     letter(ax, 'd', x=-.3, y=1.12)
+    if timeseries:
+        low = fig.add_gridspec(1, 2, width_ratios=[1.4, 1], left=.115, right=.99, top=.24, bottom=.06)
+        ax = panel_hp_timeseries(fig, low[0])
+        letter(ax, 'e', x=-.12, y=1.12)
+        name += '_ts_proto'
     save(fig, name, LEGEND)
     fig, ax = plt.subplots(figsize=(SINGLE, 2.2), gridspec_kw=dict(left=.17, right=.97, top=.92, bottom=.2))
     panel_power(ax, power_table)
@@ -132,5 +172,6 @@ if __name__ == '__main__':
     ap.add_argument('--gain-table', default='notes/data/gain_field_parameters.tsv')
     ap.add_argument('--conditional-table', default='notes/data/conditional_estimates_dog_2026-11.tsv')
     ap.add_argument('--power-table', default='notes/data/cv_power_simulation_2026-11.tsv')
+    ap.add_argument('--timeseries', action='store_true', help='Prototype with the deconvolved HP − LP time courses (e).')
     a = ap.parse_args()
-    main(a.gain_table, a.conditional_table, a.power_table)
+    main(a.gain_table, a.conditional_table, a.power_table, timeseries=a.timeseries)
