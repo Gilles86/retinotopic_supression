@@ -338,12 +338,12 @@ def distance_icon(fig, x0, y0, size, n_bins=8):
 
 def main(cv_table, hrf_table, loso_table, name='fig3_prf_fits'):
     d, base = gain_r2(cv_table, hrf_table)
-    fig = plt.figure(figsize=(DOUBLE, 6.8))
-    top = fig.add_gridspec(1, 2, width_ratios=[.27, 1], left=.01, right=.99, top=0.963, bottom=0.651, wspace=.03)
+    fig = plt.figure(figsize=(DOUBLE, 7.1))
+    top = fig.add_gridspec(1, 2, width_ratios=[.27, 1], left=.01, right=.99, top=0.965, bottom=0.665, wspace=.03)
     first = panel_flat_window(fig, top[0])
     letter(first, 'a', x=.04, y=1.12)
     panel_maps(fig, top[1])
-    mid = fig.add_gridspec(1, 3, width_ratios=[1, .7, 1], left=.075, right=.99, top=0.519, bottom=0.360, wspace=.38)
+    mid = fig.add_gridspec(1, 3, width_ratios=[1, .7, 1], left=.075, right=.99, top=0.535, bottom=0.385, wspace=.38)
     ax = fig.add_subplot(mid[0])
     panel_contra(ax)
     ax.text(0, 1.16, 'pRFs sit in the contralateral field', transform=ax.transAxes, fontsize=7, color=FG, va='center')
@@ -358,7 +358,7 @@ def main(cv_table, hrf_table, loso_table, name='fig3_prf_fits'):
             color=FG, va='center', linespacing=1.2)
     letter(ax, 'd', x=-.22, y=1.12)
     fig.text(.99, .995, 'Provisional: current inputs', fontsize=5.5, color=MUTED, ha='right', va='top')
-    low = fig.add_gridspec(1, 1, left=.075, right=.9, top=0.191, bottom=0.058)
+    low = fig.add_gridspec(1, 1, left=.075, right=.9, top=0.17, bottom=0.055)
     first = panel_distance_tc(fig, low[0])
     if first is not None:
         bb = first.get_position()
