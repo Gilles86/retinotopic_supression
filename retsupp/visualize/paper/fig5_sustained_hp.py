@@ -166,36 +166,79 @@ def panel_hp_tc(ax, window=(3.2, 6.4)):
     return dict(diff=v.mean(), p=pv, rel=rel, n=len(v))
 
 
+def panel_hp_items(ax, window=(3.2, 6.4), lim=(-45, 35)):
+    """HP relative to LP response per item type (same voxels and window as panel_hp_tc), dots are subjects."""
+    from retsupp.visualize.paper.fig45_common import item_timecourses
+    from retsupp.visualize.paper.fig_event_responses_2x3 import NEUTRAL
+    from retsupp.visualize.paper.paper_style import TARGET
+    p = item_timecourses()
+    pk = p[p.t.between(*window)].groupby(['subject', 'cls']).r.mean().unstack()
+    items = (('target', 'Target', TARGET), ('distractor', 'Distractor', DISTRACTOR), ('neutral', 'Neutral', '#7B8794'))
+    rel = pd.DataFrame({it: 100 * (pk[f'{it}_hp'] / pk[f'{it}_lp'] - 1) for it, _, _ in items})
+    lo, hi = lim
+    out = {}
+    for i, (it, lab, col) in enumerate(items):
+        v = rel[it].to_numpy()
+        rng = np.random.default_rng(i)
+        xx = i + rng.uniform(-.13, .13, len(v))
+        ok = (v >= lo) & (v <= hi)
+        ax.scatter(xx[ok], v[ok], s=6, color=col, alpha=.35, lw=0)
+        ax.scatter(xx[v < lo], np.full((v < lo).sum(), lo), s=9, marker='v', color=col, alpha=.6, lw=0, clip_on=False)
+        ax.scatter(xx[v > hi], np.full((v > hi).sum(), hi), s=9, marker='^', color=col, alpha=.6, lw=0, clip_on=False)
+        m, a, b = median_ci(v)
+        ax.errorbar(i, m, yerr=[[m - a], [b - m]], fmt='o', ms=5, color=col, mec='w', mew=.7, lw=1.4, capsize=0, zorder=4)
+        pv = stats.wilcoxon(v).pvalue
+        st = '***' if pv < .001 else '**' if pv < .01 else '*' if pv < .05 else ''
+        ax.text(i, hi + .03 * (hi - lo), st, ha='center', va='bottom', fontsize=6.5, color=col, clip_on=False)
+        out[it] = (m, pv)
+    x = rel.distractor - (rel.target + rel.neutral) / 2
+    out['distractor_vs_others'] = (np.median(x), stats.wilcoxon(x).pvalue)
+    ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
+    ax.set_xticks(range(3))
+    ax.set_xticklabels([lab for _, lab, _ in items], rotation=90)
+    for t, (_, _, col) in zip(ax.get_xticklabels(), items):
+        t.set_color(col)
+    ax.set_xlim(-.5, 2.5)
+    ax.set_ylim(lo, hi)
+    ax.set_ylabel('HP vs LP (%)')
+    offset_spines(ax)
+    ax.tick_params(axis='x', labelrotation=90)
+    ax.text(.5, 1.12, 'Per item', transform=ax.transAxes, ha='center', fontsize=6.5, color=FG)
+    return out
+
+
 def main(gain_table, conditional_table, power_table, name='fig5_sustained_hp'):
     cond = conditional(conditional_table)
     js = {f: joint(gain_table, f) for f in ('dog', 'dn')}
     # a: what dS means; b: dS per ROI (the result); c: the transient counterpart, dD (secondary).
-    W, H = DOUBLE, 4.95
+    W, H = DOUBLE, 5.1
     fig = plt.figure(figsize=(W, H))
     # Row 1: a sketch, b dS per ROI (the result). Row 2: c the same in the measured responses, d dD (secondary).
-    ax = fig.add_axes([.1 / W, 3.0 / H, 1.35 / W, 1.35 / H])
+    ax = fig.add_axes([.1 / W, 3.15 / H, 1.35 / W, 1.35 / H])
     panel_sketch(ax)
     ax.text(.05, 1.215, 'Sustained gain field', transform=ax.transAxes, fontsize=7, color=FG, va='center')
     ax.text(.5, -.04, 'Less gain where the\ndistractor is likely', transform=ax.transAxes, fontsize=6.5, color=HP,
             ha='center', va='top')
     letter(ax, 'a', x=-.02, y=1.18)
-    ax = fig.add_axes([2.3 / W, 3.05 / H, 4.7 / W, 1.3 / H])
+    ax = fig.add_axes([2.3 / W, 3.2 / H, 4.7 / W, 1.3 / H])
     panel_roi(ax, cond, ylabel='Sustained gain, HP − LP', annot=('Less gain at HP', (ROI_X['V3'], -.016), (3.0, -.1)))
     title_icon(ax, 'Less sustained gain at HP', ('hp', 'lp'), HP, h=.27, y=1.1)
     letter(ax, 'b', x=-.16, y=1.19)
-    ax = fig.add_axes([.48 / W, .5 / H, 1.45 / W, 1.15 / H])
+    ax = fig.add_axes([.48 / W, .65 / H, 1.4 / W, 1.15 / H])
     tc = panel_hp_tc(ax)
     ax.text(-.3, 1.22, 'Items at HP evoke less response', transform=ax.transAxes, fontsize=7, color=HP, va='center')
     letter(ax, 'c', x=-.3, y=1.3)
-    ax = fig.add_axes([2.85 / W, .6 / H, 4.15 / W, 1.15 / H])
+    ax = fig.add_axes([2.35 / W, .65 / H, .8 / W, 1.15 / H])
+    hi_items = panel_hp_items(ax)
+    ax = fig.add_axes([3.85 / W, .75 / H, 3.15 / W, 1.15 / H])
     panel_roi(ax, cond, 'dD', DISTRACTOR, (-.3, .2), 'Transient gain, HP − LP',
               ('Less at HP', (ROI_X['V3AB'] - .1, -.045), (1.4, -.26)), band_label=False)
     title_icon(ax, 'Transient distractor gain, HP − LP', ('distractor', 'lp'), DISTRACTOR, h=.3, y=1.08,
                sub='Estimated alone; close to 0 when fitted together with the sustained gain')
-    letter(ax, 'd', x=-.13, y=1.22)
+    letter(ax, 'd', x=-.17, y=1.22)
     fig.text(.005, .005, PROVISIONAL, fontsize=5.5, color=MUTED, ha='left', va='bottom')
     save(fig, name, LEGEND.format(c_diff=tc['diff'], c_rel=tc['rel'], c_p=tc['p'], c_n=tc['n']))
-    print('c:', tc)
+    print('c:', tc, hi_items)
     fig = plt.figure(figsize=(SINGLE, 2.3))
     gs = fig.add_gridspec(1, 2, wspace=.6, left=.17, right=.98, top=.8, bottom=.15)
     ax = fig.add_subplot(gs[0])

@@ -16,7 +16,7 @@ import cortex
 import matplotlib.pyplot as plt
 import numpy as np
 
-from retsupp.visualize.pycortex.render_fig1_prf import area_rgb, border_mask, read_varea, vertex_rgb
+from retsupp.visualize.pycortex.render_fig1_prf import AREA_COLORS, area_rgb, border_mask, read_varea, vertex_rgb
 
 
 def flat_border(subject, cx_subject):
@@ -90,6 +90,40 @@ def inset(subject, out_dir, side='medial', turn=50., gap=8.):
     print('wrote', fn)
 
 
+def label_positions(subject, out_dir, pad=12., radius=4.):
+    """Where to put each area's name on the flat map: per hemisphere, the vertex deepest inside the area.
+
+    Writes ``sub-XX_area_labels.json``: {roi: {hemi: [u, v]}}, with u, v the position as a fraction of the crop
+    box (u from the left, v from the bottom), so it maps onto the rendered PNG."""
+    import json
+    from scipy.spatial import cKDTree
+    cx = f'retsupp.sub-{subject:02d}'
+    xlim, ylim = crop_box(subject, cx, pad)
+    va = read_varea(subject)
+    pts, _ = cortex.db.get_surf(cx, 'flat', merge=True, nudge=True)
+    n_lh = len(cortex.db.get_surf(cx, 'flat', hemisphere='lh')[0])
+    hemi = np.r_[np.zeros(n_lh, bool), np.ones(len(pts) - n_lh, bool)]
+    inbox = (pts[:, 0] > xlim[0]) & (pts[:, 0] < xlim[1]) & (pts[:, 1] > ylim[0]) & (pts[:, 1] < ylim[1])
+    tree = cKDTree(pts[inbox, :2])
+    va_in = va[inbox]
+    out = {}
+    for roi, (labels, _) in AREA_COLORS.items():
+        for h, hname in ((False, 'lh'), (True, 'rh')):
+            m = np.isin(va, labels) & (hemi == h) & inbox
+            if m.sum() < 20:
+                continue
+            idx = np.flatnonzero(m)
+            frac = np.array([np.isin(va_in[nb], labels).mean() for nb in tree.query_ball_point(pts[idx, :2], radius)])
+            best = idx[frac >= frac.max() - .02]
+            med = np.median(pts[idx, :2], axis=0)
+            k = best[np.argmin(np.hypot(*(pts[best, :2] - med).T))]
+            out.setdefault(roi, {})[hname] = [float((pts[k, 0] - xlim[0]) / (xlim[1] - xlim[0])),
+                                             float((pts[k, 1] - ylim[0]) / (ylim[1] - ylim[0]))]
+    fn = Path(out_dir) / f'sub-{subject:02d}_area_labels.json'
+    fn.write_text(json.dumps(out, indent=1))
+    print('wrote', fn)
+
+
 def main(subject, out_dir, pad=12., height=2400):
     cx = f'retsupp.sub-{subject:02d}'
     out_dir = Path(out_dir)
@@ -125,6 +159,7 @@ if __name__ == '__main__':
         r1.R2_RAMP = tuple(a.r2_ramp)
     Path(a.out_dir).mkdir(parents=True, exist_ok=True)
     main(a.subject, a.out_dir)
+    label_positions(a.subject, a.out_dir)
     for side in ('lateral', 'medial'):
         if not (Path(a.out_dir) / f'sub-{a.subject:02d}_flatwindow_{side}.png').exists():
             inset(a.subject, a.out_dir, side)

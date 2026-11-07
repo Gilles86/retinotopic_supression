@@ -110,12 +110,26 @@ def panel_maps(fig, gs, subject=23, view='flat'):
         (show_flat if view == 'flat' else show_map)(ax, fn)
         ax.set_title(title, fontsize=7, color=FG, pad=2)
         axes.append(ax)
-    # Keys under the maps.
-    ax = axes[0]
-    names = [r for _, rois in ROI_GROUPS for r in rois]
-    for k, roi in enumerate(names):
-        ax.text(.02 + (k % 5) * .2, -.06 - (k // 5) * .12, roi, transform=ax.transAxes, color=ROI_COLORS[roi], fontsize=6.5,
-                fontweight='bold', va='top', ha='left')
+    # Area names in the map (left hemisphere), at the point deepest inside each area (render_fig3_flat.label_positions).
+    import json
+    import matplotlib.patheffects as pe
+    lab_fn = MAP_DIR / f'sub-{subject:02d}_area_labels.json'
+    if view == 'flat' and lab_fn.exists():
+        ax = axes[0]
+        h, w = ax.images[0].get_array().shape[:2]
+        for roi, pos in json.loads(lab_fn.read_text()).items():
+            if roi not in ROI_COLORS or 'lh' not in pos:
+                continue
+            u, v = pos['lh']
+            ax.text(u * w, (1 - v) * h, roi, color='w', fontsize=6, fontweight='bold', ha='center', va='center',
+                    rotation=90 if roi in ('V1', 'V2', 'V3') else 0,
+                    path_effects=[pe.withStroke(linewidth=1.4, foreground=ROI_COLORS[roi])])
+    else:
+        ax = axes[0]
+        names = [r for _, rois in ROI_GROUPS for r in rois]
+        for k, roi in enumerate(names):
+            ax.text(.02 + (k % 5) * .2, -.06 - (k // 5) * .12, roi, transform=ax.transAxes, color=ROI_COLORS[roi],
+                    fontsize=6.5, fontweight='bold', va='top', ha='left')
     angle_key(axes[1].inset_axes([.2, -.33, .2, .27]), axes[1].inset_axes([.6, -.33, .2, .27]))
     ax = axes[2]
     cax = ax.inset_axes([.2, -.12, .6, .05])
