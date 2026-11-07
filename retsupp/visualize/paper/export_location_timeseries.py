@@ -6,7 +6,8 @@ Per ROI and ring location: voxels with cross-run reliability > 0 and a pRF centr
 (full-data m7_full pRFs; no R² criterion). Their BOLD minus the prediction of m0 for the bar alone, averaged over voxels.
 
 Writes to ``<out-dir>/location_timeseries/``:
-``sub-XX_timeseries.tsv.gz`` (subject, roi, loc, n_voxels, session, run, tr_index, time, signal) and
+``sub-XX_timeseries.tsv.gz`` (subject, roi, loc, n_voxels, session, run, hp, tr_index, time, signal = raw − bar, raw = the
+voxels' mean BOLD, bar = m0's prediction for the bar alone, mean over the same voxels; hp: the location is the run's HP) and
 ``sub-XX_trials.tsv`` (session, run, onset, loc, cls: target/distractor/neutral × hp/lp at that location).
 
 Usage::
@@ -27,7 +28,7 @@ ROIS = ['V1', 'V2', 'V3', 'V3AB', 'IPS', 'hV4', 'VO', 'LO', 'TO']
 LOC = {1.0: 0, 3.0: 1, 5.0: 2, 7.0: 3}   # events' location codes -> ring channel (upper right, upper left, lower left, lower right)
 
 
-def main(subject, rois, bids, out_dir):
+def main(subject, rois, bids, out_dir, subdir='location_timeseries'):
     from braincoder.hrf import SPMHRFModel
     from retsupp.modeling.fit_af_prf_cv_v2 import build_data_and_paradigm, build_model, get_ring_positions
     from retsupp.modeling.fit_cv_ladder_nested import bar_paradigm, sign_pattern_of
@@ -41,7 +42,7 @@ def main(subject, rois, bids, out_dir):
     rel_all = pd.concat([pd.read_csv(f, sep='\t') for f in sorted(
         (deriv / 'prf_cv_roi_reliability' / f'sub-{subject:02d}').glob('*_reliability.tsv.gz'))])
     rel_all = rel_all.groupby('voxel_index').reliability.mean()
-    out = Path(out_dir) / 'location_timeseries'
+    out = Path(out_dir) / subdir
     out.mkdir(parents=True, exist_ok=True)
 
     trials = []
@@ -73,17 +74,19 @@ def main(subject, rois, bids, out_dir):
         dist = np.hypot(p7.x.to_numpy()[:, None] - ring[:, 0], p7.y.to_numpy()[:, None] - ring[:, 1])
         loc_v = dist.argmin(1)
         ok = (rel_all.reindex(ids).to_numpy() > 0) & (dist.min(1) < 2)
-        sig = bold[:, ids] - bar
         for loc in range(len(ring)):
             vox = np.flatnonzero(ok & (loc_v == loc))
             if not len(vox):
                 continue
-            mean = sig[:, vox].mean(1)
+            raw = bold[:, ids[vox]].mean(1)
+            bar_m = bar[:, vox].mean(1)
             for r in meta:
                 tr = sub.get_tr(r.session, r.run)
                 k = np.arange(r.n_T)
                 rows.append(pd.DataFrame(dict(subject=subject, roi=roi, loc=loc, n_voxels=len(vox), session=r.session, run=r.run,
-                                              tr_index=k, time=(k + .5) * tr, signal=mean[r.start + k])))
+                                              hp=int(np.argmax(ci[r.start]) == loc), tr_index=k, time=(k + .5) * tr,
+                                              signal=raw[r.start + k] - bar_m[r.start + k], raw=raw[r.start + k],
+                                              bar=bar_m[r.start + k])))
         print(roi, 'done', flush=True)
     pd.concat(rows).to_csv(out / f'sub-{subject:02d}_timeseries.tsv.gz', sep='\t', index=False, float_format='%.5g')
     print('Saved', out, flush=True)
@@ -95,5 +98,6 @@ if __name__ == '__main__':
     ap.add_argument('--rois', nargs='+', default=ROIS)
     ap.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
     ap.add_argument('--out-dir', default='/shares/zne.uzh/gdehol/ds-retsupp/derivatives/paper_2026-11')
+    ap.add_argument('--subdir', default='location_timeseries')
     a = ap.parse_args()
-    main(a.subject, a.rois, a.bids_folder, a.out_dir)
+    main(a.subject, a.rois, a.bids_folder, a.out_dir, a.subdir)
