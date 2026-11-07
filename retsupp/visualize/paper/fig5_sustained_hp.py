@@ -13,11 +13,11 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from retsupp.visualize.paper.fig45_common import conditional, joint, median_ci
+from retsupp.visualize.paper.fig45_common import generalization_row, conditional, joint, median_ci
 from retsupp.visualize.paper.paper_style import SINGLE, DISTRACTOR, DOUBLE, FG, HP, MUTED, ROI_COLORS, ROI_ORDER, letter, ROI_X, title_icon, offset_spines, pending, provisional, roi_axis, roi_icon, save
 
 LEGEND = """
-**Figure 5. Less sustained gain at the location where the distractor is likely.** a, dS = g_HP − g_LP per ROI, each term estimated alone on m4 (conditional, DoG pRFs): dots are subjects (n = 30; triangles, beyond the axis), points and bars the median and bootstrapped 95% CI. Stars: Wilcoxon signed-rank test against 0, Benjamini-Hochberg across ROIs. b, Each subject's dS, median over the nine ROIs, as the conditional estimate and from the joint m7 fit (DoG pRFs); the share of negative subjects and the Wilcoxon p are given above. DN pRFs: supplementary figure. c, d, The same for dD = g_HP_dyn − g_LP_dyn, the transient gain when the distractor appears at the HP location minus when it appears elsewhere. The conditional estimate is negative, but the joint m7 estimate is not: once dS and the other terms are fitted together, dD is not distinguishable from 0, so dD is not a robust result. Provisional: current inputs.
+**Figure 5. Less sustained gain at the location where the distractor is likely.** a, dS = g_HP − g_LP per ROI, each term estimated alone on m4 (conditional, DoG pRFs): dots are subjects (n = 30; triangles, beyond the axis), points and bars the median and bootstrapped 95% CI. Stars: Wilcoxon signed-rank test against 0, Benjamini-Hochberg across ROIs. b, Each subject's dS, median over the nine ROIs, as the conditional estimate and from the joint m7 fit (DoG pRFs); the share of negative subjects and the Wilcoxon p are given above. DN pRFs: supplementary figure. c, d, The same for dD = g_HP_dyn − g_LP_dyn, the transient gain when the distractor appears at the HP location minus when it appears elsewhere. The conditional estimate is negative, but the joint m7 estimate is not: once dS and the other terms are fitted together, dD is not distinguishable from 0, so dD is not a robust result. Squares under the data (New subjects): leave-one-subject-out test per ROI, the term added with the size estimated from the other 29 subjects (+δ) vs the opposite size (−δ); filled, a majority of subjects predicted better with +δ (Wilcoxon signed-rank, Benjamini-Hochberg q < .05 across ROIs); open, not significant; cross, significantly worse. Provisional: current inputs.
 """
 POWER_LEGEND = """
 **Figure S. Within-subject cross-validation cannot test dS.** When a known dS is put into the data (x-axis), the share of subjects whose held-out prediction improves (y-axis) passes 50% only near −.05, about three times the estimate (dashed). Provisional: current inputs.
@@ -50,6 +50,7 @@ def panel_roi(ax, cond, term='dS', color=HP, ylim=(-.12, .06), ylabel='dS: HP �
     ax.set_ylim(lo, hi)
     ax.set_ylabel(ylabel)
     offset_spines(ax)
+    generalization_row(ax, term, color, lo, hi)
     roi_axis(ax)
 
 
@@ -102,7 +103,7 @@ def main(gain_table, conditional_table, power_table, name='fig5_sustained_hp'):
     cond = conditional(conditional_table)
     js = {f: joint(gain_table, f) for f in ('dog', 'dn')}
     fig = plt.figure(figsize=(DOUBLE, 5.0))
-    gs = fig.add_gridspec(2, 2, width_ratios=[2.6, 1], hspace=1.05, wspace=.3, left=.08, right=.99, top=.86, bottom=.12)
+    gs = fig.add_gridspec(2, 2, width_ratios=[2.6, 1], hspace=1.05, wspace=.3, left=.115, right=.99, top=.86, bottom=.12)
     ax = fig.add_subplot(gs[0, 0])
     panel_roi(ax, cond)
     title_icon(ax, 'Sustained gain: less at the likely distractor location', ('hp', 'lp'), HP)

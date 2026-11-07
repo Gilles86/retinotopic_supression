@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from retsupp.visualize.paper.fig45_common import conditional, joint, jzs_bf10, median_ci
+from retsupp.visualize.paper.fig45_common import conditional, generalization_row, joint, jzs_bf10, median_ci
 from retsupp.visualize.paper.paper_style import (SINGLE, DISTRACTOR, DOUBLE, FG, HP, MUTED, OUT, ROI_COLORS, ROI_ORDER, TARGET, letter,
                                                  offset_spines, provisional, save, stimulus_icon, ICON_PAD, ROI_X, roi_axis,
                                                  roi_icon, roi_positions, title_icon)
@@ -25,7 +25,7 @@ TERMS = [('T', 'Target gain', TARGET), ('D', 'Distractor gain', DISTRACTOR), ('d
          ('dD', 'Distractor gain, HP − LP', '#5E3C99')]
 FAM = {'dog': 'DoG', 'dn': 'DN'}
 LEGEND = """
-**Figure 4. The target and the distractor draw gain, increasingly along the visual hierarchy.** a, Gain at the target location while the search display is on, per ROI (m7_full, DoG pRFs): dots are subjects (n = 30; triangles, beyond the axis), points and bars are the median and bootstrapped 95% CI. Stars: Wilcoxon signed-rank test against 0, Benjamini-Hochberg across ROIs; * q < .05, ** q < .01, *** q < .001. b, The same for the distractor, averaged over its locations. c, Per subject, the slope of the gain on log₂ pRF size over the nine ROIs (OLS; pRF size: group median at 1-2.5° eccentricity, from the pRF fit), so the change in gain per doubling of pRF size; median and 95% CI beside the dots; Wilcoxon against 0, Benjamini-Hochberg over the eight parameters tested (hierarchy_regression_2026-11.tsv). DN pRFs, Bayes factors and all other terms are in the parameter table. Provisional: current inputs.
+**Figure 4. The target and the distractor draw gain, increasingly along the visual hierarchy.** a, Gain at the target location while the search display is on, per ROI (m7_full, DoG pRFs): dots are subjects (n = 30; triangles, beyond the axis), points and bars are the median and bootstrapped 95% CI. Stars: Wilcoxon signed-rank test against 0, Benjamini-Hochberg across ROIs; * q < .05, ** q < .01, *** q < .001. b, The same for the distractor, averaged over its locations. c, Per subject, the slope of the gain on log₂ pRF size over the nine ROIs (OLS; pRF size: group median at 1-2.5° eccentricity, from the pRF fit), so the change in gain per doubling of pRF size; median and 95% CI beside the dots; Wilcoxon against 0, Benjamini-Hochberg over the eight parameters tested (hierarchy_regression_2026-11.tsv). DN pRFs, Bayes factors and all other terms are in the parameter table. Squares under the data (New subjects): leave-one-subject-out test per ROI, the term added with the size estimated from the other 29 subjects (+δ) vs the opposite size (−δ); filled, a majority of subjects predicted better with +δ (Wilcoxon signed-rank, Benjamini-Hochberg q < .05 across ROIs); open, not significant; cross, significantly worse. Provisional: current inputs.
 """
 LEGEND_SIZE = """
 **Figure S. Size of the fitted gain fields.** Full width at half maximum (2.355 σ) of the sustained and transient fields per ROI (m7_full, DoG pRFs), median over subjects and bootstrapped 95% CI; dotted line, the 4° radius of the ring. Many fits sit at a bound of σ (0.5° or 8°; up to 73% for the transient field in IPS, see the parameter table): where a gain is small, its width is poorly constrained. Provisional: current inputs.
@@ -104,6 +104,7 @@ def panel_gain(ax, d, t, term, col, ylim, note, note_xy):
     ax.hlines(0, x[0] - .6, x[-1] + .6, color='.7', lw=.7, ls='--', zorder=0)
     ax.set_ylim(lo, hi)
     offset_spines(ax)
+    generalization_row(ax, term, col, lo, hi)
 
 
 def panel_size(ax, d):
@@ -166,7 +167,7 @@ def main(gain_table, conditional_table, name='fig4_hierarchy', regression_table=
     write_table(t, js)
     d = js['dog']
     fig = plt.figure(figsize=(DOUBLE, 2.75))
-    gs = fig.add_gridspec(1, 3, wspace=.4, left=.085, right=.99, top=.74, bottom=.22)
+    gs = fig.add_gridspec(1, 3, wspace=.45, left=.11, right=.99, top=.74, bottom=.22)
     ax = fig.add_subplot(gs[0])
     panel_gain(ax, d, t, 'T', TARGET, (-.4, 1.2), None, None)
     roi_axis(ax)
