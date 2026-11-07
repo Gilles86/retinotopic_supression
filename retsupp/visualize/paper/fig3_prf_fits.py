@@ -26,7 +26,7 @@ from retsupp.visualize.paper.paper_style import (DOUBLE, FG, MUTED, ROI_COLORS, 
 from retsupp.visualize.paper.plot_fig1 import COVER_TSV, contralateral
 
 MAP_DIR = Path('notes/figures/fig1_r2low')
-TERMS = [('T', 'Target'), ('D', 'Distractor'), ('S', 'Sustained'), ('dS', 'Sustained HP − LP'), ('dD', 'Distractor HP − LP')]
+TERMS = [('T', 'Target'), ('D', 'Distractor'), ('S', 'Sustained'), ('dS', 'Sust. HP−LP'), ('dD', 'Distr. HP−LP')]
 LEGEND = """
 **Figure 3. The pRF fits.** a, Visual areas (neuropythy atlas), polar angle and eccentricity of the pRF fit on the inflated
 surface of one subject (sub-23, posterior view; voxels with R² above the R² mixture threshold). Polar-angle key: the visual
