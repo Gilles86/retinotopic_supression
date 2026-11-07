@@ -183,6 +183,7 @@ def fit_roi(sub, roi, data, out_path, overlay_root=None, sessions=None):
         X = .5 * (fwd + bwd)
         lin_err = np.abs(fwd - bwd).max() / max(np.abs(X).max(), 1e-12)
         R = Y - P0
+        t_all = np.concatenate(list(conds.values()))
         for hp, t in conds.items():
             y, r, x = Y[t], R[t], X[t]
             out.append(pd.DataFrame(dict(
@@ -193,7 +194,7 @@ def fit_roi(sub, roi, data, out_path, overlay_root=None, sessions=None):
                 lin_err=lin_err, width=width_val, n_width=n_width)))
         print(f'sub-{sub.subject_id:02d} {roi} {mech}: '
               f'{len(fit["voxel_ids"])} voxels, width={width_val:.3f}, '
-              f'lin_err={lin_err:.2e}, own δ̂={(X * R).sum() / (X ** 2).sum():+.4f}')
+              f'lin_err={lin_err:.2e}, own δ̂={(X[t_all] * R[t_all]).sum() / (X[t_all] ** 2).sum():+.4f}')
     df = pd.concat(out)
     df.insert(0, 'roi', roi)
     df.insert(0, 'subject', sub.subject_id)

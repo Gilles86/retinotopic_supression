@@ -3,9 +3,9 @@
 #SBATCH --account=hare.econ.uzh
 #SBATCH --partition=standard
 #SBATCH --output=/dev/null
-#SBATCH --cpus-per-task=2
-#SBATCH --time=00:20:00
-#SBATCH --mem=14G   # earlier run: ~3.5 min, ~1.5 CPUs, 10 GB per subject (all ROIs, all mechanisms)
+#SBATCH --cpus-per-task=1
+#SBATCH --time=00:15:00
+#SBATCH --mem=18G   # dS+dD on 9 ROIs: 4 min, 1 CPU, 14.7 GB peak (sub-03, 2026-11-07)
 #
 # Sufficient stats for the leave-one-subject-out test of every ladder mechanism
 # (fit_fixed_group_mechanisms). One array task per subject, all 11 ROIs.
