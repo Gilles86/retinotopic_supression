@@ -20,7 +20,7 @@ from scipy.interpolate import CubicSpline
 from scipy.optimize import minimize_scalar
 from scipy.stats import wilcoxon
 
-MECH = ['items', 'T', 'D', 'S', 'dS', 'dD']
+MECH = ['items', 'T', 'D', 'S', 'dS', 'dD', 'DonT', 'dT']
 
 
 def own_delta(grid, curve):
@@ -38,6 +38,8 @@ def load(deriv, folder, null):
         subject, roi = int(z['subject']), str(z['roi'])
         signal = null.get((subject, roi), set())
         for m in MECH:
+            if f'{m}_grid' not in z:
+                continue
             grid, dsse = z[f'{m}_grid'], z[f'{m}_dsse'].astype(np.float64)
             keep = np.isin(z[f'{m}_voxel_ids'], list(signal))
             own, at_edge = own_delta(grid, dsse.sum(0))

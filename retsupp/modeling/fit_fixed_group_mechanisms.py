@@ -76,11 +76,14 @@ MECHANISMS = {
     'dS': ('m4_TDS', ['g_HP'], None),
     'dD': ('m4_TDS', ['g_HP_dyn'], None),
     'dT': ('m4_TDS', ['g_T_HP_dyn'], None),
+    # Distractor gain on top of the target term (m3b_TD vs m1_T). σ_dyn stays the subject's own from m1_T, since the
+    # distractor shares it with the target and changing it would change the target term of the base.
+    'DonT': ('m1_T', ['g_HP_dyn', 'g_LP_dyn'], None),
 }
 # Lower and upper δ of the --exact grid. items stops at item_scale = 0.
 EXACT_RANGE = {'items': (-1., .5), 'T': (-1.5, 1.5), 'D': (-1.5, 1.5),
                'S': (-.4, .4), 'dS': (-.8, .8), 'dD': (-1.5, 1.5),
-               'dT': (-1.5, 1.5)}
+               'dT': (-1.5, 1.5), 'DonT': (-1.5, 1.5)}
 N_GRID = 25
 
 
