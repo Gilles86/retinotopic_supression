@@ -150,8 +150,8 @@ def icon(ax, t, ti, di, contour, hp_ix=None):
 
 def main(name='fig2_model'):
     sim = simulate()
-    fig = plt.figure(figsize=(DOUBLE, 3.75))
-    outer = fig.add_gridspec(2, 1, height_ratios=[1.6, 1.95], hspace=.1, left=.012, right=.995, top=.935, bottom=.035)
+    fig = plt.figure(figsize=(DOUBLE, 5.2))
+    outer = fig.add_gridspec(2, 1, height_ratios=[1.75, 2.1], hspace=.16, left=.012, right=.995, top=.95, bottom=.03)
     top_row(fig, outer[0], [v for v in PRFS.values()])
     low = outer[1].subgridspec(1, 4, width_ratios=[.55, 1, 1, 1], wspace=.07)
     ratios = [1.25, .8, .8, 1.15]
@@ -191,7 +191,7 @@ def main(name='fig2_model'):
         g = rows[1]
         g.axhline(0, color='#B8C0C8', lw=.5, ls=(0, (2, 2)))
         if k == 0:
-            g.text(0, 0, 'No change', fontsize=5.5, color='.6', ha='left', va='bottom')
+            g.text(7.2, 0, 'No change', fontsize=6.5, color='.6', ha='left', va='bottom')
         g.plot(t, np.full_like(t, d['base']), color=HP, lw=1.2)
         g.fill_between(t, d['base'], d['base'] + d['target'], color=TARGET, lw=0)
         g.fill_between(t, d['base'], d['base'] + d['distractor'], color=DISTRACTOR, lw=0)
@@ -202,7 +202,7 @@ def main(name='fig2_model'):
         r3.set_ylim(p_lo - .05 * (p_hi - p_lo), p_hi * 1.05)
         if k == 0:
             r3.plot([0, 10], [p_lo - .05 * (p_hi - p_lo)] * 2, color=FG, lw=1.1, clip_on=False, solid_capstyle='butt')
-            r3.text(5, p_lo - .12 * (p_hi - p_lo), '10 s', ha='center', va='top', fontsize=6, color=FG)
+            r3.text(5, p_lo - .12 * (p_hi - p_lo), '10 s', ha='center', va='top', fontsize=6.5, color=FG)
     save(fig, name, LEGEND)
 
 
@@ -224,7 +224,7 @@ def top_row(fig, gs, prfs=None):
     for j, (title, im, cmap, lim, col, signed, sub) in enumerate(maps, start=1):
         ax = fig.add_subplot(a[0, j])
         show(ax, im, cmap, lim, title, col, signed)
-        ax.text(.5, -.03, sub, transform=ax.transAxes, ha='center', va='top', fontsize=6, color=FG if j == 1 else col)
+        ax.text(.5, -.03, sub, transform=ax.transAxes, ha='center', va='top', fontsize=6.5, color=FG if j == 1 else col)
         if j == 1:
             for x, y, sd in prfs:
                 ax.contour(X, Y, gauss(x, y, sd), levels=[.5], colors=[PRF_TEAL], linewidths=.9)
@@ -255,7 +255,7 @@ def row_labels(fig, lab, key_hp=False):
         ax.text(1., .62, names[r], transform=ax.transAxes, ha='right', va='center', fontsize=7, color=FG)
         x = 1.
         for txt, c in reversed(keys[r]):
-            t = ax.text(x, .12, txt, transform=ax.transAxes, ha='right', va='center', fontsize=5.6, color=c)
+            t = ax.text(x, .12, txt, transform=ax.transAxes, ha='right', va='center', fontsize=6.5, color=c)
             fig.canvas.draw()
             bb = t.get_window_extent().transformed(ax.transAxes.inverted())
             x = bb.x0 - .05
@@ -268,7 +268,7 @@ def row_labels(fig, lab, key_hp=False):
             key.add_patch(Circle((.42, y), .05, transform=key.transAxes, fill=False, ec=HP, lw=.9, ls=(0, (2, 1.2))))
         else:
             key.scatter([.42], [y], marker=m, s=10, color=FG, lw=0, transform=key.transAxes)
-        key.text(.5, y, txt, transform=key.transAxes, fontsize=6, va='center', color=FG)
+        key.text(.5, y, txt, transform=key.transAxes, fontsize=6.5, va='center', color=FG)
     letter(key, 'b', x=.1, y=1.0)
 
 
@@ -279,8 +279,8 @@ def main_hp(name='fig2_model_hp_blocks'):
     trials = [(5, 1, 3), (14, 0, 2), (23, 2, 1), (31, 3, 0)]
     blocks = {'HP near this pRF': (3, trials), 'HP not near this pRF': (1, trials)}
     sim = {k: simulate(trials=tr, hp_ix=hp, prfs=prf)['pRF'] for k, (hp, tr) in blocks.items()}
-    fig = plt.figure(figsize=(DOUBLE, 3.75))
-    outer = fig.add_gridspec(2, 1, height_ratios=[1.6, 1.95], hspace=.1, left=.012, right=.995, top=.935, bottom=.035)
+    fig = plt.figure(figsize=(DOUBLE, 4.6))
+    outer = fig.add_gridspec(2, 1, height_ratios=[1.2, 2.1], hspace=.12, left=.012, right=.995, top=.95, bottom=.03)
     top_row(fig, outer[0])
     low = outer[1].subgridspec(1, 3, width_ratios=[.55, 1, 1], wspace=.08)
     ratios = [1.25, .8, .8, 1.15]
@@ -320,7 +320,7 @@ def main_hp(name='fig2_model_hp_blocks'):
         g = rows[1]
         g.axhline(0, color='#B8C0C8', lw=.5, ls=(0, (2, 2)))
         if k == 0:
-            g.text(0, 0, 'No change', fontsize=5.5, color='.6', ha='left', va='bottom')
+            g.text(7.2, 0, 'No change', fontsize=6.5, color='.6', ha='left', va='bottom')
         g.plot(t, np.full_like(t, d['base']), color=HP, lw=1.2)
         g.fill_between(t, d['base'], d['base'] + d['target'], color=TARGET, lw=0)
         g.fill_between(t, d['base'], d['base'] + d['distractor'], color=DISTRACTOR, lw=0)
@@ -331,13 +331,25 @@ def main_hp(name='fig2_model_hp_blocks'):
         r3.set_ylim(p_lo - .05 * (p_hi - p_lo), p_hi * 1.05)
         # Anchor: the peak response without HP near, drawn in both blocks.
         r3.axhline(anchor, color=FG, lw=.6, ls=(0, (1.5, 1.5)), zorder=0)
+        # Arrows from the response without gain to the one with it, where the target or the distractor lands on the pRF.
+        here = 3
+        diff = d['predicted'] - d['without']
+        for onset, ti, di in tr:
+            c = TARGET if ti == here else DISTRACTOR if di == here else None
+            if c is None:
+                continue
+            w = (t >= onset + 2) & (t <= onset + 9)
+            i = np.flatnonzero(w)[np.argmax(np.abs(diff[w]))]
+            if abs(diff[i]) > .02 * (p_hi - p_lo):
+                r3.annotate('', xy=(t[i], d['predicted'][i]), xytext=(t[i], d['without'][i]),
+                            arrowprops=dict(arrowstyle='-|>', color=c, lw=1.1, mutation_scale=7, shrinkA=0, shrinkB=0), zorder=5)
         if k == 0:
             r3.plot([0, 10], [p_lo - .05 * (p_hi - p_lo)] * 2, color=FG, lw=1.1, clip_on=False, solid_capstyle='butt')
-            r3.text(5, p_lo - .12 * (p_hi - p_lo), '10 s', ha='center', va='top', fontsize=6, color=FG)
+            r3.text(5, p_lo - .12 * (p_hi - p_lo), '10 s', ha='center', va='top', fontsize=6.5, color=FG)
             r3.annotate('', xy=(t[np.argmax(d['predicted'])], d['predicted'].max()), xytext=(t[np.argmax(d['predicted'])], anchor),
-                        arrowprops=dict(arrowstyle='-|>', color=HP, lw=.9, mutation_scale=6, shrinkA=0, shrinkB=0))
+                        arrowprops=dict(arrowstyle='-|>', color=HP, lw=1.1, mutation_scale=7, shrinkA=0, shrinkB=0))
         else:
-            r3.text(DURATION, anchor, 'Peak, HP not near', fontsize=5.6, color=FG, ha='right', va='bottom')
+            r3.text(DURATION, anchor, 'Peak, HP not near', fontsize=6.5, color=FG, ha='right', va='bottom')
     save(fig, name, LEGEND_HP)
 
 
