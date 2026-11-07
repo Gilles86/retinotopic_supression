@@ -83,7 +83,8 @@ import pandas as pd
 import tensorflow as tf
 from scipy.optimize import minimize
 
-from braincoder.hrf import SPMHRFModel
+from braincoder.hrf import SPMHRFModel  # noqa: F401
+from retsupp.modeling.roi_hrf import hrf_model as roi_hrf_model, hrf_values, load_table as load_hrf_table
 from braincoder.optimize import ParameterFitter
 from retsupp.modeling.cv_helpers import per_voxel_r2, write_cv_tsvs
 from retsupp.modeling.dn_attention_field import DNDynamicAttentionFieldPRF2D, init_from_m5
@@ -415,7 +416,8 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
          gd_iterations=8000, learning_rate=0.01, models=None,
          output_root=None, polish=False, bounded=False, max_bold_sd=None,
          loss='sse', base_roots=(), family='dog', hp_rotation=0, reliable_only=False,
-         warm_roots=(), gd_min_iterations=1000, sigma_starts=SIGMA_STARTS, lbfgs_rounds=LBFGS_ROUNDS):
+         warm_roots=(), gd_min_iterations=1000, sigma_starts=SIGMA_STARTS, lbfgs_rounds=LBFGS_ROUNDS,
+         hrf_table=None):
     if cv_scheme not in SCHEMES:
         raise ValueError(f'cv_scheme must be in {SCHEMES}')
     if hp_rotation and not base_roots:
@@ -437,8 +439,10 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
             + ('' if loss == 'sse' else f'_{loss}')
             + ('' if family == 'dog' else f'_{family}')
             + (f'_hprot{hp_rotation}' if hp_rotation else '')
-            + ('_reliable' if reliable_only else '')))
+            + ('_reliable' if reliable_only else '')
+            + ('_roihrf' if hrf_table else '')))
     polish_root = root.parent / f'{root.name}_polished'
+    hrf_tab = load_hrf_table(hrf_table)
     models = models or [m for m in LADDER if m not in TARGET_SPLIT]
 
     (bold, par_items, ci, di, ti, grid_coords, _masker,
@@ -474,8 +478,8 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
             voxel_mask = voxel_mask & reliable
         voxel_ids = np.where(voxel_mask)[0]
         ring_positions = get_ring_positions()
-        hrf_model = SPMHRFModel(tr=sub.get_tr(session=1, run=1),
-                                delay=4.5, dispersion=0.75)
+        hrf_model = roi_hrf_model(sub, roi, hrf_tab)   # canonical without --hrf-table
+        print(f'HRF: {hrf_values(subject, roi, hrf_tab)}')
         if cv_scheme == 'full':
             def whole(par):
                 return dict(train=dict(
@@ -785,6 +789,9 @@ if __name__ == '__main__':
     ap.add_argument('--sigma-starts', nargs='+', default=None,
                     help="σ starts of the shared fits; 'parent' is the parent's σ. Default: parent .5 1 2 4.")
     ap.add_argument('--lbfgs-rounds', type=int, default=LBFGS_ROUNDS)
+    ap.add_argument('--hrf-table', default=None,
+                    help='TSV of one HRF per subject x ROI (build_roi_hrf_table.py); root gets a _roihrf suffix. '
+                         'Do not combine with --base-root fits made with another HRF.')
     a = ap.parse_args()
     starts = SIGMA_STARTS if a.sigma_starts is None else tuple(None if v == 'parent' else float(v) for v in a.sigma_starts)
     main(a.subject, a.bids_folder, a.roi, cv_scheme=a.cv_scheme,
@@ -793,4 +800,5 @@ if __name__ == '__main__':
          output_root=a.output_root, polish=a.polish, bounded=a.bounded,
          max_bold_sd=a.max_bold_sd, loss=a.loss, base_roots=a.base_root, family=a.family,
          hp_rotation=a.hp_rotation, reliable_only=a.reliable_only, warm_roots=a.warm_root,
-         gd_min_iterations=a.gd_min_iterations, sigma_starts=starts, lbfgs_rounds=a.lbfgs_rounds)
+         gd_min_iterations=a.gd_min_iterations, sigma_starts=starts, lbfgs_rounds=a.lbfgs_rounds,
+         hrf_table=a.hrf_table)

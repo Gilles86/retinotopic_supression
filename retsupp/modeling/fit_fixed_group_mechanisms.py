@@ -51,7 +51,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from braincoder.hrf import SPMHRFModel
+from braincoder.hrf import SPMHRFModel  # noqa: F401
+from retsupp.modeling.roi_hrf import hrf_model as roi_hrf_model, load_table as load_hrf_table
 from retsupp.modeling.fit_af_prf_cv_v2 import (
     build_data_and_paradigm,
     get_ring_positions,
@@ -63,6 +64,7 @@ from retsupp.utils.data import Subject
 ROIS = ['V1', 'V2', 'V3', 'V3AB', 'hV4', 'LO', 'TO', 'VO', 'IPS', 'SPL1', 'FEF']
 SUBJECTS = range(1, 31)
 BASE_ROOT = 'af_prf_cv_ladder_nested_full_bounded'
+HRF_TABLE = None   # one HRF per subject x ROI (roi_hrf.load_table); canonical when None
 H = 0.05
 FAMILY = 'dog'
 # name: (base model, perturbed parameters, (width parameter, child model))
@@ -117,10 +119,9 @@ def loso_width(bids_folder, par, model, subject, roi, overlay_root=None):
     return float(np.median(vals)), len(vals)
 
 
-def build_full_model(sub, data):
+def build_full_model(sub, data, roi):
     _bold, paradigm, ci, di, ti, grid_coords, _run_meta = data
-    hrf_model = SPMHRFModel(tr=sub.get_tr(session=1, run=1),
-                            delay=4.5, dispersion=0.75)
+    hrf_model = roi_hrf_model(sub, roi, HRF_TABLE)   # canonical without --hrf-table
     # Everything free, so each mechanism can move away from its base value.
     # The target-split class: at g_T_HP_dyn = g_T_dyn it predicts exactly what the parent does.
     if FAMILY == 'dn':
@@ -157,7 +158,7 @@ def base_parameters(sub, model, roi, base, width, overlay_root):
 
 def fit_roi(sub, roi, data, out_path, overlay_root=None, sessions=None):
     bold, paradigm, _ci, _di, _ti, _grid, run_meta = data
-    model = build_full_model(sub, data)
+    model = build_full_model(sub, data, roi)
 
     def pred(p):
         return np.asarray(model.predict(paradigm=paradigm, parameters=p),
@@ -203,7 +204,7 @@ def fit_roi(sub, roi, data, out_path, overlay_root=None, sessions=None):
 def fit_roi_exact(sub, roi, data, out_path, overlay_root=None):
     """Each voxel's ΔSSE(δ) from the actual predictions, per mechanism."""
     bold, paradigm, _ci, _di, _ti, _grid, run_meta = data
-    model = build_full_model(sub, data)
+    model = build_full_model(sub, data, roi)
     conds = [np.concatenate([np.arange(rm.start, rm.stop) for rm in run_meta if rm.hp == hp])
              for hp in sorted({rm.hp for rm in run_meta})]
     saved = {}
@@ -235,8 +236,9 @@ def fit_roi_exact(sub, roi, data, out_path, overlay_root=None):
 
 def main(subject, bids_folder, rois, output_subdir='af_fixed_group_mechanisms',
          overlay_root=None, base_root=None, family='dog', step=None, exact=False, hp_rotation=0,
-         mechanisms=None, sessions=None):
-    global BASE_ROOT, FAMILY, H, MECHANISMS
+         mechanisms=None, sessions=None, hrf_table=None):
+    global BASE_ROOT, FAMILY, H, MECHANISMS, HRF_TABLE
+    HRF_TABLE = load_hrf_table(hrf_table)
     if mechanisms:
         MECHANISMS = {m: MECHANISMS[m] for m in mechanisms}
     BASE_ROOT, FAMILY, H = base_root or BASE_ROOT, family, step or H
@@ -283,7 +285,9 @@ if __name__ == '__main__':
                     help='Save ΔSSE on a grid of δ from the actual predictions')
     ap.add_argument('--mechanisms', nargs='+', default=None, choices=list(MECHANISMS),
                     help='Only these mechanisms (default all)')
+    ap.add_argument('--hrf-table', default=None,
+                    help='TSV of one HRF per subject x ROI (build_roi_hrf_table.py); must match the fits used')
     args = ap.parse_args()
     main(args.subject, args.bids_folder, args.rois, args.output_subdir, args.overlay_root,
          args.base_root, args.family, args.step, args.exact, args.hp_rotation,
-         args.mechanisms, args.sessions)
+         args.mechanisms, args.sessions, hrf_table=args.hrf_table)

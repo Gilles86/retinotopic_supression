@@ -14,6 +14,7 @@
 #   sbatch --array=1-30 retsupp/modeling/slurm_jobs/fit_fixed_group_mechanisms.sh
 #   OVERLAY_ROOT=<derivatives folder> OUTPUT_SUBDIR=<new folder> sbatch --array=1-30 ...
 #   MECHANISMS=dT runs only the listed mechanisms
+#   HRF_TABLE=<tsv> one HRF per subject x ROI (must match the HRF of the base fits)
 #   HP_ROTATION=K relabels HP K ring steps (null of the conditional dS, dD); SESSIONS="1" uses session 1 only
 
 set -eo pipefail
@@ -35,6 +36,7 @@ echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
     "$subject" --bids-folder /shares/zne.uzh/gdehol/ds-retsupp ${ROIS:+--rois $ROIS} \
     ${OVERLAY_ROOT:+--overlay-root "$OVERLAY_ROOT"} ${OUTPUT_SUBDIR:+--output-subdir "$OUTPUT_SUBDIR"} \
     ${BASE_ROOT:+--base-root "$BASE_ROOT"} ${FAMILY:+--family "$FAMILY"} ${STEP:+--step "$STEP"} ${EXACT:+--exact} \
-    ${MECHANISMS:+--mechanisms $MECHANISMS} ${HP_ROTATION:+--hp-rotation $HP_ROTATION} ${SESSIONS:+--sessions $SESSIONS}
+    ${MECHANISMS:+--mechanisms $MECHANISMS} ${HP_ROTATION:+--hp-rotation $HP_ROTATION} ${SESSIONS:+--sessions $SESSIONS} \
+    ${HRF_TABLE:+--hrf-table $HRF_TABLE}
 
 echo "Finished: $(date)"
