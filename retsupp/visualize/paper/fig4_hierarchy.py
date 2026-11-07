@@ -27,6 +27,7 @@ FAM = {'dog': 'DoG', 'dn': 'DN'}
 LEGEND = """
 **Figure 4. The target and the distractor draw gain, increasingly along the visual hierarchy.** a, Gain at the target location while the search display is on, per ROI (m7_full, DoG pRFs): dots are subjects (n = 30; triangles, beyond the axis), points and bars are the median and bootstrapped 95% CI. Stars: Wilcoxon signed-rank test against 0, Benjamini-Hochberg across ROIs; * q < .05, ** q < .01, *** q < .001. b, The same for the distractor, averaged over its locations. c, Per subject, the slope of the gain on log₂ pRF size over the nine ROIs (OLS; pRF size: group median at 1-2.5° eccentricity, from the pRF fit), so the change in gain per doubling of pRF size; median and 95% CI beside the dots; Wilcoxon against 0, Benjamini-Hochberg over the eight parameters tested (hierarchy_regression_2026-11.tsv). DN pRFs, Bayes factors and all other terms are in the parameter table. Squares under the data (New subjects): leave-one-subject-out test per ROI, the term added with the size estimated from the other 29 subjects (+δ) vs the opposite size (−δ); filled, a majority of subjects predicted better with +δ (Wilcoxon signed-rank, Benjamini-Hochberg q < .05 across ROIs); open, not significant; cross, significantly worse. Provisional: current inputs.
 """
+LEGEND = LEGEND.replace(" DN pRFs, Bayes factors", " d, e, The same comparison in the data, without the gain-field model: the deconvolved response (nideconv, Fourier basis) of the voxels whose pRF sits within 2° of an item location, when the target (d) or the distractor (e) appears there minus when a neutral item does, LP locations only, mean over 3.2-6.4 s after search onset; dots are subjects, diamonds and bars the median and bootstrapped 95% CI; Wilcoxon against 0, Benjamini-Hochberg across ROIs. f, Per ROI, the median model gain (a, b) against the median extra response in the data (d, e); Spearman ρ over the 18 points. DN pRFs, Bayes factors")
 LEGEND_SIZE = """
 **Figure S. Size of the fitted gain fields.** Full width at half maximum (2.355 σ) of the sustained and transient fields per ROI (m7_full, DoG pRFs), median over subjects and bootstrapped 95% CI; dotted line, the 4° radius of the ring. Many fits sit at a bound of σ (0.5° or 8°; up to 73% for the transient field in IPS, see the parameter table): where a gain is small, its width is poorly constrained. Provisional: current inputs.
 """
@@ -159,6 +160,52 @@ def size_figure(d):
     save(fig, 'figS_field_size', LEGEND_SIZE)
 
 
+EFFECTS = 'notes/data/event_deconv_item_effects_2026-11.tsv'
+
+
+def panel_data(ax, eff, term, col, ylim):
+    """Model-free: extra response at the pRF's location when the target (or distractor) appears there vs a neutral item."""
+    lo, hi = ylim
+    ps = []
+    for i, roi in enumerate(ROI_ORDER):
+        v = eff[eff.roi == roi][term].dropna().to_numpy()
+        rng = np.random.default_rng(i)
+        xx = ROI_X[roi] + rng.uniform(-.17, .17, len(v))
+        ok = (v >= lo) & (v <= hi)
+        ax.scatter(xx[ok], v[ok], s=7, color=col, alpha=.35, lw=0, zorder=1)
+        ax.scatter(xx[v > hi], np.full((v > hi).sum(), hi), s=10, marker='^', color=col, alpha=.6, lw=0, clip_on=False)
+        ax.scatter(xx[v < lo], np.full((v < lo).sum(), lo), s=10, marker='v', color=col, alpha=.6, lw=0, clip_on=False)
+        m, a, b = median_ci(v)
+        ax.errorbar(ROI_X[roi], m, yerr=[[m - a], [b - m]], fmt='D', ms=4.5, color=col, mec='w', mew=.7, lw=1.4, capsize=0, zorder=4)
+        ps.append(stats.wilcoxon(v).pvalue)
+    for roi, q in zip(ROI_ORDER, stats.false_discovery_control(ps)):
+        ax.text(ROI_X[roi], hi + .03 * (hi - lo), stars(q), ha='center', va='bottom', fontsize=6.5, color=col, clip_on=False)
+    ax.hlines(0, -.6, ROI_X[ROI_ORDER[-1]] + .6, color='.7', lw=.7, ls='--', zorder=0)
+    ax.set_ylim(lo, hi)
+    offset_spines(ax)
+    roi_axis(ax)
+
+
+def panel_link(ax, d, eff):
+    """Per ROI: the model's median gain against the model-free extra response, target and distractor."""
+    for term, col in (('T', TARGET), ('D', DISTRACTOR)):
+        g = d.groupby('roi')[term].median().reindex(ROI_ORDER)
+        e = eff.groupby('roi')[term].median().reindex(ROI_ORDER)
+        ax.scatter(e, g, s=22, color=col, edgecolor='w', lw=.6, zorder=3)
+        for roi in ROI_ORDER:
+            ax.text(e[roi] + .006, g[roi], roi, fontsize=5, color=col, va='center', ha='left')
+    x = np.concatenate([eff.groupby('roi')[t].median().reindex(ROI_ORDER) for t in ('T', 'D')])
+    y = np.concatenate([d.groupby('roi')[t].median().reindex(ROI_ORDER) for t in ('T', 'D')])
+    r = stats.spearmanr(x, y)
+    ax.text(.03, .97, f'ρ = {r.statistic:.2f}'.replace('0.', '.'), transform=ax.transAxes, fontsize=6.5, color=FG, va='top')
+    ax.set_xlim(0, .28)
+    ax.set_xticks([0, .1, .2])
+    ax.set_xlabel('Extra response, data (% signal)')
+    ax.set_ylabel('Gain in the model')
+    offset_spines(ax)
+    return r
+
+
 def main(gain_table, conditional_table, name='fig4_hierarchy', regression_table='notes/data/hierarchy_regression_2026-11.tsv'):
     reg = pd.read_csv(regression_table, sep='\t')
     js = {f: joint(gain_table, f) for f in FAM}
@@ -166,24 +213,39 @@ def main(gain_table, conditional_table, name='fig4_hierarchy', regression_table=
     OUT.mkdir(parents=True, exist_ok=True)
     write_table(t, js)
     d = js['dog']
-    fig = plt.figure(figsize=(DOUBLE, 2.75))
-    gs = fig.add_gridspec(1, 3, wspace=.45, left=.11, right=.99, top=.74, bottom=.22)
-    ax = fig.add_subplot(gs[0])
+    fig = plt.figure(figsize=(DOUBLE, 5.3))
+    gs = fig.add_gridspec(2, 3, wspace=.45, hspace=1.05, left=.11, right=.99, top=.86, bottom=.11)
+    ax = fig.add_subplot(gs[0, 0])
     panel_gain(ax, d, t, 'T', TARGET, (-.4, 1.2), None, None)
     roi_axis(ax)
     title_icon(ax, 'Target: more gain up the hierarchy', ('target',), TARGET, h=.24)
     ax.set_ylabel('Gain at the field centre')
     letter(ax, 'a', x=-.2, y=1.26)
     provisional(ax, x=3.3, y=1.36)
-    ax = fig.add_subplot(gs[1])
+    ax = fig.add_subplot(gs[0, 1])
     panel_gain(ax, d, t, 'D', DISTRACTOR, (-.4, 1.2), None, None)
     roi_axis(ax)
     title_icon(ax, 'Distractor: less gain than the target', ('distractor',), DISTRACTOR, h=.24)
     letter(ax, 'b', x=-.12, y=1.26)
-    ax = fig.add_subplot(gs[2])
+    ax = fig.add_subplot(gs[0, 2])
     panel_slopes(ax, pd.read_csv(regression_table.replace('regression', 'slopes'), sep='\t'), reg)
     ax.text(0, 1.22, 'Slope over ROIs, per subject', transform=ax.transAxes, fontsize=7, color=FG, va='center', ha='left')
     letter(ax, 'c', x=-.3, y=1.26)
+    eff = pd.read_csv(EFFECTS, sep='\t')
+    ax = fig.add_subplot(gs[1, 0])
+    panel_data(ax, eff, 'T', TARGET, (-.1, .5))
+    title_icon(ax, 'In the data: larger response to the target', ('target',), TARGET, h=.24)
+    ax.set_ylabel('Extra response vs a neutral\nitem (% signal)')
+    letter(ax, 'd', x=-.2, y=1.26)
+    ax = fig.add_subplot(gs[1, 1])
+    panel_data(ax, eff, 'D', DISTRACTOR, (-.1, .5))
+    title_icon(ax, 'In the data: and to the distractor', ('distractor',), DISTRACTOR, h=.24)
+    letter(ax, 'e', x=-.12, y=1.26)
+    ax = fig.add_subplot(gs[1, 2])
+    rho = panel_link(ax, d, eff)
+    ax.text(0, 1.22, 'Model gain follows the data', transform=ax.transAxes, fontsize=7, color=FG, va='center', ha='left')
+    letter(ax, 'f', x=-.3, y=1.26)
+    print('rho', rho)
     save(fig, name, LEGEND)
     size_figure(d)
     save(fig, name, LEGEND)
