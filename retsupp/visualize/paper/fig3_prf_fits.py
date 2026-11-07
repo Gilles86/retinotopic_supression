@@ -237,7 +237,6 @@ def main(cv_table, hrf_table, loso_table, name='fig3_prf_fits'):
     ax.text(0, 1.16, 'Item responses are local', transform=ax.transAxes, fontsize=7, color=FG, va='center')
     letter(ax, 'd', x=-.3, y=1.12)
     save(fig, name, LEGEND)
-    print('median gain per ROI:', d.groupby('roi').d.median().round(4).to_dict())
 
 
 if __name__ == '__main__':
