@@ -65,9 +65,10 @@ def main(folder, out, subject=None):
         subject = int(f.name[4:6])
         ts = pd.read_csv(f, sep='\t')
         trials = pd.read_csv(f.with_name(f'sub-{subject:02d}_trials.tsv'), sep='\t')
-        for (roi, loc), x in ts.groupby(['roi', 'loc']):
-            tc = deconvolve(x, trials[trials['loc'] == loc])
-            rows.append(tc.assign(subject=subject, roi=roi, loc=loc, n_voxels=int(x.n_voxels.iloc[0])))
+        keys = ['roi', 'loc'] + (['dbin'] if 'dbin' in ts else [])
+        for key, x in ts.groupby(keys):
+            tc = deconvolve(x, trials[trials['loc'] == key[1]])
+            rows.append(tc.assign(subject=subject, n_voxels=int(x.n_voxels.iloc[0]), **dict(zip(keys, key))))
         print(f.name, flush=True)
     d = pd.concat(rows)
     d.to_csv(out, sep='\t', index=False, float_format='%.5g')
