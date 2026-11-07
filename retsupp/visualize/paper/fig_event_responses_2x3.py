@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from retsupp.visualize.paper.paper_style import (DISTRACTOR, DOUBLE, FG, HP, MUTED, ROI_ORDER, TARGET, letter, offset_spines,
+from retsupp.visualize.paper.paper_style import (DISTRACTOR, DOUBLE, FG, HP, MUTED, ROI_GROUPS, ROI_ORDER, TARGET, letter, offset_spines,
                                                  save, title_icon)
 
 NEUTRAL = '#7B8794'
@@ -190,10 +190,67 @@ def bar_panels(ax, ax2, p):
     return rel, w.pvalue
 
 
-def main(folder, name='fig_event_responses_2x3', bar_folder='notes/data/bar_pass_average_2026-11', deconv=None):
+def load_joint_bar(folder):
+    """Bar × HP and bar × LP betas of the joint model (deconvolve_bar_items.py), one row per subject × ROI × location."""
+    b = pd.concat([pd.read_csv(f, sep='\t') for f in sorted(Path(folder).glob('sub-*_2026-11_bar.tsv'))])
+    b = b[b.roi.isin(ROI_ORDER)].copy()
+    groups = {r: g for g, rois in ROI_GROUPS for r in rois}
+    b['group'] = b.roi.map(groups)
+    return b
+
+
+def pct(b):
+    """Bar response at HP relative to LP (% change). Locations are weighted by n_voxels × SD(bar regressor)², the
+    inverse of the variance of their betas up to a constant, so locations the bar barely reaches count little."""
+    b = b.dropna(subset=['beta_bar_hp', 'beta_bar_lp'])
+    w = b.n_voxels * b.bar_sd_lp ** 2
+    return 100 * ((w * (b.beta_bar_hp - b.beta_bar_lp)).sum() / (w * b.beta_bar_lp).sum())
+
+
+def strip(ax, x, v, col, seed=0, lim=None):
+    rng = np.random.default_rng(seed)
+    xx = x + rng.uniform(-.15, .15, len(v))
+    if lim is None:
+        ax.scatter(xx, v, s=8, color=col, alpha=.4, lw=0, zorder=1)
+    else:
+        lo, hi = lim
+        ok = (v >= lo) & (v <= hi)
+        ax.scatter(xx[ok], v[ok], s=8, color=col, alpha=.4, lw=0, zorder=1)
+        ax.scatter(xx[v > hi], np.full((v > hi).sum(), hi), s=10, marker='^', color=col, alpha=.6, lw=0, clip_on=False)
+        ax.scatter(xx[v < lo], np.full((v < lo).sum(), lo), s=10, marker='v', color=col, alpha=.6, lw=0, clip_on=False)
+    m, h = v.mean(), stats.t.ppf(.975, len(v) - 1) * v.std(ddof=1) / np.sqrt(len(v))
+    ax.errorbar(x + .32, m, yerr=h, fmt='o', ms=5.5, color=col, mec='w', mew=.7, lw=1.4, capsize=0, zorder=3)
+    return m, m - h, m + h, stats.wilcoxon(v).pvalue
+
+
+def joint_bar_panels(ax, b):
+    """Bar response at HP vs LP per subject: all ROIs pooled, then per pathway."""
+    res = []
+    labels = ['All'] + [g for g, _ in ROI_GROUPS]
+    for i, lab in enumerate(labels):
+        x = b if lab == 'All' else b[b.group == lab]
+        v = x.groupby('subject').apply(pct, include_groups=False).to_numpy()
+        m, lo, hi, p = strip(ax, i * 1.3, v, HP if lab == 'All' else LP_GREY, seed=i, lim=(-25, 25))
+        res.append((lab, m, lo, hi, p, (v < 0).mean()))
+        st = '***' if p < .001 else '**' if p < .01 else '*' if p < .05 else ''
+        ax.text(i * 1.3 + .1, 1.0, st, transform=ax.get_xaxis_transform(), ha='center', va='bottom', fontsize=7, color=HP)
+    ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
+    ax.set_xticks([i * 1.3 + .1 for i in range(len(labels))])
+    ax.set_xticklabels(['All ROIs', 'Early', 'Dorsal', 'Occ.-temp.'], fontsize=6.5)
+    ax.set_xlim(-.5, (len(labels) - 1) * 1.3 + .7)
+    ax.set_ylim(-25, 25)
+    ax.set_ylabel('Bar response, HP vs LP (% change)')
+    offset_spines(ax)
+    return res
+
+
+def main(folder, name='fig_event_responses_2x3', bar_folder='notes/data/bar_pass_average_2026-11', deconv=None, joint=None):
+    joint_items = joint is not None and deconv is None
+    if joint_items:
+        deconv = joint
     d = load_deconv(deconv) if deconv else load(folder)
     if deconv:
-        name = f'{name}_deconv'
+        name = f'{name}_joint' if joint_items else f'{name}_deconv'
         global PEAK
         PEAK = (3.2, 6.4)
     n = d.subject.nunique()
@@ -224,7 +281,22 @@ def main(folder, name='fig_event_responses_2x3', bar_folder='notes/data/bar_pass
     ax.set_ylabel('Peak (% signal)')
     letter(ax, 'e', x=-.4, y=1.18)
     bar = ''
-    if Path(bar_folder).exists():
+    if joint:
+        g2 = fig.add_gridspec(1, 2, width_ratios=[.8, 1.8], left=.0, right=.5, top=.4, bottom=.12, wspace=.55)
+        ax = fig.add_subplot(g2[1])
+        res = joint_bar_panels(ax, load_joint_bar(joint))
+        title_icon(ax, 'Bar response at HP vs LP, items modelled jointly', ('hp', 'lp'), HP, y=1.12, h=.3)
+        letter(ax, 'f', x=-.2, y=1.18)
+        bar = (' f, Response to the bar at the HP location relative to the LP locations, from a joint model of the same voxels\' '
+               'mean BOLD (bar not removed) with two bar regressors (m0\'s prediction for the bar alone in runs where the '
+               'location is HP, and where it is LP), the six item events and run intercepts; difference of the two betas '
+               'relative to the LP beta, pooled over locations weighted by voxel count × SD of the bar regressor², per subject (dots; triangles, beyond ±25%), all ROIs and per pathway; mean and 95% CI (t); Wilcoxon signed-rank against 0: '
+               + '; '.join(f'{lab} {m:+.1f}% [{lo:+.1f}, {hi:+.1f}], {f0 * 100:.0f}% of subjects below 0, p = {p:.2g}'
+                           for lab, m, lo, hi, p, f0 in res) + ('. Item responses in b-e from the same joint model.' if joint_items else
+                  '. Item responses in b-e from the deconvolution with the bar response removed; the joint model gives '
+                  'the same item responses to within 0.002% signal.'))
+        print(bar)
+    elif Path(bar_folder).exists():
         g2 = fig.add_gridspec(1, 3, width_ratios=[.8, 2.2, .7], left=.0, right=.72, top=.4, bottom=.1, wspace=.55)
         ax = fig.add_subplot(g2[1])
         ax2 = fig.add_subplot(g2[2])
@@ -246,5 +318,6 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--folder', default='notes/data/event_average_2026-11')
     ap.add_argument('--deconv', default=None, help='Folder of nideconv responses; used instead of the event averages.')
+    ap.add_argument('--joint', default=None, help='Folder of the joint bar + items model (deconvolve_bar_items.py).')
     a = ap.parse_args()
-    main(a.folder, deconv=a.deconv)
+    main(a.folder, deconv=a.deconv, joint=a.joint)
