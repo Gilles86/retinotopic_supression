@@ -55,7 +55,8 @@ def generalization(term, family='dog', table=LOSO_TABLE):
     for roi in ROI_ORDER:
         v = d[d.roi == roi].dr2_sign.dropna()
         pct.append((v > 0).mean() * 100)
-        ps.append(stats.wilcoxon(v).pvalue)
+        # One-sided: the question is whether the others' estimate predicts better than its opposite.
+        ps.append(stats.wilcoxon(v, alternative='greater').pvalue)
     return pd.DataFrame(dict(roi=ROI_ORDER, pct=pct, q=stats.false_discovery_control(ps)))
 
 
@@ -74,8 +75,6 @@ def generalization_row(ax, term, color, lo, hi, label=True):
         x = ROI_X[r.roi]
         if r.q < .05 and r.pct > 50:
             ax.plot(x, y, 's', ms=4.2, color=color, mec=color, clip_on=False, zorder=5)
-        elif r.q < .05:
-            ax.plot(x, y, 'x', ms=4, color='.45', mew=1, clip_on=False, zorder=5)
         else:
             ax.plot(x, y, 's', ms=4.2, mfc='w', mec=color, mew=.8, clip_on=False, zorder=5)
     # The band is labelled as a y tick, so the label sits with the other tick labels and never on data.
