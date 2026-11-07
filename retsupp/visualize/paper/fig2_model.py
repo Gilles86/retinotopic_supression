@@ -327,7 +327,7 @@ def main_hp(name='fig2_model_hp_blocks'):
         g.set_ylim(g_lo * 1.2, g_hi * 1.05)
         r3 = rows[2]
         r3.plot(t, d['without'], color='.65', lw=1.1)
-        r3.plot(t, d['predicted'], color=HP if k == 0 else FG, lw=1.3)
+        r3.plot(t, d['predicted'], color=FG, lw=1.3)
         r3.set_ylim(p_lo - .05 * (p_hi - p_lo), p_hi * 1.05)
         # Anchor: the peak response without HP near, drawn in both blocks.
         r3.axhline(anchor, color=FG, lw=.6, ls=(0, (1.5, 1.5)), zorder=0)
