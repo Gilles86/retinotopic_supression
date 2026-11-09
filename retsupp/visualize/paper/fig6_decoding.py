@@ -81,7 +81,7 @@ quadrants), Benjamini-Hochberg across the ROIs per decoder; * q < .05. {tests}.{
 intensity on the bar's pixels per quadrant of the aperture, in % of the mean of the four quadrants, in the same rotated
 frame (icons: HP ringed in red at the top, the quadrant shaded): the quadrant facing HP, the two quadrants next to it
 (left and right pooled; they do not differ, two-sided Wilcoxon p = {q_lr:.2f}) and the opposite quadrant; per subject
-the mean over runs and V1–V3; dots are subjects, points and bars the mean and within-subject SEM (Cousineau-Morey).
+per subject and ROI the decoded intensity per quadrant averaged over runs and then expressed in % of the mean of the four quadrants, then averaged over V1–V3; dots are subjects, points and bars the mean and within-subject SEM (Cousineau-Morey).
 {quad}. f, The difference of d by eccentricity, in %
 of the decoded intensity in the other quadrants at the same eccentricity, mean of V1–V3 per subject; line and band, mean ± SEM over
 subjects (rings of 0.25°), in the three bands shaded. Items (radius {item_r}°) begin at {item_in:.2f}°
