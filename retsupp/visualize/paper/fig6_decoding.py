@@ -714,6 +714,70 @@ def bar_insets(fig, source, xy, W, H, size=.7, gap=.1, vmax=3., bins=(2, 3, 4)):
     return labs, segs
 
 
+def plot_all_rois(name='figS_decoding_all_rois', source='jointhrf'):
+    """Supplementary figure: the group-mean decoded frames per ROI at the time points of Fig. 6a (unconstrained decoder)."""
+    import matplotlib.colors as mcolors
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Circle
+    from retsupp.visualize.paper.paper_style import FG, MUTED, ROI_GROUPS, STIM, save
+    z = np.load(DATA / f'decoding_frames_allrois_{source}_2026-11.npz')
+    rois, G, par = list(z['rois']), z['group'], z['paradigm'].astype(float)
+    q = pd.read_csv(DATA / f'decoding_quality_{source}_2026-11.tsv', sep='\t')
+    qs = q[q.decoder == 'free'].groupby(['subject', 'roi']).r.mean().reset_index()
+    med, nsub = qs.groupby('roi').r.median(), qs.groupby('roi').subject.nunique()
+    W, H = 7.25, 6.9
+    fig = plt.figure(figsize=(W, H))
+    size, gap, x0 = .54, .1, 1.6
+    c = np.linspace(-5, 5, 50)
+    X, Y = np.meshgrid(c, c)
+    cm = mcolors.LinearSegmentedColormap.from_list('stim', ['#FFFFFF', STIM])
+    rows = [('Bar', None)] + [(r, r) for _, g in ROI_GROUPS for r in g]
+    y = H - .45
+    ypos = {}
+    prev_group = None
+    for lab, roi in rows:
+        grp = next((gn for gn, g in ROI_GROUPS if roi in g), None)
+        y -= size + (.06 if grp == prev_group else .2)
+        prev_group = grp
+        ypos[lab] = y
+        arr = par if roi is None else G[rois.index(roi)]
+        vmax = 1. if roi is None else np.nanpercentile(arr, 99.7)
+        for k, t in enumerate(FRAMES):
+            ax = fig.add_axes([(x0 + k * (size + gap)) / W, y / H, size / W, size / H])
+            if roi is None:
+                disc(ax, arr[k], cm, vmax)
+            else:
+                img = np.where(np.hypot(X, Y) <= APERTURE + .1, np.clip(arr[k], 0, None), 0)
+                ax.imshow(img, origin='lower', extent=[-5.1, 5.1, -5.1, 5.1], cmap='magma', vmin=0, vmax=vmax,
+                          interpolation='bilinear')
+                ax.add_patch(Circle((0, 0), APERTURE, fill=False, ec='.75', lw=.4))
+                ax.set_xlim(-3.6, 3.6)
+                ax.set_ylim(-3.6, 3.6)
+                ax.set_axis_off()
+            if roi is None:
+                ax.text(.5, 1.06, f'{t * TR:.0f} s', transform=ax.transAxes, ha='center', va='bottom', fontsize=6.5,
+                        color='.35')
+            if k == 0:
+                txt = 'Bar' if roi is None else f'{roi}\nn = {nsub[roi]}, r = {med[roi]:.2f}'.replace('0.', '.')
+                ax.text(-.1, .5, txt, transform=ax.transAxes, ha='right', va='center', fontsize=6.5, color=FG)
+    for gname, g in ROI_GROUPS:
+        y0, y1 = ypos[g[-1]], ypos[g[0]] + size
+        fig.add_artist(plt.Line2D([.3 / W] * 2, [y0 / H, y1 / H], color=MUTED, lw=.7))
+        fig.text(.2 / W, (y0 + y1) / 2 / H, gname, rotation=90, ha='center', va='center', fontsize=6.5, color='.4')
+    fig.text(.2 / W, (H - .18) / H, 'The bar decoded from each area: mean of the subjects\' decoded frames',
+             fontsize=7.5, color=STIM, va='center')
+    legend = f"""
+**Figure S. The bar decoded from each of the nine areas.** As Fig. 6a (bottom row) for every ROI: the decoded frames
+(unconstrained decoder, pRFs with one HRF per subject and ROI fitted on the other runs, held-out runs) averaged over each
+subject's runs and then over subjects, at seven time points of the run (the last without a bar); top row, the true bar.
+Each ROI on a magma scale from 0 to its own maximum (99.7th percentile). Row labels: number of subjects with that ROI
+(subjects with fewer than 20 usable voxels skipped) and the median over subjects of the frame-wise correlation between
+decoded and true frame (Fig. 6b). The bar is visible in every area, sharpest in V1–V3 and blurred in the areas with
+larger pRFs.
+"""
+    save(fig, name, legend)
+
+
 def plot_bar_crossing(name='figS_bar_crossing_response', source_note=''):
     """Supplementary figure (was Fig. 6g): the measured response when the bar crosses a pRF near an item location."""
     import matplotlib.pyplot as plt
@@ -879,7 +943,7 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('step', choices=['collect', 'plot', 'plot_bar_crossing'])
+    ap.add_argument('step', choices=['collect', 'plot', 'plot_bar_crossing', 'plot_all_rois'])
     ap.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
     ap.add_argument('--source', default='jointhrf', help='jointhrf (main Fig. 6) or canonical (figS_decoding_canonical)')
     ap.add_argument('--rois', nargs='+', default=['V1', 'V2', 'V3', 'V3AB', 'IPS', 'hV4', 'VO', 'LO', 'TO'],
@@ -891,6 +955,8 @@ if __name__ == '__main__':
     a = ap.parse_args()
     if a.step == 'collect':
         collect(a.bids_folder, a.source, a.out)
+    elif a.step == 'plot_all_rois':
+        plot_all_rois()
     elif a.step == 'plot_bar_crossing':
         plot_bar_crossing(source_note='')
     else:

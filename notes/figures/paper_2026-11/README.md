@@ -28,6 +28,7 @@ responses Fig. 3 and the model Fig. 4.
 | S Decoding with canonical-HRF pRFs (robustness of Fig. 6) | `figS_decoding_canonical` | `fig6_decoding.py --source canonical --rois V1 V2 V3 --name figS_decoding_canonical` | final |
 | S Decoded bars per position, HP rotated to the upper right; vertical and horizontal bars separately, minus the mean over HP locations | `figS_decoded_bars_rotated` | `figS_decoded_bars.py plot_split --n-bins 11` | final |
 | S The same per ROI, orientations pooled | `figS_decoded_bars_per_roi` | `figS_decoded_bars.py plot_per_roi --n-bins 11` | final |
+| S The bar decoded from each of the nine areas (group-mean frames, as Fig. 6a) | `figS_decoding_all_rois` | `fig6_decoding.py plot_all_rois` | final |
 | S Measured response when the bar crosses a pRF near an item location (was Fig. 6g) | `figS_bar_crossing_response` | `fig6_decoding.py plot_bar_crossing` | final; test depends on the baseline choice |
 
 `_archive/` (numbers there are the order before 2026-11-09: old Fig. 2 = model, 3 = pRF fits, 4 = item locations): Figs. 4 and 5 before the split by question (`fig4_hierarchy`, `fig5_sustained_hp`), earlier Fig. 2 (pRF-location version), Fig. 3 versions with the example voxel, the voxel scans, the
