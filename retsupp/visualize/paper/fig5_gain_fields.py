@@ -299,7 +299,7 @@ def panel_hierarchy(ax, t, size, slopes):
                     dx, dy = lab_pos[roi]
                     ax.text(xi + dx, yi + dy, roi, fontsize=5.5, color='.4', ha='center', va='center')
             xs = lx[[ROI_ORDER.index(q) for q in ('VO', 'TO', 'IPS')]]
-            ax.text(xs.max() + .02, r.loc[['VO', 'TO', 'IPS'], 'median'].max() + .08, 'VO, TO, IPS', fontsize=5.5,
+            ax.text(xs.max() + .02, .03, 'VO, TO, IPS', fontsize=5.5,
                     color='.4', ha='right', va='center')
     ax.axhline(0, color='.7', lw=.7, ls='--', zorder=0)
     ticks = [.6, 1., 1.6]
