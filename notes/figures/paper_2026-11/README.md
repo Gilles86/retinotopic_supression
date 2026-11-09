@@ -27,6 +27,7 @@ responses Fig. 3 and the model Fig. 4.
 | S Leave-one-subject-out per ROI and term (was Fig. 5b) | `figS_loso_per_roi` | `fig5_gain_fields.py` | provisional (earlier fits) |
 | S Fitted gain fields | `figS_gainfield_size` | see its legend | provisional |
 | S Decoding with canonical-HRF pRFs (robustness of Fig. 6) | `figS_decoding_canonical` | `fig6_decoding.py --source canonical --rois V1 V2 V3 --name figS_decoding_canonical` | final |
+| S Decoding with divisive-normalization pRFs (robustness of Fig. 6; HRF per subject × ROI, median of the training fits) | `figS_decoding_dn` | `fig6_decoding.py plot --source dn_roihrf --name figS_decoding_dn` | final |
 | S Decoded bars per position, HP rotated to the upper right; vertical and horizontal bars separately, minus the mean over HP locations | `figS_decoded_bars_rotated` | `figS_decoded_bars.py plot_split --n-bins 11` | final |
 | S The same per ROI, orientations pooled | `figS_decoded_bars_per_roi` | `figS_decoded_bars.py plot_per_roi --n-bins 11` | final |
 | S The bar decoded from each of the nine areas (group-mean frames, as Fig. 6a) | `figS_decoding_all_rois` | `fig6_decoding.py plot_all_rois` | final |

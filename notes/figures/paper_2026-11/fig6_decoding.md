@@ -20,7 +20,7 @@ intensity on the bar's pixels per quadrant of the aperture, in % of the mean of 
 frame (icons: HP ringed in red at the top, the quadrant shaded): the quadrant facing HP, the two quadrants next to it
 (left and right pooled; they do not differ, two-sided Wilcoxon p = 0.22) and the opposite quadrant; per subject
 the mean over runs and V1–V3; dots are subjects, points and bars the mean and within-subject SEM (Cousineau-Morey).
-HP -0.85 ± 0.38%, next to HP +0.46 ± 0.18%, opposite -0.08 ± 0.22% (mean ± SEM); HP below next to HP, one-sided Wilcoxon p = 0.015 (**); HP below opposite, p = 0.13; Friedman test across the four quadrants p = 0.06. f, The difference of d by eccentricity, in %
+HP -0.85 ± 0.38%, next to HP +0.46 ± 0.18%, opposite -0.08 ± 0.22% (mean ± SEM); HP below next to HP, one-sided Wilcoxon p = 0.015 (*); HP below opposite, p = 0.13; Friedman test across the four quadrants p = 0.06. f, The difference of d by eccentricity, in %
 of the decoded intensity in the other quadrants at the same eccentricity, mean of V1–V3 per subject; line and band, mean ± SEM over
 subjects (rings of 0.25°), in the three bands shaded. Items (radius 0.75°) begin at 3.25°
 eccentricity, just outside the aperture, and their responses are in the BOLD data but not in the encoding model; if item

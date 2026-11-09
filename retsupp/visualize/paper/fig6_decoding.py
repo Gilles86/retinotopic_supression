@@ -37,7 +37,8 @@ BAR_WINDOW = (1.6, 6.4)
 LOC_COLORS = {'hp': '#D62828', 'adjacent': '#52606D', 'opposite': '#9AA5B1'}
 DATA = Path('notes/data')
 EXAMPLES = {'canonical': ('sub-07', 'ses-1_run-3', 'V1'),     # the clearest of the top runs by r (inspected visually)
-            'jointhrf': ('sub-03', 'ses-1_run-4', 'V1')}
+            'jointhrf': ('sub-03', 'ses-1_run-4', 'V1'),
+            'dn_roihrf': ('sub-03', 'ses-1_run-4', 'V1')}       # rank 1 for DN too; the same run as Fig. 6a
 FRAMES = [15, 21, 28, 72, 81, 89, 130]      # TRs shown in a (bar left → right, top → bottom, then blank)
 TR = 1.6
 APERTURE, ITEM_ECC, ITEM_R = 3.17, 4.0, .75
@@ -60,7 +61,7 @@ subtracted; with one (−6.4 to 0 s) the difference is {bar_base}, not significa
 """
 LEGEND = """
 {title} The bar stimulus of every run was decoded from the BOLD activity of one ROI at a time with pRFs
-(difference of Gaussians, {hrf}, no gain terms) fitted on the other runs (cross-validation folds), so the decoded run
+({prf_model}, {hrf}, no gain terms) fitted on the other runs (cross-validation folds), so the decoded run
 never entered the pRF fit; voxels with cross-run reliability > 0 on the training runs (at most 2000 per ROI); every pixel
 of every frame decoded; the encoding model contains only the bar, not the search items. {areas} a, True bar (top) and decoded intensity in a single held-out run (middle;
 {ex_sub} {ex_run}, V1, frame-wise r = {ex_r:.2f}: rank {ex_rank} of {n_runs} subject × run × ROI decodes, chosen as the
@@ -393,7 +394,7 @@ def quadrant_stats(s):
     m, se = s.mean(), s.sem()
     out['text'] = (f'HP {m.hp:+.2f} ± {se.hp:.2f}%, next to HP {m.adjacent:+.2f} ± {se.adjacent:.2f}%, opposite '
                    f'{m.opposite:+.2f} ± {se.opposite:.2f}% (mean ± SEM); HP below next to HP, one-sided Wilcoxon '
-                   f'p = {out["p_adj"]:.3f} (**); HP below opposite, p = {out["p_opp"]:.2f}; Friedman test across the four '
+                   f'p = {out["p_adj"]:.3f}{" (" + stars(out["p_adj"]) + ")" if out["p_adj"] < .05 else ""}; HP below opposite, p = {out["p_opp"]:.2f}; Friedman test across the four '
                    f'quadrants p = {out["p_fried"]:.2f}')
     return out
 
@@ -990,14 +991,20 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
                  ', '.join(f'{r} {n_roi.get(r, 0)}' for r in rois) + ').')
     else:
         areas = 'Only V1–V3 are shown.'
-    hrf = {'canonical': 'canonical HRF', 'jointhrf': 'one HRF per subject and ROI, fitted jointly with the pRFs'}.get(source, source)
-    if name.startswith('figS'):
+    hrf = {'canonical': 'canonical HRF', 'jointhrf': 'one HRF per subject and ROI, fitted jointly with the pRFs',
+           'dn_roihrf': 'one HRF per subject and ROI, the median of the training fits\' per-voxel HRFs'}.get(source, source)
+    prf_model = 'divisive normalization' if source.startswith('dn') else 'difference of Gaussians'
+    if name.startswith('figS') and source.startswith('dn'):
+        title = ('**Figure S. Decoding with divisive-normalization pRFs (robustness check of Fig. 6).** Everything as in '
+                 'Fig. 6, but the decoder\'s pRFs are divisive-normalization pRFs with one HRF per subject and ROI (the '
+                 'median of the per-voxel HRFs of the training fits) instead of difference-of-Gaussians pRFs.')
+    elif name.startswith('figS'):
         title = (f'**Figure S. Decoding with pRFs that use the canonical HRF (robustness check of Fig. 6).** Everything as '
                  f'in Fig. 6, but the decoder\'s pRFs use one canonical HRF instead of an HRF per subject and ROI.')
     else:
         title = ('**Figure 6. The bar stimulus can be read out of visual cortex, and it is read out at lower intensity in '
                  'the quadrant facing the HP location.**')
-    save(fig, name, LEGEND.format(title=title, areas=areas, hrf=hrf, n=qs.subject.nunique(), quality=quality, tests=tests, outline=outline,
+    save(fig, name, LEGEND.format(title=title, areas=areas, hrf=hrf, prf_model=prf_model, n=qs.subject.nunique(), quality=quality, tests=tests, outline=outline,
                                   bands=band_txt, friedman=fried, outer_inner=oi, fovea=fovea, ex_sub=sub, ex_r=ex_r,
                                   ex_rank=ex_rank, n_runs=len(qf), r_med=qf.r.median(), ex_run=run.replace('_', ' '),
                                   ap=APERTURE, item_r=ITEM_R, insets=(INSET_TXT.format(ins_far=ins_lab[0][0], ins_mid=ins_lab[0][1], ins_hp=ins_lab[0][2], ins_seg='; '.join(f'{k} segment {m:+.2f} ± {se:.2f}%, two-sided Wilcoxon p = {p:.3f}' for k, m, se, p in ins_lab[1])) if ins_lab else ''), item_in=ITEM_ECC - ITEM_R, bar=bar_txt, bar_base=bar_base,
