@@ -27,30 +27,36 @@ from scipy import ndimage, stats
 ROIS = ['V1', 'V2', 'V3']
 DECODERS = [('outline', 'Bar outline given'), ('free', 'Unconstrained')]
 DATA = Path('notes/data')
-EXAMPLE = ('sub-23', 'ses-2_run-3', 'V1')
+EXAMPLE = ('sub-07', 'ses-1_run-3', 'V1')    # the clearest of the top runs by r (inspected visually)
 FRAMES = [15, 21, 28, 72, 81, 89, 130]      # TRs shown in a (bar left → right, top → bottom, then blank)
 TR = 1.6
 APERTURE, ITEM_ECC, ITEM_R = 3.17, 4.0, .75
 BANDS = [('0-1.5', 0, 1.5, '0–1.5°'), ('1.5-2.5', 1.5, 2.5, '1.5–2.5°'), ('2.5-ap', 2.5, APERTURE, '2.5°–edge')]
+ITEM_ANGLES = (90, 180, 270, 0)              # HP first: after rotation HP sits at 12 o'clock
 BAND_SHADE = ['#E8ECF0', '#D5DCE3', '#C2CBD5']
 LEGEND = """
 **Figure 6. The bar stimulus can be read out of early visual cortex, and less of it is read out in the quadrant facing
 the HP location.** The bar stimulus of every run was decoded from the BOLD activity of V1, V2 or V3 with pRFs (difference
 of Gaussians, canonical HRF, no gain terms) fitted on the other runs (cross-validation folds), so the decoded run never
 entered the pRF fit; voxels with cross-run reliability > 0 on the training runs (at most 2000 per ROI); the encoding model
-contains only the bar, not the search items. a, True bar (top) and decoded intensity in a single held-out run of one
-subject ({ex_sub}, V1, frame-wise r = {ex_r:.2f}; middle) and averaged over all runs and subjects (V1; bottom), at seven
-time points of the run (the last one without a bar). Grey circle, the {ap}° aperture of the bar. b, Per subject, the
+contains only the bar, not the search items. Only V1–V3 were decoded: reading out a bar needs small pRFs, which is why
+the pre-specified test is in these three areas; the higher areas (V3AB, IPS, hV4, VO, LO, TO) have not been decoded. a,
+True bar (top) and decoded intensity in a single held-out run (middle; {ex_sub} {ex_run}, V1, frame-wise r = {ex_r:.2f}:
+rank {ex_rank} of {n_runs} subject × run × ROI decodes, chosen as the clearest of the five best; the median run has r =
+{r_med:.2f}) and averaged over all runs and subjects (V1; bottom), at seven time points of the run (the last one without
+a bar). Grey circle, the {ap}° aperture of the bar. b, Per subject, the
 spatial correlation between decoded and true frame inside the aperture, averaged over the frames with a bar and over
 runs (unconstrained decoder; blue dots, n = {n} subjects), against the same with the order of the true frames shuffled
 (100 permutations; grey). Points and bars: median and bootstrapped 95% CI. Decoded vs shuffled: Wilcoxon signed-rank
 test, one-sided (*** p < .001); {quality}. The decoded time course is not displaced in time: the correlation peaks at lag 0 in all
 three ROIs. With the bar outline given (the decoder of c–f) the correlation is trivially high (median r = {r_outline}). c,
-Each run's visual field rotated in 90° steps so that the HP location (red dashed circle; grey, the LP locations, drawn
-with the item footprint, radius {item_r}°) lies upper right, then the decoded intensity on the bar's pixels minus its
-average over the four rotations (in % of that average), averaged over runs, V1–V3 and subjects, smoothed (Gaussian, σ =
-0.4°); bar-outline decoder. d, The same as a function of polar angle relative to the HP direction (bins of 22.5°), whole
-aperture; shaded red, the quadrant facing HP. Line and band: mean ± SEM over subjects. e, The pre-specified test: per
+Each run's visual field rotated so that the HP location (red dashed circle; grey, the LP locations, drawn with the item
+footprint, radius {item_r}°) lies at 12 o'clock (90° steps, then 45° with bilinear interpolation); shown is the decoded
+intensity on the bar's pixels minus its average over the four rotations (in % of that average), averaged over runs, V1–V3
+and subjects, smoothed (Gaussian, σ = 0.4°); bar-outline decoder. The dotted diagonals bound the quadrant facing HP. d, The
+same as a function of direction from fixation, measured clockwise from the HP direction (bins of 22.5°), whole aperture;
+circles under the axis mark the item directions (red, HP; grey, LP); shaded red, the quadrant facing HP (the inset display
+shows it). Line and band: mean ± SEM over subjects. e, The pre-specified test: per
 subject and ROI, the mean decoded intensity on the bar's pixels in the quadrant facing HP minus the mean over the three
 other quadrants, averaged over runs. Filled: bar outline given, intensities decoded (the pre-specified decoder; dots are
 subjects); open: every pixel decoded. Points and bars: median and bootstrapped 95% CI. Wilcoxon signed-rank test, one-sided
@@ -121,7 +127,23 @@ def rel_maps(maps, decoder='outline'):
     x = maps['drive'][:, :, j].astype(float)                         # sub, roi, y, x
     sym = np.mean([np.rot90(x, k, axes=(2, 3)) for k in range(4)], 0)
     ref = np.nanmean(sym, 0, keepdims=True)                          # group average, per ROI and pixel
-    return np.nanmean((x - sym) / ref, 1) * 100
+    return rotate_hp_up(np.nanmean((x - sym) / ref, 1) * 100)
+
+
+def rotate_hp_up(rm):
+    """Rotate maps (HP upper right) by a further 45° counter-clockwise so HP sits at 12 o'clock (bilinear)."""
+    c = np.linspace(-5, 5, 50)
+    X, Y = np.meshgrid(c, c)
+    k = np.sqrt(.5)
+    sx, sy = k * X + k * Y, -k * X + k * Y                           # source position R(-45°)(x, y)
+    coords = [(sy + 5) / (c[1] - c[0]), (sx + 5) / (c[1] - c[0])]    # (row, col)
+    out = []
+    for m in rm:
+        ok = np.isfinite(m)
+        v = ndimage.map_coordinates(np.where(ok, m, 0), coords, order=1, cval=0)
+        w = ndimage.map_coordinates(ok.astype(float), coords, order=1, cval=0)
+        out.append(np.where(w > .5, v / np.maximum(w, 1e-9), np.nan))
+    return np.array(out)
 
 
 def stars(p):
@@ -162,7 +184,7 @@ def panel_frames(fig, box, frames, W, H):
     gapy = (h - 3 * size) / 2
     cm = mcolors.LinearSegmentedColormap.from_list('stim', ['#FFFFFF', STIM])
     rows = [('Bar', frames['paradigm'].astype(float), 1.),
-            (f'One run\n({frames["ex_label"]})', frames['example'], np.nanpercentile(frames['example'], 99.7)),
+            (f'Best run\n{frames["ex_label"]}', frames['example'], np.nanpercentile(frames['example'], 99.7)),
             ('Mean of 30\nsubjects (V1)', frames['group'], np.nanpercentile(frames['group'], 99.7))]
     axes = []
     for i, (lab, arr, vmax) in enumerate(rows):
@@ -209,7 +231,7 @@ def panel_quality(ax, qs, pq):
 
 def items(ax, hp_color, lw=.8):
     from matplotlib.patches import Circle
-    for k, a in enumerate((45, 135, 225, 315)):
+    for k, a in enumerate(ITEM_ANGLES):
         p = ITEM_ECC * np.array([np.cos(np.deg2rad(a)), np.sin(np.deg2rad(a))])
         ax.add_patch(Circle(p, ITEM_R, fill=False, ec=hp_color if k == 0 else '.55', lw=lw, ls=(0, (2.5, 1.2)),
                             clip_on=False))
@@ -223,7 +245,7 @@ def panel_map(ax, rm, vmax=3):
     sm = np.array([ndimage.gaussian_filter(np.where(inside, np.nan_to_num(p), 0), 2) /
                    ndimage.gaussian_filter(inside.astype(float), 2) for p in rm])
     im = disc(ax, np.nanmean(sm, 0), 'RdBu_r', vmax, -vmax)
-    for a in (0, 90):
+    for a in (45, 135):
         t = np.deg2rad(a)
         ax.plot([-APERTURE * np.cos(t), APERTURE * np.cos(t)], [-APERTURE * np.sin(t), APERTURE * np.sin(t)],
                 color='.55', lw=.4, ls=':')
@@ -231,17 +253,25 @@ def panel_map(ax, rm, vmax=3):
     ax.set_xlim(-4.95, 4.95)
     ax.set_ylim(-4.95, 4.95)
     ax.set_aspect('equal')
-    p = ITEM_ECC / np.sqrt(2)
-    ax.text(p, p + ITEM_R + .25, 'HP', color=HP, fontsize=6.5, ha='center', va='bottom')
+    ax.text(ITEM_R + .25, ITEM_ECC, 'HP', color=HP, fontsize=6.5, ha='left', va='center')
+    area_tag(ax, x=0., y=1.)
     return im
 
 
+def area_tag(ax, text='V1–V3 pooled', x=1., y=1., ha='left'):
+    ax.text(x, y, text, transform=ax.transAxes, fontsize=6, color='.4', ha=ha, va='top',
+            bbox=dict(boxstyle='round,pad=.25', fc='#F1F3F5', ec='none'))
+
+
 def panel_angle(ax, rm):
-    from retsupp.visualize.paper.paper_style import FG, HP, offset_spines
+    """d: drive by direction from fixation, clockwise from HP (12 o'clock); the four item directions drawn as icons."""
+    import matplotlib.transforms as mtrans
+    from matplotlib.patches import Circle, Wedge
+    from retsupp.visualize.paper.paper_style import FG, HP, MUTED, offset_spines
     c = np.linspace(-5, 5, 50)
     X, Y = np.meshgrid(c, c)
     inside = np.hypot(X, Y) <= APERTURE
-    ang = (np.degrees(np.arctan2(Y, X)) - 45 + 180) % 360 - 180
+    ang = (90 - np.degrees(np.arctan2(Y, X)) + 180) % 360 - 180      # clockwise from 12 o'clock
     edges = np.arange(-180, 181, 22.5)
     prof = np.array([[np.nanmean(p[inside & (ang >= a) & (ang < b)]) for a, b in zip(edges[:-1], edges[1:])] for p in rm])
     x = (edges[:-1] + edges[1:]) / 2
@@ -254,12 +284,33 @@ def panel_angle(ax, rm):
     ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
     ax.set_xlim(-180, 180)
     ax.set_xticks([-180, -90, 0, 90, 180])
-    ax.set_xticklabels(['−180', '−90', 'HP', '90', '180'])
+    ax.set_xticklabels([])
     ax.set_ylim(-2.6, 2.2)
-    ax.set_yticks([-2, -1, 0, 1, 2])
-    ax.set_xlabel('Polar angle from HP (°)')
-    ax.set_ylabel('Drive vs rotation\nmean (%)')
+    ax.set_yticks([-2, 0, 2])
+    ax.set_yticklabels(['−2', '0', '2'])
+    ax.set_ylabel('Decoded bar drive\nvs average (%)')
     ax.text(0, 2.15, 'Quadrant\nfacing HP', color=HP, fontsize=6.5, ha='center', va='top')
+    # Item icons under the ticks: HP red at 0, the LP items grey.
+    tr = mtrans.blended_transform_factory(ax.transData, ax.transAxes)
+    for xx, lab, col in [(-180, 'Below', MUTED), (-90, 'Left', MUTED), (0, 'HP', HP), (90, 'Right', MUTED),
+                         (180, 'Below', MUTED)]:
+        ax.plot(xx, -.15, 'o', transform=tr, ms=5, mfc='w' if col == MUTED else '#F6D4D4', mec=col, mew=.9, clip_on=False)
+        ax.text(xx, -.27, lab, transform=tr, ha='center', va='top', fontsize=6.5, color=HP if col == HP else '.4')
+    ax.text(.5, -.44, 'Direction from fixation, relative to HP', transform=ax.transAxes, ha='center', va='top',
+            fontsize=8, color=FG)
+    # Mini display: HP on top, the shaded quadrant facing it.
+    ins = ax.inset_axes([1.0, .55, .3, .45])
+    ins.add_patch(Wedge((0, 0), APERTURE, 45, 135, facecolor=HP, alpha=.15, lw=0))
+    ins.add_patch(Circle((0, 0), APERTURE, fill=False, ec='.55', lw=.5))
+    for k, a in enumerate(ITEM_ANGLES):
+        p = ITEM_ECC * np.array([np.cos(np.deg2rad(a)), np.sin(np.deg2rad(a))])
+        ins.add_patch(Circle(p, ITEM_R, facecolor='#F6D4D4' if k == 0 else 'w', ec=HP if k == 0 else MUTED, lw=.6))
+    ins.plot(0, 0, '+', color=FG, ms=3, mew=.5)
+    ins.set_xlim(-5, 5)
+    ins.set_ylim(-5, 5)
+    ins.set_aspect('equal')
+    ins.set_axis_off()
+    area_tag(ax, x=1.02, y=.4)
     offset_spines(ax)
 
 
@@ -303,7 +354,7 @@ def panel_bands_sketch(ax):
     for (key, a, b, lab), col in zip(BANDS, BAND_SHADE):
         ax.add_patch(Wedge((0, 0), b, 0, 360, width=b - a, facecolor=col, ec='w', lw=.6))
     ax.add_patch(Circle((0, 0), APERTURE, fill=False, ec='.45', lw=.6))
-    for k, a in enumerate((45, 135, 225, 315)):
+    for k, a in enumerate(ITEM_ANGLES):
         p = ITEM_ECC * np.array([np.cos(np.deg2rad(a)), np.sin(np.deg2rad(a))])
         ax.add_patch(Circle(p, ITEM_R, facecolor='.88' if k else '#F6D4D4', ec=HP if k == 0 else '.55', lw=.6))
     ax.plot(0, 0, '+', color=FG, ms=3, mew=.5)
@@ -311,8 +362,7 @@ def panel_bands_sketch(ax):
     ax.set_ylim(-4.9, 4.9)
     ax.set_aspect('equal')
     ax.set_axis_off()
-    p = ITEM_ECC / np.sqrt(2)
-    ax.text(p, p + ITEM_R + .2, 'HP item', color=HP, fontsize=6.5, ha='center', va='bottom')
+    ax.text(ITEM_R + .25, ITEM_ECC, 'HP item', color=HP, fontsize=6.5, ha='left', va='center')
 
 
 def panel_ecc(ax, be, pb):
@@ -374,15 +424,18 @@ def plot(table, name='fig6_decoding', source='canonical', source_note=''):
     ex = np.load(DATA / f'decoding_example_run_{source}_2026-11.npz')
     sub, run, roi = EXAMPLE
     frames = dict(paradigm=fr['paradigm'], group=fr['group'][0, list(fr['decoders']).index('free')].astype(float),
-                  example=ex[f'{sub}_{run}_roi-{roi}'].astype(float), ex_label=f'{sub}, {roi}')
-    ex_r = q[(q.subject == int(sub[4:])) & (q.session == int(run[4])) & (q.run == int(run[-1])) & (q.roi == roi)
-             & (q.decoder == 'free')].r.iloc[0]
+                  example=ex[f'{sub}_{run}_roi-{roi}'].astype(float))
+    qf = q[q.decoder == 'free'].sort_values('r', ascending=False).reset_index(drop=True)
+    hit = (qf.subject == int(sub[4:])) & (qf.session == int(run[4])) & (qf.run == int(run[-1])) & (qf.roi == roi)
+    ex_r, ex_rank = qf[hit].r.iloc[0], int(np.flatnonzero(hit)[0]) + 1
+    frames['ex_label'] = f'{sub}, {roi}\nr = {ex_r:.2f}'.replace('0.', '.')
+    print('top runs', qf.head(5)[['subject', 'session', 'run', 'roi', 'r']].to_string(index=False))
 
     W, H = 7.25, 5.75
     fig = plt.figure(figsize=(W, H))
     # Row 1: a frames, b quality.
     ax0 = panel_frames(fig, (.75, 3.75, 4.0, 1.6), frames, W, H)[0]
-    fig.text(.2 / W, 5.62 / H, 'The bar stimulus can be decoded from held-out runs', fontsize=7.5, color=STIM,
+    fig.text(.2 / W, 5.62 / H, 'The bar stimulus can be decoded from held-out runs in V1, V2 and V3', fontsize=7.5, color=STIM,
              va='center', fontweight='bold')
     fig.text(.02 / W, 5.62 / H, 'a', fontsize=8, fontweight='bold', va='center', ha='left')
     ax = fig.add_axes([5.55 / W, 3.85 / H, 1.6 / W, 1.42 / H])
@@ -402,7 +455,7 @@ def plot(table, name='fig6_decoding', source='canonical', source_note=''):
     cb.outline.set_linewidth(.4)
     cb.ax.text(-.06, .5, 'Less', transform=cb.ax.transAxes, ha='right', va='center', fontsize=6, color='#2166AC')
     cb.ax.text(1.06, .5, 'More', transform=cb.ax.transAxes, ha='left', va='center', fontsize=6, color='#B2182B')
-    ax = fig.add_axes([2.25 / W, 1.98 / H, 2.0 / W, 1.15 / H])
+    ax = fig.add_axes([2.2 / W, 2.1 / H, 1.75 / W, 1.0 / H])
     panel_angle(ax, rm)
     letter(ax, 'd', x=-.3, y=1.04)
     ax = fig.add_axes([5.55 / W, 1.98 / H, 1.6 / W, 1.15 / H])
@@ -418,6 +471,7 @@ def plot(table, name='fig6_decoding', source='canonical', source_note=''):
     fig.text(.02 / W, 1.38 / H, 'f', fontsize=8, fontweight='bold', va='center', ha='left')
     ax = fig.add_axes([2.25 / W, .38 / H, 4.6 / W, .85 / H])
     panel_ecc(ax, be, pb)
+    area_tag(ax, x=.02, y=.3)
 
     nq = qs.groupby('roi').r.median()
     quality = '; '.join(f'{r} median r = {nq[r]:.2f} vs {qs[qs.roi == r].r_shuffle.median():.3f}, {fmt_p(pq[r])}' for r in ROIS)
@@ -427,7 +481,7 @@ def plot(table, name='fig6_decoding', source='canonical', source_note=''):
     band_txt += f'; whole aperture {be["all"].mean():+.1f} ± {be["all"].sem():.1f}%, p = {pb["all"]:.3f}'
     fovea = f'{fov.mean():+.1f} ± {fov.sem():.1f}%'
     save(fig, name, LEGEND.format(n=qs.subject.nunique(), quality=quality, r_outline=f'{r_outline:.2f}', tests=tests,
-                                  bands=band_txt, friedman=fried, outer_inner=oi, fovea=fovea, ex_sub=sub, ex_r=ex_r,
+                                  bands=band_txt, friedman=fried, outer_inner=oi, fovea=fovea, ex_sub=sub, ex_r=ex_r, ex_rank=ex_rank, n_runs=len(qf), r_med=qf.r.median(), ex_run=run.replace('_', ' '),
                                   ap=APERTURE, item_r=ITEM_R, item_in=ITEM_ECC - ITEM_R, source=source_note))
     print('quality', quality)
     print('lag medians', qs.groupby('roi')[[f'r_lag_{k}' for k in range(-3, 4)]].median().round(3).to_string())
