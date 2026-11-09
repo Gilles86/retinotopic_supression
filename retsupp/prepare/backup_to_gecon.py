@@ -105,6 +105,11 @@ def copy(unit, env, batch=50):
             text = smb([f'put "{p}" "{DEST}/{p.relative_to(SRC)}"' for p in chunk], env, check=False)
             put_ok = {line.split(' as ')[0][len('putting file '):] for line in text.splitlines()
                       if line.startswith('putting file ')}
+            refused = [p for p in chunk if str(p) not in put_ok]
+            if len(refused) > 5:
+                # Not a refusal by name: the share is refusing everything (seen 2026-11-09 ~17:45, reads and
+                # writes ACCESS_DENIED for all files). Stop instead of tarring the whole unit.
+                raise RuntimeError(f'{len(refused)} of {len(chunk)} puts refused; stopping:\n' + text[-2000:])
             for p in chunk:
                 if str(p) in put_ok:
                     log.write(f'{p.relative_to(SRC)}\t{p.stat().st_size}\n')
@@ -157,12 +162,14 @@ def put_blocked(unit, env):
         return
     tar = STATE / f'{unit}_refused_by_share.tar'
     remote = f'{DEST}/refused_by_share/{tar.name}'
-    if tar.exists():
-        print(f'{unit}: {tar.name} already made and put', flush=True)
+    marker = STATE / f'{unit}_refused_by_share.put'
+    if marker.exists():
+        print(f'{unit}: {tar.name} already put', flush=True)
         return
     subprocess.run(['tar', '-cf', str(tar), '-C', str(SRC)] + rels, check=True)
     smb([f'mkdir "{DEST}/refused_by_share"'], env, check=False)
     smb([f'put "{tar}" "{remote}"'], env)
+    marker.write_text(remote + '\n')
     print(f'{unit}: {len(rels)} files refused by the share by name, put as {remote}', flush=True)
 
 
