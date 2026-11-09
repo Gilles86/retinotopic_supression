@@ -23,6 +23,7 @@ responses Fig. 3 and the model Fig. 4.
 | S Field sizes | `figS_field_size` | `fig5_gain_fields.py` | provisional |
 | S Within-subject CV power | `figS_cv_power` | `fig5_gain_fields.py` | provisional |
 | S dS and dD pooled over ROIs | `figS_pooled_dS_dD` | `fig5_gain_fields.py` | provisional |
+| S Gain fields with DN pRFs (Fig. 5 layout; joint DN fit for c, d, no target split; earlier canonical-HRF fits) | `figS_gain_fields_dn` | `fig5_gain_fields.py --family dn` | provisional |
 | S Leave-one-subject-out per ROI and term (was Fig. 5b) | `figS_loso_per_roi` | `fig5_gain_fields.py` | provisional (earlier fits) |
 | S Fitted gain fields | `figS_gainfield_size` | see its legend | provisional |
 | S Decoding with canonical-HRF pRFs (robustness of Fig. 6) | `figS_decoding_canonical` | `fig6_decoding.py --source canonical --rois V1 V2 V3 --name figS_decoding_canonical` | final |

@@ -134,7 +134,7 @@ Order since 2026-11-09: measured results (pRF fits, item locations) before the m
 | 7 Trial history in the gains; behaviour trial by trial | `fig7_behaviour.pdf` (a history, as Fig. 1e, f; b trial by trial) | prototype on earlier fits (Oct 2026) |
 | Table 1 Ladder | `table1_ladder.md` | provisional |
 | Table S Parameters | `table_parameters_2026-11.md` | provisional |
-| Supplement | `figS_gain_vs_prf_size.pdf` (was Fig. 5a), `figS_field_size.pdf`, `figS_cv_power.pdf`, `figS_pooled_dS_dD.pdf`, `figS_gainfield_size.pdf`, `figS_loso_per_roi.pdf` (was Fig. 5b) | provisional |
+| Supplement | `figS_gain_vs_prf_size.pdf` (was Fig. 5a), `figS_field_size.pdf`, `figS_cv_power.pdf`, `figS_pooled_dS_dD.pdf`, `figS_gainfield_size.pdf`, `figS_loso_per_roi.pdf` (was Fig. 5b), `figS_gain_fields_dn.pdf` (Fig. 5 with DN pRFs) | provisional |
 | Supplement (decoding) | `figS_decoding_canonical.pdf`, `figS_decoded_bars_rotated.pdf`, `figS_decoded_bars_per_roi.pdf`, `figS_decoding_all_rois.pdf`, `figS_decoding_all_rois_examples.pdf`, `figS_bar_crossing_response.pdf` | final |
 
 ## Open items the text must leave room for
