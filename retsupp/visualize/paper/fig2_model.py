@@ -352,7 +352,17 @@ def main_hp(name='fig2_model_hp_blocks'):
                 continue
             w = (t >= onset + 2) & (t <= onset + 9)
             i = np.flatnonzero(w)[np.argmax(np.abs(diff[w]))]
-            if abs(diff[i]) > .02 * (p_hi - p_lo):
+            if abs(diff[i]) <= .02 * (p_hi - p_lo):
+                continue
+            if k == 0:
+                # HP near: the item's own gain lifts the response (up to where it is with HP not near), and the
+                # sustained loss at HP pushes it back down, so the red arrow meets the orange or blue one.
+                far = sim['HP not near this pRF']['predicted']
+                r3.annotate('', xy=(t[i], far[i]), xytext=(t[i], d['without'][i]),
+                            arrowprops=dict(arrowstyle='-|>', color=c, lw=1.1, mutation_scale=7, shrinkA=0, shrinkB=0), zorder=5)
+                r3.annotate('', xy=(t[i] + .7, d['predicted'][i] + .01 * (p_hi - p_lo)), xytext=(t[i] + .7, far[i] + .16 * (p_hi - p_lo)),
+                            arrowprops=dict(arrowstyle='-|>', color=HP, lw=1.1, mutation_scale=7, shrinkA=0, shrinkB=0), zorder=6)
+            else:
                 r3.annotate('', xy=(t[i], d['predicted'][i]), xytext=(t[i], d['without'][i]),
                             arrowprops=dict(arrowstyle='-|>', color=c, lw=1.1, mutation_scale=7, shrinkA=0, shrinkB=0), zorder=5)
         if k == 0:

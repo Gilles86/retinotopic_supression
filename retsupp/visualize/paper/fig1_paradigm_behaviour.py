@@ -21,12 +21,12 @@ from retsupp.visualize.paper.paper_style import DISTRACTOR, DOUBLE, FG, HP, MUTE
 from retsupp.visualize.paper.plot_fig1 import APERTURE, RING, item_positions, panel_display
 
 LEGEND = """
-**Figure 1. Paradigm and behaviour.** a, Search display with the bar in its 3.17° aperture: 8 items on a ring at 4°, with target and distractor at the four diagonal positions; percentages are over all trials. b, Two trials to scale, with the bar position every 2 s below, and the HP location across blocks of runs (example order). c, Response time with the distractor at the HP location, at an LP location, or absent. d, Response time with the target at the HP or an LP location, on trials with a distractor. c, d, n = 30, correct trials. Dots are subjects, triangles are subjects beyond the axis limits; large points and bars are the mean ± within-subject SEM (Cousineau-Morey). Wilcoxon signed-rank tests: ** p < .01, *** p < .001.
+**Figure 1. Paradigm and behaviour.** a, Search display with the bar in its 3.17° aperture: 8 items on a ring at 4°, with target and distractor at the four diagonal positions; percentages are over all trials. b, Two trials to scale, with the bar position every 2 s below; the bar sweeps the aperture in four directions (rightward, leftward, downward, upward; 42 s each with 4.8 s rest, the sequence twice per run), and the HP location across blocks of runs (example order). c, Response time with the distractor at the HP location, at an LP location, or absent. d, Response time with the target at the HP or an LP location, on trials with a distractor. c, d, n = 30, correct trials. Dots are subjects, triangles are subjects beyond the axis limits; large points and bars are the mean ± within-subject SEM (Cousineau-Morey). Wilcoxon signed-rank tests: ** p < .01, *** p < .001.
 """
 
 
 LEGEND_DIFF = """
-**Figure 1. Paradigm and behaviour.** a, Search display with the bar in its 3.17° aperture: 8 items on a ring at 4°, with target and distractor at the four diagonal positions; percentages are over all trials. b, Two trials to scale, with the bar position every 2 s below, and the HP location across blocks of runs (example order). c, Within-subject differences in response time: distractor at an LP location minus at the HP location, and at an LP location minus absent. d, Target at the HP location minus at an LP location, on trials with a distractor. e, Repeating a location from the previous trial: response time when the target (or the distractor) switches location minus when it repeats; distractor repeats are compared within HP and within LP trials and averaged. c-e, n = 30, correct trials; dots are subjects, large points and bars the mean and 95% CI (t); counts give the subjects above 0. Wilcoxon signed-rank tests: ** p < .01, *** p < .001.
+**Figure 1. Paradigm and behaviour.** a, Search display with the bar in its 3.17° aperture: 8 items on a ring at 4°, with target and distractor at the four diagonal positions; percentages are over all trials. b, Two trials to scale, with the bar position every 2 s below; the bar sweeps the aperture in four directions (rightward, leftward, downward, upward; 42 s each with 4.8 s rest, the sequence twice per run), and the HP location across blocks of runs (example order). c, Within-subject differences in response time: distractor at an LP location minus at the HP location, and at an LP location minus absent. d, Target at the HP location minus at an LP location, on trials with a distractor. e, Repeating a location from the previous trial: response time when the target (or the distractor) switches location minus when it repeats; distractor repeats are compared within HP and within LP trials and averaged. c-e, n = 30, correct trials; dots are subjects, large points and bars the mean and 95% CI (t); counts give the subjects above 0. Wilcoxon signed-rank tests: ** p < .01, *** p < .001.
 """
 
 
@@ -77,6 +77,26 @@ def panel_timeline(fig, ax):
         inset.set_aspect('equal')
         inset.set_axis_off()
     ax.text(x0, yb - .012, 'Bar sweeps throughout, independent of the trials', ha='left', va='top', fontsize=6.5, color=FG)
+    # The four sweep directions (42 s each, 4.8 s rest between, the sequence twice per run).
+    ws = .055
+    ics = ws * aspect
+    ys = yb - .012 - ics - .06
+    ax.text(x0, ys + ics / 2, 'Four sweep directions, 42 s each, twice per run', ha='left', va='center', fontsize=6.5, color=FG)
+    for i, (ori, sgn) in enumerate(((0, 1), (0, -1), (90, -1), (90, 1))):   # rightward, leftward, downward, upward
+        inset = ax.inset_axes([.6 + i * .08, ys, ws, ics])
+        inset.add_patch(Circle((0, 0), APERTURE, facecolor='#808080', lw=0))
+        bar = plt.Rectangle((-1.9 * sgn - .4, -APERTURE), .8, 2 * APERTURE, facecolor='w', lw=0) if ori == 0 else \
+            plt.Rectangle((-APERTURE, -1.9 * sgn - .4), 2 * APERTURE, .8, facecolor='w', lw=0)
+        inset.add_patch(bar)
+        bar.set_clip_path(Circle((0, 0), APERTURE, transform=inset.transData))
+        d = (sgn * 2.6, 0) if ori == 0 else (0, sgn * 2.6)
+        st = (-sgn * 1.3, 0) if ori == 0 else (0, -sgn * 1.3)
+        inset.annotate('', xy=(st[0] + d[0], st[1] + d[1]), xytext=st,
+                       arrowprops=dict(arrowstyle='-|>', color=FG, lw=.8, mutation_scale=6, shrinkA=0, shrinkB=0))
+        inset.set_xlim(-3.3, 3.3)
+        inset.set_ylim(-3.3, 3.3)
+        inset.set_aspect('equal')
+        inset.set_axis_off()
     # The HP location per block of runs.
     w = .07
     icon = w * aspect
