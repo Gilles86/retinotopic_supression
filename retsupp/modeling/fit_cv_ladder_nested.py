@@ -45,8 +45,8 @@ instead of the DoG: m00 starts from the whole-brain m5 fit, the gain fields are
 the same. Root gets a _dn suffix.
 
 ``--family gauss`` uses a Gaussian pRF: the DoG classes with the surround amplitude fixed at 0
-(``gauss_attention_field``); m00 starts from x, y, sd of the per-ROI-HRF Gaussian fold fits (model 13 of
-``cv/fit_prf_cv_roi_hrf.py``, fold mean; m4 where missing). Root gets a _gauss suffix.
+(``gauss_attention_field``); m00 starts from x, y, sd of the Gaussian fold fits with the joint per-ROI HRF
+(``cv/fit_prf_cv_roi_hrf_joint.py --family gauss``, stage 3, fold mean; m4 where missing). Root gets a _gauss suffix.
 
 ``--hp-rotation K`` (1-3) relabels every run's HP location as the ring position K
 steps away, for a null distribution of the HP-specific terms. Only the labels move:
@@ -811,7 +811,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                     if family == 'gauss':
                         template, n_folds, have = gauss_init(bids_folder, subject, prf_pars)
                         print(f'  Gaussian template: {np.isin(voxel_ids, have).sum()} of {voxel_ids.size} voxels '
-                              f'from the model-13 fold fits ({n_folds} folds), the rest from m4')
+                              f'from the joint-HRF Gaussian fold fits ({n_folds} folds), the rest from m4')
                     init = make_init_pars(template, voxel_mask, sp,
                                           sigma_af_init=2.0, sigma_dyn_init=2.0,
                                           item_scale=item_scale)
