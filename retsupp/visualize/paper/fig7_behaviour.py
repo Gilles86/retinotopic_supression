@@ -29,7 +29,7 @@ from retsupp.visualize.paper.paper_style import (HP, DISTRACTOR, DOUBLE, FG, MUT
 from retsupp.visualize.paper.plot_fig1 import RING, item_positions
 
 LEGEND = """
-**Figure 7 (prototype). The history effects of Fig. 1 in the gains, and gain and behaviour trial by trial.** a, History (Fig. 1e, f; the location effects of Fig. 1c, d are in Fig. 5d): target gain on target-repeat minus target-switch trials (fits with the target gain split by repeat), and distractor gain on distractor-repeat minus distractor-switch trials (fits with separate distractor gains on repeat and switch trials, the difference taken within HP and within LP and averaged, as for the response times in Fig. 1f); the display icons are those of Fig. 1 (four possible locations, HP ringed in red; filled, the item on this trial; hollow, on the previous trial), each series the gain in the first condition minus that in the second. Less target gain on repeats in V3AB, IPS, hV4 and VO; the distractor gain does not differ after correction. Points and bars are the median over subjects (n = 30) and its bootstrapped 95% CI; Wilcoxon signed-rank test against 0, Benjamini-Hochberg across the nine ROIs within each series; estimates with q < .05 are drawn solid, the others pale (key at the top); stars: * q < .05, ** q < .01, *** q < .001; all values below. b, Within subjects, trial by trial: Bayesian hierarchical linear model of log RT (z within subject) per ROI on the per-trial target gain (gain field at the target), distractor gain (gain field at the distractor) on HP and on LP trials, and global gain (over the whole display), each z-scored within run and trial type, with trial number, target repeat, distractor repeat and target-at-previous-distractor as covariates, and random intercepts and gain slopes per subject (bambi, 4 × 1000 draws, no divergences, R̂ ≤ 1.01); the icons show each gain field (illustrative); up is slower. The distractor gain is shown as the slopes on HP and LP trials (entered separately) averaged per posterior draw; per trial type and their difference in the text and table (the HP − LP difference is not reliable: only IPS, uncorrected). Points are posterior means, bars 95% HDIs, solid when the HDI excludes 0 and pale otherwise; stars give the posterior probability that the effect has the sign shown: * > .975, ** > .995, *** > .9995 (not corrected across ROIs). Both panels use the earlier attention-field fits (October 2026) and will be redone on the final fits.
+**Figure 7 (prototype). The history effects of Fig. 1 in the gains, and gain and behaviour trial by trial.** a, History (Fig. 1e, f; the location effects of Fig. 1c, d are in Fig. 5d): target gain on target-repeat minus target-switch trials (fits with the target gain split by repeat), and distractor gain on distractor-repeat minus distractor-switch trials (fits with separate distractor gains on repeat and switch trials, the difference taken within HP and within LP and averaged, as for the response times in Fig. 1f); the display icons are those of Fig. 1e, f (four possible locations; filled, the item on this trial; hollow, on the previous trial; no HP ring, since HP and LP trials are pooled), each series the gain in the first condition minus that in the second. Less target gain on repeats in V3AB, IPS, hV4 and VO; the distractor gain does not differ after correction. Points and bars are the median over subjects (n = 30) and its bootstrapped 95% CI; Wilcoxon signed-rank test against 0, Benjamini-Hochberg across the nine ROIs within each series; estimates with q < .05 are drawn solid, the others pale (key at the top); stars: * q < .05, ** q < .01, *** q < .001; all values below. b, Within subjects, trial by trial: Bayesian hierarchical linear model of log RT (z within subject) per ROI on the per-trial target gain (gain field at the target), distractor gain (gain field at the distractor) on HP and on LP trials, and global gain (over the whole display), each z-scored within run and trial type, with trial number, target repeat, distractor repeat and target-at-previous-distractor as covariates, and random intercepts and gain slopes per subject (bambi, 4 × 1000 draws, no divergences, R̂ ≤ 1.01); the icons show each gain field (illustrative); up is slower. The distractor gain is shown as the slopes on HP and LP trials (entered separately) averaged per posterior draw; per trial type and their difference in the text and table (the HP − LP difference is not reliable: only IPS, uncorrected). Points are posterior means, bars 95% HDIs, solid when the HDI excludes 0 and pale otherwise; stars give the posterior probability that the effect has the sign shown: * > .975, ** > .995, *** > .9995 (not corrected across ROIs). Both panels use the earlier attention-field fits (October 2026) and will be redone on the final fits.
 """
 STAMP = 'Earlier attention-field fits (Oct 2026)'
 
@@ -129,7 +129,7 @@ def draw_source(ax, kind):
     ax.add_patch(Circle((0, 0), 3.17, fill=False, ec=MUTED, lw=.5, zorder=2))
     for p in ring:
         ax.add_patch(Circle(p, .7, facecolor='w', ec=MUTED, lw=.4, zorder=2))
-    ax.add_patch(Circle(ring[3], 1.3, fill=False, ec=HP, lw=.7, ls=(0, (2, 1.2)), zorder=3))
+    # No HP ring: the trial-by-trial gains are not split by HP (the distractor term is averaged over HP and LP trials).
     if kind == 'target':
         ax.plot(*ring[1], 'D', ms=2.6, color=TARGET, mew=0, zorder=4)
     if kind == 'distractor':
@@ -141,7 +141,7 @@ def draw_source(ax, kind):
     ax.set_axis_off()
 
 
-def display_icon(ins, items):
+def display_icon(ins, items, hp=True):
     """The display icon of Fig. 1 (``fig1_paradigm_behaviour.cond_icons``) drawn into ``ins``: the four diagonal
     locations, HP ringed in red, and the items, (location index, 'target' or 'distractor', filled); hollow is the previous
     trial's item."""
@@ -150,7 +150,8 @@ def display_icon(ins, items):
     ins.add_patch(Circle((0, 0), RING, fill=False, ec=MUTED, lw=.5))
     for j in (1, 3, 5, 7):
         ins.add_patch(Circle(pos[j], .95, facecolor='w', ec=MUTED, lw=.4))
-    ins.add_patch(Circle(pos[7], 1.45, fill=False, ec=HP, lw=.8, ls=(0, (2, 1.2))))
+    if hp:   # only where the contrast involves the HP location
+        ins.add_patch(Circle(pos[7], 1.45, fill=False, ec=HP, lw=.8, ls=(0, (2, 1.2))))
     for j, kind, filled in items:
         col, m = (TARGET, 'D') if kind == 'target' else (DISTRACTOR, 'o')
         ins.plot(*pos[j], m, ms=3.4 if filled else 6.4, mfc=col if filled else 'none', mec=col, mew=.8, zorder=5 if filled else 6)
@@ -202,7 +203,8 @@ def row(fig, y, let, title, entries, ref=None, x_title=.2, key_y=None, x_let=.02
 
 def icons(contrast, kind):
     a, b = ICONS[contrast][kind]
-    return [lambda ax, it=a: display_icon(ax, it), lambda ax, it=b: display_icon(ax, it)]
+    hp = contrast == 'location'   # the history contrast pools HP and LP trials, so no HP ring
+    return [lambda ax, it=a: display_icon(ax, it, hp), lambda ax, it=b: display_icon(ax, it, hp)]
 
 
 def series_stats(df, col):
