@@ -1,5 +1,5 @@
-**Figure 6. The bar stimulus can be read out of early visual cortex, and less of it is read out in the quadrant facing
-the HP location.** The bar stimulus of every run was decoded from the BOLD activity of V1, V2 or V3 with pRFs (difference
+**Figure 6. The bar stimulus can be read out of early visual cortex, and it is read out at lower intensity in the quadrant
+facing the HP location.** The bar stimulus of every run was decoded from the BOLD activity of V1, V2 or V3 with pRFs (difference
 of Gaussians, canonical HRF, no gain terms) fitted on the other runs (cross-validation folds), so the decoded run never
 entered the pRF fit; voxels with cross-run reliability > 0 on the training runs (at most 2000 per ROI); every pixel of
 every frame decoded; the encoding model contains only the bar, not the search items. Only V1–V3 were decoded: reading
@@ -22,7 +22,7 @@ it). Line and band: mean ± SEM over subjects. e, The pre-specified test: per su
 on the bar's pixels in the quadrant facing HP minus the mean over the three other quadrants, averaged over runs; dots are
 subjects, points and bars the median and bootstrapped 95% CI. Wilcoxon signed-rank test, one-sided (HP < other
 quadrants), Holm across the three ROIs; * p_Holm < .05. V1 median -0.0002, 50% of subjects below 0, p = 0.202, p_Holm = 0.202; V2 median -0.0014, 73% of subjects below 0, p = 0.015, p_Holm = 0.044; V3 median -0.0006, 67% of subjects below 0, p = 0.022, p_Holm = 0.045. The decoder with the bar outline given (only the bar's pixels decoded) gives the same result: V1 p_Holm = 0.232, V2 p_Holm = 0.037, V3 p_Holm = 0.038. f, The difference of e by eccentricity, in %
-of the drive in the other quadrants at the same eccentricity, mean of V1–V3 per subject; line and band, mean ± SEM over
+of the decoded intensity in the other quadrants at the same eccentricity, mean of V1–V3 per subject; line and band, mean ± SEM over
 subjects (rings of 0.25°); left, the three bands drawn on the display. Items (radius 0.75°) begin at 3.25°
 eccentricity, just outside the aperture, and their responses are in the BOLD data but not in the encoding model; if item
 responses leaking into the aperture produced the difference, it would grow toward the aperture edge. It does not: per

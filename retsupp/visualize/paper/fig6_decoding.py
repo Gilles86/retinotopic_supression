@@ -4,8 +4,8 @@
 other summaries (decoding quality, eccentricity bands, HP-rotated maps, display frames) come from
 ``retsupp/visualize/paper/fig6_collect.py``.
 
-``plot`` (local): the pre-specified test is per subject and ROI the mean over runs of drive(HP quadrant) − mean
-drive(three other quadrants); Wilcoxon signed-rank across subjects, one-sided (HP < LP), Holm across V1, V2, V3
+``plot`` (local): the pre-specified test is per subject and ROI the mean over runs of decoded intensity(HP quadrant) − mean
+decoded intensity(three other quadrants); Wilcoxon signed-rank across subjects, one-sided (HP < LP), Holm across V1, V2, V3
 (``notes/primary_test_2026-11.md``). The figure shows the unconstrained decoder (every pixel decoded); the decoder with the
 bar outline given gives the same result and is left out for now.
 
@@ -42,8 +42,8 @@ BANDS = [('0-1.5', 0, 1.5, '0–1.5°'), ('1.5-2.5', 1.5, 2.5, '1.5–2.5°'), (
 ITEM_ANGLES = (90, 180, 270, 0)              # HP first: after rotation HP sits at 12 o'clock
 BAND_SHADE = ['#E8ECF0', '#D5DCE3', '#C2CBD5']
 LEGEND = """
-**Figure 6. The bar stimulus can be read out of early visual cortex, and less of it is read out in the quadrant facing
-the HP location.** The bar stimulus of every run was decoded from the BOLD activity of V1, V2 or V3 with pRFs (difference
+**Figure 6. The bar stimulus can be read out of early visual cortex, and it is read out at lower intensity in the quadrant
+facing the HP location.** The bar stimulus of every run was decoded from the BOLD activity of V1, V2 or V3 with pRFs (difference
 of Gaussians, canonical HRF, no gain terms) fitted on the other runs (cross-validation folds), so the decoded run never
 entered the pRF fit; voxels with cross-run reliability > 0 on the training runs (at most 2000 per ROI); every pixel of
 every frame decoded; the encoding model contains only the bar, not the search items. Only V1–V3 were decoded: reading
@@ -66,7 +66,7 @@ it). Line and band: mean ± SEM over subjects. e, The pre-specified test: per su
 on the bar's pixels in the quadrant facing HP minus the mean over the three other quadrants, averaged over runs; dots are
 subjects, points and bars the median and bootstrapped 95% CI. Wilcoxon signed-rank test, one-sided (HP < other
 quadrants), Holm across the three ROIs; * p_Holm < .05. {tests}.{outline} f, The difference of e by eccentricity, in %
-of the drive in the other quadrants at the same eccentricity, mean of V1–V3 per subject; line and band, mean ± SEM over
+of the decoded intensity in the other quadrants at the same eccentricity, mean of V1–V3 per subject; line and band, mean ± SEM over
 subjects (rings of 0.25°); left, the three bands drawn on the display. Items (radius {item_r}°) begin at {item_in:.2f}°
 eccentricity, just outside the aperture, and their responses are in the BOLD data but not in the encoding model; if item
 responses leaking into the aperture produced the difference, it would grow toward the aperture edge. It does not: per
@@ -302,7 +302,7 @@ def panel_angle(ax, rm):
     ax.set_ylim(-2.6, 2.2)
     ax.set_yticks([-2, 0, 2])
     ax.set_yticklabels(['−2', '0', '2'])
-    ax.set_ylabel('Decoded bar drive\nvs average (%)')
+    ax.set_ylabel('Decoded intensity\nvs average (%)')
     ax.text(0, 2.15, 'Quadrant\nfacing HP', color=HP, fontsize=6.5, ha='center', va='top')
     # Item icons under the ticks: HP red at 0, the LP items grey.
     tr = mtrans.blended_transform_factory(ax.transData, ax.transAxes)
@@ -346,7 +346,7 @@ def panel_test(ax, e, t, rois=ROIS, decoder=DECODER):
     ax.set_ylim(lo, hi)
     ax.set_yticks([-.01, -.005, 0, .005])
     ax.set_yticklabels(['−.010', '−.005', '0', '.005'])
-    ax.set_ylabel('Decoded drive,\nHP − other quadrants')
+    ax.set_ylabel('Decoded intensity,\nHP − other quadrants')
     offset_spines(ax)
 
 
@@ -533,7 +533,7 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     letter(ax, 'b', x=-.42, y=1.08)
 
     # Row 2: c map, d angle, e the test.
-    fig.text(.2 / W, (3.4 + DY) / H, 'Less of the bar is decoded in the quadrant facing the HP location', fontsize=7.5,
+    fig.text(.2 / W, (3.4 + DY) / H, 'The bar is decoded at lower intensity in the quadrant facing the HP location', fontsize=7.5,
              color=HP, va='center')
     ax = fig.add_axes([.1 / W, (1.78 + DY) / H, 1.42 / W, 1.42 / H])
     im = panel_map(ax, rm)
