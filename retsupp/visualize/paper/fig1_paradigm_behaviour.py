@@ -192,26 +192,38 @@ def main(rt_table, bids, name='fig1_paradigm_behaviour', diff=False,
     if not Path(rt_table).exists():
         build_rt(rt_table, bids)
     d = pd.read_csv(rt_table, sep='\t')
-    fig = plt.figure(figsize=(DOUBLE, 3.3))
-    gs = fig.add_gridspec(2, 2, width_ratios=[1, 1.62], height_ratios=[1.25, 1], left=.005, right=.995, top=.975, bottom=.13, hspace=.46, wspace=.17)
-    ax = fig.add_subplot(gs[:, 0])
-    panel_display(ax, margin=7.4)
-    box = ax.get_position()
-    ax.set_position([box.x0, .005, box.width, .985])   # down to the figure edge, the x labels of c and d need no room here
-    ax.set_anchor('N')
-    letter(ax, 'a', x=.05, y=.93)
-    ax = fig.add_subplot(gs[0, 1])
-    panel_timeline(fig, ax)
-    letter(ax, 'b', x=0, y=.9)
-    low = gs[1, 1].subgridspec(1, 3, width_ratios=[1.25, 1.1, 1.25], wspace=.25) if diff else \
-        gs[1, 1].subgridspec(1, 2, width_ratios=[1.45, 1], wspace=.2)
+    if diff:
+        # Display and timeline on top, the three behaviour panels across the full width below, with room between.
+        fig = plt.figure(figsize=(DOUBLE, 4.7))
+        top = fig.add_gridspec(1, 2, width_ratios=[1, 1.62], left=.005, right=.995, top=.985, bottom=.47, wspace=.12)
+        ax = fig.add_subplot(top[0])
+        panel_display(ax, margin=7.4)
+        letter(ax, 'a', x=.05, y=.97)
+        ax = fig.add_subplot(top[1])
+        panel_timeline(fig, ax)
+        letter(ax, 'b', x=0, y=.95)
+        low = fig.add_gridspec(1, 3, width_ratios=[2, 1.2, 2], left=.09, right=.98, top=.33, bottom=.1, wspace=.3)
+    else:
+        fig = plt.figure(figsize=(DOUBLE, 3.3))
+        gs = fig.add_gridspec(2, 2, width_ratios=[1, 1.62], height_ratios=[1.25, 1], left=.005, right=.995, top=.975, bottom=.13,
+                              hspace=.46, wspace=.17)
+        ax = fig.add_subplot(gs[:, 0])
+        panel_display(ax, margin=7.4)
+        box = ax.get_position()
+        ax.set_position([box.x0, .005, box.width, .985])   # down to the figure edge, the x labels of c and d need no room here
+        ax.set_anchor('N')
+        letter(ax, 'a', x=.05, y=.93)
+        ax = fig.add_subplot(gs[0, 1])
+        panel_timeline(fig, ax)
+        letter(ax, 'b', x=0, y=.9)
+        low = gs[1, 1].subgridspec(1, 2, width_ratios=[1.45, 1], wspace=.2)
     ylim = (770, 1020)
     if diff:
         ax = fig.add_subplot(low[0])
         diff_panel(ax, d[d.contrast == 'distractor'], [('LP', 'HP'), ('LP', 'Absent')], [HP, FG], ['LP − HP', 'LP − absent'], (-45, 110))
         ax.set_xlabel('Distractor')
         ax.set_ylabel('RT difference (ms)')
-        letter(ax, 'c', x=-.2, y=1.2)
+        letter(ax, 'c', x=-.17, y=1.2)
         ax = fig.add_subplot(low[1])
         diff_panel(ax, d[d.contrast == 'target'], [('HP', 'LP')], [HP], ['HP − LP'], (-45, 110))
         ax.set_xlabel('Target')
