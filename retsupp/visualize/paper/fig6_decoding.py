@@ -34,7 +34,8 @@ BAR_PASS = Path('notes/data/bar_pass_average_2026-11')
 BAR_WINDOW = (1.6, 6.4)
 LOC_COLORS = {'hp': '#D62828', 'adjacent': '#52606D', 'opposite': '#9AA5B1'}
 DATA = Path('notes/data')
-EXAMPLE = ('sub-07', 'ses-1_run-3', 'V1')    # the clearest of the top runs by r (inspected visually)
+EXAMPLES = {'canonical': ('sub-07', 'ses-1_run-3', 'V1'),     # the clearest of the top runs by r (inspected visually)
+            'jointhrf': ('sub-03', 'ses-1_run-4', 'V1')}
 FRAMES = [15, 21, 28, 72, 81, 89, 130]      # TRs shown in a (bar left → right, top → bottom, then blank)
 TR = 1.6
 APERTURE, ITEM_ECC, ITEM_R = 3.17, 4.0, .75
@@ -43,20 +44,18 @@ ITEM_ANGLES = (90, 180, 270, 0)              # HP first: after rotation HP sits 
 ECC_MAX = 3.45                               # f's x axis ends just past the aperture edge
 BAND_SHADE = ['#E8ECF0', '#D5DCE3', '#C2CBD5']
 LEGEND = """
-**Figure 6. The bar stimulus can be read out of early visual cortex, and it is read out at lower intensity in the quadrant
-facing the HP location.** The bar stimulus of every run was decoded from the BOLD activity of V1, V2 or V3 with pRFs (difference
-of Gaussians, canonical HRF, no gain terms) fitted on the other runs (cross-validation folds), so the decoded run never
-entered the pRF fit; voxels with cross-run reliability > 0 on the training runs (at most 2000 per ROI); every pixel of
-every frame decoded; the encoding model contains only the bar, not the search items. Only V1–V3 were decoded: reading
-out a bar needs small pRFs, which is why the pre-specified test is in these three areas; the higher areas (V3AB, IPS,
-hV4, VO, LO, TO) have not been decoded. a, True bar (top) and decoded intensity in a single held-out run (middle;
+**Figure 6. The bar stimulus can be read out of visual cortex, and it is read out at lower intensity in the quadrant
+facing the HP location.** The bar stimulus of every run was decoded from the BOLD activity of one ROI at a time with pRFs
+(difference of Gaussians, {hrf}, no gain terms) fitted on the other runs (cross-validation folds), so the decoded run
+never entered the pRF fit; voxels with cross-run reliability > 0 on the training runs (at most 2000 per ROI); every pixel
+of every frame decoded; the encoding model contains only the bar, not the search items. {areas} a, True bar (top) and decoded intensity in a single held-out run (middle;
 {ex_sub} {ex_run}, V1, frame-wise r = {ex_r:.2f}: rank {ex_rank} of {n_runs} subject × run × ROI decodes, chosen as the
 clearest of the five best; the median run has r = {r_med:.2f}) and averaged over all runs and subjects (V1; bottom), at
 seven time points of the run (the last one without a bar). Grey circle, the {ap}° aperture of the bar. b, Per subject,
 the spatial correlation between decoded and true frame inside the aperture, averaged over the frames with a bar and over
 runs (blue dots, n = {n} subjects), against the same with the order of the true frames shuffled (100 permutations; grey).
 Points and bars: median and bootstrapped 95% CI. Decoded vs shuffled: Wilcoxon signed-rank test, one-sided (*** p <
-.001); {quality}. The correlation peaks at lag 0 in all three ROIs, so the decoded time course is not displaced. c, Each
+.001); {quality}. The correlation peaks at lag 0 in V1–V3, so the decoded time course is not displaced. c, Each
 run's visual field rotated so that the HP location (red dashed circle; grey, the LP locations, drawn with the item
 footprint, radius {item_r}°) lies at 12 o'clock (90° steps, then 45° with bilinear interpolation); shown is the decoded
 intensity on the bar's pixels minus its average over the four rotations (in % of that average), averaged over runs,
@@ -68,7 +67,7 @@ the mean over runs and V1–V3; dots are subjects, points and bars the mean and 
 {quad}. e, The pre-specified test: per subject and ROI, the mean decoded intensity
 on the bar's pixels in the quadrant facing HP minus the mean over the three other quadrants, averaged over runs; dots are
 subjects, points and bars the median and bootstrapped 95% CI. Wilcoxon signed-rank test, one-sided (HP < other
-quadrants), Holm across the three ROIs; * p_Holm < .05. {tests}.{outline} f, The difference of e by eccentricity, in %
+quadrants), Holm across V1–V3 (the pre-specified test); * p_Holm < .05. {tests}.{explore}{outline} f, The difference of e by eccentricity, in %
 of the decoded intensity in the other quadrants at the same eccentricity, mean of V1–V3 per subject; line and band, mean ± SEM over
 subjects (rings of 0.25°); left, the three bands drawn on the display. Items (radius {item_r}°) begin at {item_in:.2f}°
 eccentricity, just outside the aperture, and their responses are in the BOLD data but not in the encoding model; if item
@@ -228,23 +227,43 @@ def subject_dots(ax, x, v, color, seed, s=7, alpha=.4, med=True, open_=False, ms
                     mfc='w' if open_ else color, mew=1. if open_ else .7, lw=1.3, capsize=0, zorder=4)
 
 
+def roi_xs(rois):
+    """x positions: 0, 1, 2 for the early areas alone; the shared pathway layout (ROI_X) for more."""
+    from retsupp.visualize.paper.paper_style import ROI_X
+    return np.arange(len(rois), dtype=float) if len(rois) <= 3 else np.array([ROI_X[r] for r in rois])
+
+
+def finish_roi_axis(ax, rois):
+    from retsupp.visualize.paper.paper_style import roi_axis
+    xs = roi_xs(rois)
+    if len(rois) <= 3:
+        ax.set_xticks(xs)
+        ax.set_xticklabels(rois)
+        ax.set_xlim(-.5, len(rois) - .5)
+    else:
+        roi_axis(ax, labels=rois, rotate=False, fontsize=6.5)
+
+
 def panel_quality(ax, qs, pq, rois=ROIS):
     from retsupp.visualize.paper.paper_style import FG, MUTED, STIM, offset_spines
-    for i, roi in enumerate(rois):
+    many = len(rois) > 3
+    for i, (roi, x) in enumerate(zip(rois, roi_xs(rois))):
         g = qs[qs.roi == roi]
-        subject_dots(ax, i - .14, g.r.to_numpy(), STIM, i)
-        subject_dots(ax, i + .2, g.r_shuffle.to_numpy(), MUTED, 10 + i, s=5, width=.07, ms=4)
-        ax.text(i - .14, .7, stars(pq[roi]), ha='center', va='bottom', fontsize=7, color=STIM)
+        if not len(g):
+            continue
+        subject_dots(ax, x - .14, g.r.to_numpy(), STIM, i, s=5 if many else 7, width=.1 if many else .13,
+                     ms=4.5 if many else 5.5)
+        subject_dots(ax, x + .22, g.r_shuffle.to_numpy(), MUTED, 10 + i, s=0, ms=3.5)
+        ax.text(x, .7, stars(pq[roi]), ha='center', va='bottom', fontsize=6.5, color=STIM)
     ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
-    ax.set_xticks(range(len(rois)))
-    ax.set_xticklabels(rois)
-    ax.set_xlim(-.5, len(rois) - .5)
     ax.set_ylim(-.06, .7)
     ax.set_yticks([0, .2, .4, .6])
     ax.set_ylabel('Decoded vs true bar (r)')
-    ax.text(len(rois) - .55, .2, 'Held-out run', color=STIM, fontsize=6.5, ha='right', va='center')
-    ax.text(len(rois) - .55, .08, 'Frames shuffled', color='.45', fontsize=6.5, ha='right', va='center')
+    xr = roi_xs(rois)[-1] + .45
+    ax.text(xr, .2 if not many else .62, 'Held-out run', color=STIM, fontsize=6.5, ha='right', va='center')
+    ax.text(xr, .08 if not many else .54, 'Frames shuffled', color='.45', fontsize=6.5, ha='right', va='center')
     offset_spines(ax)
+    finish_roi_axis(ax, rois)
 
 
 def items(ax, hp_color, lw=.8):
@@ -412,26 +431,65 @@ def panel_quadrants(ax, s, st):
     offset_spines(ax)
 
 
-def panel_test(ax, e, t, rois=ROIS, decoder=DECODER):
-    from retsupp.visualize.paper.paper_style import HP, offset_spines
-    lo, hi = -.0132, .008
-    for i, roi in enumerate(rois):
-        v = e[(e.decoder == decoder) & (e.roi == roi)]['diff'].to_numpy()
-        subject_dots(ax, i, v, HP, i)
-        n_lo = (v < lo).sum()
-        if n_lo:
-            ax.scatter(np.full(n_lo, i), np.full(n_lo, lo), s=10, marker='v', color=HP, alpha=.6, lw=0, clip_on=False)
-        q = t[(t.decoder == decoder) & (t.roi == roi)].p_holm.iloc[0]
-        ax.text(i, hi, stars(q), ha='center', va='bottom', fontsize=7, color=HP)
+def panel_test(ax, e, t, rois=ROIS, decoder=DECODER, t_exp=None):
+    """e: HP − other quadrants per ROI; the pre-specified test (Holm over V1–V3) and, for the higher areas, the
+    exploratory one (BH over those areas)."""
+    from retsupp.visualize.paper.paper_style import HP, MUTED, offset_spines
+    vals = e[(e.decoder == decoder) & e.roi.isin(rois)]['diff']
+    lo, hi = (-.0132, .008) if len(rois) <= 3 else tuple(np.r_[-1.08, 1.08] * np.nanpercentile(np.abs(vals), 98.5))
+    for i, (roi, x) in enumerate(zip(rois, roi_xs(rois))):
+        v = e[(e.decoder == decoder) & (e.roi == roi)]['diff'].dropna().to_numpy()
+        if not len(v):
+            continue
+        subject_dots(ax, x, v, HP, i, s=5 if len(rois) > 3 else 7, width=.1 if len(rois) > 3 else .13,
+                     ms=4.5 if len(rois) > 3 else 5.5)
+        for sgn, lim in ((-1, lo), (1, hi)):
+            out = (v < lo) if sgn < 0 else (v > hi)
+            if out.any():
+                ax.scatter(np.full(out.sum(), x), np.full(out.sum(), lim), s=9, marker='v' if sgn < 0 else '^',
+                           color=HP, alpha=.6, lw=0, clip_on=False)
+        tt = t if roi in EARLY else t_exp
+        if tt is not None and roi in set(tt.roi):
+            q = tt[tt.roi == roi].iloc[0]
+            ax.text(x, hi, stars(q.p_holm if roi in EARLY else q.p_bh), ha='center', va='bottom', fontsize=7, color=HP)
     ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
-    ax.set_xticks(range(len(rois)))
-    ax.set_xticklabels(rois)
-    ax.set_xlim(-.5, len(rois) - .5)
     ax.set_ylim(lo, hi)
-    ax.set_yticks([-.01, -.005, 0, .005])
-    ax.set_yticklabels(['−.010', '−.005', '0', '.005'])
     ax.set_ylabel('Decoded intensity,\nHP − other quadrants')
     offset_spines(ax)
+    if len(rois) > 3:
+        import matplotlib.transforms as mtrans
+        from retsupp.visualize.paper.paper_style import ROI_X
+        tr = mtrans.blended_transform_factory(ax.transData, ax.transAxes)
+        early = [ROI_X[r] for r in rois if r in EARLY]
+        rest = [ROI_X[r] for r in rois if r not in EARLY]
+        for xs_, lab in ((early, 'Pre-specified'), (rest, 'Exploratory')):
+            if xs_:
+                ax.plot([min(xs_) - .35, max(xs_) + .35], [1.15] * 2, transform=tr, color=MUTED, lw=.7, clip_on=False)
+                ax.text((min(xs_) + max(xs_)) / 2, 1.17, lab, transform=tr, ha='center', va='bottom', fontsize=6,
+                        color='.4')
+        ax.set_yticks([-.005, 0, .005])
+        ax.set_yticklabels(['−.005', '0', '.005'])
+    else:
+        ax.set_yticks([-.01, -.005, 0, .005])
+        ax.set_yticklabels(['−.010', '−.005', '0', '.005'])
+    finish_roi_axis(ax, rois)
+
+
+def test_exploratory(e, rois, decoder=DECODER):
+    """One-sided Wilcoxon (HP < other quadrants) per higher ROI, Benjamini-Hochberg across them."""
+    rows = []
+    for roi in rois:
+        if roi in EARLY:
+            continue
+        v = e[(e.decoder == decoder) & (e.roi == roi)]['diff'].dropna().to_numpy()
+        if len(v) < 5:
+            continue
+        rows.append(dict(roi=roi, n=len(v), median=np.median(v), pct_below=(v < 0).mean() * 100,
+                         p=stats.wilcoxon(v, alternative='less').pvalue))
+    t = pd.DataFrame(rows)
+    if len(t):
+        t['p_bh'] = stats.false_discovery_control(t.p)
+    return t
 
 
 def panel_bands_sketch(ax):
@@ -594,8 +652,11 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     from retsupp.visualize.paper.paper_style import FG, HP, STIM, letter, save
     d = pd.read_csv(DATA / f'decoding_readout_{source}_2026-11.tsv', sep='\t')
     e = effects(d)
-    t = test(e, rois, (decoder,))
-    t_out = test(e, rois, ('outline',)) if 'outline' in set(d.decoder) else None
+    t = test(e, [r for r in rois if r in EARLY], (decoder,))
+    t_exp = test_exploratory(e, rois, decoder) if len(rois) > 3 else None
+    if t_exp is not None:
+        print(t_exp.round(4).to_string(index=False))
+    t_out = test(e, EARLY, ('outline',)) if 'outline' in set(d.decoder) else None
     print(t.round(4).to_string(index=False))
 
     q = pd.read_csv(DATA / f'decoding_quality_{source}_2026-11.tsv', sep='\t')
@@ -613,7 +674,7 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     rm = rel_maps(maps, decoder)
     fr = np.load(DATA / f'decoding_frames_{source}_2026-11.npz')
     ex = np.load(DATA / f'decoding_example_run_{source}_2026-11.npz')
-    sub, run, roi = EXAMPLE
+    sub, run, roi = EXAMPLES[source]
     frames = dict(paradigm=fr['paradigm'], group=fr['group'][list(fr['rois']).index('V1'), list(fr['decoders']).index('free')].astype(float),
                   example=ex[f'{sub}_{run}_roi-{roi}'].astype(float))
     qf = q[q.decoder == 'free'].sort_values('r', ascending=False).reset_index(drop=True)
@@ -629,13 +690,17 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     DY = .55                                      # rows 1-2 sit above the taller row 3
     fig = plt.figure(figsize=(W, H))
     # Row 1: a frames, b quality.
-    panel_frames(fig, (.75, 3.75 + DY, 4.0, 1.6), frames, W, H)
-    fig.text(.2 / W, (5.62 + DY) / H, 'The bar stimulus can be decoded from held-out runs in ' + ', '.join(rois[:-1]) + f' and {rois[-1]}',
-             fontsize=7.5, color=STIM, va='center')
+    many = len(rois) > 3
+    panel_frames(fig, (.75, 3.75 + DY, 3.3 if many else 4.0, 1.6), frames, W, H)
+    fig.text(.2 / W, (5.62 + DY) / H, 'The bar stimulus can be decoded from held-out runs' +
+             ('' if many else ' in ' + ', '.join(rois[:-1]) + f' and {rois[-1]}'), fontsize=7.5, color=STIM, va='center')
     fig.text(.02 / W, (5.62 + DY) / H, 'a', fontsize=8, fontweight='bold', va='center', ha='left')
-    ax = fig.add_axes([5.55 / W, (3.85 + DY) / H, 1.6 / W, 1.42 / H])
+    if many:
+        ax = fig.add_axes([4.95 / W, (4.08 + DY) / H, 2.2 / W, 1.2 / H])
+    else:
+        ax = fig.add_axes([5.55 / W, (3.85 + DY) / H, 1.6 / W, 1.42 / H])
     panel_quality(ax, qs, pq, rois)
-    letter(ax, 'b', x=-.42, y=1.08)
+    letter(ax, 'b', x=-.27 if many else -.42, y=1.08)
 
     # Row 2: c map, d angle, e the test.
     fig.text(.2 / W, (3.4 + DY) / H, 'The bar is decoded at lower intensity in the quadrant facing the HP location', fontsize=7.5,
@@ -652,13 +717,16 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     cb.ax.text(1.06, .5, 'More', transform=cb.ax.transAxes, ha='left', va='center', fontsize=6, color='#B2182B')
     qe = quadrant_effects(d, decoder)
     qst = quadrant_stats(qe)
-    ax = fig.add_axes([2.35 / W, (2.32 + DY) / H, 1.45 / W, .9 / H])
+    ax = fig.add_axes([(2.1 if many else 2.35) / W, (2.32 + DY) / H, (1.3 if many else 1.45) / W, .9 / H])
     panel_quadrants(ax, qe, qst)
     area_tag(ax, x=1.0, y=1.0, ha='right')
     letter(ax, 'd', x=-.5, y=1.04)
-    ax = fig.add_axes([5.55 / W, (1.98 + DY) / H, 1.6 / W, 1.15 / H])
-    panel_test(ax, e, t, rois, decoder)
-    letter(ax, 'e', x=-.42, y=1.04)
+    if many:
+        ax = fig.add_axes([4.4 / W, (2.2 + DY) / H, 2.75 / W, .9 / H])
+    else:
+        ax = fig.add_axes([5.55 / W, (1.98 + DY) / H, 1.6 / W, 1.15 / H])
+    panel_test(ax, e, t, rois, decoder, t_exp)
+    letter(ax, 'e', x=-.17 if many else -.42, y=1.15 if many else 1.04)
 
     # Row 3: f eccentricity, g the measured response.
     fig.text(.2 / W, 1.93 / H, 'Not driven by the items outside the aperture, and seen in the measured response', fontsize=7.5,
@@ -675,7 +743,8 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     panel_bar_pass(ax, bp, bst)
 
     nq = qs.groupby('roi').r.median()
-    quality = '; '.join(f'{r} median r = {nq[r]:.2f} vs {qs[qs.roi == r].r_shuffle.median():.3f}, {fmt_p(pq[r])}' for r in rois)
+    quality = '; '.join(f'{r} median r = {nq[r]:.2f} vs {qs[qs.roi == r].r_shuffle.median():.3f}, {fmt_p(pq[r])}'
+                        for r in rois if r in nq)
     tests = '; '.join(f'{r.roi} median {r["median"]:+.4f}, {r.pct_below:.0f}% of subjects below 0, p = {r.p:.3f}, '
                       f'p_Holm = {r.p_holm:.3f}' for _, r in t.iterrows())
     outline = ''
@@ -690,7 +759,21 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
                f'one-sided Wilcoxon p = {r_["p"]:.3f} (vs the two neighbouring LP locations {r_["rel_adjacent"]:+.1f}%, '
                f'p = {r_["p_adjacent"]:.3f}; vs the opposite one {r_["rel_opposite"]:+.1f}%, p = {r_["p_opposite"]:.3f})')
     bar_base = f'{b_["rel"]:+.1f}%, p = {b_["p"]:.2f}'
-    save(fig, name, LEGEND.format(n=qs.subject.nunique(), quality=quality, tests=tests, outline=outline,
+    n_roi = qs.groupby('roi').subject.nunique()
+    if many:
+        higher = [r for r in rois if r not in EARLY]
+        areas = ('The higher areas (' + ', '.join(higher) + ') were decoded the same way; an area was skipped for a '
+                 'subject when fewer than 20 voxels passed the criteria (n subjects: ' +
+                 ', '.join(f'{r} {n_roi.get(r, 0)}' for r in rois) + '). Their tests are exploratory.')
+        explore = (' Higher areas (exploratory): one-sided Wilcoxon, Benjamini-Hochberg across the six areas; ' +
+                   '; '.join(f'{r.roi} median {r["median"]:+.4f}, {r.pct_below:.0f}% below 0, n = {r.n}, p = {r.p:.3f}, '
+                             f'q = {r.p_bh:.3f}' for _, r in t_exp.iterrows()) + '.')
+    else:
+        areas = ('Only V1–V3 were decoded: reading out a bar needs small pRFs, which is why the pre-specified test is in '
+                 'these three areas; the higher areas (V3AB, IPS, hV4, VO, LO, TO) have not been decoded.')
+        explore = ''
+    hrf = {'canonical': 'canonical HRF', 'jointhrf': 'one HRF per subject and ROI, fitted jointly with the pRFs'}.get(source, source)
+    save(fig, name, LEGEND.format(areas=areas, explore=explore, hrf=hrf, n=qs.subject.nunique(), quality=quality, tests=tests, outline=outline,
                                   bands=band_txt, friedman=fried, outer_inner=oi, fovea=fovea, ex_sub=sub, ex_r=ex_r,
                                   ex_rank=ex_rank, n_runs=len(qf), r_med=qf.r.median(), ex_run=run.replace('_', ' '),
                                   ap=APERTURE, item_r=ITEM_R, item_in=ITEM_ECC - ITEM_R, bar=bar_txt, bar_base=bar_base,
