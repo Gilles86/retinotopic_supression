@@ -2,12 +2,12 @@
 
 a  Illustration: gain at the target (each trial), at the distractor (each trial) and at the learned HP
    location (whole block; Fig. 5).
-b  Behaviour: repeating the target location speeds responses, repeating the distractor location less so.
-c  Target gain on target-repeat minus target-switch trials, per ROI (joint fits with the target gain split by repeat).
-d  Trial by trial: target, distractor-at-HP and global gain as predictors of log RT (one Bayesian hierarchical
+b  Target gain on target-repeat minus target-switch trials, per ROI (joint fits with the target gain split by repeat);
+   the behavioural repeat effect is Fig. 1e.
+c  Trial by trial: target, distractor-at-HP and global gain as predictors of log RT (one Bayesian hierarchical
    model per ROI); the global gain's sign flips along the hierarchy.
 
-c-e come from the October trial-wise analysis on the earlier attention-field fits (pSig0.5) and are
+b and c come from the October trial-wise analysis on the earlier attention-field fits (pSig0.5) and are
 stamped as such until they are redone on the ladder fits. Null results (between-subject brain-behaviour
 correlations, distractor-repeat gain) stay out of this main figure; they are reported in the text.
 
@@ -31,9 +31,9 @@ from retsupp.visualize.paper.paper_style import (HP, DISTRACTOR, DOUBLE, FG, MUT
 from retsupp.visualize.paper.plot_trialwise_story import behaviour
 
 LEGEND = """
-**Figure 7 (prototype). Three sources of gain, and behaviour.** a, The gain terms (illustrative): at the target and at the distractor on each trial, at the HP location over a whole block (Fig. 5), and a global gain over the whole display on each trial. b, Response time on trials where the target (or the distractor) appears at the same location as on the previous trial, minus trials where it switches; distractor repeats are compared within HP and within LP trials and averaged. Dots are subjects (n = 30), points and bars the median and bootstrapped 95% CI; Wilcoxon signed-rank test against 0. c, Target gain on target-repeat minus target-switch trials, from fits with the target gain split by repeat; dots are subjects, points and bars the median and bootstrapped 95% CI; Wilcoxon against 0, Benjamini-Hochberg across ROIs. The distractor gain did not differ between distractor repeats and switches (text). d, Within subjects, trial by trial: Bayesian hierarchical linear model of log RT (z within subject) per ROI on the per-trial target gain, distractor gain on HP and on LP trials, and global gain (each z-scored within run and trial type), with trial number, target repeat, distractor repeat and target-at-previous-distractor as covariates, and random intercepts and gain slopes per subject (bambi, 4 × 1000 draws, no divergences, R̂ ≤ 1.01). Points are posterior means, bars 95% HDIs; stars give the posterior probability that the effect has the sign shown: * > .975, ** > .995, *** > .9995 (not corrected across ROIs). The distractor gain on LP trials and the HP − LP difference are in the table. c, d use the earlier attention-field fits (October 2026) and will be redone on the final fits. * q < .05, ** q < .01, *** q < .001.
+**Figure 7 (prototype). Three sources of gain, and behaviour.** a, The gain terms (illustrative): at the target and at the distractor on each trial, at the HP location over a whole block (Fig. 5), and a global gain over the whole display on each trial. b, Target gain (repeating the target location also speeds responses, Fig. 1e) on target-repeat minus target-switch trials, from fits with the target gain split by repeat; dots are subjects (n = 30), points and bars the median and bootstrapped 95% CI; Wilcoxon against 0, Benjamini-Hochberg across ROIs. The distractor gain did not differ between distractor repeats and switches (text). c, Within subjects, trial by trial: Bayesian hierarchical linear model of log RT (z within subject) per ROI on the per-trial target gain, distractor gain on HP and on LP trials, and global gain (each z-scored within run and trial type), with trial number, target repeat, distractor repeat and target-at-previous-distractor as covariates, and random intercepts and gain slopes per subject (bambi, 4 × 1000 draws, no divergences, R̂ ≤ 1.01). Points are posterior means, bars 95% HDIs; stars give the posterior probability that the effect has the sign shown: * > .975, ** > .995, *** > .9995 (not corrected across ROIs). The distractor gain on LP trials and the HP − LP difference are in the table. b, c use the earlier attention-field fits (October 2026) and will be redone on the final fits. * q < .05, ** q < .01, *** q < .001.
 """
-EARLIER = 'c, d: earlier fits (Oct 2026)'
+EARLIER = 'b, c: earlier fits (Oct 2026)'
 
 
 def stars(q):
@@ -183,16 +183,11 @@ def main(trial_table, mixed_table, repeat_table, bayes_table, name='fig7_behavio
     ax = fig.add_axes([.0, .52, .3, .44])
     panel_sources(ax)
     letter(ax, 'a', x=.06, y=.98)
-    mid = fig.add_gridspec(1, 2, width_ratios=[1, 1.85], wspace=.32, left=.39, right=.99, top=.86, bottom=.63)
-    header(fig, .95, 'Repeating a location: faster search, less target gain', x0=.33)
-    ax = fig.add_subplot(mid[0])
-    panel_rt(ax, behaviour(tt))
-    ax.text(0, 1.22, 'Response time', transform=ax.transAxes, fontsize=7, color=FG, va='center')
-    letter(ax, 'b', x=-.3, y=1.26)
-    ax = fig.add_subplot(mid[1])
+    header(fig, .95, 'Repeating the target location: faster search (Fig. 1e), less target gain', x0=.36)
+    ax = fig.add_axes([.43, .63, .55, .23])
     panel_repeat(ax, pd.read_csv(repeat_table, sep='\t'))
     title_icon(ax, 'Target gain: lower on repeats', ('target',), TARGET, h=.24)
-    letter(ax, 'c', x=-.2, y=1.26)
+    letter(ax, 'b', x=-.12, y=1.26)
     header(fig, .485, 'Trial by trial: gain on a trial predicts its response time')
     ax = fig.add_axes([.075, .135, .9, .245])
     panel_bayes(ax, bayes, [('T', TARGET), ('D_HP', DISTRACTOR), ('G', FG)], (-.08, .13), 'Log RT per unit gain (z)',
@@ -201,7 +196,7 @@ def main(trial_table, mixed_table, repeat_table, bayes_table, name='fig7_behavio
     for k, (lab, col) in enumerate((('Target gain', TARGET), ('Distractor gain, HP trials', DISTRACTOR),
                                     ('Global gain: the sign flips', FG))):
         ax.text(-.4, .125 - .022 * k, lab, color=col, fontsize=6.5, ha='left', va='center')
-    letter(ax, 'd', x=-.055, y=1.3)
+    letter(ax, 'c', x=-.055, y=1.3)
     fig.text(.99, .998, EARLIER, fontsize=5.5, color=MUTED, ha='right', va='top')
     save(fig, name, LEGEND)
 
