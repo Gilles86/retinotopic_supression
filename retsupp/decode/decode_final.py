@@ -19,6 +19,15 @@ pRF fit:
 * ``--prf-source jointhrf``: ``derivatives/prf_cv_roi_jointhrf`` stage-3 fits (DoG, one HRF per
   subject × ROI fitted jointly with the pRFs; ``fit_prf_cv_roi_hrf_joint.py``, tag ``--joint-tag``),
   flexible-HRF model with lower bounds delay 2 s and dispersion 0.1.
+* ``--prf-source dog_roihrf`` / ``dn_roihrf``: ``derivatives/prf_cv_roi_sharedhrf`` models 14 (DoG) and 16
+  (divisive normalization, DN) of ``fit_prf_cv_roi_hrf.py``: one HRF per subject × ROI (the median of the
+  fold's flexible-HRF training fits, m4 resp. m6), held fixed while the pRF was refit on the training runs.
+* ``--prf-source dn_canonical``: ``derivatives/prf_cv_roi`` model 5 (DN, canonical HRF).
+
+All fits used ``sd_min = 0.2`` and ``SPMHRFModel(tr=1.6, delay=4.5, dispersion=0.75)`` (jointhrf adds the
+lower bounds), and the same model construction is used here (``SOURCES``). ``--check-prfs`` verifies that
+for one subject × fold: it recomputes the held-out R² of the fold fit from this module's model and
+compares it with the R² the fit wrote.
 
 Voxels: the ROI's voxels with cross-run reliability > 0 on the fold's training runs and BOLD SD ≤
 ``--max-bold-sd`` (the outlier rule), at most ``--max-voxels`` (highest reliability first). Decoder
@@ -53,7 +62,14 @@ from retsupp.utils.data import Subject
 
 N_TR = 258
 QUADRANTS = {'upper_right': (1, 1), 'upper_left': (-1, 1), 'lower_left': (-1, -1), 'lower_right': (1, -1)}
-SOURCES = {'canonical': ('prf_cv_roi', 'model-2'), 'jointhrf': ('prf_cv_roi_jointhrf', None)}
+# prf-source -> (derivatives folder, file tag, model class, flexible HRF?, HRF lower bounds?)
+SOURCES = {
+    'canonical': ('prf_cv_roi', 'model-2', 'dog', False, False),
+    'jointhrf': ('prf_cv_roi_jointhrf', 'dog_{joint_tag}_stage-3', 'dog', True, True),
+    'dog_roihrf': ('prf_cv_roi_sharedhrf', 'model-14', 'dog', True, False),
+    'dn_roihrf': ('prf_cv_roi_sharedhrf', 'model-16', 'dn', True, False),
+    'dn_canonical': ('prf_cv_roi', 'model-5', 'dn', False, False),
+}
 
 
 def fold_of(sub, session, run, n_folds=3):
@@ -65,16 +81,12 @@ def fold_of(sub, session, run, n_folds=3):
 
 
 def load_prfs(deriv, subject, fold, source, joint_tag):
-    """Per-voxel pRF parameters of the fold (rows = voxel_index of the ROI union) and their model kind."""
-    stem = f'sub-{subject:02d}_fold-{fold}'
-    if source == 'canonical':
-        d = deriv / 'prf_cv_roi' / f'sub-{subject:02d}'
-        cv = pd.read_csv(d / f'{stem}_model-2_cvr2.tsv.gz', sep='\t')
-        pars = pd.read_pickle(d / f'{stem}_model-2_pars.pkl.gz').reset_index(drop=True)
-    else:
-        d = deriv / 'prf_cv_roi_jointhrf' / f'sub-{subject:02d}'
-        cv = pd.read_csv(d / f'{stem}_dog_{joint_tag}_stage-3_cvr2.tsv.gz', sep='\t')
-        pars = pd.read_pickle(d / f'{stem}_dog_{joint_tag}_stage-3_pars.pkl.gz').reset_index(drop=True)
+    """Per-voxel pRF parameters of the fold (rows = voxel_index of the ROI union) and their ROI labels."""
+    folder, tag = SOURCES[source][:2]
+    d = deriv / folder / f'sub-{subject:02d}'
+    stem = f'sub-{subject:02d}_fold-{fold}_{tag.format(joint_tag=joint_tag)}'
+    cv = pd.read_csv(d / f'{stem}_cvr2.tsv.gz', sep='\t')
+    pars = pd.read_pickle(d / f'{stem}_pars.pkl.gz').reset_index(drop=True)
     pars = pars.drop(columns=['r2', 'theta', 'ecc'], errors='ignore')
     pars.index = cv.voxel_index.to_numpy()
     return pars, cv.set_index('voxel_index').roi
@@ -82,15 +94,41 @@ def load_prfs(deriv, subject, fold, source, joint_tag):
 
 def make_model(source, grid, paradigm, data, parameters, sd_min=.2):
     from braincoder.hrf import SPMHRFModel
-    from braincoder.models import DifferenceOfGaussiansPRF2DWithHRF
-    if source == 'canonical':
-        hrf = SPMHRFModel(tr=1.6, delay=4.5, dispersion=0.75)
-        flex = False
-    else:
-        hrf = SPMHRFModel(tr=1.6, delay=4.5, dispersion=0.75, min_hrf_delay=2., min_dispersion=.1)
-        flex = True
-    return DifferenceOfGaussiansPRF2DWithHRF(grid_coordinates=grid, paradigm=paradigm, hrf_model=hrf, data=data,
-                                             parameters=parameters, flexible_hrf_parameters=flex, sd_min=sd_min)
+    from braincoder.models import DifferenceOfGaussiansPRF2DWithHRF, DivisiveNormalizationGaussianPRF2DWithHRF
+    _, _, kind, flex, bounded = SOURCES[source]
+    hrf = SPMHRFModel(tr=1.6, delay=4.5, dispersion=0.75, **(dict(min_hrf_delay=2., min_dispersion=.1) if bounded else {}))
+    cls = DifferenceOfGaussiansPRF2DWithHRF if kind == 'dog' else DivisiveNormalizationGaussianPRF2DWithHRF
+    return cls(grid_coordinates=grid, paradigm=paradigm, hrf_model=hrf, data=data, parameters=parameters,
+               flexible_hrf_parameters=flex, sd_min=sd_min)
+
+
+def select_voxels(pars_all, roi_of, rel, roi, max_voxels, max_bold_sd):
+    """The ROI's voxels with a complete fit, training reliability > 0 and BOLD SD <= max_bold_sd, at most
+    ``max_voxels`` (highest reliability first). Returns (selected voxel_index, number of ROI voxels)."""
+    ids = roi_of.index[roi_of.to_numpy() == roi]
+    p = pars_all.loc[ids]
+    r = rel.reindex(ids)
+    keep = p.notna().all(axis=1).to_numpy() & (r.reliability.to_numpy() > 0)
+    if max_bold_sd is not None and 'sd_train' in r:
+        keep &= r.sd_train.to_numpy() <= max_bold_sd
+    sel = ids[keep]
+    if len(sel) > max_voxels:
+        sel = r.loc[sel].reliability.sort_values(ascending=False).index[:max_voxels]
+    return sel, len(ids)
+
+
+def fit_noise(model, data, par_df, pars, resid_max_iter):
+    from braincoder.optimize import ResidualFitter
+    rf = ResidualFitter(model=model, data=data, paradigm=par_df, parameters=pars)
+    return rf.fit(max_n_iterations=resid_max_iter, progressbar=False, method='gauss')
+
+
+def decode(model, data, pars, omega, dof, mask, l2_norm, learning_rate, max_iter, min_iter, shape):
+    from braincoder.optimize import StimulusFitter
+    sf = StimulusFitter(model=model, data=data, omega=omega, parameters=pars, dof=dof)
+    fit = sf.fit(l2_norm=l2_norm, learning_rate=learning_rate, max_n_iterations=max_iter, min_n_iterations=min_iter,
+                 progressbar=False, mask=mask)
+    return np.asarray(fit.values if hasattr(fit, 'values') else fit, dtype=np.float32).reshape(shape)
 
 
 def slice_run(bold_all, sub, session, run):
@@ -119,9 +157,58 @@ def readout(decoded, paradigm, grid, aperture, hp):
     return pd.DataFrame(rows)
 
 
+def check_prfs(subject, fold, source, bids, joint_tag='final2', rois=('V1', 'V2', 'V3'), resolution=50):
+    """Recompute the fold fit's held-out R² with ``make_model`` (full paradigm, as in the fit) and compare it with
+    the R² the fit wrote; for the ``prf_cv_roi*`` sources also compare the predictions with those of the fitting
+    code's own model factory. Prints per ROI: n voxels, corr and max |ΔR²|, median prediction correlation."""
+    from retsupp.modeling.cv.fit_prf_cv import make_fold_assignments
+    sub = Subject(subject, bids_folder=bids)
+    deriv = Path(bids) / 'derivatives'
+    folder, tag = SOURCES[source][:2]
+    stem = f'sub-{subject:02d}_fold-{fold}_{tag.format(joint_tag=joint_tag)}'
+    cv = pd.read_csv(deriv / folder / f'sub-{subject:02d}' / f'{stem}_cvr2.tsv.gz', sep='\t').set_index('voxel_index')
+    pars_all, roi_of = load_prfs(deriv, subject, fold, source, joint_tag)
+    test_runs = sorted(make_fold_assignments(sub)[fold])
+    with np.load(deriv / 'cleaned_bold_cache' / f'sub-{subject:02d}' / f'sub-{subject:02d}_kind-full_res-{resolution}.npz') as f:
+        bold_all = f['bold']
+    factory = None
+    if folder.startswith('prf_cv_roi') and source != 'jointhrf':
+        from retsupp.modeling.fit_prf import MODEL_CFG, build_model_factory
+        parent = {'model-2': 2, 'model-5': 5, 'model-14': 4, 'model-16': 6}[tag]
+        factory = lambda grid: build_model_factory(MODEL_CFG[parent], grid, .2)
+    for roi in rois:
+        ids = roi_of.index[(roi_of.to_numpy() == roi)]
+        ids = ids[pars_all.loc[ids].notna().all(axis=1).to_numpy()]
+        pars = pars_all.loc[ids].reset_index(drop=True).astype(np.float32)
+        obs, pred, pred_ref = [], [], []
+        for ses, r in test_runs:
+            par = sub.get_stimulus_with_distractors(session=ses, run=r, resolution=resolution, grid_radius=5.0,
+                                                    distractor_shape='rectangle', distractor_long_side=1.5,
+                                                    distractor_short_side=0.375).astype(np.float32).reshape(N_TR, -1)
+            gx, gy = sub.get_extended_grid_coordinates(resolution=resolution, session=ses, run=r, grid_radius=5.0)
+            grid = np.stack([gx.ravel(), gy.ravel()], axis=1).astype(np.float32)
+            y = slice_run(bold_all, sub, ses, r)[:, np.asarray(ids)].astype(np.float32)
+            m = make_model(source, grid, par, None, pars)
+            pars = pars[list(m.parameter_labels)]
+            obs.append(y)
+            pred.append(np.asarray(m.predict(paradigm=par, parameters=pars)))
+            if factory is not None:
+                pred_ref.append(np.asarray(factory(grid)(y, par).predict(paradigm=par, parameters=pars)))
+        obs, pred = np.vstack(obs), np.vstack(pred)
+        r2 = 1 - ((obs - pred) ** 2).sum(0) / ((obs - obs.mean(0)) ** 2).sum(0)
+        stored = cv.loc[ids, 'r2_test'].to_numpy()
+        msg = (f'{source} sub-{subject:02d} fold-{fold} {roi}: {len(ids)} voxels; R² recomputed vs stored: '
+               f'corr {np.corrcoef(r2, stored)[0, 1]:.5f}, max |Δ| {np.nanmax(np.abs(r2 - stored)):.2e}, '
+               f'median {np.median(r2):.4f} vs {np.median(stored):.4f}')
+        if pred_ref:
+            pr = np.vstack(pred_ref)
+            c = [np.corrcoef(pred[:, v], pr[:, v])[0, 1] for v in range(pred.shape[1]) if pred[:, v].std() > 0]
+            msg += f'; prediction corr with fitting factory: median {np.median(c):.6f}, min {np.min(c):.6f}'
+        print(msg, flush=True)
+
+
 def main(subject, session, run, rois, bids, source, decoders, joint_tag, max_voxels, max_bold_sd, l2_norm, learning_rate,
          max_iter, min_iter, resid_max_iter, resolution=50, grid_radius=5.0, out_root=None):
-    from braincoder.optimize import ResidualFitter, StimulusFitter
     sub = Subject(subject, bids_folder=bids)
     if run not in sub.get_runs(session):
         print(f'sub-{subject:02d} has no ses-{session} run-{run}; nothing to do')
@@ -161,19 +248,11 @@ def main(subject, session, run, rois, bids, source, decoders, joint_tag, max_vox
         pars_of['items'] = np.maximum(items, paradigm)
 
     for roi in rois:
-        ids = roi_of.index[roi_of.to_numpy() == roi]
-        p = pars_all.loc[ids]
-        r = rel.reindex(ids)
-        keep = p.notna().all(axis=1).to_numpy() & (r.reliability.to_numpy() > 0)
-        if max_bold_sd is not None and 'sd_train' in r:
-            keep &= r.sd_train.to_numpy() <= max_bold_sd
-        sel = ids[keep]
-        if len(sel) > max_voxels:
-            sel = r.loc[sel].reliability.sort_values(ascending=False).index[:max_voxels]
+        sel, n_roi = select_voxels(pars_all, roi_of, rel, roi, max_voxels, max_bold_sd)
         if len(sel) < 20:
             print(f'{roi}: only {len(sel)} voxels, skipped', flush=True)
             continue
-        print(f'{roi}: {len(sel)} voxels (reliability > 0 of {len(ids)})', flush=True)
+        print(f'{roi}: {len(sel)} voxels (reliability > 0 of {n_roi})', flush=True)
         pars = pars_all.loc[sel].reset_index(drop=True).astype(np.float32)
         data = pd.DataFrame(bold_run[:, np.asarray(sel)], index=pd.Index(np.arange(T), name='frame'))
 
@@ -186,8 +265,7 @@ def main(subject, session, run, rois, bids, source, decoders, joint_tag, max_vox
         for kind in {('items' if d.endswith('_items') else 'bar') for d in decoders}:
             t1 = time.time()
             m, par_df = mk(kind)
-            rf = ResidualFitter(model=m, data=data, paradigm=par_df, parameters=pars)
-            noise[kind] = rf.fit(max_n_iterations=resid_max_iter, progressbar=False, method='gauss')
+            noise[kind] = fit_noise(m, data, par_df, pars, resid_max_iter)
             print(f'  residual fit ({kind} paradigm) {time.time() - t1:.0f} s', flush=True)
         for dec in decoders:
             out = out_root / dec / f'sub-{subject:02d}'
@@ -197,11 +275,9 @@ def main(subject, session, run, rois, bids, source, decoders, joint_tag, max_vox
             t1 = time.time()
             kind = 'items' if dec.endswith('_items') else 'bar'
             omega, dof = noise[kind]
-            sf = StimulusFitter(model=mk(kind)[0], data=data, omega=omega, parameters=pars, dof=dof)
             mask = (pars_of[kind] > 0) if dec.startswith('outline') else None
-            fit = sf.fit(l2_norm=l2_norm, learning_rate=learning_rate, max_n_iterations=max_iter, min_n_iterations=min_iter,
-                         progressbar=False, mask=mask)
-            decoded = np.asarray(fit.values if hasattr(fit, 'values') else fit, dtype=np.float32).reshape(T, resolution, resolution)
+            decoded = decode(mk(kind)[0], data, pars, omega, dof, mask, l2_norm, learning_rate, max_iter, min_iter,
+                             (T, resolution, resolution))
             ro = readout(decoded, paradigm, grid, aperture, hp).assign(subject=subject, session=session, run=run, roi=roi,
                                                                        decoder=dec, source=source, fold=fold, hp_location=hp,
                                                                        n_voxels=len(sel))
@@ -233,6 +309,12 @@ if __name__ == '__main__':
     ap.add_argument('--min-n-iterations', type=int, default=200)
     ap.add_argument('--resid-max-iter', type=int, default=2000)
     ap.add_argument('--out-root', default=None)
+    ap.add_argument('--check-prfs', action='store_true',
+                    help='only verify the model construction against the fold fit of --session/--run (see check_prfs)')
     a = ap.parse_args()
+    if a.check_prfs:
+        fold = fold_of(Subject(a.subject, bids_folder=a.bids_folder), a.session, a.run)
+        check_prfs(a.subject, fold, a.prf_source, a.bids_folder, a.joint_tag, a.rois)
+        raise SystemExit
     main(a.subject, a.session, a.run, a.rois, a.bids_folder, a.prf_source, a.decoders, a.joint_tag, a.max_voxels, a.max_bold_sd,
          a.l2_norm, a.learning_rate, a.max_n_iterations, a.min_n_iterations, a.resid_max_iter, out_root=a.out_root)
