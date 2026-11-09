@@ -111,14 +111,14 @@ def plot(source, name='figS_decoded_bars_rotated'):
     hc = half_contrast(mean, grid)
     pooled = np.nanmean(hc, 1)                                  # subjects × bins (vertical and horizontal pooled)
 
-    W, H = 7.25, 3.9
+    W, H = 7.25, 3.45
     fig = plt.figure(figsize=(W, H))
     cm = mcolors.LinearSegmentedColormap.from_list('stim', ['#FFFFFF', STIM])
     vmax = np.nanpercentile(grp[:, :, 0], 99.5)
     c = np.linspace(-5, 5, 50)
     X, Y = np.meshgrid(c, c)
-    size, gap, x0 = .62, .1, .95
-    for o, lab in enumerate(['Vertical bar,\nleft → right', 'Horizontal bar,\nbottom → top']):
+    size, gap, x0 = .62, .1, 1.3
+    for o, lab in enumerate(['Vertical bar,\nleft to right', 'Horizontal bar,\nbottom to top']):
         for b in range(len(centres)):
             ax = fig.add_axes([(x0 + b * (size + gap)) / W, (H - .55 - (o + 1) * size - o * .12) / H, size / W, size / H])
             img = np.where(np.hypot(X, Y) <= APERTURE + .3, grp[o, b, 0], np.nan)
@@ -136,7 +136,7 @@ def plot(source, name='figS_decoded_bars_rotated'):
             ax.set_aspect('equal')
             ax.set_axis_off()
             if o == 0:
-                ax.text(.5, 1.02, f'{centres[b]:+.1f}°', transform=ax.transAxes, ha='center', va='bottom', fontsize=6,
+                ax.text(.5, 1.02, f'{centres[b]:+.1f}°'.replace('-', '−'), transform=ax.transAxes, ha='center', va='bottom', fontsize=6,
                         color='.4')
             if b == 0:
                 ax.text(-.08, .5, lab, transform=ax.transAxes, ha='right', va='center', fontsize=6.5, color=FG)
@@ -144,7 +144,7 @@ def plot(source, name='figS_decoded_bars_rotated'):
     fig.text(.2 / W, (H - .2) / H, 'Decoded bars, HP location rotated to the upper right (V1–V3, mean of 30 subjects)',
              fontsize=7.5, color=STIM, va='center')
     # Row 3: near-HP half minus far half.
-    ax = fig.add_axes([.95 / W, .38 / H, 3.0 / W, 1.05 / H])
+    ax = fig.add_axes([2.6 / W, .42 / H, 2.9 / W, 1.0 / H])
     m, se = np.nanmean(pooled, 0), np.nanstd(pooled, 0, ddof=1) / np.sqrt(np.isfinite(pooled).sum(0))
     ax.axvspan(0, APERTURE, color=HP, alpha=.07, lw=0)
     ax.fill_between(centres, m - se, m + se, color=HP, alpha=.2, lw=0)
@@ -158,10 +158,28 @@ def plot(source, name='figS_decoded_bars_rotated'):
     ax.set_xlim(-APERTURE, APERTURE)
     ax.set_ylim(lo, hi)
     ax.set_xlabel('Bar position (°; positive = HP side)')
+    ax.set_xticks([-3, -2, -1, 0, 1, 2, 3])
+    ax.set_xticklabels(['−3', '−2', '−1', '0', '1', '2', '3'])
     ax.set_ylabel('Half nearer HP −\nhalf farther (%)')
     ax.text(APERTURE - .1, lo + .2, 'Bar passes the\nHP quadrant', ha='right', va='bottom', fontsize=6, color=HP)
     offset_spines(ax)
-    letter(ax, 'b', x=-.28, y=1.02)
+    letter(ax, 'b', x=-.85, y=1.02)
+    # Sketch: what the near and far halves are.
+    sk = fig.add_axes([1.05 / W, .4 / H, 1.05 / W, 1.05 / H])
+    from matplotlib.patches import Rectangle
+    sk.add_patch(Circle((0, 0), APERTURE, fill=False, ec='.6', lw=.5))
+    q = 4 / np.sqrt(2)
+    sk.add_patch(Circle((q, q), .75, fill=False, ec=HP, lw=.8, ls=(0, (2, 1.2))))
+    hh = np.sqrt(APERTURE ** 2 - 1.2 ** 2)
+    sk.add_patch(Rectangle((.8, 0), .8, hh, facecolor=HP, alpha=.45, lw=0))
+    sk.add_patch(Rectangle((.8, -hh), .8, hh, facecolor=MUTED, alpha=.6, lw=0))
+    sk.text(2.0, hh * .45, 'Near', fontsize=6, color=HP, va='center')
+    sk.text(2.0, -hh * .55, 'Far', fontsize=6, color='.4', va='center')
+    sk.plot(0, 0, '+', color=FG, ms=3, mew=.5)
+    sk.set_xlim(-4.9, 4.9)
+    sk.set_ylim(-4.9, 4.9)
+    sk.set_aspect('equal')
+    sk.set_axis_off()
     nb = n.sum(0)
     legend = f"""
 **Figure S. The decoded bars, averaged per bar position with the HP location rotated to the upper right.** Every run's
@@ -173,7 +191,8 @@ subjects (n = {mean.shape[0]}). Dotted outline, the true bar. Frames per bin, al
 {', '.join(str(int(v)) for v in nb[0])}; horizontal {', '.join(str(int(v)) for v in nb[1])}. b, Decoded intensity on the
 bar's pixels in the half of the bar nearer HP (upper half of a vertical bar, right half of a horizontal one) minus the
 half farther away, in % of the bar's mean, vertical and horizontal bars pooled; positive positions are on HP's side of the
-aperture (shaded), where the near half lies in the quadrant facing HP. Line and band: mean ± SEM over subjects;
+aperture (shaded), where the near half lies in the quadrant facing HP and the far half in a neighbouring one; on the
+other side the near half lies in a quadrant next to HP and the far half in the opposite quadrant. Line and band: mean ± SEM over subjects;
 Wilcoxon signed-rank test against 0 per position, uncorrected (* p < .05): {', '.join(f'{c:+.1f}° {v:+.2f}% p = {p:.3f}' for c, v, p in zip(centres, m, ps))}.
 """
     save(fig, name, legend)
