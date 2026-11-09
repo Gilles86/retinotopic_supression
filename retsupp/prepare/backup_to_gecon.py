@@ -67,7 +67,8 @@ def smb(commands, env, check=True):
                        capture_output=True, text=True, env=env)
     text = r.stdout + r.stderr
     if check and (r.returncode != 0 or 'NT_STATUS' in text):
-        raise RuntimeError(text[-3000:])
+        bad = [line for line in text.splitlines() if 'NT_STATUS' in line or not line.startswith('putting file')]
+        raise RuntimeError(f'smbclient exit {r.returncode}:\n' + '\n'.join(bad[-40:]))
     return text
 
 
