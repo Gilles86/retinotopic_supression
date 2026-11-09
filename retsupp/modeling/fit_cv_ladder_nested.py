@@ -72,6 +72,12 @@ the DN neural baseline (w_b), the surround baseline (w_d) or both, with one shap
 from three other θ; the joint model also starts from both one-weight fits. A Gauss-Newton Hessian (JᵀJ) of the
 SSE over the shared terms is stored (``hessian_corr``) to show whether w_b and w_d trade off.
 
+``--models m8_full_dogk`` (DoG only) splits the sustained field between the centre (driving) and surround
+(suppressive) pooling with one shared tilt κ: centre weight 1 + κ, surround 1 − κ (``dog_centre_surround_field``;
+κ = 0 is m7_full, checked at the start, κ = ±1 field on one pooling only). Started from m7_full and from κ = ±1;
+``m8_full_dogcen`` / ``m8_full_dogsur`` fit the κ = +1 / −1 special cases (also used as dogk starts when listed
+before it). A Gauss-Newton Hessian is stored for dogk (κ against g_HP, g_LP).
+
 ``--frozen-prf`` (with a CV scheme and an all-runs ``--base-root``) is the cheap held-out test for models that
 differ only in shared terms: per-voxel pRFs and m00-m5 are taken from the all-runs fit (same in every fold, so
 their leak into the held-out runs is the same for all models), m7_full and the requested models are refitted per
@@ -111,6 +117,7 @@ from retsupp.modeling.target_split import NEW as T_HP, TargetSplitDN, TargetSpli
 from retsupp.modeling.lp_split import NEW as LP_D, LPSplitDN, LPSplitDoG
 from retsupp.modeling.sigma_tied import SigmaTiedDN, SigmaTiedDoG
 from retsupp.modeling.dn_baseline_field import NEW as BF_TERMS, DNBaselineField
+from retsupp.modeling.dog_centre_surround_field import NEW as KAPPA, DoGCentreSurroundField
 from retsupp.modeling.gauss_attention_field import gauss_init, gaussian
 from retsupp.modeling.local_models import (
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_factorial as DoGFactorial,
@@ -149,6 +156,9 @@ LADDER = {
     'm8_full_dnb': ('free', 'free', 'free', 'free', 'free', 'free', 'm7_full'),
     'm8_full_dnd': ('free', 'free', 'free', 'free', 'free', 'free', 'm7_full'),
     'm8_full_dnbd': ('free', 'free', 'free', 'free', 'free', 'free', 'm8_full_dnb'),
+    'm8_full_dogk': ('free', 'free', 'free', 'free', 'free', 'free', 'm7_full'),
+    'm8_full_dogcen': ('free', 'free', 'free', 'free', 'free', 'free', 'm7_full'),
+    'm8_full_dogsur': ('free', 'free', 'free', 'free', 'free', 'free', 'm7_full'),
 }
 # Models fitted on top of finished ladders, run only when asked: the target gain split by target at HP vs
 # elsewhere (``target_split``) and the sustained LP gain split into next to HP vs opposite (``lp_split``).
@@ -162,7 +172,13 @@ SIGMA_TIED = ('m7_full_sigtied',)
 BASELINE_FIELD = {'m8_full_dnb': ('b',), 'm8_full_dnd': ('d',), 'm8_full_dnbd': ('b', 'd')}
 EXTRA_PARENTS = {'m8_full_dnbd': ('m8_full_dnd',)}
 THETA_STARTS = (0.785398, -0.785398, 1.570796)   # extra θ starts (parent σ's): uniform, HP vs LP, LP only
-TARGET_SPLIT = tuple(SPLIT_TERMS) + SIGMA_TIED + tuple(BASELINE_FIELD)
+# DoG only: the sustained field split between the centre (driving) and surround (suppressive) pooling by a shared
+# tilt κ (``dog_centre_surround_field``): centre weight 1 + κ, surround 1 − κ, κ = 0 is m7_full exactly. dogk fits κ
+# (from κ = 0, checked to reproduce m7, and from κ = ±1); dogcen / dogsur are the special cases κ = +1 / −1 (field on
+# the centre / surround pooling only), fitted only when asked.
+CS_FIELD = {'m8_full_dogk': None, 'm8_full_dogcen': 1.0, 'm8_full_dogsur': -1.0}
+KAPPA_STARTS = (1.0, -1.0)   # extra κ starts of dogk (parent σ's and gains)
+TARGET_SPLIT = tuple(SPLIT_TERMS) + SIGMA_TIED + tuple(BASELINE_FIELD) + tuple(CS_FIELD)
 GAINS = ['g_HP', 'g_LP', 'g_HP_dyn', 'g_LP_dyn', 'g_T_dyn']
 # Models whose fit cannot depend on which ring position is labelled HP.
 LABEL_BLIND = ('m1_T', 'm2_D', 'm3_S', 'm3b_TD', 'm4_TDS')
@@ -180,7 +196,8 @@ POLISH_ROUNDS = 3
 SHARED_BOUNDS = {'sigma_AF': (0.5, 8.0), 'sigma_dyn': (0.5, 8.0),
                  'item_scale': (1e-3, 50.0),
                  **{g: (-10.0, 10.0) for g in GAINS + [T_HP, LP_D]},
-                 'w_b': (-5.0, 5.0), 'w_d': (-5.0, 5.0), 'theta_bd': (-6.3, 6.3)}
+                 'w_b': (-5.0, 5.0), 'w_d': (-5.0, 5.0), 'theta_bd': (-6.3, 6.3),
+                 KAPPA: (-2.0, 2.0)}
 POLISH_MAX_ITER = 3000
 SCHEMES = tuple(CV_SCHEMES) + ('full',)
 
@@ -192,6 +209,8 @@ def extra_terms(name):
     if name in BASELINE_FIELD:
         return [t for t, k in zip(BF_TERMS, ('b', 'd', None))
                 if k is None or k in BASELINE_FIELD[name]]
+    if name in CS_FIELD:
+        return [KAPPA] if CS_FIELD[name] is None else []
     return []
 
 
@@ -403,6 +422,8 @@ def child_init(parent_pars, model, name):
     for t in BF_TERMS:
         if t in labels and init[t].isna().all():
             init[t] = 0.0              # weights 0: the parent's prediction (θ = 0: field at HP only)
+    if KAPPA in labels and init[KAPPA].isna().all():
+        init[KAPPA] = 0.0              # κ = 0: the parent's prediction (fixed-κ classes override it)
     return init
 
 
@@ -711,6 +732,16 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                                  LP_D: (LPSplitDoG, LPSplitDN)}.get(SPLIT_TERMS.get(name))
                     if name in SIGMA_TIED:
                         split_cls = (SigmaTiedDoG, SigmaTiedDN)
+                    if name in CS_FIELD:
+                        if family != 'dog':
+                            raise ValueError(f'{name} needs --family dog')
+                        return DoGCentreSurroundField(
+                            kappa_fixed=CS_FIELD[name], item_scale_mode=item_scale,
+                            grid_coordinates=grid_coords, paradigm=d['paradigm'], hrf_model=hrf_model,
+                            condition_indicator=d['condition_indicator'],
+                            dynamic_indicator=d['dynamic_indicator'],
+                            target_indicator=d['target_indicator'],
+                            ring_positions=ring_positions, sign_pattern=sp)
                     if name in BASELINE_FIELD:
                         if family != 'dn':
                             raise ValueError(f'{name} needs --family dn')
@@ -809,7 +840,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                         # σ_dyn is an extra start.
                         free = [p for p in free if p != 'sigma_dyn']
                         starts = tuple(sigma_starts) + (float(fits[parent][k]['sigma_dyn'].iloc[0]),)
-                    if name in BASELINE_FIELD:
+                    if name in BASELINE_FIELD or CS_FIELD.get(name, 1.0) is None:
                         # Equality check: the start (weights 0) must reproduce the parent's prediction.
                         p_par = np.asarray(mk(train, parent).predict(
                             paradigm=train['paradigm'], parameters=fits[parent][k]))
@@ -830,6 +861,23 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                             alt = init.copy()
                             alt['theta_bd'] = th
                             cands.append((alt, (None,)))
+                    if name in CS_FIELD:
+                        sus = ['g_HP', 'g_LP']
+                        if CS_FIELD[name] is None:
+                            # The κ = ±1 ends, from the parent's gains and σ's, and the fixed-κ fits if done.
+                            for kap in KAPPA_STARTS:
+                                alt = init.copy()
+                                alt[KAPPA] = kap
+                                alt[sus] = alt[sus] / 2.0
+                                cands.append((alt, (None,)))
+                            for ep in ('m8_full_dogcen', 'm8_full_dogsur'):
+                                if ep in fits and fits[ep][k] is not None:
+                                    cands.append((fits[ep][k].reindex(columns=labels), (None,)))
+                        else:
+                            # Field on one pooling only (weight 2g): also start from half the parent's gains.
+                            alt = init.copy()
+                            alt[sus] = alt[sus] / 2.0
+                            cands.append((alt, (None,)))
                     for ep in EXTRA_PARENTS.get(name, ()):
                         # e.g. the joint model also starts from the d-only optimum (w_b = 0).
                         cands.append((child_init(fits[ep][k], m_tr, name), (None,)))
@@ -838,9 +886,10 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                         c_pars, c_info = shared_fit(
                             m_tr, y_tr, train['paradigm'], c_init, free, bounded=bounded, loss=loss,
                             sigma_starts=c_starts, lbfgs_rounds=lbfgs_rounds,
-                            hessian=name in BASELINE_FIELD)
+                            hessian=name in BASELINE_FIELD or name == 'm8_full_dogk')
                         cand_log.append(dict(
                             theta_start=float(c_init['theta_bd'].iloc[0]) if 'theta_bd' in c_init else None,
+                            kappa_start=float(c_init[KAPPA].iloc[0]) if KAPPA in c_init else None,
                             sse_start=c_info['sse_parent_start'], sse_final=c_info['sse_final'],
                             seconds=c_info['seconds']))
                         if best_fit is None or c_info['sse_final'] < best_fit[1]['sse_final']:
@@ -851,7 +900,8 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                     if len(cand_log) > 1:
                         info['candidates'] = cand_log
                         print('  candidates: ' + ', '.join(
-                            (f"θ0={c['theta_start']:.2f}" if c['theta_start'] is not None else f'start {i}')
+                            (f"θ0={c['theta_start']:.2f}" if c['theta_start'] is not None else
+                             f"κ0={c['kappa_start']:.2f}" if c['kappa_start'] is not None else f'start {i}')
                             + f": {c['sse_final']:.2f}" for i, c in enumerate(cand_log)))
                     if 'hessian_corr' in info:
                         lab = info['hessian_labels']
