@@ -27,7 +27,7 @@ LEGEND = f"""
 **Figure 2. Gain-field model.** a, {COMMON} b, A schematic stretch of a run with illustrative trials: one bar sweep from left to right and four trials, with symbols above their onsets (target: diamond; distractor: dot; HP: red ring; pRF: teal circle). For three pRFs, the rows show the stimulus reaching the pRF (bar and items), the gain it sees, and the predicted BOLD response after the HRF, with and without gain. Rows share their scale across columns.
 """
 LEGEND_HP = f"""
-**Figure 2. Gain-field model.** a, {COMMON} b, A schematic stretch of a run for one pRF (teal) near a ring location, in a block with HP near it and in a block with HP at the opposite location. One bar sweep from left to right and four illustrative trials, the same in both blocks, so that only the sustained gain differs (in the experiment the distractor is also more frequent at HP). Symbols above the onsets show the screen (target: diamond; distractor: dot; HP: red ring). Rows show the stimulus reaching the pRF (bar and items), the gain it sees, and the predicted BOLD response after the HRF, with and without gain. The dotted line marks the peak response in the block with HP not near, in both blocks; with HP near, the response peaks lower (arrow). Rows share their scale across columns.
+**Figure 2. Gain-field model.** a, {COMMON} b, A schematic stretch of a run for one pRF (teal) near a ring location, in a block with HP near it and in a block with HP at the opposite location. One bar sweep from left to right and four illustrative trials, the same in both blocks, so that only the sustained gain differs (in the experiment the distractor is also more frequent at HP). Symbols above the onsets show the screen (target: diamond; distractor: dot; HP: red ring). Rows show the stimulus reaching the pRF (bar and items), the gain it sees (red shading: the sustained loss of gain with HP near, present for the whole block), and the predicted BOLD response after the HRF, with and without gain; coloured arrows mark where each gain changes the prediction. The dotted line marks the peak response in the block with HP not near, in both blocks; with HP near, the response peaks lower (red arrow). The size of the HP reduction is exaggerated for clarity. Rows share their scale across columns.
 """
 LIM = 5.2
 RING = 4.
@@ -208,7 +208,7 @@ def main(name='fig2_model'):
 
 def top_row(fig, gs, prfs=None):
     prfs = prfs or [RING_PRF]
-    a = gs.subgridspec(1, 6, wspace=.34)
+    a = gs.subgridspec(1, 6, wspace=.42)
     ax = fig.add_subplot(a[0, 0])
     display(ax)
     ax.add_patch(Circle(POS[HP_IX], 1.12, fill=False, ec=HP, lw=1., ls=(0, (2.5, 1.5)), zorder=8))
@@ -217,14 +217,19 @@ def top_row(fig, gs, prfs=None):
     sus = sum((GAINS['hp'] if i == HP_IX else GAINS['lp']) * gauss(*p, SIGMA['sus']) for i, p in enumerate(POS))
     tgt = GAINS['t'] * gauss(*POS[T_IX], SIGMA['dyn'])
     dis = GAINS['d'] * gauss(*POS[HP_IX], SIGMA['dyn'])
-    maps = [('Model input', stimulus(), 'magma', 2.6, FG, False, 'Fixed pRF (teal)'),
-            ('Sustained:\nless gain at HP', -sus, 'Reds', .9, HP, False, 'Whole block · g_HP vs g_LP'),
-            ('Target', tgt, 'Oranges', 1.8, TARGET, False, 'During search · g_T'),
-            ('Distractor', dis, 'Blues', 1.8, DISTRACTOR, False, 'During search · HP vs LP')]
+    maps = [('Model input', stimulus(), 'magma', 2.6, FG, False, 'Fixed pRF'),
+            ('Sustained', -sus, 'Reds', .9, HP, False, 'Whole block, less at HP'),
+            ('Target', tgt, 'Oranges', 1.8, TARGET, False, 'During search'),
+            ('Distractor', dis, 'Blues', 1.8, DISTRACTOR, False, 'During search')]
     for j, (title, im, cmap, lim, col, signed, sub) in enumerate(maps, start=1):
         ax = fig.add_subplot(a[0, j])
         show(ax, im, cmap, lim, title, col, signed)
-        ax.text(.5, -.03, sub, transform=ax.transAxes, ha='center', va='top', fontsize=6.5, color=FG if j == 1 else col)
+        if j == 1:
+            # Draw the pRF glyph next to its name rather than naming its colour.
+            ax.add_patch(Circle((.27, -.085), .045, transform=ax.transAxes, fill=False, ec=PRF_TEAL, lw=.9, clip_on=False))
+            ax.text(.35, -.085, sub, transform=ax.transAxes, ha='left', va='center', fontsize=6.5, color=FG)
+        else:
+            ax.text(.5, -.03, sub, transform=ax.transAxes, ha='center', va='top', fontsize=6.5, color=col)
         if j == 1:
             for x, y, sd in prfs:
                 ax.contour(X, Y, gauss(x, y, sd), levels=[.5], colors=[PRF_TEAL], linewidths=.9)
@@ -237,7 +242,10 @@ def top_row(fig, gs, prfs=None):
     for i, sign in ((1, None), (2, '× (1 +'), (3, '+'), (4, '+'), (5, ') =')):
         pos = fig.add_subplot(a[0, i]).get_position()
         fig.axes[-1].remove()
-        x, y = pos.x0 - .024, pos.y0 + pos.height / 2
+        prev = fig.add_subplot(a[0, i - 1]).get_position()
+        fig.axes[-1].remove()
+        # Centre each operator in the gap between its two panels, so none touches a panel edge.
+        x, y = (prev.x1 + pos.x0) / 2, pos.y0 + pos.height / 2
         if sign is None:
             fig.add_artist(mpl.patches.FancyArrowPatch((x - .012, y), (x + .012, y), arrowstyle='-|>', mutation_scale=7, lw=.9, color=FG, transform=fig.transFigure))
         else:
@@ -247,7 +255,7 @@ def top_row(fig, gs, prfs=None):
 def row_labels(fig, lab, key_hp=False):
     """Row names in the left column, each with its own key, so the data area stays clean."""
     keys = {1: [('Items', '.25'), ('Bar', '.6')], 2: [('Target', TARGET), ('Distractor', DISTRACTOR), ('Sustained', HP)],
-            3: [('With gain', FG), ('without', '.55')]}
+            3: [('With gain', FG), ('Without', '.55')]}
     names = {1: 'Stimulus in pRF', 2: 'Gain', 3: 'Predicted BOLD'}
     for r in (1, 2, 3):
         ax = fig.add_subplot(lab[r])
@@ -279,11 +287,11 @@ def main_hp(name='fig2_model_hp_blocks'):
     trials = [(5, 1, 3), (14, 0, 2), (23, 2, 1), (31, 3, 0)]
     blocks = {'HP near this pRF': (3, trials), 'HP not near this pRF': (1, trials)}
     sim = {k: simulate(trials=tr, hp_ix=hp, prfs=prf)['pRF'] for k, (hp, tr) in blocks.items()}
-    fig = plt.figure(figsize=(DOUBLE, 4.6))
-    outer = fig.add_gridspec(2, 1, height_ratios=[1.2, 2.1], hspace=.12, left=.012, right=.995, top=.95, bottom=.03)
+    fig = plt.figure(figsize=(DOUBLE, 4.45))
+    outer = fig.add_gridspec(2, 1, height_ratios=[1.05, 2.2], hspace=.12, left=.012, right=.995, top=.95, bottom=.055)
     top_row(fig, outer[0])
     low = outer[1].subgridspec(1, 3, width_ratios=[.55, 1, 1], wspace=.08)
-    ratios = [1.25, .8, .8, 1.15]
+    ratios = [1.25, .8, .95, 1.15]
     lab = low[0].subgridspec(4, 1, height_ratios=ratios, hspace=.12)
     row_labels(fig, lab, key_hp=True)
     s_hi = max(d['stimulus'].max() for d in sim.values())
@@ -321,10 +329,14 @@ def main_hp(name='fig2_model_hp_blocks'):
         g.axhline(0, color='#B8C0C8', lw=.5, ls=(0, (2, 2)))
         if k == 0:
             g.text(7.2, 0, 'No change', fontsize=6.5, color='.6', ha='left', va='bottom')
+        # The sustained loss of gain, shaded over the whole block so that it reads as lasting.
+        g.fill_between(t, d['base'], 0, color=HP, alpha=.18, lw=0)
         g.plot(t, np.full_like(t, d['base']), color=HP, lw=1.2)
         g.fill_between(t, d['base'], d['base'] + d['target'], color=TARGET, lw=0)
         g.fill_between(t, d['base'], d['base'] + d['distractor'], color=DISTRACTOR, lw=0)
-        g.set_ylim(g_lo * 1.2, g_hi * 1.05)
+        g.set_ylim(g_lo * 2.0, g_hi * 1.05)
+        if k == 0:
+            g.text(7.6, d['base'] - .1 * (g_hi - g_lo), 'Less gain, whole block', fontsize=6.5, color=HP, ha='left', va='top')
         r3 = rows[2]
         r3.plot(t, d['without'], color='.65', lw=1.1)
         r3.plot(t, d['predicted'], color=FG, lw=1.3)
@@ -344,12 +356,13 @@ def main_hp(name='fig2_model_hp_blocks'):
                 r3.annotate('', xy=(t[i], d['predicted'][i]), xytext=(t[i], d['without'][i]),
                             arrowprops=dict(arrowstyle='-|>', color=c, lw=1.1, mutation_scale=7, shrinkA=0, shrinkB=0), zorder=5)
         if k == 0:
-            r3.plot([0, 10], [p_lo - .05 * (p_hi - p_lo)] * 2, color=FG, lw=1.1, clip_on=False, solid_capstyle='butt')
-            r3.text(5, p_lo - .12 * (p_hi - p_lo), '10 s', ha='center', va='top', fontsize=6.5, color=FG)
-            r3.annotate('', xy=(t[np.argmax(d['predicted'])], d['predicted'].max()), xytext=(t[np.argmax(d['predicted'])], anchor),
-                        arrowprops=dict(arrowstyle='-|>', color=HP, lw=1.1, mutation_scale=7, shrinkA=0, shrinkB=0))
-        else:
-            r3.text(DURATION, anchor, 'Peak, HP not near', fontsize=6.5, color=FG, ha='right', va='bottom')
+            yb = p_lo - .14 * (p_hi - p_lo)
+            r3.plot([0, 10], [yb] * 2, color=FG, lw=1.1, clip_on=False, solid_capstyle='butt')
+            r3.text(5, yb - .04 * (p_hi - p_lo), '10 s', ha='center', va='top', fontsize=6.5, color=FG)
+            ipk = np.argmax(d['predicted'])
+            r3.annotate('', xy=(t[ipk], d['predicted'].max()), xytext=(t[ipk], anchor),
+                        arrowprops=dict(arrowstyle='-|>', color=HP, lw=1.3, mutation_scale=8, shrinkA=0, shrinkB=0))
+            r3.text(.4, anchor - .03 * (p_hi - p_lo), 'Peak with HP not near', fontsize=6.5, color=FG, ha='left', va='top')
     save(fig, name, LEGEND_HP)
 
 
