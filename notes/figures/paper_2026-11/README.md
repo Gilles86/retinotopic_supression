@@ -6,7 +6,7 @@ final refit.
 
 | Figure | File | Script | Status |
 |---|---|---|---|
-| 1 Paradigm and behaviour | `fig1_paradigm_behaviour` (c, d as RTs) / `fig1_paradigm_behaviour_diff` (c, d as within-subject differences) | `fig1_paradigm_behaviour.py` (`--diff`) | final; choose the c, d version |
+| 1 Paradigm and behaviour | `fig1_paradigm_behaviour` (c, d response times by HP/LP; e, f repeat vs switch) | `fig1_paradigm_behaviour.py` | final |
 | 2 Gain-field model | `fig2_model_hp_blocks` | `fig2_model.py` | final |
 | 3 pRF fits | `fig3_prf_fits` | `fig3_prf_fits.py` | provisional (c: HRF choice) |
 | 4 Responses at the item locations (model-free): target and distractor vs neutral item, HP vs LP per item type | `fig4_item_locations` | `fig4_item_locations.py` (statistics for the DCT basis in its legend) | final apart from layout |
