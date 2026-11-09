@@ -62,6 +62,12 @@ g_adj_minus_opp = g_adj − g_opp, with g_LP kept as the mean of the three LP ga
 ties the transient width to the sustained one (σ_dyn := σ_AF, ``sigma_tied``; one term fewer than m7_full),
 refitting σ_AF and the gains from m7_full.
 
+``--models m8_full_dnb m8_full_dnd m8_full_dnbd`` (``--family dn`` only) add a second sustained field that scales
+the DN neural baseline (w_b), the surround baseline (w_d) or both, with one shape (σ_AF, HP/LP pattern θ) shared
+(``dn_baseline_field``). Started from m7_full with the weights at 0 (checked to reproduce m7's prediction) and
+from three other θ; the joint model also starts from both one-weight fits. A finite-difference Hessian of the
+loss over the shared terms is stored (``hessian_corr``) to show whether w_b and w_d trade off.
+
 ``--reliable-only`` keeps the selected voxels with model-free cross-run reliability > 0 (mean over
 the ``prf_cv_reliability`` folds). The m00, m0, m1 and m3b fits come from ``--base-root``, restricted
 to those voxels, so m4 onward refit the shared terms on them. Root gets a _reliable suffix.
@@ -95,6 +101,7 @@ from retsupp.modeling.dn_attention_field import DNDynamicAttentionFieldPRF2D, in
 from retsupp.modeling.target_split import NEW as T_HP, TargetSplitDN, TargetSplitDoG
 from retsupp.modeling.lp_split import NEW as LP_D, LPSplitDN, LPSplitDoG
 from retsupp.modeling.sigma_tied import SigmaTiedDN, SigmaTiedDoG
+from retsupp.modeling.dn_baseline_field import NEW as BF_TERMS, DNBaselineField
 from retsupp.modeling.fit_af_prf_cv_v2 import (
     ALL_SHARED_PARS,
     CV_SCHEMES,
@@ -125,6 +132,9 @@ LADDER = {
     'm8_full_dT': ('free', 'free', 'free', 'free', 'free', 'free', 'm7_full'),
     'm8_full_adjopp': ('free', 'free', 'free', 'free', 'free', 'free', 'm7_full'),
     'm7_full_sigtied': ('free', 'free', 'free', 'free', 'free', 'free', 'm7_full'),
+    'm8_full_dnb': ('free', 'free', 'free', 'free', 'free', 'free', 'm7_full'),
+    'm8_full_dnd': ('free', 'free', 'free', 'free', 'free', 'free', 'm7_full'),
+    'm8_full_dnbd': ('free', 'free', 'free', 'free', 'free', 'free', 'm8_full_dnb'),
 }
 # Models fitted on top of finished ladders, run only when asked: the target gain split by target at HP vs
 # elsewhere (``target_split``) and the sustained LP gain split into next to HP vs opposite (``lp_split``).
@@ -132,7 +142,13 @@ LADDER = {
 SPLIT_TERMS = {'m8_full_dT': T_HP, 'm8_full_adjopp': LP_D}
 # m7_full with one width (σ_dyn := σ_AF): one term fewer, so it is fitted from m7 but is not above it.
 SIGMA_TIED = ('m7_full_sigtied',)
-TARGET_SPLIT = tuple(SPLIT_TERMS) + SIGMA_TIED
+# DN only: a second sustained field (σ_AF, HP/LP pattern θ) scales the neural baseline b (w_b), the surround
+# baseline d (w_d), or both (``dn_baseline_field``). Fitted from m7_full with the weights at 0; the joint model
+# starts from the b-only fit and, as a second candidate, from the d-only fit.
+BASELINE_FIELD = {'m8_full_dnb': ('b',), 'm8_full_dnd': ('d',), 'm8_full_dnbd': ('b', 'd')}
+EXTRA_PARENTS = {'m8_full_dnbd': ('m8_full_dnd',)}
+THETA_STARTS = (0.785398, -0.785398, 1.570796)   # extra θ starts (parent σ's): uniform, HP vs LP, LP only
+TARGET_SPLIT = tuple(SPLIT_TERMS) + SIGMA_TIED + tuple(BASELINE_FIELD)
 GAINS = ['g_HP', 'g_LP', 'g_HP_dyn', 'g_LP_dyn', 'g_T_dyn']
 # Models whose fit cannot depend on which ring position is labelled HP.
 LABEL_BLIND = ('m1_T', 'm2_D', 'm3_S', 'm3b_TD', 'm4_TDS')
@@ -149,9 +165,20 @@ POLISH_ROUNDS = 3
 # trades off against pRF amplitude).
 SHARED_BOUNDS = {'sigma_AF': (0.5, 8.0), 'sigma_dyn': (0.5, 8.0),
                  'item_scale': (1e-3, 50.0),
-                 **{g: (-10.0, 10.0) for g in GAINS + [T_HP, LP_D]}}
+                 **{g: (-10.0, 10.0) for g in GAINS + [T_HP, LP_D]},
+                 'w_b': (-5.0, 5.0), 'w_d': (-5.0, 5.0), 'theta_bd': (-6.3, 6.3)}
 POLISH_MAX_ITER = 3000
 SCHEMES = tuple(CV_SCHEMES) + ('full',)
+
+
+def extra_terms(name):
+    """Shared terms a model adds to the m7 set."""
+    if name in SPLIT_TERMS:
+        return [SPLIT_TERMS[name]]
+    if name in BASELINE_FIELD:
+        return [t for t, k in zip(BF_TERMS, ('b', 'd', None))
+                if k is None or k in BASELINE_FIELD[name]]
+    return []
 
 
 def sign_pattern_of(name):
@@ -240,7 +267,7 @@ def raw_bounds(model, init_pars, cols):
 
 def shared_fit(model, bold_train, paradigm, init_pars, free_shared,
                max_iter=2000, bounded=False, loss='sse', sigma_starts=SIGMA_STARTS,
-               lbfgs_rounds=LBFGS_ROUNDS):
+               lbfgs_rounds=LBFGS_ROUNDS, hessian=False):
     """L-BFGS-B over the shared parameters, per-voxel pRFs frozen.
 
     Starts from ``init_pars`` (the parent optimum, new terms at null) and
@@ -307,7 +334,30 @@ def shared_fit(model, bold_train, paradigm, init_pars, free_shared,
     info = dict(optimizer='lbfgs_shared', seconds=time.time() - t0,
                 loss=loss, sse_parent_start=f_parent, sse_final=best[0],
                 grad_norm=float(np.linalg.norm(g)), starts=starts)
+    if hessian:
+        info.update(fd_hessian(fun, best[1], free_shared))
     return fit_pars, info
+
+
+def fd_hessian(fun, x, labels, h=2e-3):
+    """Central-difference Hessian of the loss in raw space at ``x``, and the correlations of its inverse.
+
+    For SSE the inverse Hessian is proportional to the Laplace covariance of the shared terms, so its
+    correlation matrix shows which terms trade off (e.g. w_b against w_d).
+    """
+    n = len(x)
+    hess = np.zeros((n, n))
+    for i in range(n):
+        e = np.zeros(n)
+        e[i] = h
+        hess[i] = (fun(x + e)[1] - fun(x - e)[1]) / (2 * h)
+    hess = 0.5 * (hess + hess.T)
+    cov = np.linalg.pinv(hess)   # θ has no curvature where both weights are 0
+    sd = np.sqrt(np.abs(np.diag(cov)))
+    with np.errstate(divide='ignore', invalid='ignore'):
+        corr = cov / np.outer(sd, sd)
+    return dict(hessian_labels=list(labels), hessian=hess, hessian_corr=corr,
+                hessian_eig=np.linalg.eigvalsh(hess))
 
 
 def child_init(parent_pars, model, name):
@@ -328,6 +378,9 @@ def child_init(parent_pars, model, name):
         init[T_HP] = init['g_T_dyn']   # split starts unsplit
     if LP_D in labels and init[LP_D].isna().all():
         init[LP_D] = 0.0               # g_adj = g_opp = g_LP
+    for t in BF_TERMS:
+        if t in labels and init[t].isna().all():
+            init[t] = 0.0              # weights 0: the parent's prediction (θ = 0: field at HP only)
     return init
 
 
@@ -556,6 +609,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
             chain, n = [], name
             while n is not None:
                 chain.append(n)
+                chain.extend(EXTRA_PARENTS.get(n, ()))
                 n = LADDER[n][6]
             for n in reversed(chain):
                 if n not in needed:
@@ -618,13 +672,25 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                 y_tr = train['bold'][:, voxel_mask]
                 y_he = None if held is None else held['bold'][:, voxel_mask]
 
-                extra = [SPLIT_TERMS[name]] if name in SPLIT_TERMS else []
-                split_cls = {T_HP: (TargetSplitDoG, TargetSplitDN),
-                             LP_D: (LPSplitDoG, LPSplitDN)}.get(extra[0]) if extra else None
-                if name in SIGMA_TIED:
-                    split_cls = (SigmaTiedDoG, SigmaTiedDN)
+                extra = extra_terms(name)
 
-                def mk(d):
+                def mk(d, name=name):
+                    split_cls = {T_HP: (TargetSplitDoG, TargetSplitDN),
+                                 LP_D: (LPSplitDoG, LPSplitDN)}.get(SPLIT_TERMS.get(name))
+                    if name in SIGMA_TIED:
+                        split_cls = (SigmaTiedDoG, SigmaTiedDN)
+                    if name in BASELINE_FIELD:
+                        if family != 'dn':
+                            raise ValueError(f'{name} needs --family dn')
+                        return DNBaselineField(
+                            targets=BASELINE_FIELD[name],
+                            grid_coordinates=grid_coords, paradigm=d['paradigm'],
+                            hrf_model=hrf_model,
+                            condition_indicator=d['condition_indicator'],
+                            dynamic_indicator=d['dynamic_indicator'],
+                            target_indicator=d['target_indicator'],
+                            ring_positions=ring_positions, sign_pattern=sp,
+                            item_scale_mode=item_scale)
                     if family == 'dn':
                         return (split_cls[1] if split_cls else DNDynamicAttentionFieldPRF2D)(
                             grid_coordinates=grid_coords, paradigm=d['paradigm'],
@@ -699,9 +765,53 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                         # σ_dyn is an extra start.
                         free = [p for p in free if p != 'sigma_dyn']
                         starts = tuple(sigma_starts) + (float(fits[parent][k]['sigma_dyn'].iloc[0]),)
-                    pars, info = shared_fit(m_tr, y_tr, train['paradigm'],
-                                            init, free, bounded=bounded, loss=loss,
-                                            sigma_starts=starts, lbfgs_rounds=lbfgs_rounds)
+                    if name in BASELINE_FIELD:
+                        # Equality check: the start (weights 0) must reproduce the parent's prediction.
+                        p_par = np.asarray(mk(train, parent).predict(
+                            paradigm=train['paradigm'], parameters=fits[parent][k]))
+                        p_new = np.asarray(m_tr.predict(paradigm=train['paradigm'], parameters=init))
+                        dev = float(np.abs(p_new - p_par).max())
+                        print(f'  fold {k}: equality check vs {parent}: max |Δpred| = {dev:.3g}')
+                        if not dev <= 1e-4 * max(1.0, float(np.abs(p_par).max())):
+                            raise AssertionError(f'{name} start differs from {parent}: {dev}')
+                    cands = [(init, starts)]
+                    if name in BASELINE_FIELD and parent == 'm7_full':
+                        # Other HP/LP patterns of the new field, from the parent's σ's.
+                        for th in THETA_STARTS:
+                            alt = init.copy()
+                            alt['theta_bd'] = th
+                            cands.append((alt, (None,)))
+                    for ep in EXTRA_PARENTS.get(name, ()):
+                        # e.g. the joint model also starts from the d-only optimum (w_b = 0).
+                        cands.append((child_init(fits[ep][k], m_tr, name), (None,)))
+                    best_fit, cand_log = None, []
+                    for c_init, c_starts in cands:
+                        c_pars, c_info = shared_fit(
+                            m_tr, y_tr, train['paradigm'], c_init, free, bounded=bounded, loss=loss,
+                            sigma_starts=c_starts, lbfgs_rounds=lbfgs_rounds,
+                            hessian=name in BASELINE_FIELD)
+                        cand_log.append(dict(
+                            theta_start=float(c_init['theta_bd'].iloc[0]) if 'theta_bd' in c_init else None,
+                            sse_start=c_info['sse_parent_start'], sse_final=c_info['sse_final'],
+                            seconds=c_info['seconds']))
+                        if best_fit is None or c_info['sse_final'] < best_fit[1]['sse_final']:
+                            best_fit = (c_pars, c_info)
+                    pars, info = best_fit
+                    info['sse_parent_start'] = cand_log[0]['sse_start']   # the parent's own optimum
+                    info['seconds'] = sum(c['seconds'] for c in cand_log)
+                    if len(cand_log) > 1:
+                        info['candidates'] = cand_log
+                        print('  candidates: ' + ', '.join(
+                            f"θ0={c['theta_start']:.2f}: {c['sse_final']:.2f}" for c in cand_log))
+                    if 'hessian_corr' in info:
+                        lab = info['hessian_labels']
+                        corr = info['hessian_corr']
+                        new_ix = [lab.index(t) for t in extra if t in lab]
+                        print('  shared fit: ' + ', '.join(
+                            f'{t}={pars[t].iloc[0]:.4g}' for t in ['g_HP', 'g_LP'] + extra))
+                        for i in new_ix:
+                            print(f'  corr({lab[i]}, ·): ' + ', '.join(
+                                f'{lab[j]} {corr[i, j]:+.2f}' for j in range(len(lab)) if j != i))
                     print(f'  fold {k}: SSE parent-start {info["sse_parent_start"]:.2f}'
                           f' -> {info["sse_final"]:.2f} | |grad| '
                           f'{info["grad_norm"]:.3g} | {info["seconds"]:.0f}s')
@@ -738,7 +848,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
             if pkl.exists():   # never overwrite an existing fit
                 raise FileExistsError(pkl)
             out_dir.mkdir(parents=True, exist_ok=True)
-            shared_labels = ALL_SHARED_PARS + ['item_scale'] + ([SPLIT_TERMS[name]] if name in SPLIT_TERMS else [])
+            shared_labels = ALL_SHARED_PARS + ['item_scale'] + extra_terms(name)
             write_cv_tsvs(
                 out_dir, subject=subject, roi=roi, model=name,
                 voxel_ids=voxel_ids, cv_r2_per_fold=cv_r2s,
