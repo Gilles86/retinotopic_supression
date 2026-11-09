@@ -1,12 +1,13 @@
-**Figure S. The decoded bars, averaged per bar position with the HP location rotated to the upper right.** Every run's
-decoded frames (unconstrained decoder, V1, V2 and V3; pRFs: jointhrf fold fits) and its true bar frames were rotated in
-90° steps so that the HP location (red dashed circle) lies upper right; 90° steps keep the bars vertical or horizontal.
-Frames with a bar inside the aperture (grey circle, 3.17°) were grouped by bar orientation and by the position of
-the bar centre along its motion (7 bins; centres above row 1), averaged over runs and ROIs per subject, then over
-subjects (n = 30). Dotted outline, the true bar. Frames per bin, all subjects and ROIs: vertical
-16665, 15189, 12816, 16878, 12828, 15147, 16683; horizontal 16692, 15186, 12789, 16854, 12810, 15186, 16716. b, Decoded intensity on the
-bar's pixels in the half of the bar nearer HP (upper half of a vertical bar, right half of a horizontal one) minus the
-half farther away, in % of the bar's mean, vertical and horizontal bars pooled; positive positions are on HP's side of the
-aperture (shaded), where the near half lies in the quadrant facing HP and the far half in a neighbouring one; on the
-other side the near half lies in a quadrant next to HP and the far half in the opposite quadrant. Line and band: mean ± SEM over subjects;
-Wilcoxon signed-rank test against 0 per position, two-sided, uncorrected (* p < .05, ** p < .01): -2.7° +0.57% p = 0.171, -1.8° -0.21% p = 0.700, -0.9° +1.56% p = 0.006, +0.0° -0.12% p = 0.903, +0.9° -1.66% p = 0.040, +1.8° -1.13% p = 0.299, +2.7° -0.48% p = 0.440.
+**Figure S. The same bar is decoded at lower intensity where it passes the quadrant facing the HP location.** The bar
+sequence is the same in every run, so each decoded frame (unconstrained decoder, every pixel decoded; V1, V2 and V3; pRFs: jointhrf fold fits) can be
+compared with the mean decoded frame at the same time point over the subject's runs, averaged within each HP location
+first and then over the four (three for sub-01 and sub-02, whose runs cover three HP locations): the stimulus is the same
+on both sides of the subtraction and only the HP location differs. Each run's frames were then rotated in 90° steps so
+that the HP location (red dashed circle) lies upper right, grouped by bar position (bins of 0.9°;
+the positions where the whole bar lies inside the 3.17° aperture are shown), and horizontal bars were reflected
+across the diagonal through HP onto vertical ones (a symmetry of the rotated display that keeps HP in place). Top, the
+decoded bar; bottom, the difference, in % of the subject's mean decoded intensity on the bar, smoothed (Gaussian, σ =
+0.2°), on the bar's footprint (grey outline); means over runs and ROIs per subject, then over subjects (n =
+30). Frames per bin, vertical and horizontal, all subjects and ROIs: 33357, 30375, 25605, 33732, 25638, 30333, 33399.
+Per quadrant, the difference on the part of the bar in that quadrant (mean ± SEM over subjects; two-sided Wilcoxon
+signed-rank test against 0, uncorrected; stars on the image: * p < .05, ** p < .01, *** p < .001): bar at -1.8°: Next to HP (upper left) -0.33 ± 0.46% (p = 0.328), Opposite -0.32 ± 0.42% (p = 0.280); bar at -0.9°: Next to HP (upper left) +1.12 ± 0.39% (p = 0.006), Opposite -0.41 ± 0.37% (p = 0.184); bar at +0.0°: HP -0.02 ± 0.26% (p = 0.824), Next to HP (upper left) -0.33 ± 0.31% (p = 0.490), Next to HP (lower right) +0.20 ± 0.24% (p = 0.360), Opposite -0.17 ± 0.29% (p = 0.516); bar at +0.9°: HP -1.56 ± 0.50% (p = 0.003), Next to HP (lower right) +0.44 ± 0.31% (p = 0.213); bar at +1.8°: HP -0.70 ± 0.51% (p = 0.280), Next to HP (lower right) +0.72 ± 0.38% (p = 0.146).

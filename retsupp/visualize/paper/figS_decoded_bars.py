@@ -328,6 +328,129 @@ Wilcoxon signed-rank test against 0 per position, two-sided, uncorrected (* p < 
     print('half contrast', np.round(m, 2), 'p', np.round(ps, 3))
 
 
+QUAD = {'HP': (1, 1), 'Next to HP (upper left)': (-1, 1), 'Next to HP (lower right)': (1, -1), 'Opposite': (-1, -1)}
+
+
+def pooled_condition(mean):
+    """Vertical bars and horizontal bars reflected onto them across the diagonal through HP (x <-> y), which keeps HP
+    upper right: per subject × bin, (decoded, decoded − mean over HP locations, true bar)."""
+    return (mean[:, 0] + np.swapaxes(mean[:, 1], -1, -2)) / 2
+
+
+def segment_stats(P, grid, b):
+    """Per quadrant: the decoded − mean-over-HP difference on the bar's pixels in that quadrant, % of the bar's mean."""
+    X, Y = grid[:, 0].reshape(50, 50), grid[:, 1].reshape(50, 50)
+    bar = (P[:, b, 2].mean(0) > .5) & (np.hypot(X, Y) <= APERTURE)
+    bm = np.array([P[s_, b, 0][bar].mean() for s_ in range(len(P))])
+    out = {}
+    for name, (sx, sy) in QUAD.items():
+        mk = bar & (np.sign(X) == sx) & (np.sign(Y) == sy)
+        if mk.sum() < 10:
+            continue
+        v = np.array([P[s_, b, 1][mk].mean() for s_ in range(len(P))]) / bm * 100
+        out[name] = (v.mean(), v.std(ddof=1) / np.sqrt(len(v)), stats.wilcoxon(v).pvalue, int(mk.sum()))
+    return out
+
+
+def plot_condition(source, name='figS_decoded_bars_rotated', decoder='free'):
+    import matplotlib.colors as mcolors
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Circle
+    from scipy import ndimage
+    from retsupp.visualize.paper.paper_style import FG, HP, STIM, save
+    z = np.load(Path('notes/data') / data_name(source, decoder).replace('decoded_bars_', 'decoded_bars_condition_'))
+    mean, n, grid, edges = z['mean'], z['n'], z['grid'], z['edges']
+    centres = (edges[:-1] + edges[1:]) / 2
+    P = pooled_condition(mean)                                   # subject, bin, 3, 50, 50
+    c = np.linspace(-5, 5, 50)
+    X, Y = np.meshgrid(c, c)
+    inside = np.hypot(X, Y) <= APERTURE
+    show = [b for b in range(len(centres)) if abs(centres[b]) < 2.]
+    W, H = 7.25, 2.75
+    fig = plt.figure(figsize=(W, H))
+    cm = mcolors.LinearSegmentedColormap.from_list('stim', ['#FFFFFF', STIM])
+    size, gap, x0 = 1.0, .12, 1.0
+    dvm = 3.
+    grp_dec = P[:, :, 0].mean(0)
+    vmax = np.nanpercentile(grp_dec[show], 99.5)
+    seg = {b: segment_stats(P, grid, b) for b in range(len(centres))}
+    for k, lab in enumerate(['Decoded bar', 'Minus the mean\nover HP locations']):
+        yb = H - .45 - (k + 1) * size - k * .12
+        for j, b in enumerate(show):
+            ax = fig.add_axes([(x0 + j * (size + gap)) / W, yb / H, size / W, size / H])
+            foot = ndimage.binary_dilation(P[:, b, 2].mean(0) > .5, iterations=1) & inside
+            if k == 0:
+                img = grp_dec[b]
+                im = ax.imshow(img, origin='lower', extent=[-5.1, 5.1, -5.1, 5.1], cmap=cm, vmin=0, vmax=vmax,
+                               interpolation='bilinear')
+            else:
+                rel = []
+                for s_ in range(len(P)):
+                    bm = P[s_, b, 0][foot].mean()
+                    d = np.where(foot, 100 * P[s_, b, 1] / bm, 0)
+                    rel.append(ndimage.gaussian_filter(d, 1) / np.maximum(ndimage.gaussian_filter(foot * 1., 1), 1e-6))
+                img = np.where(foot, np.mean(rel, 0), np.nan)
+                im = ax.imshow(img, origin='lower', extent=[-5.1, 5.1, -5.1, 5.1], cmap='RdBu_r', vmin=-dvm, vmax=dvm,
+                               interpolation='nearest')
+                dim = im
+                ax.contour(X, Y, (P[:, b, 2].mean(0) > .5) & inside, levels=[.5], colors=['.5'], linewidths=.4)
+                for qn, (sx, sy) in QUAD.items():
+                    if qn in seg[b] and seg[b][qn][2] < .05:
+                        p = seg[b][qn][2]
+                        st = '***' if p < .001 else '**' if p < .01 else '*'
+                        bx = centres[b]
+                        ax.text(bx + (1.0 if bx >= 0 else -1.0), sy * 1.6, st, ha='center', va='center', fontsize=7,
+                                color=FG)
+            clip = Circle((0, 0), APERTURE, transform=ax.transData, fc='none', ec='none')
+            ax.add_patch(clip)
+            im.set_clip_path(clip)
+            ax.add_patch(Circle((0, 0), APERTURE, fill=False, ec='.6', lw=.5))
+            q = 4 / np.sqrt(2)
+            ax.add_patch(Circle((q, q), .75, fill=False, ec=HP, lw=.9, ls=(0, (2, 1.2))))
+            if j == 0 and k == 0:
+                ax.text(q + .2, q + .95, 'HP', color=HP, fontsize=6.5, ha='center', va='bottom')
+            ax.set_xlim(-4.9, 4.9)
+            ax.set_ylim(-4.9, 4.9)
+            ax.set_aspect('equal')
+            ax.set_axis_off()
+            if k == 0:
+                ax.text(.5, 1.0, f'Bar at {centres[b]:+.1f}°'.replace('-', '−').replace('+0.0', '0'),
+                        transform=ax.transAxes, ha='center', va='bottom', fontsize=6.5, color='.35')
+            if j == 0:
+                ax.text(-.06, .5, lab, transform=ax.transAxes, ha='right', va='center', fontsize=7, color=FG)
+    cax = fig.add_axes([(x0 + len(show) * (size + gap) + .05) / W, .3 / H, .07 / W, .8 / H])
+    cb = fig.colorbar(dim, cax=cax, ticks=[-dvm, 0, dvm])
+    cb.ax.set_yticklabels([f'−{dvm:.0f}%', '0', f'+{dvm:.0f}%'], fontsize=6)
+    cb.ax.tick_params(length=2, width=.5, pad=1)
+    cb.outline.set_linewidth(.4)
+    cb.ax.text(.5, 1.06, 'Stronger', transform=cb.ax.transAxes, ha='center', va='bottom', fontsize=6, color='#B2182B')
+    cb.ax.text(.5, -.06, 'Weaker', transform=cb.ax.transAxes, ha='center', va='top', fontsize=6, color='#2166AC')
+    fig.text(.2 / W, (H - .18) / H, 'The same bar is decoded weaker where it passes the quadrant facing HP '
+             '(V1–V3, mean of 30 subjects)', fontsize=7.5, color=HP, va='center')
+    dec_txt = {'free': 'unconstrained decoder, every pixel decoded',
+               'outline': 'decoder with the bar outline given: only the pixels the bar covers are decoded'}[decoder]
+    segtxt = '; '.join(f'bar at {centres[b]:+.1f}°: ' + ', '.join(f'{qn} {v[0]:+.2f} ± {v[1]:.2f}% (p = {v[2]:.3f})'
+                                                               for qn, v in seg[b].items()) for b in show)
+    nb = n.sum(0)
+    legend = f"""
+**Figure S. The same bar is decoded at lower intensity where it passes the quadrant facing the HP location.** The bar
+sequence is the same in every run, so each decoded frame ({dec_txt}; V1, V2 and V3; pRFs: {source} fold fits) can be
+compared with the mean decoded frame at the same time point over the subject's runs, averaged within each HP location
+first and then over the four (three for sub-01 and sub-02, whose runs cover three HP locations): the stimulus is the same
+on both sides of the subtraction and only the HP location differs. Each run's frames were then rotated in 90° steps so
+that the HP location (red dashed circle) lies upper right, grouped by bar position (bins of {edges[1] - edges[0]:.1f}°;
+the positions where the whole bar lies inside the {APERTURE}° aperture are shown), and horizontal bars were reflected
+across the diagonal through HP onto vertical ones (a symmetry of the rotated display that keeps HP in place). Top, the
+decoded bar; bottom, the difference, in % of the subject's mean decoded intensity on the bar, smoothed (Gaussian, σ =
+0.2°), on the bar's footprint (grey outline); means over runs and ROIs per subject, then over subjects (n =
+{len(P)}). Frames per bin, vertical and horizontal, all subjects and ROIs: {', '.join(str(int(v)) for v in nb.sum(0))}.
+Per quadrant, the difference on the part of the bar in that quadrant (mean ± SEM over subjects; two-sided Wilcoxon
+signed-rank test against 0, uncorrected; stars on the image: * p < .05, ** p < .01, *** p < .001): {segtxt}.
+"""
+    save(fig, name, legend)
+    print(segtxt)
+
+
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('step', choices=['collect', 'collect_condition', 'plot', 'plot_condition'])
