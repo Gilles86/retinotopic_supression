@@ -14,9 +14,11 @@ areas of b and e; c, d and f always pool the early areas (V1–V3), g comes from
 
 Usage::
 
-    python -m retsupp.visualize.paper.fig6_decoding collect --source canonical \\
-        --out /shares/zne.uzh/gdehol/ds-retsupp/derivatives/paper_2026-11/decoding_readout_canonical.tsv
-    python -m retsupp.visualize.paper.fig6_decoding plot --source canonical
+    python -m retsupp.visualize.paper.fig6_decoding collect --source jointhrf \\
+        --out notes/data/decoding_readout_jointhrf_2026-11.tsv                     # compute node
+    python -m retsupp.visualize.paper.fig6_decoding plot                             # Fig. 6 (joint HRF, nine ROIs)
+    python -m retsupp.visualize.paper.fig6_decoding plot --source canonical --rois V1 V2 V3 \\
+        --name figS_decoding_canonical                                            # robustness: canonical HRF
 """
 from __future__ import annotations
 
@@ -44,8 +46,7 @@ ITEM_ANGLES = (90, 180, 270, 0)              # HP first: after rotation HP sits 
 ECC_MAX = 3.45                               # f's x axis ends just past the aperture edge
 BAND_SHADE = ['#E8ECF0', '#D5DCE3', '#C2CBD5']
 LEGEND = """
-**Figure 6. The bar stimulus can be read out of visual cortex, and it is read out at lower intensity in the quadrant
-facing the HP location.** The bar stimulus of every run was decoded from the BOLD activity of one ROI at a time with pRFs
+{title} The bar stimulus of every run was decoded from the BOLD activity of one ROI at a time with pRFs
 (difference of Gaussians, {hrf}, no gain terms) fitted on the other runs (cross-validation folds), so the decoded run
 never entered the pRF fit; voxels with cross-run reliability > 0 on the training runs (at most 2000 per ROI); every pixel
 of every frame decoded; the encoding model contains only the bar, not the search items. {areas} a, True bar (top) and decoded intensity in a single held-out run (middle;
@@ -67,7 +68,7 @@ the mean over runs and V1–V3; dots are subjects, points and bars the mean and 
 {quad}. e, The pre-specified test: per subject and ROI, the mean decoded intensity
 on the bar's pixels in the quadrant facing HP minus the mean over the three other quadrants, averaged over runs; dots are
 subjects, points and bars the median and bootstrapped 95% CI. Wilcoxon signed-rank test, one-sided (HP < other
-quadrants), Holm across V1–V3 (the pre-specified test); * p_Holm < .05. {tests}.{explore}{outline} f, The difference of e by eccentricity, in %
+quadrants), Holm across V1–V3 (the pre-specified test); * p_Holm < .05. {tests}.{borderline}{explore}{outline} f, The difference of e by eccentricity, in %
 of the decoded intensity in the other quadrants at the same eccentricity, mean of V1–V3 per subject; line and band, mean ± SEM over
 subjects (rings of 0.25°); left, the three bands drawn on the display. Items (radius {item_r}°) begin at {item_in:.2f}°
 eccentricity, just outside the aperture, and their responses are in the BOLD data but not in the encoding model; if item
@@ -769,11 +770,19 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
                    '; '.join(f'{r.roi} median {r["median"]:+.4f}, {r.pct_below:.0f}% below 0, n = {r.n}, p = {r.p:.3f}, '
                              f'q = {r.p_bh:.3f}' for _, r in t_exp.iterrows()) + '.')
     else:
-        areas = ('Only V1–V3 were decoded: reading out a bar needs small pRFs, which is why the pre-specified test is in '
-                 'these three areas; the higher areas (V3AB, IPS, hV4, VO, LO, TO) have not been decoded.')
+        areas = ('Only V1–V3 are shown: reading out a bar needs small pRFs, which is why the pre-specified test is in '
+                 'these three areas.')
         explore = ''
     hrf = {'canonical': 'canonical HRF', 'jointhrf': 'one HRF per subject and ROI, fitted jointly with the pRFs'}.get(source, source)
-    save(fig, name, LEGEND.format(areas=areas, explore=explore, hrf=hrf, n=qs.subject.nunique(), quality=quality, tests=tests, outline=outline,
+    if name.startswith('figS'):
+        title = (f'**Figure S. Decoding with pRFs that use the canonical HRF (robustness check of Fig. 6).** Everything as '
+                 f'in Fig. 6, but the decoder\'s pRFs use one canonical HRF instead of an HRF per subject and ROI.')
+    else:
+        title = ('**Figure 6. The bar stimulus can be read out of visual cortex, and it is read out at lower intensity in '
+                 'the quadrant facing the HP location.**')
+    bl = t[(t.p_holm >= .05) & (t.p_holm < .1)]
+    borderline = ''.join(f' {r.roi} is borderline (p_Holm = {r.p_holm:.3f}, same direction).' for _, r in bl.iterrows())
+    save(fig, name, LEGEND.format(title=title, borderline=borderline, areas=areas, explore=explore, hrf=hrf, n=qs.subject.nunique(), quality=quality, tests=tests, outline=outline,
                                   bands=band_txt, friedman=fried, outer_inner=oi, fovea=fovea, ex_sub=sub, ex_r=ex_r,
                                   ex_rank=ex_rank, n_runs=len(qf), r_med=qf.r.median(), ex_run=run.replace('_', ' '),
                                   ap=APERTURE, item_r=ITEM_R, item_in=ITEM_ECC - ITEM_R, bar=bar_txt, bar_base=bar_base,
@@ -793,8 +802,9 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('step', choices=['collect', 'plot'])
     ap.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
-    ap.add_argument('--source', default='canonical')
-    ap.add_argument('--rois', nargs='+', default=ROIS, help='areas of b and e (c, d, f, g pool V1–V3)')
+    ap.add_argument('--source', default='jointhrf', help='jointhrf (main Fig. 6) or canonical (figS_decoding_canonical)')
+    ap.add_argument('--rois', nargs='+', default=['V1', 'V2', 'V3', 'V3AB', 'IPS', 'hV4', 'VO', 'LO', 'TO'],
+                    help='areas of b and e (c, d, f, g pool V1–V3)')
     ap.add_argument('--decoder', default=DECODER)
     ap.add_argument('--out', default=None)
     ap.add_argument('--name', default='fig6_decoding')

@@ -193,7 +193,7 @@ bar's pixels in the half of the bar nearer HP (upper half of a vertical bar, rig
 half farther away, in % of the bar's mean, vertical and horizontal bars pooled; positive positions are on HP's side of the
 aperture (shaded), where the near half lies in the quadrant facing HP and the far half in a neighbouring one; on the
 other side the near half lies in a quadrant next to HP and the far half in the opposite quadrant. Line and band: mean ± SEM over subjects;
-Wilcoxon signed-rank test against 0 per position, uncorrected (* p < .05): {', '.join(f'{c:+.1f}° {v:+.2f}% p = {p:.3f}' for c, v, p in zip(centres, m, ps))}.
+Wilcoxon signed-rank test against 0 per position, two-sided, uncorrected (* p < .05, ** p < .01): {', '.join(f'{c:+.1f}° {v:+.2f}% p = {p:.3f}' for c, v, p in zip(centres, m, ps))}.
 """
     save(fig, name, legend)
     print('frames per bin', nb)

@@ -89,8 +89,13 @@ contrasts. End with what we did and found.
    primary test]`. Location as in Fig. 1c, d (Fig. 5c): less gain for a distractor at HP (dD, estimated alone) in
    V3AB, IPS, hV4, VO, not robust in the joint fit; target gain HP − LP (estimated alone) not reliable after correction
    (smallest q = .07), and null in the joint fit.
-6. Converging evidence without gain terms (Fig. 6, decoding). `[PENDING: rerun on final inputs; the
-   May numbers must not be cited]`.
+6. Converging evidence without gain terms (Fig. 6, decoding; pRFs with an HRF per subject × ROI, no gain terms,
+   held-out runs). The bar can be decoded from every area (median frame-wise r .52/.47/.40 in V1/V2/V3, .12–.29 in
+   the higher areas, all far above shuffled frames). Pre-specified test: less decoded intensity in the quadrant facing
+   HP, V2 p_Holm = .039, V3 borderline p_Holm = .055, V1 n.s.; HP quadrant below its neighbours (p = .015); spread from
+   1° to the aperture edge, not larger near the items; same direction in the measured bar-pass response (p = .017
+   without baseline, n.s. with a pre-crossing baseline). Higher areas exploratory, none after BH (q ≥ .085).
+   Canonical-HRF pRFs (supplement): V2 .044, V3 .045.
 7. Trial history in the gains, and gain and behaviour trial by trial (Fig. 7). History (Fig. 7a, as Fig. 1e, f;
    the location effects of Fig. 1c, d are Fig. 5c): repeats lower target gain in V3AB, IPS, hV4, VO; distractor gain
    repeat − switch not reliable after correction. Per-trial gain predicts response time, sign flips between early
@@ -118,11 +123,12 @@ Order since 2026-11-09: measured results (pRF fits, item locations) before the m
 | 3 Responses at the item locations (model-free) | `fig3_item_locations.pdf` | final apart from layout |
 | 4 Gain-field model | `fig4_model_hp_blocks.pdf` (chosen 2026-11-06) | final |
 | 5 Gain fields (model parameters; c, distractor and target HP − LP as Fig. 1c, d; e, leave-one-subject-out per ROI) | `fig5_gain_fields.pdf` | provisional |
-| 6 Decoding | not made | pending (plan C6) |
+| 6 Decoding | `fig6_decoding.pdf` | final inputs |
 | 7 Trial history in the gains; behaviour trial by trial | `fig7_behaviour.pdf` (a history, as Fig. 1e, f; b trial by trial) | prototype on earlier fits (Oct 2026) |
 | Table 1 Ladder | `table1_ladder.md` | provisional |
 | Table S Parameters | `table_parameters_2026-11.md` | provisional |
 | Supplement | `figS_gain_vs_prf_size.pdf` (was Fig. 5a), `figS_field_size.pdf`, `figS_cv_power.pdf`, `figS_pooled_dS_dD.pdf`, `figS_gainfield_size.pdf` | provisional |
+| Supplement (decoding) | `figS_decoding_canonical.pdf`, `figS_decoded_bars_rotated.pdf` | final |
 
 ## Open items the text must leave room for
 
@@ -130,5 +136,4 @@ Order since 2026-11-09: measured results (pRF fits, item locations) before the m
 - Final HRF (per subject × ROI test running) and voxel selection; then the Phase C rerun of all fits.
 - D2: target gain at HP vs LP (fit running, DoG).
 - D4: trial-wise gain at HP split by what HP holds (fit running).
-- Decoding (Fig. 6).
 - Reliability of per-subject dS across sessions (would justify the power framing with a number).
