@@ -11,9 +11,13 @@ and of the fit, the shared terms, and derived quantities:
 - Gauss-Newton correlations (inverse of JᵀJ over the shared terms) for w_b vs w_d, w_amp vs w_ratio, and of
   each weight with g_HP and g_LP, where stored (fits from commit 26a9135 on).
 
+With ``--cv-root`` (a ``--frozen-prf`` run3 root) it writes instead one row per subject × ROI × fold × model with
+the held-out R² per voxel averaged over voxels (``cv_r2``) and its paired difference from m7_full (``dcv_r2``).
+
 Usage::
 
     python -m retsupp.modeling.collect_dn_baseline_field --root <ladder root> --out notes/data/<name>.tsv
+    python -m retsupp.modeling.collect_dn_baseline_field --cv-root <frozenprf root> --out notes/data/<name>.tsv
 """
 from __future__ import annotations
 
@@ -105,10 +109,39 @@ def main(root, out, base_root=None):
     print(f'{len(df)} rows -> {out}')
 
 
+def collect_cv(cv_root, out):
+    cv_root = Path(cv_root)
+    rows = []
+    for f in sorted((cv_root / 'm7_full').glob('sub-*/sub-*_roi-*_cv-r2.tsv')):
+        ref = pd.read_csv(f, sep='\t')
+        for model in ('m7_full',) + MODELS:
+            g = cv_root / model / f.parent.name / f.name
+            if not g.exists():
+                continue
+            d = pd.read_csv(g, sep='\t').merge(ref[['fold', 'voxel_id', 'cv_r2', 'train_r2']],
+                                                on=['fold', 'voxel_id'], suffixes=('', '_m7'))
+            d['dcv'] = d.cv_r2 - d.cv_r2_m7
+            d['dtrain'] = d.train_r2 - d.train_r2_m7
+            agg = d.groupby('fold').agg(cv_r2=('cv_r2', 'mean'), dcv_r2=('dcv', 'mean'),
+                                        dtrain_r2=('dtrain', 'mean'), n_voxels=('voxel_id', 'size'))
+            for fold, r in agg.iterrows():
+                rows.append(dict(subject=int(d.subject.iloc[0]), roi=d.roi.iloc[0], model=model, fold=fold, **r))
+    df = pd.DataFrame(rows)
+    out = Path(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(out, sep='\t', index=False)
+    print(df.groupby('model')[['dcv_r2', 'dtrain_r2']].mean().to_string())
+    print(f'{len(df)} rows -> {out}')
+
+
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('--root', required=True)
+    ap.add_argument('--root', default=None)
+    ap.add_argument('--cv-root', default=None)
     ap.add_argument('--out', required=True)
     ap.add_argument('--base-root', default=None, help='Ladder root holding m7_full, added for comparison.')
     a = ap.parse_args()
-    main(a.root, a.out, a.base_root)
+    if a.cv_root:
+        collect_cv(a.cv_root, a.out)
+    else:
+        main(a.root, a.out, a.base_root)
