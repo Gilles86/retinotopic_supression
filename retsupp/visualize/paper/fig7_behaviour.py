@@ -3,7 +3,7 @@
 a  Illustration: gain at the target (each trial), at the distractor (each trial), at the learned HP location (whole block;
    Fig. 5) and over the whole display (global).
 b  Location, the gain analogue of Fig. 1c, d: distractor gain HP − LP (each term estimated alone, as Fig. 5f) next to the
-   target gain HP − LP (joint fit), per ROI.
+   target gain HP − LP (also estimated alone), per ROI.
 c  History, the gain analogue of Fig. 1e, f: target gain repeat − switch next to distractor gain repeat − switch, per ROI
    (October attention-field fits with the gains split by repeat).
 d  Trial by trial: target, distractor-at-HP and global gain as predictors of log RT (one Bayesian hierarchical model per
@@ -33,7 +33,7 @@ from retsupp.visualize.paper.paper_style import (HP, DISTRACTOR, DOUBLE, FG, MUT
 from retsupp.visualize.paper.plot_fig1 import RING, item_positions
 
 LEGEND = """
-**Figure 7 (prototype). The behavioural effects of Fig. 1 in the gains, and gain and behaviour trial by trial.** a, The gain terms (illustrative): at the target and at the distractor on each trial, at the HP location over a whole block (Fig. 5), and a global gain over the whole display on each trial. b, c, The gain analogues of the response-time effects in Fig. 1c-f; the display icons are those of Fig. 1 (four possible locations, HP ringed in red; filled, the item on this trial; hollow, on the previous trial), and each series is the gain in the first condition minus that in the second. b, Location (Fig. 1c, d): the gain the distractor draws at the HP location minus at an LP location (dD, estimated alone, as in Fig. 5f; current fits, provisional) and the target gain at the HP location minus at an LP location (dT, fitted jointly with all other terms; current fits, provisional). Less gain for a distractor at HP in V3AB, IPS, hV4 and VO; the target gain does not differ between HP and LP in any ROI. c, History (Fig. 1e, f): target gain on target-repeat minus target-switch trials (fits with the target gain split by repeat), and distractor gain on distractor-repeat minus distractor-switch trials (fits with separate distractor gains on repeat and switch trials, the difference taken within HP and within LP and averaged, as for the response times in Fig. 1f). Less target gain on repeats in V3AB, IPS, hV4 and VO; the distractor gain does not differ after correction. b, c: dots are subjects (n = 30; triangles, beyond the axis), points and bars the median and bootstrapped 95% CI; stars, Wilcoxon signed-rank test against 0, Benjamini-Hochberg across the nine ROIs within each series: * q < .05, ** q < .01, *** q < .001; all values below. d, Within subjects, trial by trial: Bayesian hierarchical linear model of log RT (z within subject) per ROI on the per-trial target gain, distractor gain on HP and on LP trials, and global gain (each z-scored within run and trial type), with trial number, target repeat, distractor repeat and target-at-previous-distractor as covariates, and random intercepts and gain slopes per subject (bambi, 4 × 1000 draws, no divergences, R̂ ≤ 1.01). Points are posterior means, bars 95% HDIs; stars give the posterior probability that the effect has the sign shown: * > .975, ** > .995, *** > .9995 (not corrected across ROIs). The distractor gain on LP trials and the HP − LP difference are in the table. c, d use the earlier attention-field fits (October 2026) and will be redone on the final fits.
+**Figure 7 (prototype). The behavioural effects of Fig. 1 in the gains, and gain and behaviour trial by trial.** a, The gain terms (illustrative): at the target and at the distractor on each trial, at the HP location over a whole block (Fig. 5), and a global gain over the whole display on each trial. b, c, The gain analogues of the response-time effects in Fig. 1c-f; the display icons are those of Fig. 1 (four possible locations, HP ringed in red; filled, the item on this trial; hollow, on the previous trial), and each series is the gain in the first condition minus that in the second. b, Location (Fig. 1c, d): the gain the distractor draws at the HP location minus at an LP location (dD, estimated alone, as in Fig. 5f; current fits, provisional) and the target gain at the HP location minus at an LP location (dT, likewise estimated alone; current fits, provisional). Less gain for a distractor at HP in V3AB, IPS, hV4 and VO; the target gain shows no reliable HP − LP difference after correction (smallest q = .07, V3, and a positive trend in IPS, q = .10). Fitted jointly with all other terms, dT is null in every ROI as well (text). c, History (Fig. 1e, f): target gain on target-repeat minus target-switch trials (fits with the target gain split by repeat), and distractor gain on distractor-repeat minus distractor-switch trials (fits with separate distractor gains on repeat and switch trials, the difference taken within HP and within LP and averaged, as for the response times in Fig. 1f). Less target gain on repeats in V3AB, IPS, hV4 and VO; the distractor gain does not differ after correction. b, c: dots are subjects (n = 30; triangles, beyond the axis), points and bars the median and bootstrapped 95% CI; stars, Wilcoxon signed-rank test against 0, Benjamini-Hochberg across the nine ROIs within each series: * q < .05, ** q < .01, *** q < .001; all values below (n per ROI in the table). d, Within subjects, trial by trial: Bayesian hierarchical linear model of log RT (z within subject) per ROI on the per-trial target gain, distractor gain on HP and on LP trials, and global gain (each z-scored within run and trial type), with trial number, target repeat, distractor repeat and target-at-previous-distractor as covariates, and random intercepts and gain slopes per subject (bambi, 4 × 1000 draws, no divergences, R̂ ≤ 1.01). Points are posterior means, bars 95% HDIs; stars give the posterior probability that the effect has the sign shown: * > .975, ** > .995, *** > .9995 (not corrected across ROIs). The distractor gain on LP trials and the HP − LP difference are in the table. c, d use the earlier attention-field fits (October 2026) and will be redone on the final fits.
 """
 STAMP = 'b: provisional, current fits · c, d: earlier fits (Oct 2026)'
 
@@ -203,7 +203,7 @@ def header(fig, y, text, x0=.02, x1=.99):
 
 def stats_table(results):
     lines = ['', '**Per-ROI statistics (b, c).** Median [bootstrapped 95% CI], Wilcoxon signed-rank p against 0, '
-             'Benjamini-Hochberg q across the nine ROIs within each series; n = 30 (LO 29 for the target HP − LP).', '']
+             'Benjamini-Hochberg q across the nine ROIs within each series; n = 30 subjects per ROI unless given otherwise.', '']
     for name, st in results.items():
         lines += [f'*{name}*', '', '| ROI | n | Median [95% CI] | p | q |', '|---|---|---|---|---|']
         lines += [f'| {r.roi} | {r.n} | {r["median"]:+.3f} [{r.lo:+.3f}, {r.hi:+.3f}] | {r.p:.3g} | {r.q:.3g} |'
@@ -240,10 +240,10 @@ def main(repeat_table, bayes_table, conditional_table, dt_table, name='fig7_beha
     # b: location, HP − LP (Fig. 1c, d).
     ax = ax_in(fig, x0, 4.6, pw, 1.1)
     results.update(panel_pair(ax, [('Distractor gain, HP − LP (estimated alone)', cond, 'dD', DISTRACTOR),
-                                   ('Target gain, HP − LP (joint fit)', dt, 'dT', TARGET)],
+                                   ('Target gain, HP − LP (estimated alone)', dt, 'dT', TARGET)],
                               (-.4, .4), 'Gain, HP − LP', xlabels=False))
     ax.set_yticks([-.4, -.2, 0, .2, .4])
-    icon_key(ax, 'location', [('distractor', DISTRACTOR, 'Distractor: less gain at HP'), ('target', TARGET, 'Target: no difference')],
+    icon_key(ax, 'location', [('distractor', DISTRACTOR, 'Distractor: less gain at HP'), ('target', TARGET, 'Target: no reliable difference')],
              'As Fig. 1c, d')
     letter(ax, 'b', x=-.08, y=1.2)
     # c: history, repeat − switch (Fig. 1e, f).
@@ -278,6 +278,6 @@ if __name__ == '__main__':
     ap.add_argument('--repeat-table', default='notes/data/repeat_af_fits_params.tsv')
     ap.add_argument('--bayes-table', default='notes/data/trialwise_rt_bayes_summary.tsv')
     ap.add_argument('--conditional-table', default='notes/data/conditional_estimates_dog_2026-11.tsv')
-    ap.add_argument('--dt-table', default='notes/data/joint_dT_dog_2026-11.tsv')
+    ap.add_argument('--dt-table', default='notes/data/conditional_dT_dog_2026-11.tsv')
     a = ap.parse_args()
     main(a.repeat_table, a.bayes_table, a.conditional_table, a.dt_table)

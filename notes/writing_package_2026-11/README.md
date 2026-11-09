@@ -88,7 +88,7 @@ contrasts. End with what we did and found.
 6. Converging evidence without gain terms (Fig. 6, decoding). `[PENDING: rerun on final inputs; the
    May numbers must not be cited]`.
 7. The behavioural effects of Fig. 1 in the gains, and gain and behaviour trial by trial (Fig. 7). Location
-   (Fig. 7b, as Fig. 1c, d): less distractor gain at HP in V3AB, IPS, hV4, VO; target gain HP − LP null.
+   (Fig. 7b, as Fig. 1c, d): less distractor gain at HP in V3AB, IPS, hV4, VO; target gain HP − LP (also estimated alone) not reliable after correction.
    History (Fig. 7c, as Fig. 1e, f): repeats lower target gain in V3AB, IPS, hV4, VO; distractor gain
    repeat − switch not reliable after correction. Per-trial gain predicts response time, sign flips
    between early visual and parietal cortex (Fig. 7d).
