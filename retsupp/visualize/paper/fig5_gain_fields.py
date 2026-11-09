@@ -31,7 +31,7 @@ TERMS = [('T', 'Target gain', TARGET), ('D', 'Distractor gain', DISTRACTOR), ('d
          ('dD', 'Distractor gain, HP − LP', '#5E3C99')]
 FAM = {'dog': 'DoG', 'dn': 'DN'}
 LEGEND = """
-**Figure 5. The gain fields: gain at the target and the distractor, and less sustained gain at the high-probability (HP) location.** Gain-field model fits with DoG pRFs (n = 30); a gain is the fractional change in drive at the centre of a field (+0.30: 30% more). a, c, d: dots are subjects (triangles, beyond the axis), points and bars the median and bootstrapped 95% CI; stars, Wilcoxon signed-rank test against 0, Benjamini-Hochberg across the nine ROIs, * q < .05, ** q < .01, *** q < .001 (exact p and q per ROI in the parameter table). a, Gain at the target (orange) and at the distractor (blue, averaged over its locations) while the search display is on, all terms fitted jointly. The gain against pRF size is in a supplementary figure. b, The sustained gain field over the search display, drawn to scale (red shading): one Gaussian per item (white discs, 4° eccentricity, neighbouring items {spacing:.1f}° apart; grey circle, the 3.17° aperture of the bar stimulus), with less gain at the HP than at the LP locations (the HP − LP difference exaggerated for display). Dashed circle: the full width at half maximum (FWHM = 2.355 σ) of the fitted sustained field, the median over all subjects and ROIs ({fwhm:.1f}°; per-ROI medians: {fw_roi}; {fw_bound:.0f}% of the fits at a bound of σ, 0.5° or 8°). The field reaches beyond the item and overlaps those of its neighbours. c, dS = g_HP − g_LP, the sustained gain at the HP location minus that at the low-probability (LP) locations, each term estimated alone on the item model with sustained gain (conditional estimate). d, The gain analogue of Fig. 1c, d: dD = g_HP_dyn − g_LP_dyn, the gain the distractor draws at the HP location minus at an LP location (blue), next to dT, the target gain at the HP location minus at an LP location (orange), each estimated alone as in c; the display icons are those of Fig. 1 (HP ringed in red; the item at HP minus at an LP location). Less gain for a distractor at HP in V3AB, IPS, hV4 and VO; the target gain shows no reliable HP − LP difference after correction (smallest q = .07, V3; a positive trend in IPS, q = .10), and none when fitted jointly with all other terms either (q ≥ .36). Compared directly (per subject dD − dT, Wilcoxon signed-rank, Benjamini-Hochberg across ROIs), the distractor and target HP − LP terms do not differ reliably in any ROI (V3 +.053, p = .021, q = .094; IPS −.097, p = .012, q = .094; all others p ≥ .36, q = .855; pooled over ROIs per subject, median −.005, p = .89); the target series is shown for context. Stars per series (against 0), one row each. When dS and dD are fitted together with all other terms (supplementary figure and parameter table), no ROI survives correction: dD stays at −7 to −10% in V3AB, IPS, hV4 and VO (q ≈ .09–.15), dS is −4 to −5% in V1–V3 (q ≥ .07). The measured responses at the item locations (Fig. 3) show less response at HP for every item type, significant in the early areas, without a distractor-specific difference. Whether the terms predict new subjects (leave-one-subject-out) is in Table 1 and, per ROI, in the supplementary figure figS_loso_per_roi. DN pRFs, Bayes factors and all other terms are in the parameter table. Provisional: current inputs.
+**Figure 5. The gain fields: gain at the target and the distractor, and less sustained gain at the high-probability (HP) location.** Gain-field model fits with DoG pRFs (n = 30); a gain is the fractional change in drive at the centre of a field (+0.30: 30% more). a, c, d: dots are subjects (triangles, beyond the axis), points and bars the median and bootstrapped 95% CI; stars, Wilcoxon signed-rank test against 0, Benjamini-Hochberg across the nine ROIs, * q < .05, ** q < .01, *** q < .001 (exact p and q per ROI in the parameter table). a, Gain at the target (orange) and at the distractor (blue, averaged over its locations) while the search display is on, all terms fitted jointly. The gain against pRF size is in a supplementary figure. b, The sustained gain field over the search display, drawn to scale (red shading): one Gaussian per item (white discs, 4° eccentricity, neighbouring items {spacing:.1f}° apart; grey circle, the 3.17° aperture of the bar stimulus), with less gain at the HP than at the LP locations (the HP − LP difference exaggerated for display). Red dashed circle around the HP item: the full width at half maximum (FWHM = 2.355 σ) of the fitted sustained field, the median over all subjects and ROIs ({fwhm:.1f}°); thin grey circles, the median per ROI. Below: FWHM per subject and ROI (log axis; dots, subjects; points and bars, median and bootstrapped 95% CI; open triangles at the axis edge, fits at a bound of σ, 0.5° or 8°, i.e. FWHM 1.2° or 18.8°: {fw_bound:.0f}% of all fits; per ROI {fw_bound_roi}); dotted line, the spacing of neighbouring items. Per-ROI median FWHM [interquartile range over subjects]: {fw_iqr}. The field reaches beyond the item and overlaps those of its neighbours. c, dS = g_HP − g_LP, the sustained gain at the HP location minus that at the low-probability (LP) locations, each term estimated alone on the item model with sustained gain (conditional estimate). d, The gain analogue of Fig. 1c, d: dD = g_HP_dyn − g_LP_dyn, the gain the distractor draws at the HP location minus at an LP location (blue), next to dT, the target gain at the HP location minus at an LP location (orange), each estimated alone as in c; the display icons are those of Fig. 1 (HP ringed in red; the item at HP minus at an LP location). Less gain for a distractor at HP in V3AB, IPS, hV4 and VO; the target gain shows no reliable HP − LP difference after correction (smallest q = .07, V3; a positive trend in IPS, q = .10), and none when fitted jointly with all other terms either (q ≥ .36). Compared directly (per subject dD − dT, Wilcoxon signed-rank, Benjamini-Hochberg across ROIs), the distractor and target HP − LP terms do not differ reliably in any ROI (V3 +.053, p = .021, q = .094; IPS −.097, p = .012, q = .094; all others p ≥ .36, q = .855; pooled over ROIs per subject, median −.005, p = .89); the target series is shown for context. Stars per series (against 0), one row each. When dS and dD are fitted together with all other terms (supplementary figure and parameter table), no ROI survives correction: dD stays at −7 to −10% in V3AB, IPS, hV4 and VO (q ≈ .09–.15), dS is −4 to −5% in V1–V3 (q ≥ .07). The measured responses at the item locations (Fig. 3) show less response at HP for every item type, significant in the early areas, without a distractor-specific difference. Whether the terms predict new subjects (leave-one-subject-out) is in Table 1 and, per ROI, in the supplementary figure figS_loso_per_roi. DN pRFs, Bayes factors and all other terms are in the parameter table. Provisional: current inputs.
 """
 LEGEND_LOSO = """
 **Figure S. Do the gain terms predict new subjects?** Leave-one-subject-out test per ROI and term: the term added with the size estimated from the other 29 subjects (+δ) vs the opposite size (−δ); numbers, the percentage of subjects predicted better with +δ (cell colour: red above 50%, blue below); bold: q < .05 (non-significant cells muted), one-sided Wilcoxon signed-rank test, Benjamini-Hochberg across the nine ROIs per term (q per cell below). The distractor gain is tested on top of the target term, whose size and field width are the subject's own fit ("with target"); added to the pRF model alone it predicts new subjects no better (52–67% per ROI, TO 8%). These tests use the earlier gain fits (canonical HRF, before the selection on cross-run reliability) and will be redone on the final fits. Provisional.
@@ -235,7 +235,7 @@ def sustained_fwhm(js):
     return FWHM * d.sigma_AF.median(), per_roi, at_bound
 
 
-def panel_sketch(ax, fwhm, lo_hi, g_lp=1., g_hp=.2, hp_ix=3, ecc=4., aperture=3.17, item_r=.75):
+def panel_sketch(ax, fwhm, lo_hi, g_lp=1., g_hp=.2, hp_ix=3, ecc=4., aperture=3.17, item_r=.75, roi_fwhm=None, label=True):
     """The sustained gain field over the display, drawn to scale with the fitted FWHM; weaker at HP (exaggerated)."""
     from matplotlib.colors import LinearSegmentedColormap
     from matplotlib.patches import Circle
@@ -257,8 +257,12 @@ def panel_sketch(ax, fwhm, lo_hi, g_lp=1., g_hp=.2, hp_ix=3, ecc=4., aperture=3.
     ax.plot(0, 0, '+', color=FG, ms=4, mew=.6)
     hp = ring[hp_ix]
     # The fitted half-maximum extent of one item's field, around the HP item.
+    if roi_fwhm is not None:       # per-ROI medians, thin grey rings
+        for f in roi_fwhm:
+            ax.add_patch(Circle(hp, f / 2, fill=False, ec='.35', lw=.4, alpha=.7, zorder=3))
     ax.add_patch(Circle(hp, fwhm / 2, fill=False, ec=HP, lw=1., ls=(0, (2.5, 1.5)), zorder=3))
-    ax.text(hp[0] - .4, hp[1] - fwhm / 2 - .3, f'Fitted FWHM {fwhm:.1f}°', color=HP, fontsize=6, ha='center', va='top')
+    if label:
+        ax.text(hp[0] - .4, hp[1] - fwhm / 2 - .3, f'Fitted FWHM {fwhm:.1f}°', color=HP, fontsize=6, ha='center', va='top')
     ax.text(hp[0], hp[1], 'HP', color=HP, fontsize=5.5, ha='center', va='center', fontweight='bold', zorder=4)
     for i, p in enumerate(ring):
         if i != hp_ix:
@@ -275,6 +279,47 @@ def panel_sketch(ax, fwhm, lo_hi, g_lp=1., g_hp=.2, hp_ix=3, ecc=4., aperture=3.
     ax.set_axis_off()
 
 
+
+
+def fwhm_text(d):
+    """Per-ROI median FWHM with the subjects' IQR, and the share of fits at a σ bound, for the legend."""
+    iqr, bnd = [], []
+    for roi in ROI_ORDER:
+        sg = d[d.roi == roi].sigma_AF.dropna()
+        q1, m, q3 = (FWHM * sg).quantile([.25, .5, .75])
+        iqr.append(f'{roi} {m:.1f}° [{q1:.1f}–{q3:.1f}]')
+        bnd.append(f'{roi} {100 * ((sg < .51) | (sg > 7.9)).mean():.0f}%')
+    return dict(fw_iqr='; '.join(iqr), fw_bound_roi=', '.join(bnd))
+
+
+def fwhm_strip(ax, d):
+    """FWHM of the sustained field per subject and ROI (log axis): faint dots, median and bootstrapped 95% CI; fits at a σ
+    bound (0.5° or 8°) as open triangles at the axis edge; dotted line, the spacing of neighbouring items."""
+    from retsupp.visualize.paper.fig7_behaviour import XP, XMAX, roi_axis7
+    lo, hi = 1.1, 21.
+    ax.set_yscale('log')
+    ax.set_ylim(lo, hi)
+    for i, roi in enumerate(ROI_ORDER):
+        sg = d[d.roi == roi].sigma_AF.dropna().to_numpy()
+        f = FWHM * sg
+        bound = (sg < .51) | (sg > 7.9)
+        xx = XP[roi] + np.random.default_rng(i).uniform(-.18, .18, len(f))
+        ax.scatter(xx[~bound], f[~bound], s=3, color=HP, alpha=.3, lw=0, zorder=1)
+        low, high = bound & (sg < .51), bound & (sg > 7.9)
+        for sel, yv, mk in ((low, lo, 'v'), (high, hi, '^')):
+            if sel.any():           # an empty scatter with open markers still draws one at the figure origin
+                ax.scatter(xx[sel], np.full(sel.sum(), yv), s=8, marker=mk, facecolor='none', edgecolor=HP, lw=.5, alpha=.7,
+                           clip_on=False, zorder=2)
+        m, a, b = median_ci(f)
+        ax.errorbar(XP[roi], m, yerr=[[m - a], [b - m]], fmt='o', ms=3.8, color=HP, mec='w', mew=.5, lw=1.1, capsize=0, zorder=4)
+    sp = 4 * np.sqrt(2)
+    ax.hlines(sp, -.6, XMAX + .6, color='.55', lw=.6, ls=':', zorder=0)
+    ax.set_yticks([2, 5, 10, 20])
+    ax.set_yticklabels(['2', '5', '10', '20'], fontsize=6)
+    ax.yaxis.set_minor_locator(plt.NullLocator())
+    ax.set_ylabel('FWHM (°)', fontsize=6.5)
+    offset_spines(ax)
+    roi_axis7(ax, fontsize=6)
 
 
 def bare_roi_axis(ax, right_pad=ICON_PAD):
@@ -522,7 +567,7 @@ def main(gain_table, conditional_table, power_table, slope_table, sigma_table, n
     size = roi_size(sigma_table)
 
     from retsupp.visualize.paper.fig7_behaviour import icons, row
-    W, H = DOUBLE, 4.62
+    W, H = DOUBLE, 4.74
     fig = plt.figure(figsize=(W, H))
     at = lambda x, y, w, h: fig.add_axes([x / W, y / H, w / W, h / H])
     Y = lambda dd: H - dd           # inches from the top
@@ -531,18 +576,36 @@ def main(gain_table, conditional_table, power_table, slope_table, sigma_table, n
     # Row 1: a (target and distractor gain, wide) | b (the sustained field to scale).
     row(fig, Y(.16), 'a', [('Gain at the ', FG), ('target', TARGET), (' beyond V1, at the ', FG), ('distractor', DISTRACTOR),
                             (' in V3AB, IPS, hV4, VO', FG)], [], x_let=.02, x_title=.2)
-    ax = at(LX, Y(1.82), 4.35, 1.18)
+    ax = at(LX, Y(1.82), 3.7, 1.18)
     sm = lambda term: t[(t.model == 'DoG') & (t.term == term)].set_index('roi').loc[ROI_ORDER]
     dot_panel(ax, [(d, 'T', TARGET, sm('T')), (d, 'D', DISTRACTOR, sm('D'))], (-.4, 1.2), 'Gain')
     ax.set_yticks([0, .5, 1])
-    ax = at(5.45, Y(1.95), 1.5, 1.5)
-    panel_sketch(ax, fw, (fw_roi.min(), fw_roi.max()))
-    fig.text(5.25 / W, Y(.16) / H, 'b', fontsize=8, fontweight='bold', va='center', ha='left')
-    fig.text(5.43 / W, Y(.16) / H, 'Sustained gain field, to scale', fontsize=7.5, color=FG, va='center', ha='left')
+    BX = 4.62                       # left edge of b
+    ax = at(BX + .05, Y(1.22), .94, .94)
+    panel_sketch(ax, fw, (fw_roi.min(), fw_roi.max()), roi_fwhm=fw_roi.values, label=False)
+    fig.text((BX - .25) / W, Y(.16) / H, 'b', fontsize=8, fontweight='bold', va='center', ha='left')
+    fig.text((BX - .07) / W, Y(.16) / H, 'Sustained gain field: size', fontsize=7.5, color=FG, va='center', ha='left')
+    ky = Y(.62)
+    kx = BX + 1.2
+    key = fig.add_axes([kx / W, (ky - .5) / H, 1.25 / W, .62 / H])
+    key.set_xlim(0, 1.25)
+    key.set_ylim(-.62, .12)
+    key.set_axis_off()
+    from matplotlib.patches import Circle as _C
+    key.add_patch(_C((.07, 0), .055, fill=False, ec=HP, lw=1., ls=(0, (2.5, 1.5))))
+    key.text(.17, 0, f'FWHM, median {fw:.1f}°', fontsize=6, color=HP, va='center')
+    key.add_patch(_C((.07, -.2), .055, fill=False, ec='.35', lw=.4))
+    key.text(.17, -.2, 'Median per ROI', fontsize=6, color='.35', va='center')
+    key.plot([.01, .13], [-.4, -.4], color='.55', lw=.6, ls=':')
+    key.text(.17, -.4, f'Item spacing, {4 * np.sqrt(2):.1f}°', fontsize=6, color='.45', va='center')
+    key.text(0, -.6, 'Sketch drawn to scale', fontsize=6, color='.45', va='center')
+    ax = at(BX + .1, Y(1.95), 7.0 - BX - .1, .62)
+    fwhm_strip(ax, d)
+    fig.text((BX - .25) / W, Y(.16) / H, '', fontsize=1)
 
     # Row 2: the gain at the HP location, c (sustained) | d (transient, distractor vs target; Fig. 1c, d); each with its
     # icon key under the title, so the two axes and titles line up.
-    y2 = 2.38
+    y2 = 2.5
     from retsupp.visualize.paper.paper_style import stimulus_icon
     hp_lp = [lambda a: (a.set_axis_off(), stimulus_icon(a, (0, 0, 1, 1), ('hp',))),
              lambda a: (a.set_axis_off(), stimulus_icon(a, (0, 0, 1, 1), ('lp',)))]
@@ -561,7 +624,7 @@ def main(gain_table, conditional_table, power_table, slope_table, sigma_table, n
     ax.set_yticks([-.2, 0, .2])
     fig.text(.995, .005, PROVISIONAL, fontsize=6, color=MUTED, ha='right', va='bottom')
     save(fig, name, LEGEND.format(spacing=4 * np.sqrt(2), fwhm=fw, fw_bound=100 * fw_bound,
-                                  fw_roi='; '.join(f'{r} {v:.1f}°' for r, v in fw_roi.items())))
+                                  fw_roi='; '.join(f'{r} {v:.1f}°' for r, v in fw_roi.items()), **fwhm_text(d)))
     loso_figure()
     hierarchy_figure(t, size, sl)
     print('FWHM median', fw, 'per ROI', fw_roi.round(2).to_dict(), 'at bound', fw_bound)
