@@ -23,6 +23,8 @@
 #   FAMILY=dn uses the divisive-normalization pRF (root gets a _dn suffix)
 #   HP_ROTATION=K relabels HP K ring steps away (root gets a _hprot<K> suffix), needs BASE_ROOT
 #   MODELS="m5_TDS_dS m7_full" fits only these models and their ancestors
+#   MODELS=m8_full_dT or m8_full_adjopp (target split; LP gain split next to HP vs opposite) are fitted on
+#     top of a finished ladder: BASE_ROOT=<that root> plus the same CV_SCHEME/BOUNDED/MAX_BOLD_SD/RELIABLE_ONLY/HRF_TABLE
 #   PER_SUBJECT=1: array index = subject, all ROIS in one task (data loaded once)
 #   WARM_ROOT="<path> ..." starts m00/m0 from earlier fits; GD_ITER, GD_MIN_ITER, SIGMA_STARTS, LBFGS_ROUNDS tune the search
 #   ROI_LIST="V1 V2" restricts the ROIs (with PER_SUBJECT=1); OUTPUT_ROOT=<path> writes elsewhere (tests)

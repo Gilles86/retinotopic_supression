@@ -56,7 +56,9 @@ after a small change such as the HRF is cheap). ``--sigma-starts`` and ``--lbfgs
 search of the shared fits.
 
 ``--models m8_full_dT`` fits the target gain split by target at HP vs elsewhere (``target_split``) from
-m7_full; all its ancestors are loaded from ``--base-root``.
+m7_full; all its ancestors are loaded from ``--base-root``. ``--models m8_full_adjopp`` likewise splits the
+sustained LP gain into the two locations next to HP and the one opposite it (``lp_split``; one new term,
+g_adj_minus_opp = g_adj − g_opp, with g_LP kept as the mean of the three LP gains).
 
 ``--reliable-only`` keeps the selected voxels with model-free cross-run reliability > 0 (mean over
 the ``prf_cv_reliability`` folds). The m00, m0, m1 and m3b fits come from ``--base-root``, restricted
@@ -89,6 +91,7 @@ from braincoder.optimize import ParameterFitter
 from retsupp.modeling.cv_helpers import per_voxel_r2, write_cv_tsvs
 from retsupp.modeling.dn_attention_field import DNDynamicAttentionFieldPRF2D, init_from_m5
 from retsupp.modeling.target_split import NEW as T_HP, TargetSplitDN, TargetSplitDoG
+from retsupp.modeling.lp_split import NEW as LP_D, LPSplitDN, LPSplitDoG
 from retsupp.modeling.fit_af_prf_cv_v2 import (
     ALL_SHARED_PARS,
     CV_SCHEMES,
@@ -117,9 +120,13 @@ LADDER = {
     'm6_TDS_dD': ('tied', 'free', 'free', 'free', 'free', 'free', 'm4_TDS'),
     'm7_full':   ('free', 'free', 'free', 'free', 'free', 'free', 'm5_TDS_dS'),
     'm8_full_dT': ('free', 'free', 'free', 'free', 'free', 'free', 'm7_full'),
+    'm8_full_adjopp': ('free', 'free', 'free', 'free', 'free', 'free', 'm7_full'),
 }
-# Models with the target gain split by target at HP vs elsewhere (``target_split``); run only when asked.
-TARGET_SPLIT = ('m8_full_dT',)
+# Models fitted on top of finished ladders, run only when asked: the target gain split by target at HP vs
+# elsewhere (``target_split``) and the sustained LP gain split into next to HP vs opposite (``lp_split``).
+# Each adds one shared term to its parent, started at the value that reproduces the parent.
+SPLIT_TERMS = {'m8_full_dT': T_HP, 'm8_full_adjopp': LP_D}
+TARGET_SPLIT = tuple(SPLIT_TERMS)
 GAINS = ['g_HP', 'g_LP', 'g_HP_dyn', 'g_LP_dyn', 'g_T_dyn']
 # Models whose fit cannot depend on which ring position is labelled HP.
 LABEL_BLIND = ('m1_T', 'm2_D', 'm3_S', 'm3b_TD', 'm4_TDS')
@@ -136,7 +143,7 @@ POLISH_ROUNDS = 3
 # trades off against pRF amplitude).
 SHARED_BOUNDS = {'sigma_AF': (0.5, 8.0), 'sigma_dyn': (0.5, 8.0),
                  'item_scale': (1e-3, 50.0),
-                 **{g: (-10.0, 10.0) for g in GAINS + [T_HP]}}
+                 **{g: (-10.0, 10.0) for g in GAINS + [T_HP, LP_D]}}
 POLISH_MAX_ITER = 3000
 SCHEMES = tuple(CV_SCHEMES) + ('full',)
 
@@ -313,6 +320,8 @@ def child_init(parent_pars, model, name):
     init['sigma_T_dyn'] = init['sigma_dyn']
     if T_HP in labels and init[T_HP].isna().all():
         init[T_HP] = init['g_T_dyn']   # split starts unsplit
+    if LP_D in labels and init[LP_D].isna().all():
+        init[LP_D] = 0.0               # g_adj = g_opp = g_LP
     return init
 
 
@@ -603,11 +612,13 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                 y_tr = train['bold'][:, voxel_mask]
                 y_he = None if held is None else held['bold'][:, voxel_mask]
 
-                split_t = name in TARGET_SPLIT
+                extra = [SPLIT_TERMS[name]] if name in SPLIT_TERMS else []
+                split_cls = {T_HP: (TargetSplitDoG, TargetSplitDN),
+                             LP_D: (LPSplitDoG, LPSplitDN)}.get(extra[0]) if extra else None
 
                 def mk(d):
                     if family == 'dn':
-                        return (TargetSplitDN if split_t else DNDynamicAttentionFieldPRF2D)(
+                        return (split_cls[1] if split_cls else DNDynamicAttentionFieldPRF2D)(
                             grid_coordinates=grid_coords, paradigm=d['paradigm'],
                             hrf_model=hrf_model,
                             condition_indicator=d['condition_indicator'],
@@ -620,8 +631,8 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                               dynamic_indicator=d['dynamic_indicator'],
                               target_indicator=d['target_indicator'],
                               ring_positions=ring_positions, hrf_model=hrf_model, sign_pattern=sp)
-                    if split_t:
-                        return TargetSplitDoG(item_scale_mode=item_scale, **kw)
+                    if split_cls:
+                        return split_cls[0](item_scale_mode=item_scale, **kw)
                     return build_model(grid_coords=kw.pop('grid_coordinates'), item_scale=item_scale, **kw)
                 m_tr = mk(train)
                 labels = list(m_tr.parameter_labels)
@@ -673,7 +684,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                 else:
                     init = child_init(fits[parent][k], m_tr, name)
                     free = [p for p in shared_pars_for(sp, item_scale)
-                            if p != 'sigma_T_dyn'] + ([T_HP] if split_t else [])
+                            if p != 'sigma_T_dyn'] + extra
                     pars, info = shared_fit(m_tr, y_tr, train['paradigm'],
                                             init, free, bounded=bounded, loss=loss,
                                             sigma_starts=sigma_starts, lbfgs_rounds=lbfgs_rounds)
@@ -701,7 +712,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                 cv_r2s.append(cv_r2)
                 train_r2s.append(tr_r2)
                 shared_dicts.append(pars.reindex(
-                    columns=ALL_SHARED_PARS + ['item_scale'] + ([T_HP] if split_t else [])).iloc[0].to_dict())
+                    columns=ALL_SHARED_PARS + ['item_scale'] + extra).iloc[0].to_dict())
                 infos.append(info)
                 tr_meta.append([(r.session, r.run, r.hp) for r in train['run_meta']])
                 he_meta.append([] if held is None else
@@ -713,7 +724,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
             if pkl.exists():   # never overwrite an existing fit
                 raise FileExistsError(pkl)
             out_dir.mkdir(parents=True, exist_ok=True)
-            shared_labels = ALL_SHARED_PARS + ['item_scale'] + ([T_HP] if name in TARGET_SPLIT else [])
+            shared_labels = ALL_SHARED_PARS + ['item_scale'] + ([SPLIT_TERMS[name]] if name in SPLIT_TERMS else [])
             write_cv_tsvs(
                 out_dir, subject=subject, roi=roi, model=name,
                 voxel_ids=voxel_ids, cv_r2_per_fold=cv_r2s,
