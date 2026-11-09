@@ -1,7 +1,28 @@
-**Figure 6. Decoding without gain fields: less bar drive in the quadrant facing the HP location.** The bar stimulus of each
-run was decoded from V1, V2 and V3 with pRFs fitted on other runs (cross-validation folds) and no gain terms, voxels with
-cross-run reliability > 0 on the training runs. a, Bar outline given, intensities decoded (the pre-specified test). b,
-Every pixel decoded. Per subject, the mean decoded intensity on the bar's pixels inside the aperture in the quadrant facing
-HP minus the mean over the three other quadrants, averaged over runs: dots are subjects (n = 30), points and bars the
-median and bootstrapped 95% CI. Wilcoxon signed-rank test, one-sided (HP < other quadrants), Holm across the three ROIs:
-V1 (outline) median -0.000, 50% below 0, Holm p = 0.23; V2 (outline) median -0.001, 73% below 0, Holm p = 0.037; V3 (outline) median -0.001, 70% below 0, Holm p = 0.038; V1 (free) median -0.000, 50% below 0, Holm p = 0.2; V2 (free) median -0.001, 73% below 0, Holm p = 0.044; V3 (free) median -0.001, 67% below 0, Holm p = 0.045. pRFs: canonical fold fits.
+**Figure 6. The bar stimulus can be read out of early visual cortex, and less of it is read out in the quadrant facing
+the HP location.** The bar stimulus of every run was decoded from the BOLD activity of V1, V2 or V3 with pRFs (difference
+of Gaussians, canonical HRF, no gain terms) fitted on the other runs (cross-validation folds), so the decoded run never
+entered the pRF fit; voxels with cross-run reliability > 0 on the training runs (at most 2000 per ROI); the encoding model
+contains only the bar, not the search items. a, True bar (top) and decoded intensity in a single held-out run of one
+subject (sub-23, V1, frame-wise r = 0.50; middle) and averaged over all runs and subjects (V1; bottom), at seven
+time points of the run (the last one without a bar). Grey circle, the 3.17° aperture of the bar. b, Per subject, the
+spatial correlation between decoded and true frame inside the aperture, averaged over the frames with a bar and over
+runs (unconstrained decoder; blue dots, n = 30 subjects), against the same with the order of the true frames shuffled
+(100 permutations; grey). Points and bars: median and bootstrapped 95% CI. Decoded vs shuffled: Wilcoxon signed-rank
+test, one-sided (*** p < .001); V1 median r = 0.51 vs -0.003, p = 9.3 × 10^-10; V2 median r = 0.47 vs -0.004, p = 9.3 × 10^-10; V3 median r = 0.41 vs -0.005, p = 9.3 × 10^-10. The decoded time course is not displaced in time: the correlation peaks at lag 0 in all
+three ROIs. With the bar outline given (the decoder of c–f) the correlation is trivially high (median r = 0.86). c,
+Each run's visual field rotated in 90° steps so that the HP location (red dashed circle; grey, the LP locations, drawn
+with the item footprint, radius 0.75°) lies upper right, then the decoded intensity on the bar's pixels minus its
+average over the four rotations (in % of that average), averaged over runs, V1–V3 and subjects, smoothed (Gaussian, σ =
+0.4°); bar-outline decoder. d, The same as a function of polar angle relative to the HP direction (bins of 22.5°), whole
+aperture; shaded red, the quadrant facing HP. Line and band: mean ± SEM over subjects. e, The pre-specified test: per
+subject and ROI, the mean decoded intensity on the bar's pixels in the quadrant facing HP minus the mean over the three
+other quadrants, averaged over runs. Filled: bar outline given, intensities decoded (the pre-specified decoder; dots are
+subjects); open: every pixel decoded. Points and bars: median and bootstrapped 95% CI. Wilcoxon signed-rank test, one-sided
+(HP < other quadrants), Holm across the three ROIs; * p_Holm < .05. V1 (bar outline given) median -0.0003, 50% of subjects below 0, p = 0.232, p_Holm = 0.232; V2 (bar outline given) median -0.0014, 73% of subjects below 0, p = 0.012, p_Holm = 0.037; V3 (bar outline given) median -0.0006, 70% of subjects below 0, p = 0.019, p_Holm = 0.038; V1 (unconstrained) median -0.0002, 50% of subjects below 0, p = 0.202, p_Holm = 0.202; V2 (unconstrained) median -0.0014, 73% of subjects below 0, p = 0.015, p_Holm = 0.044; V3 (unconstrained) median -0.0006, 67% of subjects below 0, p = 0.022, p_Holm = 0.045. f, The difference of e by eccentricity, in %
+of the drive in the other quadrants at the same eccentricity, mean of V1–V3 per subject; line and band, mean ± SEM over
+subjects (rings of 0.25°); left, the three bands drawn on the display. Items (radius 0.75°) begin at
+3.25° eccentricity, just outside the aperture, and their responses are in the BOLD data but not in the
+encoding model; if item responses leaking into the aperture produced the difference, it would grow toward the aperture
+edge. It does not: per band (mean ± SEM; one-sided Wilcoxon signed-rank test, uncorrected, * p < .05) 0–1.5° -0.8 ± 0.5%, p = 0.052; 1.5–2.5° -1.4 ± 0.7%, p = 0.024; 2.5°–edge -1.3 ± 0.7%, p = 0.048; whole aperture -1.2 ± 0.5%, p = 0.016; the three bands do not differ
+(Friedman test, p = 0.67; outer minus inner band, two-sided Wilcoxon p = 0.60). Within 0.75° of
+the fovea, where the four quadrants meet, there is no difference (+0.1 ± 0.4%). pRFs: canonical fold fits.
