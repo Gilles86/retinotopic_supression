@@ -6,7 +6,7 @@ baseline d (purple). The b- and d-fields share one shape (width σ_AF, HP/LP pat
 at w = 0 each equals the input-gain model exactly. Scaling b and d together equals scaling the amplitude a, so only
 w_b − w_d (b/d) is specific to DN. b, Top: held-out R² of each variant minus the input-gain model, mean ± SEM over
 subjects (run3 folds; per-voxel pRFs frozen at the all-runs fit in every model, shared terms refitted per fold).
-Bottom: dS = g_HP − g_LP of the input gain in each model (all-runs fits). c, Recovery on pending: BOLD simulated
+Bottom: dS = g_HP − g_LP of the input gain in each model (all-runs fits). c, Recovery on 16 subject × ROI units (subjects 3, 8, 13, 23; V1, V3, V3AB, hV4), 2 noise draws: BOLD simulated
 from an input, b or d effect of equal BOLD size plus phase-randomised real residuals, refitted with every model.
 Confusion: % of simulations in which each model is selected (training-SSE gain of the b- or d-field over the input
 model, threshold = 95th percentile under the input truth, so the input row is ~95 % by construction). Right: dS

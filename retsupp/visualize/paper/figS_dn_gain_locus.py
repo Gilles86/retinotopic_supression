@@ -68,7 +68,7 @@ def panel_schematic(fig, ax):
     ax.set_axis_off()
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
-    y_num, y_den, y_bar = .78, .5, .64
+    y_num, y_den, y_bar = .84, .58, .71
     kw = dict(fontsize=8.5, va='center', ha='left', color=FG)
 
     def box(x0, y, w, color):
@@ -96,7 +96,7 @@ def panel_schematic(fig, ax):
            (BFIELD, r'b-field: $b_c=b\,\exp(w_b F_c)$'),
            (DFIELD, r'd-field: $d_c=d\,\exp(w_d F_c)$,   $F_c$ = HP/LP field ($\sigma_{AF}$, $\theta$) over the pRF')]
     for i, (col, s) in enumerate(eqs):
-        ax.text(.02, .25 - i * .1, s, fontsize=6.3, color=col, va='center', ha='left')
+        ax.text(.02, .34 - i * .14, s, fontsize=6.3, color=col, va='center', ha='left')
     for i, (kind, col, lab) in enumerate((('input', INPUT, 'Input: field on the image,\nreaches the surround'),
                                           ('b', BFIELD, 'b: baseline of\nthe pRF centre'),
                                           ('d', DFIELD, 'd: normalization\nconstant'))):
@@ -119,10 +119,8 @@ def panel_cv(ax, cv):
         ax.errorbar(x, 1e3 * mu.reindex(ROI_ORDER), 1e3 * se.reindex(ROI_ORDER), fmt='o', ms=2.6, color=col,
                     lw=.8, capsize=0, label=lab)
     ax.axhline(0, color=FG, lw=.6)
-    ax.set_ylabel('Held-out R² − input gain\n(×10⁻³)')
-    ax.legend(frameon=False, fontsize=6, ncol=3, loc='upper left', bbox_to_anchor=(0, 1.12), handletextpad=.2,
-              columnspacing=.8)
-    roi_axis(ax, fontsize=6)
+    ax.set_ylabel('Held-out R² − input\ngain model (×10⁻³)', fontsize=6.5)
+    ax.set_xticks([])
 
 
 def panel_ds(ax, full):
@@ -134,8 +132,8 @@ def panel_ds(ax, full):
         ax.errorbar(x, mu.reindex(ROI_ORDER), se.reindex(ROI_ORDER), fmt='o', ms=2.4, color=col, lw=.8,
                     capsize=0, label=lab)
     ax.axhline(0, color=FG, lw=.6)
-    ax.set_ylabel(r'dS = $g_{HP}-g_{LP}$')
-    ax.set_xticks([])
+    ax.set_ylabel(r'dS = $g_{HP}-g_{LP}$', fontsize=6.5)
+    roi_axis(ax, fontsize=6)
 
 
 # ---------------------------------------------------------------- c: recovery
@@ -180,7 +178,7 @@ def panel_confusion(ax, rec, size):
 
 def panel_spurious(ax, rec):
     """dS fitted by m7 under each truth (size 1), relative to the input truth's true dS."""
-    d = rec[(rec.model == 'm7_full') & (rec['size'] == 1)].copy()
+    d = rec[(rec.model == 'm7_full') & ((rec['size'] == 1) | (rec.truth == 'none'))].copy()
     d['dS'] = d.g_HP - d.g_LP
     true_in = rec[(rec.truth == 'input') & (rec['size'] == 1) & (rec.model == 'm7_full')]
     ref = (true_in.true_g_HP - true_in.true_g_LP).groupby([true_in.subject, true_in.roi]).first()
@@ -195,9 +193,10 @@ def panel_spurious(ax, rec):
     ax.axhline(0, color=FG, lw=.6)
     ax.axhline(1, color=INPUT, lw=.5, ls=':')
     ax.set_xticks(range(len(order)))
-    ax.set_xticklabels([o[1] for o in order], fontsize=6, rotation=30)
-    ax.set_ylabel('Fitted dS / true dS\n(input-gain model)', fontsize=6.5)
-    ax.set_xlabel('Truth', fontsize=6.5, labelpad=1)
+    ax.set_xticklabels(['None', 'Input', 'b', 'd'], fontsize=6)
+    ax.set_ylabel('dS fitted by the input model\n(÷ true dS of input truth)', fontsize=6)
+    ax.set_xlabel('Truth (1× size)', fontsize=6.5, labelpad=1)
+    ax.set_ylim(-2.5, 4.5)
 
 
 # ---------------------------------------------------------------- d: signatures
@@ -306,41 +305,41 @@ def main(name='figS_dn_gain_locus'):
     by_hp = load('dn_by_hp_stats_2026-11.tsv')
 
     fig = plt.figure(figsize=(DOUBLE, 6.0))
-    gs = fig.add_gridspec(3, 1, height_ratios=[.85, 1.5, 1.25], hspace=.62, left=.075, right=.985, top=.975,
-                          bottom=.075)
+    top = fig.add_gridspec(2, 1, height_ratios=[.78, 2.8], hspace=.28, left=.075, right=.985, top=.975,
+                           bottom=.075)
+    gs = [top[0]] + list(top[1].subgridspec(2, 1, height_ratios=[1.6, 1.2], hspace=.78))
     ax_a = fig.add_subplot(gs[0])
     panel_schematic(fig, ax_a)
     letter(ax_a, 'a', x=0, y=.95)
 
-    g2 = gs[1].subgridspec(2, 2, width_ratios=[1.55, 1], height_ratios=[1, .75], wspace=.32, hspace=.25)
-    ax_b1, ax_b2 = fig.add_subplot(g2[0, 0]), fig.add_subplot(g2[1, 0])
+    g2 = gs[1].subgridspec(1, 2, width_ratios=[1.45, 1], wspace=.28)
+    g2b = g2[0].subgridspec(2, 1, height_ratios=[1, 1], hspace=.18)
+    ax_b1, ax_b2 = fig.add_subplot(g2b[0]), fig.add_subplot(g2b[1])
     if cv is not None:
         panel_cv(ax_b1, cv)
     else:
         pending(ax_b1, 'held-out comparison (run3, frozen pRFs)')
     if full is not None:
         panel_ds(ax_b2, full)
+        h, l = ax_b2.get_legend_handles_labels()
+        ax_b1.legend(h, l, frameon=False, fontsize=6, ncol=4, loc='lower left', bbox_to_anchor=(0, 1.0),
+                     handletextpad=.2, columnspacing=.9)
     else:
         pending(ax_b2, 'dS per model')
-    letter(ax_b1, 'b', x=-.1, y=1.05)
-    g2c = g2[:, 1].subgridspec(2, 3, height_ratios=[1, 1], width_ratios=[1, 1, 1.25], wspace=.5, hspace=.9)
+    letter(ax_b1, 'b', x=-.12, y=1.08)
+    g2c = g2[1].subgridspec(2, 2, height_ratios=[1, 1.25], wspace=.25, hspace=.75)
     axc = [fig.add_subplot(g2c[0, 0]), fig.add_subplot(g2c[0, 1])]
-    ax_c3 = fig.add_subplot(g2c[:, 2])
+    ax_c3 = fig.add_subplot(g2c[1, :])
     if rec is not None:
         for ax, k in zip(axc, (1.0, 4.0)):
             panel_confusion(ax, rec, k)
         axc[0].set_ylabel('Truth', fontsize=6.5, labelpad=1)
+        axc[1].set_yticklabels([])
         panel_spurious(ax_c3, rec)
     else:
         for ax in axc + [ax_c3]:
             pending(ax, 'recovery')
-    ax_note = fig.add_subplot(g2c[1, :2])
-    ax_note.set_axis_off()
-    if rec is not None:
-        n = rec.groupby(['subject', 'roi']).ngroups
-        ax_note.text(0, .8, f'{n} subject × ROI units,\n{rec.noise.nunique()} noise draws each', fontsize=6,
-                     color='.35', va='top', transform=ax_note.transAxes)
-    letter(axc[0], 'c', x=-.55, y=1.25)
+    letter(axc[0], 'c', x=-.45, y=1.12)
 
     g3 = gs[2].subgridspec(1, 2, width_ratios=[1.55, 1], wspace=.3)
     g3d = g3[0].subgridspec(1, 3, wspace=.35)
@@ -355,7 +354,7 @@ def main(name='figS_dn_gain_locus'):
     h, l = axd[0].get_legend_handles_labels()
     axd[0].legend(h, l, frameon=False, fontsize=5.8, ncol=4, loc='upper left', bbox_to_anchor=(0, 1.32),
                   handlelength=.9, handletextpad=.3, columnspacing=.7)
-    axd[2].legend(frameon=False, fontsize=5.8, loc='upper left', bbox_to_anchor=(0, 1.32), handletextpad=.2)
+    axd[2].legend(frameon=False, fontsize=5.8, loc='lower left', bbox_to_anchor=(0, 1.1), handletextpad=.2)
     letter(axd[0], 'd', x=-.3, y=1.2)
     ax_e = fig.add_subplot(g3[1])
     panel_by_hp(ax_e, by_hp)
