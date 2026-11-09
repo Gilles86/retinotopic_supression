@@ -87,6 +87,7 @@ def copy(unit, env, batch=50):
     if done_fn.exists():
         done = {line.split('\t')[0] for line in done_fn.read_text().splitlines() if line}
     todo = [p for p in files if str(p.relative_to(SRC)) not in done]
+    todo = reconcile(unit, todo[:batch], env) + todo[batch:]
     print(f'{unit}: {len(files)} files, {sum(p.stat().st_size for p in files) / 1e9:.1f} GB; {len(todo)} to copy', flush=True)
     dirs = sorted({str(p.relative_to(SRC).parent) for p in todo} - {'.'})
     mk = []
@@ -97,32 +98,113 @@ def copy(unit, env, batch=50):
         # mkdir of an existing directory reports NAME_COLLISION; that is fine, so no check here.
         smb([f'mkdir "{"/".join(DEST.split("/")[:i + 1])}"' for i in range(len(DEST.split('/')))] + list(dict.fromkeys(mk)),
             env, check=False)
-    with open(done_fn, 'a') as log:
+    blocked_fn = STATE / f'{unit}.blocked.tsv'
+    with open(done_fn, 'a') as log, open(blocked_fn, 'a') as blog:
         for i in range(0, len(todo), batch):
             chunk = todo[i:i + batch]
-            smb([f'put "{p}" "{DEST}/{p.relative_to(SRC)}"' for p in chunk], env)
+            text = smb([f'put "{p}" "{DEST}/{p.relative_to(SRC)}"' for p in chunk], env, check=False)
+            put_ok = {line.split(' as ')[0][len('putting file '):] for line in text.splitlines()
+                      if line.startswith('putting file ')}
             for p in chunk:
-                log.write(f'{p.relative_to(SRC)}\t{p.stat().st_size}\n')
+                if str(p) in put_ok:
+                    log.write(f'{p.relative_to(SRC)}\t{p.stat().st_size}\n')
+                else:
+                    # The share refuses some file names (e.g. ACCESS_DENIED on creating them); these go into a tar.
+                    blog.write(f'{p.relative_to(SRC)}\t{p.stat().st_size}\n')
             log.flush()
+            blog.flush()
             print(f'  {min(i + batch, len(todo))}/{len(todo)}', flush=True)
+    put_blocked(unit, env)
+
+
+def reconcile(unit, first, env):
+    """After an interrupted batch, files may be on the share but not in the done-list. Mark those with the same
+    size as done instead of putting them again (the share is append-only: never overwrite)."""
+    remote = {}
+    for d in sorted({str(p.relative_to(SRC).parent) for p in first}):
+        text = smb([f'ls "{DEST}/{d}/*"'], env, check=False)
+        for line in text.splitlines():
+            parts = line.split()
+            # "  name   A   size  Mon Nov  9 17:40:31 2026"
+            if len(parts) >= 8 and parts[-6].isdigit():
+                remote[f'{d}/{" ".join(parts[:-7])}'] = int(parts[-6])
+    keep = []
+    with open(STATE / f'{unit}.done.tsv', 'a') as log:
+        for p in first:
+            rel = str(p.relative_to(SRC))
+            if remote.get(rel) == p.stat().st_size:
+                log.write(f'{rel}\t{p.stat().st_size}\n')
+            else:
+                keep.append(p)
+    if len(keep) < len(first):
+        print(f'{unit}: {len(first) - len(keep)} files already on the share, marked done', flush=True)
+    return keep
+
+
+def blocked_files(unit):
+    fn = STATE / f'{unit}.blocked.tsv'
+    if not fn.exists():
+        return []
+    done = {line.split('\t')[0] for line in (STATE / f'{unit}.done.tsv').read_text().splitlines() if line}
+    rels = dict.fromkeys(line.split('\t')[0] for line in fn.read_text().splitlines() if line)
+    return [r for r in rels if r not in done]
+
+
+def put_blocked(unit, env):
+    """Files the share refused by name go into one tar (paths relative to the dataset root), put once."""
+    rels = blocked_files(unit)
+    if not rels:
+        return
+    tar = STATE / f'{unit}_refused_by_share.tar'
+    remote = f'{DEST}/refused_by_share/{tar.name}'
+    if tar.exists():
+        print(f'{unit}: {tar.name} already made and put', flush=True)
+        return
+    subprocess.run(['tar', '-cf', str(tar), '-C', str(SRC)] + rels, check=True)
+    smb([f'mkdir "{DEST}/refused_by_share"'], env, check=False)
+    smb([f'put "{tar}" "{remote}"'], env)
+    print(f'{unit}: {len(rels)} files refused by the share by name, put as {remote}', flush=True)
+
+
+def remote_md5(remote, env):
+    r = subprocess.run(['smbclient', '-N', '--use-kerberos=required', SHARE, '-c', f'get "{remote}" -'],
+                       capture_output=True, env=env)
+    return hashlib.md5(r.stdout).hexdigest() if r.returncode == 0 and r.stdout else 'missing'
 
 
 def verify(unit, env):
     files = files_for(unit)
+    refused = set(blocked_files(unit))
+    tar = STATE / f'{unit}_refused_by_share.tar'
+    tar_members = {}
+    if refused:
+        import tarfile
+        with tarfile.open(tar) as t:
+            for m in t.getmembers():
+                if m.isfile():
+                    tar_members[m.name] = hashlib.md5(t.extractfile(m).read()).hexdigest()
     out = STATE / f'{unit}.verify.tsv'
     bad = 0
     with open(out, 'w') as f:
         f.write('path\tsize\tmd5_local\tmd5_remote\tok\n')
         for p in files:
-            rel = p.relative_to(SRC)
-            r = subprocess.run(['smbclient', '-N', '--use-kerberos=required', SHARE, '-c', f'get "{DEST}/{rel}" -'],
-                               capture_output=True, env=env)
-            remote = hashlib.md5(r.stdout).hexdigest() if r.returncode == 0 else 'missing'
+            rel = str(p.relative_to(SRC))
             local = md5(p)
+            if rel in refused:
+                # in the tar: the tar member must equal the source, and the tar on the share must equal the local tar
+                remote = tar_members.get(rel, 'missing')
+            else:
+                remote = remote_md5(f'{DEST}/{rel}', env)
             ok = remote == local
             bad += not ok
             f.write(f'{rel}\t{p.stat().st_size}\t{local}\t{remote}\t{ok}\n')
-    print(f'{unit}: {len(files)} files verified, {bad} mismatching or missing -> {out}', flush=True)
+        if refused:
+            local, remote = md5(tar), remote_md5(f'{DEST}/refused_by_share/{tar.name}', env)
+            ok = local == remote
+            bad += not ok
+            f.write(f'refused_by_share/{tar.name}\t{tar.stat().st_size}\t{local}\t{remote}\t{ok}\n')
+    print(f'{unit}: {len(files)} files verified ({len(refused)} via the tar), {bad} mismatching or missing -> {out}',
+          flush=True)
     return bad
 
 
