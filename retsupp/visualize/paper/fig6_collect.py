@@ -229,6 +229,20 @@ def extract_runs(bids, source, out_dir, keys, name):
     print('Wrote', sorted(out), '->', dst)
 
 
+def extract_subject_means(bids, source, out_dir, keys, frames, decoder='free'):
+    """Per 'sub-XX_roi-ROI': the decoded frames averaged over the subject's runs, at the given frame indices."""
+    root = Path(bids) / 'derivatives' / 'decoded_final_2026-11' / source / decoder
+    out = {}
+    for k in keys:
+        sub, roi = k.split('_')
+        runs = [np.load(f)['decoded'].astype(np.float32)[frames] for f in sorted((root / sub).glob(f'decoded_ses-*_run-*_{roi}.npz'))]
+        out[k] = np.mean(runs, 0)
+        out[k + '_nruns'] = np.array(len(runs))
+    dst = Path(out_dir) / f'decoding_example_subjects_{source}_2026-11.npz'
+    np.savez_compressed(dst, frames=np.array(frames), **out)
+    print('Wrote', dst, len(keys), 'subject x ROI')
+
+
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
@@ -240,8 +254,12 @@ if __name__ == '__main__':
     ap.add_argument('--trim', nargs='+', default=None, help="only trim the example runs, e.g. 'sub-23_ses-2_run-3'")
     ap.add_argument('--extract', nargs='+', default=None, help="only extract decoded runs, e.g. 'sub-18_ses-2_run-5_roi-V1'")
     ap.add_argument('--extract-name', default='example_candidates')
+    ap.add_argument('--subject-means', nargs='+', default=None, help="'sub-XX_roi-ROI' keys: run-mean frames")
+    ap.add_argument('--frames', nargs='+', type=int, default=[15, 21, 28, 72, 81, 89, 130])
     a = ap.parse_args()
-    if a.extract:
+    if a.subject_means:
+        extract_subject_means(a.bids_folder, a.source, a.out_dir, a.subject_means, a.frames)
+    elif a.extract:
         extract_runs(a.bids_folder, a.source, a.out_dir, a.extract, a.extract_name)
     elif a.trim:
         trim_examples(a.source, a.out_dir, a.trim)
