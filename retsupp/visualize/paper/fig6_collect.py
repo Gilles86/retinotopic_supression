@@ -41,8 +41,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-ROIS = ['V1', 'V2', 'V3']
-DECODERS = ['free', 'outline']
+ALL_ROIS = ['V1', 'V2', 'V3', 'V3AB', 'IPS', 'hV4', 'VO', 'LO', 'TO']   # fixed order (also seeds the shuffles)
 ANGLE = {'upper_right': 45, 'upper_left': 135, 'lower_left': 225, 'lower_right': 315}
 QUADRANTS = {'upper_right': (1, 1), 'upper_left': (-1, 1), 'lower_left': (-1, -1), 'lower_right': (1, -1)}
 BANDS = [('0-1.5', 0., 1.5), ('1.5-2.5', 1.5, 2.5), ('2.5-ap', 2.5, np.inf)]
@@ -101,7 +100,7 @@ def one_run(args):
     Di, Pi = D[:, inside], P[:, inside]
     has = Pi.sum(1) > 0
     r = frame_corr(Di[has], Pi[has])
-    rng = np.random.default_rng(subject * 1000 + session * 100 + run * 10 + ROIS.index(roi))
+    rng = np.random.default_rng(subject * 1000 + session * 100 + run * 10 + ALL_ROIS.index(roi))
     idx = np.flatnonzero(has)
     null = []
     for _ in range(N_SHUFFLE):
@@ -143,9 +142,14 @@ def one_run(args):
     return meta, q, rows, maps, (D.reshape(T, 50, 50) if T == N_TR else None), P.reshape(T, 50, 50)
 
 
-def main(bids, source, out_dir, jobs):
+def main(bids, source, out_dir, jobs, rois=None):
     root = Path(bids) / 'derivatives' / 'decoded_final_2026-11' / source
     files = sorted(root.glob('*/sub-*/decoded_ses-*_run-*_roi-*.npz'))
+    found = {f.stem.split('roi-')[1] for f in files}
+    ROIS = [r for r in ALL_ROIS if r in found and (rois is None or r in rois)]
+    DECODERS = [d for d in ('free', 'outline') if any(f.parent.parent.name == d for f in files)]
+    files = [f for f in files if f.stem.split('roi-')[1] in ROIS]
+    print('ROIs', ROIS, 'decoders', DECODERS, flush=True)
     print(f'{len(files)} decoded runs', flush=True)
     out_dir = Path(out_dir)
     subjects = sorted({int(f.parent.name.split('-')[1]) for f in files})
@@ -231,6 +235,7 @@ if __name__ == '__main__':
     ap.add_argument('--source', default='canonical')
     ap.add_argument('--out-dir', default='notes/data')
     ap.add_argument('-j', '--jobs', type=int, default=4)
+    ap.add_argument('--rois', nargs='+', default=None, help='default: every ROI found under the source')
     ap.add_argument('--trim', nargs='+', default=None, help="only trim the example runs, e.g. 'sub-23_ses-2_run-3'")
     ap.add_argument('--extract', nargs='+', default=None, help="only extract decoded runs, e.g. 'sub-18_ses-2_run-5_roi-V1'")
     ap.add_argument('--extract-name', default='example_candidates')
@@ -240,4 +245,4 @@ if __name__ == '__main__':
     elif a.trim:
         trim_examples(a.source, a.out_dir, a.trim)
     else:
-        main(a.bids_folder, a.source, a.out_dir, a.jobs)
+        main(a.bids_folder, a.source, a.out_dir, a.jobs, a.rois)
