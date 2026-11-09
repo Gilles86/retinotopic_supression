@@ -13,10 +13,10 @@ responses Fig. 3 and the model Fig. 4.
 | 2 pRF fits | `fig2_prf_fits` | `fig2_prf_fits.py` | provisional (d: HRF choice) |
 | 3 Responses at the item locations (model-free): target and distractor vs neutral item, HP vs LP per item type | `fig3_item_locations` | `fig3_item_locations.py` (statistics for the DCT basis in its legend) | final apart from layout |
 | 4 Gain-field model | `fig4_model_hp_blocks` | `fig4_model.py` | final |
-| 5 Gain fields: target and distractor gain, sustained and distractor HP − LP gain, the field to scale, leave-one-subject-out test per ROI (e) | `fig5_gain_fields` | `fig5_gain_fields.py` | provisional |
+| 5 Gain fields: target and distractor gain, sustained HP − LP gain, distractor and target HP − LP gain (c, as Fig. 1c, d), the field to scale, leave-one-subject-out test per ROI (e; bold, q < .05) | `fig5_gain_fields` | `fig5_gain_fields.py` | provisional |
 | Responses at a pRF's item location (model-free; place to be decided) | `fig_event_responses_2x3_deconv` | `fig_event_responses_2x3.py --deconv notes/data/event_deconv_2026-11` | final apart from layout |
 | 6 Decoding | not made yet | `fig6_decoding.py` | pending (final pRF fold fits) |
-| 7 The behavioural effects of Fig. 1 in the gains (a location HP − LP, b history repeat − switch; target and distractor side by side), and gain vs response time trial by trial (c) | `fig7_behaviour` (double column, a and b side by side); `fig7_behaviour_alt` (1.5 columns, all stacked; `--layout stacked`) for comparison | `fig7_behaviour.py` | prototype: a provisional (current fits), b, c on the October fits |
+| 7 Trial history in the gains (a, repeat − switch, as Fig. 1e, f; the location effects are Fig. 5c), and gain vs response time trial by trial (b) | `fig7_behaviour` | `fig7_behaviour.py` | prototype on the October fits |
 | Table 1 The ladder | `table1_ladder` | `table1_ladder.py` | provisional |
 | Table S Parameters | `table_parameters_2026-11` | written by `fig5_gain_fields.py` | provisional |
 | S Gain against pRF size (was Fig. 5a) | `figS_gain_vs_prf_size` | `fig5_gain_fields.py` | provisional |

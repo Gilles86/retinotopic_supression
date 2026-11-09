@@ -1,15 +1,13 @@
-"""Figure 7 (prototype): the gains behind the behavioural effects of Fig. 1, and behaviour trial by trial.
+"""Figure 7 (prototype): the history effects of Fig. 1 in the gains, and gain and behaviour trial by trial.
 
-a  Location, the gain analogue of Fig. 1c, d: distractor gain HP − LP (each term estimated alone, as Fig. 5c) next to the
-   target gain HP − LP (also estimated alone), per ROI.
-b  History, the gain analogue of Fig. 1e, f: target gain repeat − switch next to distractor gain repeat − switch, per ROI
-   (October attention-field fits with the gains split by repeat).
-c  Trial by trial: target, distractor (HP and LP trials averaged) and global gain as predictors of log RT (one Bayesian hierarchical model per
-   ROI); the global gain's sign flips along the hierarchy. Keyed by small drawings of the three gain fields.
+a  History, the gain analogue of Fig. 1e, f: target gain repeat − switch next to distractor gain repeat − switch, per ROI
+   (October attention-field fits with the gains split by repeat). The location analogue (Fig. 1c, d) is Fig. 5c.
+b  Trial by trial: target, distractor (HP and LP trials averaged) and global gain as predictors of log RT (one Bayesian
+   hierarchical model per ROI); the global gain's sign flips along the hierarchy. Keyed by small drawings of the gain fields.
 
-a uses the current (provisional) gain fits; b and c the October trial-wise analysis on the earlier attention-field fits
-(pSig0.5), stamped as such until they are redone on the ladder fits. Between-subject brain-behaviour correlations (null)
-stay in the text.
+Both use the October trial-wise analysis on the earlier attention-field fits (pSig0.5), stamped as such until they are redone
+on the ladder fits. Between-subject brain-behaviour correlations (null) stay in the text. Estimates are solid when
+significant, pale otherwise; stars as usual.
 
 Usage::
 
@@ -25,16 +23,15 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from retsupp.visualize.paper.fig45_common import conditional, median_ci
+from retsupp.visualize.paper.fig45_common import median_ci
 from retsupp.visualize.paper.paper_style import (HP, DISTRACTOR, DOUBLE, FG, MUTED, ROI_ORDER, ROI_X, TARGET, ROI_GROUPS, offset_spines,
                                                  roi_axis, save)
 from retsupp.visualize.paper.plot_fig1 import RING, item_positions
 
 LEGEND = """
-**Figure 7 (prototype). The behavioural effects of Fig. 1 in the gains, and gain and behaviour trial by trial.** a, b, The gain analogues of the response-time effects in Fig. 1c-f; the display icons are those of Fig. 1 (four possible locations, HP ringed in red; filled, the item on this trial; hollow, on the previous trial), and each series is the gain in the first condition minus that in the second. a, Location (Fig. 1c, d): the gain the distractor draws at the HP location minus at an LP location (dD, estimated alone, as in Fig. 5c; current fits, provisional) and the target gain at the HP location minus at an LP location (dT, likewise estimated alone; current fits, provisional). Less gain for a distractor at HP in V3AB, IPS, hV4 and VO; the target gain shows no reliable HP − LP difference after correction (smallest q = .07, V3, and a positive trend in IPS, q = .10). Fitted jointly with all other terms, dT is null in every ROI as well (text). b, History (Fig. 1e, f): target gain on target-repeat minus target-switch trials (fits with the target gain split by repeat), and distractor gain on distractor-repeat minus distractor-switch trials (fits with separate distractor gains on repeat and switch trials, the difference taken within HP and within LP and averaged, as for the response times in Fig. 1f). Less target gain on repeats in V3AB, IPS, hV4 and VO; the distractor gain does not differ after correction. a, b: points and bars are the median over subjects (n = 30) and its bootstrapped 95% CI (subject-level spread: Fig. 5); Wilcoxon signed-rank test against 0, Benjamini-Hochberg across the nine ROIs within each series; estimates with q < .05 are drawn solid, the others pale (key at the top); stars: * q < .05, ** q < .01, *** q < .001; all values below (n per ROI in the table). c, Within subjects, trial by trial: Bayesian hierarchical linear model of log RT (z within subject) per ROI on the per-trial target gain (gain field at the target), distractor gain (gain field at the distractor) on HP and on LP trials, and global gain (over the whole display), each z-scored within run and trial type, with trial number, target repeat, distractor repeat and target-at-previous-distractor as covariates, and random intercepts and gain slopes per subject (bambi, 4 × 1000 draws, no divergences, R̂ ≤ 1.01); the icons show each gain field (illustrative); up is slower. Points are posterior means, bars 95% HDIs, solid when the HDI excludes 0 and pale otherwise; stars give the posterior probability that the effect has the sign shown: * > .975, ** > .995, *** > .9995 (not corrected across ROIs). The distractor gain is shown as the slopes on HP and LP trials (entered separately) averaged per posterior draw; per trial type and their difference in the text and table (the HP − LP difference is not reliable: only IPS, uncorrected). b, c use the earlier attention-field fits (October 2026) and will be redone on the final fits.
+**Figure 7 (prototype). The history effects of Fig. 1 in the gains, and gain and behaviour trial by trial.** a, History (Fig. 1e, f; the location effects of Fig. 1c, d are in Fig. 5c): target gain on target-repeat minus target-switch trials (fits with the target gain split by repeat), and distractor gain on distractor-repeat minus distractor-switch trials (fits with separate distractor gains on repeat and switch trials, the difference taken within HP and within LP and averaged, as for the response times in Fig. 1f); the display icons are those of Fig. 1 (four possible locations, HP ringed in red; filled, the item on this trial; hollow, on the previous trial), each series the gain in the first condition minus that in the second. Less target gain on repeats in V3AB, IPS, hV4 and VO; the distractor gain does not differ after correction. Points and bars are the median over subjects (n = 30) and its bootstrapped 95% CI; Wilcoxon signed-rank test against 0, Benjamini-Hochberg across the nine ROIs within each series; estimates with q < .05 are drawn solid, the others pale (key at the top); stars: * q < .05, ** q < .01, *** q < .001; all values below. b, Within subjects, trial by trial: Bayesian hierarchical linear model of log RT (z within subject) per ROI on the per-trial target gain (gain field at the target), distractor gain (gain field at the distractor) on HP and on LP trials, and global gain (over the whole display), each z-scored within run and trial type, with trial number, target repeat, distractor repeat and target-at-previous-distractor as covariates, and random intercepts and gain slopes per subject (bambi, 4 × 1000 draws, no divergences, R̂ ≤ 1.01); the icons show each gain field (illustrative); up is slower. The distractor gain is shown as the slopes on HP and LP trials (entered separately) averaged per posterior draw; per trial type and their difference in the text and table (the HP − LP difference is not reliable: only IPS, uncorrected). Points are posterior means, bars 95% HDIs, solid when the HDI excludes 0 and pale otherwise; stars give the posterior probability that the effect has the sign shown: * > .975, ** > .995, *** > .9995 (not corrected across ROIs). Both panels use the earlier attention-field fits (October 2026) and will be redone on the final fits.
 """
-WIDTH = 5.2   # stacked layout: 1.5 columns (132 mm); the side layout (default) is double column
-STAMP = 'a: provisional, current fits · b, c: earlier fits (Oct 2026)'
+STAMP = 'Earlier attention-field fits (Oct 2026)'
 
 
 def stars(q):
@@ -243,7 +240,7 @@ def panel_pair(ax, series, ylim, ylabel, xlabels=True, roi_fs=6.5, group_names=N
 
 
 def stats_table(results):
-    lines = ['', '**Per-ROI statistics (a, b).** Median [bootstrapped 95% CI], Wilcoxon signed-rank p against 0, '
+    lines = ['', '**Per-ROI statistics (a).** Median [bootstrapped 95% CI], Wilcoxon signed-rank p against 0, '
              'Benjamini-Hochberg q across the nine ROIs within each series; n = 30 subjects per ROI unless given otherwise.', '']
     for name, st in results.items():
         lines += [f'*{name}*', '', '| ROI | n | Median [95% CI] | p | q |', '|---|---|---|---|---|']
@@ -267,88 +264,44 @@ def sig_key(fig, y):
     ax.set_ylim(-1, 1)
     ax.set_axis_off()
     estimate(ax, .05, 0, -.8, .8, FG, True)
-    ax.text(.13, 0, 'q < .05 (a, b) or 95% HDI excludes 0 (c)', fontsize=6, color=FG, va='center')
+    ax.text(.13, 0, 'q < .05 (a) or 95% HDI excludes 0 (b)', fontsize=6, color=FG, va='center')
     estimate(ax, 2.35, 0, -.8, .8, FG, False)
     ax.text(2.43, 0, 'Not significant', fontsize=6, color='.45', va='center')
 
 
-def main(repeat_table, bayes_table, conditional_table, dt_table, name='fig7_behaviour', W=WIDTH, layout='side'):
+def main(repeat_table, bayes_table, name='fig7_behaviour'):
     bayes = pd.read_csv(bayes_table, sep='\t')
     rep = pd.read_csv(repeat_table, sep='\t')
-    cond = conditional(conditional_table)
-    dt = pd.read_csv(dt_table, sep='\t')
     t_rep = rep[rep.model == 'targetRepeat'].assign(d=lambda d: d.g_T_dyn_repeat - d.g_T_dyn_switch)
     # The repeat model has separate distractor gains on repeat and on switch trials (g_HP_dyn, g_LP_dyn are the switch
     # gains); repeat − switch is taken within HP and within LP trials and averaged, as for the response times (Fig. 1f).
     d_rep = rep[rep.model == 'repeat'].assign(d=lambda d: ((d.g_HP_dyn_repeat - d.g_HP_dyn) + (d.g_LP_dyn_repeat - d.g_LP_dyn)) / 2)
-
-    A = [('Distractor gain, HP − LP (estimated alone)', cond, 'dD', DISTRACTOR), ('Target gain, HP − LP (estimated alone)', dt, 'dT', TARGET)]
-    B = [('Target gain, repeat − switch', t_rep, 'd', TARGET), ('Distractor gain, repeat − switch', d_rep, 'd', DISTRACTOR)]
-    title_a = [('Location: less gain for a ', FG), ('distractor', DISTRACTOR), (' at HP', FG)]
-    title_b = [('History: less ', FG), ('target', TARGET), (' gain when its location repeats', FG)]
-    key_a = [(icons('location', 'distractor'), DISTRACTOR, 'Distractor gain'), (icons('location', 'target'), TARGET, 'Target gain')]
-    key_b = [(icons('history', 'target'), TARGET, 'Target gain'), (icons('history', 'distractor'), DISTRACTOR, 'Distractor gain')]
-    key_c = [([lambda a: draw_source(a, 'target')], TARGET, 'Target gain'),
-             ([lambda a: draw_source(a, 'distractor')], DISTRACTOR, 'Distractor gain'),
-             ([lambda a: draw_source(a, 'global')], FG, 'Global gain: the sign flips')]
-    title_c = [('Trial by trial: gain on a trial predicts its response time', FG)]
     results = {}
+    W, x0 = DOUBLE, .75
+    pw = W - .95
     gap = .27                      # heading to axes: room for the stars
-    if layout == 'side':
-        # a and b side by side, c full width below (double column).
-        W = DOUBLE
-        head, ah, below, ch = .44, .95, .5, 1.0
-        H = .26 + head + gap + ah + below + .22 + gap + ch + .4
-        fig = plt.figure(figsize=(W, H))
-        Y = lambda d: H - d
-        sig_key(fig, Y(.1))
-        fig.text(.995, Y(.1) / H, STAMP, fontsize=6, color=MUTED, ha='right', va='center')
-        pwh, xa, xb = 2.85, .62, 4.2
-        short = ['Early', 'Dorsal', 'Occipitotemporal']
-        for (xl, let, title, ref, key, ser, ylim, ylab, yt) in (
-                (xa, 'a', title_a, 'As Fig. 1c, d', key_a, A, (-.15, .12), 'Gain, HP − LP', [-.1, 0, .1]),
-                (xb, 'b', title_b, 'As Fig. 1e, f', key_b, B, (-1.15, .55), 'Gain, repeat − switch', [-1, 0])):
-            y = Y(.36)
-            row(fig, y, let, title, key, x_let=xl - .6, x_title=xl - .45, key_y=y - .27)
-            fig.text((xl + pwh) / W, y / H, ref, fontsize=6, color='.45', ha='right', va='center')
-            ax = ax_in(fig, xl, Y(.26 + head + gap + ah), pwh, ah)
-            results.update(panel_pair(ax, ser, ylim, ylab, roi_fs=6, group_names=short))
-            ax.set_yticks(yt)
-        yc = .26 + head + gap + ah + below
-        row(fig, Y(yc + .1), 'c', title_c, key_c)
-        ax = ax_in(fig, .62, Y(yc + .22 + gap + ch), W - .82, ch)
-    else:
-        # All three stacked; the 1.5-column width (or double with the keys on the title line).
-        narrow = W < 6
-        pw, x0 = W - .95, .75
-        head = .44 if narrow else .2
-        ah, below = (.72, .72, 1.0), (.24, .56, 0)
-        tops, t = [], .48 if narrow else .26
-        for k in range(3):
-            tops.append(t)
-            t += head + gap + ah[k] + below[k]
-        H = t + .4
-        fig = plt.figure(figsize=(W, H))
-        Y = lambda d: H - d
-        if narrow:
-            sig_key(fig, Y(.32))
-        else:
-            sig_key(fig, Y(.1))
-        fig.text(.995, Y(.1) / H, STAMP, fontsize=6, color=MUTED, ha='right', va='center')
-        for k, (let, title, ref, key, ser, ylim, ylab, yt) in enumerate((
-                ('a', title_a, 'As Fig. 1c, d', key_a, A, (-.15, .12), 'Gain,\nHP − LP', [-.1, 0, .1]),
-                ('b', title_b, 'As Fig. 1e, f', key_b, B, (-1.15, .55), 'Gain,\nrepeat − switch', [-1, 0]))):
-            y = Y(tops[k] + .1)
-            if narrow:
-                row(fig, y, let, title + [(f'  ({ref})', '.45')], key, key_y=y - .27)
-            else:
-                row(fig, y, let, title, key, ref)
-            ax = ax_in(fig, x0, Y(tops[k] + head + gap + ah[k]), pw, ah[k])
-            results.update(panel_pair(ax, ser, ylim, ylab, xlabels=k == 1))
-            ax.set_yticks(yt)
-        y = Y(tops[2] + .1)
-        row(fig, y, 'c', title_c, key_c, key_y=y - .27 if narrow else None)
-        ax = ax_in(fig, x0, Y(tops[2] + head + gap + ah[2]), pw, ah[2])
+    ah, ch, below = .9, 1.0, .56
+    H = .26 + .2 + gap + ah + below + .2 + gap + ch + .4
+    fig = plt.figure(figsize=(W, H))
+    Y = lambda d: H - d            # inches from the top -> from the bottom
+    sig_key(fig, Y(.1))
+    fig.text(.995, Y(.1) / H, STAMP, fontsize=6, color=MUTED, ha='right', va='center')
+    # a: history, repeat − switch (Fig. 1e, f); the location effect (Fig. 1c, d) is Fig. 5c.
+    row(fig, Y(.36), 'a', [('History: less ', FG), ('target', TARGET), (' gain when its location repeats', FG)],
+        [(icons('history', 'target'), TARGET, 'Target gain'), (icons('history', 'distractor'), DISTRACTOR, 'Distractor gain')],
+        'As Fig. 1e, f')
+    ax = ax_in(fig, x0, Y(.26 + .2 + gap + ah), pw, ah)
+    results.update(panel_pair(ax, [('Target gain, repeat − switch', t_rep, 'd', TARGET),
+                                   ('Distractor gain, repeat − switch', d_rep, 'd', DISTRACTOR)],
+                              (-1.15, .55), 'Gain,\nrepeat − switch'))
+    ax.set_yticks([-1, 0])
+    # b: trial by trial, keyed by the gain fields themselves.
+    yc = .26 + .2 + gap + ah + below
+    row(fig, Y(yc + .1), 'b', [('Trial by trial: gain on a trial predicts its response time', FG)],
+        [([lambda a: draw_source(a, 'target')], TARGET, 'Target gain'),
+         ([lambda a: draw_source(a, 'distractor')], DISTRACTOR, 'Distractor gain'),
+         ([lambda a: draw_source(a, 'global')], FG, 'Global gain: the sign flips')])
+    ax = ax_in(fig, x0, Y(yc + .2 + gap + ch), pw, ch)
     panel_bayes(ax, bayes, [('T', TARGET), ('D_avg', DISTRACTOR), ('G', FG)], (-.07, .125), 'Log RT per\nunit gain (z)')
     ax.set_yticks([0, .1])
     ax.text(XMAX + .25, .112, 'Slower', ha='right', va='center', fontsize=6, color='.45')
@@ -366,10 +319,6 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--repeat-table', default='notes/data/repeat_af_fits_params.tsv')
     ap.add_argument('--bayes-table', default='notes/data/trialwise_rt_bayes_summary_davg_2026-11.tsv')
-    ap.add_argument('--conditional-table', default='notes/data/conditional_estimates_dog_2026-11.tsv')
-    ap.add_argument('--dt-table', default='notes/data/conditional_dT_dog_2026-11.tsv')
     ap.add_argument('--name', default='fig7_behaviour')
-    ap.add_argument('--layout', default='side', choices=['stacked', 'side'], help='side: a, b next to each other, double column')
-    ap.add_argument('--width', type=float, default=WIDTH, help='inches; below 6 the keys go on their own line')
     a = ap.parse_args()
-    main(a.repeat_table, a.bayes_table, a.conditional_table, a.dt_table, a.name, a.width, a.layout)
+    main(a.repeat_table, a.bayes_table, a.name)
