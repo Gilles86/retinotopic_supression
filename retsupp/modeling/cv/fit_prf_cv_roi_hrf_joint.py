@@ -6,7 +6,7 @@ because pilot fits ended at the default dispersion bound in most ROIs.
 Stages, per ROI, on the training runs of one fold:
 
 1. All pRF parameters with the canonical HRF: the fold's canonical fit from ``fit_prf_cv_roi``
-   (model 2 for DoG, 5 for DN), carried into the flexible-HRF model at the canonical HRF values
+   (model 2 for DoG, 5 for DN, 1 for the Gaussian), carried into the flexible-HRF model at the canonical HRF values
    (delay 4.5 s, dispersion 0.75). Checked: same predictions as the canonical model.
 2. Only the HRF free: one delay and one dispersion shared by all voxels of the ROI; every pRF
    parameter fixed except the per-voxel baseline (an offset; braincoder's fitter needs one free
@@ -43,7 +43,7 @@ from retsupp.utils.data import Subject
 from retsupp.utils.sentinels import assert_gpu_available_if_expected
 
 ROIS = ['V1', 'V2', 'V3', 'V3AB', 'IPS', 'hV4', 'VO', 'LO', 'TO']
-FAMILY = {'dog': (2, 4), 'dn': (5, 6)}           # (canonical parent, flexible-HRF model class)
+FAMILY = {'dog': (2, 4), 'dn': (5, 6), 'gauss': (1, 3)}   # (canonical parent, flexible-HRF model class)
 CANONICAL = {'hrf_delay': 4.5, 'hrf_dispersion': 0.75}
 
 

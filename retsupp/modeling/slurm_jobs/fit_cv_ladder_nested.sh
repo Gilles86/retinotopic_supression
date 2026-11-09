@@ -21,6 +21,7 @@
 #   BASE_ROOT="<path> ..." reuses the m00 and m0 fits of these roots, first hit wins
 #   MAX_BOLD_SD=20 drops voxels above that BOLD SD (root gets a _maxsd20 suffix)
 #   FAMILY=dn uses the divisive-normalization pRF (root gets a _dn suffix)
+#   FAMILY=gauss uses a Gaussian pRF (DoG with surround amplitude 0; m00 from the joint-HRF Gaussian fold fits; _gauss suffix)
 #   HP_ROTATION=K relabels HP K ring steps away (root gets a _hprot<K> suffix), needs BASE_ROOT
 #   MODELS="m5_TDS_dS m7_full" fits only these models and their ancestors
 #   MODELS=m8_full_dT or m8_full_adjopp (target split; LP gain split next to HP vs opposite) are fitted on

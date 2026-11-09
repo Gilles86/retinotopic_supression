@@ -22,6 +22,9 @@ pRF fit:
 * ``--prf-source dog_roihrf`` / ``dn_roihrf``: ``derivatives/prf_cv_roi_sharedhrf`` models 14 (DoG) and 16
   (divisive normalization, DN) of ``fit_prf_cv_roi_hrf.py``: one HRF per subject × ROI (the median of the
   fold's flexible-HRF training fits, m4 resp. m6), held fixed while the pRF was refit on the training runs.
+* ``--prf-source gauss_roihrf``: the same for model 13 (Gaussian pRF; HRF from the m3 training fits).
+* ``--prf-source gauss_jointhrf`` / ``dn_jointhrf``: as ``jointhrf`` for the Gaussian and the DN pRF (their own
+  joint per-ROI HRF fits, same recipe and tag).
 * ``--prf-source dn_canonical``: ``derivatives/prf_cv_roi`` model 5 (DN, canonical HRF).
 
 All fits used ``sd_min = 0.2`` and ``SPMHRFModel(tr=1.6, delay=4.5, dispersion=0.75)`` (jointhrf adds the
@@ -69,6 +72,9 @@ SOURCES = {
     'dog_roihrf': ('prf_cv_roi_sharedhrf', 'model-14', 'dog', True, False),
     'dn_roihrf': ('prf_cv_roi_sharedhrf', 'model-16', 'dn', True, False),
     'dn_canonical': ('prf_cv_roi', 'model-5', 'dn', False, False),
+    'gauss_roihrf': ('prf_cv_roi_sharedhrf', 'model-13', 'gauss', True, False),
+    'gauss_jointhrf': ('prf_cv_roi_jointhrf', 'gauss_{joint_tag}_stage-3', 'gauss', True, True),
+    'dn_jointhrf': ('prf_cv_roi_jointhrf', 'dn_{joint_tag}_stage-3', 'dn', True, True),
 }
 
 
@@ -94,10 +100,12 @@ def load_prfs(deriv, subject, fold, source, joint_tag):
 
 def make_model(source, grid, paradigm, data, parameters, sd_min=.2):
     from braincoder.hrf import SPMHRFModel
-    from braincoder.models import DifferenceOfGaussiansPRF2DWithHRF, DivisiveNormalizationGaussianPRF2DWithHRF
+    from braincoder.models import (DifferenceOfGaussiansPRF2DWithHRF, DivisiveNormalizationGaussianPRF2DWithHRF,
+                                   GaussianPRF2DWithHRF)
     _, _, kind, flex, bounded = SOURCES[source]
     hrf = SPMHRFModel(tr=1.6, delay=4.5, dispersion=0.75, **(dict(min_hrf_delay=2., min_dispersion=.1) if bounded else {}))
-    cls = DifferenceOfGaussiansPRF2DWithHRF if kind == 'dog' else DivisiveNormalizationGaussianPRF2DWithHRF
+    cls = {'dog': DifferenceOfGaussiansPRF2DWithHRF, 'dn': DivisiveNormalizationGaussianPRF2DWithHRF,
+           'gauss': GaussianPRF2DWithHRF}[kind]
     return cls(grid_coordinates=grid, paradigm=paradigm, hrf_model=hrf, data=data, parameters=parameters,
                flexible_hrf_parameters=flex, sd_min=sd_min)
 
@@ -172,9 +180,9 @@ def check_prfs(subject, fold, source, bids, joint_tag='final2', rois=('V1', 'V2'
     with np.load(deriv / 'cleaned_bold_cache' / f'sub-{subject:02d}' / f'sub-{subject:02d}_kind-full_res-{resolution}.npz') as f:
         bold_all = f['bold']
     factory = None
-    if folder.startswith('prf_cv_roi') and source != 'jointhrf':
+    if folder.startswith('prf_cv_roi') and folder != 'prf_cv_roi_jointhrf':
         from retsupp.modeling.fit_prf import MODEL_CFG, build_model_factory
-        parent = {'model-2': 2, 'model-5': 5, 'model-14': 4, 'model-16': 6}[tag]
+        parent = {'model-2': 2, 'model-5': 5, 'model-13': 3, 'model-14': 4, 'model-16': 6}[tag]
         factory = lambda grid: build_model_factory(MODEL_CFG[parent], grid, .2)
     for roi in rois:
         ids = roi_of.index[(roi_of.to_numpy() == roi)]
