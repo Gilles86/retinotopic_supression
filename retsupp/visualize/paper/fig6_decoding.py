@@ -778,6 +778,78 @@ larger pRFs.
     save(fig, name, legend)
 
 
+def plot_all_rois_examples(name='figS_decoding_all_rois_examples', source='jointhrf', show=(1, 4, 5)):
+    """Supplementary figure: per ROI, three example subjects (75th, 50th and 25th percentile of decoding quality r),
+    their decoded frames averaged over runs, at three time points."""
+    import matplotlib.colors as mcolors
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import Circle
+    from retsupp.visualize.paper.paper_style import FG, MUTED, ROI_GROUPS, STIM, save
+    z = np.load(DATA / f'decoding_example_subjects_{source}_2026-11.npz')
+    ex = pd.read_csv(DATA / f'decoding_example_subjects_{source}_2026-11.tsv', sep='\t')
+    fr = np.load(DATA / f'decoding_frames_allrois_{source}_2026-11.npz')
+    par = fr['paradigm'].astype(float)
+    frames = list(z['frames'])
+    W, H = 7.25, 7.4
+    fig = plt.figure(figsize=(W, H))
+    size, gap, bgap, x0 = .5, .04, .22, 1.35
+    c = np.linspace(-5, 5, 50)
+    X, Y = np.meshgrid(c, c)
+    cm = mcolors.LinearSegmentedColormap.from_list('stim', ['#FFFFFF', STIM])
+    pct_lab = {75: '75th percentile of r', 50: 'Median r', 25: '25th percentile of r'}
+
+    def xpos(blk, k):
+        return x0 + blk * (3 * (size + gap) + bgap) + k * (size + gap)
+
+    y = H - .85
+    for blk, pct in enumerate((75, 50, 25)):
+        fig.text((xpos(blk, 0) + 1.5 * size + gap) / W, (H - .14) / H, pct_lab[pct], ha='center', va='center',
+                 fontsize=6.5, color=FG)
+        for k, j in enumerate(show):
+            ax = fig.add_axes([xpos(blk, k) / W, y / H, size / W, size / H])
+            disc(ax, par[j], cm, 1.)
+            ax.text(.5, 1.04, f'{frames[j] * TR:.0f} s', transform=ax.transAxes, ha='center', va='bottom', fontsize=5.5,
+                    color='.35')
+    fig.text((x0 - .1) / W, (y + size / 2) / H, 'Bar', ha='right', va='center', fontsize=6.5, color=FG)
+    ypos = {}
+    prev = None
+    for gname, g in ROI_GROUPS:
+        for roi in g:
+            y -= size + .17 + (.12 if gname != prev else 0)
+            prev = gname
+            ypos[roi] = y
+            for blk, pct in enumerate((75, 50, 25)):
+                r = ex[(ex.roi == roi) & (ex.pct == pct)].iloc[0]
+                arr = z[f'sub-{int(r.subject):02d}_roi-{roi}']
+                vmax = np.nanpercentile(arr[list(show)], 99.7)
+                for k, j in enumerate(show):
+                    ax = fig.add_axes([xpos(blk, k) / W, y / H, size / W, size / H])
+                    img = np.where(np.hypot(X, Y) <= APERTURE + .1, np.clip(arr[j], 0, None), 0)
+                    ax.imshow(img, origin='lower', extent=[-5.1, 5.1, -5.1, 5.1], cmap='magma', vmin=0, vmax=vmax,
+                              interpolation='bilinear')
+                    ax.add_patch(Circle((0, 0), APERTURE, fill=False, ec='.75', lw=.4))
+                    ax.set_xlim(-3.6, 3.6)
+                    ax.set_ylim(-3.6, 3.6)
+                    ax.set_axis_off()
+                fig.text((xpos(blk, 1) + size / 2) / W, (y - .02) / H, f'sub-{int(r.subject):02d}, r = {r.r:.2f}'.replace('0.', '.'),
+                         ha='center', va='top', fontsize=5.5, color='.35')
+            fig.text((x0 - .1) / W, (y + size / 2) / H, roi, ha='right', va='center', fontsize=7, color=FG)
+    for gname, g in ROI_GROUPS:
+        y0, y1 = ypos[g[-1]] - .12, ypos[g[0]] + size
+        fig.add_artist(plt.Line2D([.45 / W] * 2, [y0 / H, y1 / H], color=MUTED, lw=.7))
+        fig.text(.33 / W, (y0 + y1) / 2 / H, gname, rotation=90, ha='center', va='center', fontsize=6.5, color='.4')
+    legend = f"""
+**Figure S. The bar decoded from each area in example subjects.** For each ROI, the subjects at the 75th, 50th and 25th
+percentile of decoding quality in that ROI (frame-wise correlation between decoded and true frame, mean over runs, as in
+Fig. 6b; label: subject and r), their decoded frames (unconstrained decoder, pRFs with one HRF per subject and ROI fitted
+on the other runs, held-out runs) averaged over their runs (11 or 12), at three time points (a vertical bar near the
+centre, a horizontal bar through the centre and one in the lower part); top row, the true bar. Each subject × ROI on a
+magma scale from 0 to its own maximum (99.7th percentile). The examples differ between ROIs because the percentiles are
+taken within each ROI.
+"""
+    save(fig, name, legend)
+
+
 def plot_bar_crossing(name='figS_bar_crossing_response', source_note=''):
     """Supplementary figure (was Fig. 6g): the measured response when the bar crosses a pRF near an item location."""
     import matplotlib.pyplot as plt
@@ -943,7 +1015,8 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('step', choices=['collect', 'plot', 'plot_bar_crossing', 'plot_all_rois'])
+    ap.add_argument('step', choices=['collect', 'plot', 'plot_bar_crossing', 'plot_all_rois',
+                                     'plot_all_rois_examples'])
     ap.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
     ap.add_argument('--source', default='jointhrf', help='jointhrf (main Fig. 6) or canonical (figS_decoding_canonical)')
     ap.add_argument('--rois', nargs='+', default=['V1', 'V2', 'V3', 'V3AB', 'IPS', 'hV4', 'VO', 'LO', 'TO'],
@@ -955,6 +1028,8 @@ if __name__ == '__main__':
     a = ap.parse_args()
     if a.step == 'collect':
         collect(a.bids_folder, a.source, a.out)
+    elif a.step == 'plot_all_rois_examples':
+        plot_all_rois_examples()
     elif a.step == 'plot_all_rois':
         plot_all_rois()
     elif a.step == 'plot_bar_crossing':
