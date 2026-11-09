@@ -40,6 +40,7 @@ TR = 1.6
 APERTURE, ITEM_ECC, ITEM_R = 3.17, 4.0, .75
 BANDS = [('0-1.5', 0, 1.5, '0–1.5°'), ('1.5-2.5', 1.5, 2.5, '1.5–2.5°'), ('2.5-ap', 2.5, APERTURE, '2.5°+')]
 ITEM_ANGLES = (90, 180, 270, 0)              # HP first: after rotation HP sits at 12 o'clock
+ECC_MAX = 3.45                               # f's x axis ends just past the aperture edge
 BAND_SHADE = ['#E8ECF0', '#D5DCE3', '#C2CBD5']
 LEGEND = """
 **Figure 6. The bar stimulus can be read out of early visual cortex, and it is read out at lower intensity in the quadrant
@@ -462,14 +463,15 @@ def panel_ecc(ax, be, pb):
         ax.axvspan(a, b, color=col, lw=0, zorder=0)
         ax.text((a + b) / 2, hi, lab, ha='center', va='top', fontsize=6.5, color='.35')
         ax.text((a + b) / 2, hi - .62, stars(pb[key]), ha='center', va='top', fontsize=7, color=HP)
-    ax.axvspan(ITEM_ECC - ITEM_R, ITEM_ECC + ITEM_R, color='.88', lw=0, zorder=0)
-    ax.text(ITEM_ECC, hi, 'Items', ha='center', va='top', fontsize=6.5, color='.35')
-    ax.text(ITEM_ECC, lo + .25, 'Outside\nthe bar', ha='center', va='bottom', fontsize=6, color='.45')
+    # Beyond the aperture edge there is no bar to decode; the items start just outside it.
+    ax.axvspan(APERTURE, ECC_MAX, facecolor='w', edgecolor='.6', hatch='////', lw=0, zorder=0)
+    ax.text((APERTURE + ECC_MAX) / 2, (lo + hi) / 2, 'Aperture edge (items beyond, at 4°)', rotation=90, ha='center',
+            va='center', fontsize=5.5, color='.35', bbox=dict(boxstyle='square,pad=.15', fc='w', ec='none'))
     ax.fill_between(x, m - se, m + se, color=HP, alpha=.2, lw=0)
     ax.plot(x, m, color=HP, lw=1.3)
     ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
-    ax.set_xlim(0, ITEM_ECC + ITEM_R)
-    ax.set_xticks([0, 1, 2, 3, 4])
+    ax.set_xlim(0, ECC_MAX)
+    ax.set_xticks([0, 1, 2, 3])
     ax.set_ylim(lo, hi)
     ax.set_yticks([-4, -2, 0, 2])
     ax.set_yticklabels(['−4', '−2', '0', '2'])
