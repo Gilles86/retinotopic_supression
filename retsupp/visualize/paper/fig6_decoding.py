@@ -76,13 +76,14 @@ band (mean ± SEM; one-sided Wilcoxon signed-rank test, uncorrected, * p < .05) 
 (Friedman test, p = {friedman:.2f}; outer minus inner band, two-sided Wilcoxon p = {outer_inner:.2f}). Within 0.75° of
 the fovea, where the four quadrants meet, there is no difference ({fovea}). g, Without a model: the measured response
 (cleaned BOLD, % signal) of V1–V3 voxels with cross-run reliability > 0 and a pRF centre within 2° of an item location,
-locked to the moment the bar centre crosses the pRF centre along the bar's direction of motion, by where the voxel's
-location lies relative to the run's HP location (inset: red, HP; dark grey, the two neighbouring LP locations; light grey,
-the opposite one); averaged over passes and voxels per subject, ROIs pooled weighted by voxel count; lines and bands,
-mean and within-subject SEM (Cousineau-Morey) over subjects. Bottom, HP minus the mean of the three LP locations, mean ±
-SEM. In {w0:.1f}–{w1:.1f} s (grey): {bar}. Search items are not removed and the response before the crossing is already
-rising (the bar enters the pRF earlier), so no pre-crossing baseline is subtracted; with one (−6.4 to 0 s) the
-difference is {bar_base}. {source}
+locked to the moment the bar centre crosses the pRF centre along the bar's direction of motion (left: sketch, and the
+mean response of these voxels, which peaks about 3 s after the crossing). Each voxel's location is classed relative to
+the run's HP location as in d: HP (red), next to HP (the two neighbouring LP locations, dark grey) or opposite (light
+grey); responses are averaged over passes and voxels per subject, ROIs pooled weighted by voxel count, and shown
+relative to the mean of the four locations; lines and bands, mean ± SEM over subjects. HP minus the mean of the three LP
+locations in {w0:.1f}–{w1:.1f} s (grey; * one-sided Wilcoxon p < .05): {bar}. Search items are not removed and the
+response before the crossing is already rising (the bar enters the pRF earlier), so no pre-crossing baseline is
+subtracted; with one (−6.4 to 0 s) the difference is {bar_base}, not significant. {source}
 """
 
 
@@ -507,62 +508,81 @@ def bar_pass_stats(w):
     return out
 
 
-def panel_bar_pass(ax, ax2, w, st):
-    """g: response when the bar passes the pRF, by where the voxel's item location is relative to HP."""
-    from matplotlib.patches import Circle
+PRF_TEAL = '#2A9D8F'
+
+
+def bar_pass_icon(fig, x0, y0, w, mean_tc):
+    """The display (HP on top) with a pRF near the HP item and the bar sweeping across it, and below it the mean
+    measured response (all locations) with the moment the bar crosses the pRF centre at 0."""
+    from matplotlib.patches import Circle, FancyArrowPatch, Rectangle
+    from retsupp.visualize.paper.paper_style import FG, HP, MUTED, STIM
+    W, H = fig.get_size_inches()
+    ax = fig.add_axes([x0 / W, (y0 + .42) / H, w / W, w / H])
+    ax.add_patch(Circle((0, 0), APERTURE, fill=False, ec=MUTED, lw=.5))
+    for k, a in enumerate(ITEM_ANGLES):
+        q = ITEM_ECC * np.array([np.cos(np.deg2rad(a)), np.sin(np.deg2rad(a))])
+        ax.add_patch(Circle(q, ITEM_R, facecolor='w', ec=HP if k == 0 else '.6', lw=.9 if k == 0 else .5, zorder=3))
+    prf = np.array([.2, 2.6])
+    ax.add_patch(Circle(prf, 1.0, facecolor=PRF_TEAL, ec='none', alpha=.45, zorder=4))
+    ax.plot(*prf, 'o', ms=1.6, color=PRF_TEAL, zorder=5)
+    bx, bw = -.25, .8                                  # vertical bar, moving right, about to cross the pRF centre
+    hh = np.sqrt(APERTURE ** 2 - (bx + bw / 2) ** 2)
+    ax.add_patch(Rectangle((bx - bw / 2, -hh), bw, 2 * hh, facecolor=STIM, alpha=.55, lw=0, zorder=2))
+    ax.add_patch(FancyArrowPatch((bx + .5, -1.2), (bx + 2.3, -1.2), arrowstyle='-|>', mutation_scale=6, color=STIM,
+                                 lw=.8, zorder=6))
+    ax.plot(0, 0, '+', color=FG, ms=3, mew=.5, zorder=6)
+    ax.set_xlim(-5, 5)
+    ax.set_ylim(-5, 5)
+    ax.set_aspect('equal')
+    ax.set_axis_off()
+    ax.text(prf[0] + 1.25, prf[1] + .1, 'pRF', fontsize=5.5, color=PRF_TEAL, ha='left', va='center', zorder=7)
+    # The mean response, small, to show its shape.
+    a2 = fig.add_axes([(x0 + .08) / W, y0 / H, (w - .1) / W, .3 / H])
+    m = mean_tc[(mean_tc.index >= -4.8) & (mean_tc.index <= 14.4)]
+    a2.plot(m.index, m.values, color=PRF_TEAL, lw=1.1)
+    a2.axvline(0, color=STIM, lw=.8)
+    a2.text(0, 1.04, 'Bar crosses pRF', transform=a2.get_xaxis_transform(), fontsize=5.5, color=STIM, ha='center',
+            va='bottom')
+    a2.set_xlim(-4.8, 14.4)
+    a2.set_ylim(m.min() - .2, m.max() + .3)
+    a2.set_xticks([0, 10])
+    a2.set_xticklabels(['0', '10 s'], fontsize=5.5)
+    a2.set_yticks([])
+    a2.tick_params(axis='x', length=2, pad=1)
+    for sp in ('left', 'top', 'right'):
+        a2.spines[sp].set_visible(False)
+    a2.spines['bottom'].set_linewidth(.5)
+    return ax, a2
+
+
+def panel_bar_pass(ax, w, st):
+    """g: response at each item location relative to the mean of the four locations, time-locked to the bar crossing the
+    pRF; HP, next to HP and opposite in d's order and colours."""
     from retsupp.visualize.paper.paper_style import FG, HP, offset_spines
-    w = w[(w.t >= -4.8) & (w.t <= 14.4)]
-    cls = ['hp', 'adjacent', 'opposite']
-    wide = w.set_index(['subject', 't'])[cls]
-    # Cousineau-Morey within-subject SEM
-    norm = wide.sub(wide.mean(1), axis=0).add(wide.values.mean(), axis=0)
-    k = len(cls)
-    for c in cls[::-1]:
-        m = wide[c].groupby('t').mean()
-        se = norm[c].groupby('t').std(ddof=1) / np.sqrt(w.subject.nunique()) * np.sqrt(k / (k - 1))
+    w = w[(w.t >= -4.8) & (w.t <= 14.4)].copy()
+    m4 = (w.hp + 2 * w.adjacent + w.opposite) / 4
+    ax.axvspan(*BAR_WINDOW, color='.92', lw=0, zorder=0)
+    for c, lab in QUAD_CLASSES[::-1]:
+        dd = (w[c] - m4).groupby(w.t)
+        m, se = dd.mean(), dd.std(ddof=1) / np.sqrt(w.subject.nunique())
         ax.fill_between(m.index, m - se, m + se, color=LOC_COLORS[c], alpha=.18, lw=0)
-        ax.plot(m.index, m, color=LOC_COLORS[c], lw=1.3 if c == 'hp' else 1.)
+        ax.plot(m.index, m.values, color=LOC_COLORS[c], lw=1.4 if c == 'hp' else 1.1)
     ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
     ax.axvline(0, color='.75', lw=.6, zorder=0)
+    ax.text(np.mean(BAR_WINDOW), -.083, stars(st['raw']['p']), ha='center', va='top', fontsize=7, color=HP)
     ax.set_xlim(-4.8, 14.4)
     ax.set_xticks([0, 5, 10])
-    ax.set_xticklabels([])
-    ax.set_ylim(-1.2, 2.6)
-    ax.set_yticks([0, 2])
-    ax.set_ylabel('Response\n(% signal)')
-    ax.yaxis.set_label_coords(-.24, .5)
-    # key: the display with each location in its colour
-    ins = ax.inset_axes([1.04, .25, .38, .75 * 1.55 / .65 * .38 / .75])
-    ins.add_patch(Circle((0, 0), APERTURE, fill=False, ec='.6', lw=.5))
-    for a, c in zip(ITEM_ANGLES, ['hp', 'adjacent', 'opposite', 'adjacent']):
-        q = ITEM_ECC * np.array([np.cos(np.deg2rad(a)), np.sin(np.deg2rad(a))])
-        ins.add_patch(Circle(q, ITEM_R * 1.25, facecolor=LOC_COLORS[c], ec='none'))
-    ins.plot(0, 0, '+', color=FG, ms=3, mew=.5)
-    ins.set_xlim(-5.2, 5.2)
-    ins.set_ylim(-5.2, 5.2)
-    ins.set_aspect('equal')
-    ins.set_axis_off()
-    for k, (c, lab) in enumerate((('hp', 'HP'), ('adjacent', 'Next to HP'), ('opposite', 'Opposite'))):
-        ax.text(1.04, .12 - k * .2, lab, transform=ax.transAxes, color=LOC_COLORS[c], fontsize=6, ha='left', va='top')
-    area_tag(ax, x=1.04, y=-.55)
+    ax.set_ylim(-.095, .11)
+    ax.set_yticks([-.05, 0, .05])
+    ax.set_yticklabels(['−.05', '0', '.05'])
+    ax.set_ylabel('Response vs mean of\nlocations (% signal)')
+    ax.set_xlabel('Time from crossing (s)')
+    for k, (c, lab) in enumerate(QUAD_CLASSES):
+        y = 1.0 - k * .1
+        ax.plot([.5, .58], [y, y], transform=ax.transAxes, color=LOC_COLORS[c], lw=1.4, clip_on=False)
+        ax.text(.6, y, lab, transform=ax.transAxes, color=LOC_COLORS[c] if c != 'opposite' else '.5', fontsize=6,
+                va='center')
     offset_spines(ax)
-    # HP − LP
-    d = (wide.hp - (2 * wide.adjacent + wide.opposite) / 3).groupby('t')
-    m, se = d.mean(), d.std(ddof=1) / np.sqrt(w.subject.nunique())
-    ax2.axvspan(*BAR_WINDOW, color='.92', lw=0, zorder=0)
-    ax2.fill_between(m.index, m - se, m + se, color=HP, alpha=.2, lw=0)
-    ax2.plot(m.index, m, color=HP, lw=1.3)
-    ax2.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
-    ax2.text(np.mean(BAR_WINDOW), .07, stars(st['raw']['p']), ha='center', va='top', fontsize=7, color=HP)
-    ax2.set_xlim(-4.8, 14.4)
-    ax2.set_xticks([0, 5, 10])
-    ax2.set_ylim(-.16, .08)
-    ax2.set_yticks([-.1, 0])
-    ax2.set_yticklabels(['−.1', '0'])
-    ax2.set_ylabel('HP − LP')
-    ax2.yaxis.set_label_coords(-.24, .5)
-    ax2.set_xlabel('Time from bar crossing the pRF (s)')
-    offset_spines(ax2)
 
 
 # ------------------------------------------------------------------------------------------------------------ figure
@@ -643,13 +663,14 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     fig.text(.02 / W, 1.93 / H, 'f', fontsize=8, fontweight='bold', va='center', ha='left')
     ax = fig.add_axes([.05 / W, .35 / H, 1.05 / W, 1.05 / H])
     panel_bands_sketch(ax)
-    ax = fig.add_axes([1.75 / W, .42 / H, 2.55 / W, 1.2 / H])
+    ax = fig.add_axes([1.65 / W, .42 / H, 2.25 / W, 1.2 / H])
     panel_ecc(ax, be, pb)
     area_tag(ax, x=.02, y=.3)
-    ax = fig.add_axes([5.0 / W, 1.0 / H, 1.55 / W, .65 / H])
-    ax2 = fig.add_axes([5.0 / W, .42 / H, 1.55 / W, .45 / H])
-    panel_bar_pass(ax, ax2, bp, bst)
-    letter(ax, 'g', x=-.42, y=1.02)
+    ico, _ = bar_pass_icon(fig, 4.12, .3, .95, bp.groupby('t')[['hp', 'adjacent', 'opposite']].mean().mean(1))
+    ico.text(-5.3, 5.6, 'g', fontsize=8, fontweight='bold', ha='left', va='bottom', color='k')
+    ax = fig.add_axes([5.75 / W, .42 / H, 1.35 / W, 1.2 / H])
+    panel_bar_pass(ax, bp, bst)
+    area_tag(ax, x=.02, y=.12)
 
     nq = qs.groupby('roi').r.median()
     quality = '; '.join(f'{r} median r = {nq[r]:.2f} vs {qs[qs.roi == r].r_shuffle.median():.3f}, {fmt_p(pq[r])}' for r in rois)
