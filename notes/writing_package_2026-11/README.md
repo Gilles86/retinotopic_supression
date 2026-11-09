@@ -93,12 +93,14 @@ contrasts. End with what we did and found.
    (smallest q = .07), and null in the joint fit.
 6. Converging evidence without gain terms (Fig. 6, decoding; pRFs with an HRF per subject × ROI, no gain terms,
    held-out runs). The bar can be decoded from every area (median frame-wise r .52/.47/.40 in V1/V2/V3, .12–.29 in
-   the higher areas, all far above shuffled frames). Pre-specified test: less decoded intensity in the quadrant facing
-   HP, V2 p_Holm = .039, V3 borderline p_Holm = .055, V1 n.s.; HP quadrant below its neighbours (p = .015); spread from
+   the higher areas, all far above shuffled frames). Decoded intensity is lower in the quadrant facing HP: per ROI
+   (one-sided Wilcoxon, Benjamini-Hochberg across the nine ROIs) V2, V3, V3AB, VO and TO p = .013–.043 but none
+   survives correction (q = .076–.077; V1 q = .41); pooled over V1–V3 the HP quadrant is below its
+   neighbours (p = .015) and below the other quadrants over the whole aperture (p = .033); the effect is spread from
    1° to the aperture edge, not larger near the items; with the stimulus held identical (each frame minus its mean over
    HP locations), the half of a bar in the HP quadrant is decoded weaker than its other half, for vertical (−1.6%,
-   p = .031) and horizontal bars (−1.8%, p = .001) (supplement). Higher areas exploratory, none after BH (q ≥ .085);
-   the bar-outline decoder gives the same (V2 .031, V3 .061). The measured bar-pass response (supplement) points the
+   p = .031) and horizontal bars (−1.8%, p = .001) (supplement). The bar-outline decoder gives the
+   same (q = .090 for V2, V3, V3AB and TO). The measured bar-pass response (supplement) points the
    same way but its test depends on the baseline (p = .017 without, n.s. with).
    Canonical-HRF pRFs (supplement): V2 .044, V3 .045.
 7. Trial history in the gains, and gain and behaviour trial by trial (Fig. 7). History (Fig. 7a, as Fig. 1e, f;
