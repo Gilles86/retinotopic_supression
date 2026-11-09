@@ -153,7 +153,11 @@ def panel_display(ax, margin=9.3):
     ax.add_patch(Circle((0, 0), RING, fill=False, ec='w', lw=.5, ls=(0, (1.5, 1.5)), zorder=2.5))
     ax.plot([-5.0, -4.0], [-5.0, -5.0], color='w', lw=1.2, solid_capstyle='butt', zorder=6)
     ax.text(-4.5, -4.82, '1°', color='w', fontsize=6, ha='center', va='bottom', zorder=6)
-    ax.text(-1.25, -3.3, '4°', color='w', fontsize=6, ha='center', va='center', zorder=6)
+    # Item eccentricity (fixation to the right item) and item length (bracket over the top item).
+    ax.plot([.35, RING - .85], [0, 0], color='w', lw=.7, zorder=6)
+    ax.text(RING / 2 - .2, .25, '4°', color='w', fontsize=6, ha='center', va='bottom', zorder=6)
+    ax.plot([-.75, -.75, .75, .75], [RING + .45, RING + .6, RING + .6, RING + .45], color='w', lw=.7, zorder=6)
+    ax.text(0, RING + .72, '1.5°', color='w', fontsize=6, ha='center', va='bottom', zorder=6)
     ax.set_xlim(-margin - .2, margin + .2)
     ax.set_ylim(-8, 8.6)
     # Where the distractor can appear, with its probability over all trials.

@@ -35,6 +35,9 @@ def build_rt(path, bids):
     pd.concat([a, b]).to_csv(path, sep='\t', index=False)
 
 
+X_ICONS, DX_ICONS = .5, .13   # sweep and HP-location icon rows share these columns
+
+
 def panel_timeline(fig, ax):
     """Two trials to scale, the bar position every 2 s below them, then the HP location over blocks."""
     ax.set_axis_off()
@@ -73,14 +76,14 @@ def panel_timeline(fig, ax):
         inset.set_ylim(-3.3, 3.3)
         inset.set_aspect('equal')
         inset.set_axis_off()
-    ax.text(x0, yb - .012, 'Bar sweeps throughout, independent of the trials', ha='left', va='top', fontsize=6.5, color=FG)
+    ax.text(x0, yb - .045, 'Bar sweeps throughout, independent of the trials', ha='left', va='top', fontsize=6.5, color=FG)
     # The four sweep directions (42 s each, 4.8 s rest between, the sequence twice per run).
     ws = .055
     ics = ws * aspect
-    ys = yb - .012 - ics - .06
-    ax.text(x0, ys + ics / 2, 'Four sweep directions, 42 s each, twice per run', ha='left', va='center', fontsize=6.5, color=FG)
+    ys = yb - .045 - ics - .1
+    ax.text(x0, ys + ics / 2, 'Four sweep directions,\n42 s each, twice per run', ha='left', va='center', fontsize=6.5, color=FG)
     for i, (ori, sgn) in enumerate(((0, 1), (0, -1), (90, -1), (90, 1))):   # rightward, leftward, downward, upward
-        inset = ax.inset_axes([.6 + i * .08, ys, ws, ics])
+        inset = ax.inset_axes([X_ICONS + i * DX_ICONS + (.07 - ws) / 2, ys, ws, ics])
         inset.add_patch(Circle((0, 0), APERTURE, facecolor='#808080', lw=0))
         bar = plt.Rectangle((-1.9 * sgn - .4, -APERTURE), .8, 2 * APERTURE, facecolor='w', lw=0) if ori == 0 else \
             plt.Rectangle((-APERTURE, -1.9 * sgn - .4), 2 * APERTURE, .8, facecolor='w', lw=0)
@@ -97,11 +100,11 @@ def panel_timeline(fig, ax):
     # The HP location per block of runs.
     w = .07
     icon = w * aspect
-    yh = max(0., ys - .14 - icon)   # right under the sweep row, not at the bottom of the panel
+    yh = max(0., ys - .08 - icon)   # right under the sweep row, not at the bottom of the panel
     ax.text(x0, yh + icon / 2, 'HP location moves\nevery 3 runs (example)', ha='left', va='center', fontsize=6.5, color=FG)
     pos = item_positions()
     for i, k in enumerate([1, 5, 7, 3]):
-        x = .32 + i * .17
+        x = X_ICONS + i * DX_ICONS
         inset = ax.inset_axes([x, yh, w, icon])
         inset.add_patch(Circle((0, 0), RING, fill=False, ec=MUTED, lw=.5))
         for j in (1, 3, 5, 7):
@@ -111,7 +114,7 @@ def panel_timeline(fig, ax):
         inset.set_aspect('equal')
         inset.set_axis_off()
         if i < 3:
-            ax.annotate('', xy=(x + w + .08, yh + icon / 2), xytext=(x + w + .02, yh + icon / 2),
+            ax.annotate('', xy=(x + DX_ICONS - .012, yh + icon / 2), xytext=(x + w + .012, yh + icon / 2),
                         arrowprops=dict(arrowstyle='-|>', color=MUTED, lw=.7, mutation_scale=5, shrinkA=0, shrinkB=0))
 
 
