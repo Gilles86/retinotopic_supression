@@ -152,6 +152,7 @@ def collect_condition(bids, source, out_dir, jobs=4, decoder='free'):
 
 
 ALL_ROIS = ['V1', 'V2', 'V3', 'V3AB', 'IPS', 'hV4', 'VO', 'LO', 'TO']
+EARLY_ROIS = ['V1', 'V2', 'V3']
 SEG_QUAD = {'hp': (1, 1), 'next_ul': (-1, 1), 'next_lr': (1, -1), 'opposite': (-1, -1)}
 
 
@@ -167,9 +168,16 @@ def _segments(dec, diff, bar, X, Y):
 
 
 def collect_condition_per_roi(bids, source, out_dir, jobs=4, decoder='outline'):
-    """Per subject × ROI: the pooled (vertical + reflected horizontal) difference images in % of the bar's mean for
-    the bins with |centre| < 2°, and a table of quadrant-segment differences per orientation (vertical, horizontal,
-    pooled)."""
+    """All nine ROIs, reduced on the compute node (bins: the module's ``N_BINS``):
+
+    * ``decoded_bars_segments_<source>_<decoder>_b<N>_2026-11.tsv``: per subject × ROI × orientation (vertical,
+      horizontal, pooled = horizontal reflected across the HP diagonal onto vertical) × bin × quadrant, the
+      decoded − mean-over-HP difference on the bar's pixels in that quadrant, % of the mean decoded intensity on the bar.
+    * ``decoded_bars_images_<source>_<decoder>_b<N>_2026-11.npz``: group means (over subjects) of, per orientation ×
+      bin, the decoded image in % of the bar's mean and the difference image in % of the bar's mean, V1–V3 averaged per
+      subject first (``early_dec``, ``early_diff``, ``early_bar``); and per ROI the pooled-orientation difference image
+      (``roi_diff``, with ``roi_n`` subjects).
+    """
     root = Path(bids) / 'derivatives' / 'decoded_final_2026-11' / source / decoder
     tasks, keys = [], []
     for d in sorted(root.glob('sub-*')):
@@ -178,37 +186,59 @@ def collect_condition_per_roi(bids, source, out_dir, jobs=4, decoder='outline'):
             if fs:
                 tasks.append(fs)
                 keys.append((int(d.name.split('-')[1]), roi))
-    print(len(tasks), 'subject x ROI', flush=True)
+    print(len(tasks), 'subject x ROI', N_BINS, 'bins', flush=True)
     grid = np.load(tasks[0][0])['grid']
     X, Y = grid[:, 0].reshape(50, 50), grid[:, 1].reshape(50, 50)
     inside = np.hypot(X, Y) <= APERTURE
     centres = (EDGES[:-1] + EDGES[1:]) / 2
-    show = [b for b in range(N_BINS) if abs(centres[b]) < 2.]
-    subs = sorted({k[0] for k in keys})
-    imgs = np.full((len(subs), len(ALL_ROIS), len(show), 50, 50), np.nan, np.float32)
+    shape = (2, N_BINS, 50, 50)
+    early = {}                                          # subject -> list of (dec_rel, diff_rel, bar) for V1-V3
+    roi_sum = {r: np.zeros((N_BINS, 50, 50)) for r in ALL_ROIS}
+    roi_cnt = {r: np.zeros((N_BINS, 50, 50)) for r in ALL_ROIS}
+    roi_n = {r: 0 for r in ALL_ROIS}
+    frames = np.zeros((2, N_BINS))
     rows = []
     with Pool(jobs) as pool:
-        for (sub, roi), (sub2, s_, n_, nhp) in zip(keys, pool.imap(one_subject_roi, tasks)):
+        for (sub, roi), (_, s_, n_, nhp) in zip(keys, pool.imap(one_subject_roi, tasks)):
+            if roi in EARLY_ROIS:
+                frames += n_
             with np.errstate(invalid='ignore'):
                 m = (s_ / n_[:, :, None, None]).reshape(2, N_BINS, 3, 50, 50)
             pooled = (m[0] + np.swapaxes(m[1], -1, -2)) / 2
+            dec_rel, diff_rel, bars = np.full(shape, np.nan), np.full(shape, np.nan), np.zeros(shape)
             for b in range(N_BINS):
-                for oname, mm in (('vertical', m[0, b]), ('horizontal', m[1, b]), ('pooled', pooled[b])):
+                for o, (oname, mm) in enumerate((('vertical', m[0, b]), ('horizontal', m[1, b]), ('pooled', pooled[b]))):
                     bar = (mm[2] > .5) & inside
                     if bar.sum() < 10:
                         continue
                     for qn, v in _segments(mm[0], mm[1], bar, X, Y).items():
                         rows.append(dict(subject=sub, roi=roi, orientation=oname, bin=b, centre=centres[b], quadrant=qn,
                                          diff_pct=v, n_hp=nhp))
-                if b in show:
-                    bar = (pooled[b, 2] > .5) & inside
-                    imgs[subs.index(sub), ALL_ROIS.index(roi), show.index(b)] = np.where(
-                        inside, 100 * pooled[b, 1] / pooled[b, 0][bar].mean(), np.nan)
-    tag = f'{source}_{decoder}'
+                    bm = mm[0][bar].mean()
+                    if o < 2:
+                        dec_rel[o, b] = np.where(inside, 100 * mm[0] / bm, np.nan)
+                        diff_rel[o, b] = np.where(inside, 100 * mm[1] / bm, np.nan)
+                        bars[o, b] = mm[2]
+                    else:
+                        v = np.where(inside, 100 * mm[1] / bm, np.nan)
+                        ok = np.isfinite(v)
+                        roi_sum[roi][b] += np.where(ok, v, 0)
+                        roi_cnt[roi][b] += ok
+            roi_n[roi] += 1
+            if roi in EARLY_ROIS:
+                early.setdefault(sub, []).append((dec_rel, diff_rel, bars))
+    tag = f'{source}_{decoder}_b{N_BINS}'
     pd.DataFrame(rows).to_csv(Path(out_dir) / f'decoded_bars_segments_{tag}_2026-11.tsv', sep='\t', index=False)
-    np.savez_compressed(Path(out_dir) / f'decoded_bars_per_roi_{tag}_2026-11.npz', img=imgs.astype(np.float16),
-                        subjects=np.array(subs), rois=np.array(ALL_ROIS), centres=centres[show], grid=grid)
-    print('Wrote per-ROI images and segment table', flush=True)
+    per_sub = [[np.nanmean([x[k] for x in v], 0) for k in range(3)] for v in early.values()]
+    with np.errstate(invalid='ignore'):
+        np.savez_compressed(Path(out_dir) / f'decoded_bars_images_{tag}_2026-11.npz',
+                            early_dec=np.nanmean([p_[0] for p_ in per_sub], 0).astype(np.float32),
+                            early_diff=np.nanmean([p_[1] for p_ in per_sub], 0).astype(np.float32),
+                            early_bar=np.nanmean([p_[2] for p_ in per_sub], 0).astype(np.float32),
+                            roi_diff=np.array([roi_sum[r] / roi_cnt[r] for r in ALL_ROIS]).astype(np.float32),
+                            roi_n=np.array([roi_n[r] for r in ALL_ROIS]), rois=np.array(ALL_ROIS), centres=centres,
+                            edges=EDGES, frames_early=frames, n_early=len(per_sub), grid=grid)
+    print('Wrote', tag, 'frames per bin (V1-V3):', frames, flush=True)
 
 
 def half_contrast(mean, grid):
@@ -521,7 +551,11 @@ if __name__ == '__main__':
     ap.add_argument('-j', '--jobs', type=int, default=4)
     ap.add_argument('--decoder', default='outline', choices=['free', 'outline'], help='outline (main figure) or free')
     ap.add_argument('--name', default='figS_decoded_bars_rotated')
+    ap.add_argument('--n-bins', type=int, default=N_BINS, help='bar-position bins across the aperture')
     a = ap.parse_args()
+    if a.n_bins != N_BINS:                     # module-level so the forked workers see it
+        N_BINS = a.n_bins
+        EDGES = np.linspace(-APERTURE, APERTURE, N_BINS + 1)
     if a.step == 'collect_per_roi':
         collect_condition_per_roi(a.bids_folder, a.source, a.out_dir, a.jobs, a.decoder)
     elif a.step == 'plot_per_roi':
