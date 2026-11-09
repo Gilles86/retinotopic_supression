@@ -62,7 +62,8 @@ def files_for(unit):
 
 def smb(commands, env, check=True):
     """Run smbclient with commands on stdin; returns its output. With check, raises on any NT_STATUS error."""
-    r = subprocess.run(['smbclient', '--use-kerberos=required', SHARE], input='\n'.join(commands) + '\nexit\n',
+    # -N: never prompt for a password (otherwise smbclient reads stdin as the password); commands via -c.
+    r = subprocess.run(['smbclient', '-N', '--use-kerberos=required', SHARE, '-c', '; '.join(commands)],
                        capture_output=True, text=True, env=env)
     text = r.stdout + r.stderr
     if check and (r.returncode != 0 or 'NT_STATUS' in text):
@@ -91,7 +92,7 @@ def copy(unit, env, batch=50):
     for d in dirs:
         parts = d.split('/')
         mk += [f'mkdir "{DEST}/{"/".join(parts[:i + 1])}"' for i in range(len(parts))]
-    if mk:
+    if True:
         # mkdir of an existing directory reports NAME_COLLISION; that is fine, so no check here.
         smb([f'mkdir "{"/".join(DEST.split("/")[:i + 1])}"' for i in range(len(DEST.split('/')))] + list(dict.fromkeys(mk)),
             env, check=False)
@@ -113,7 +114,7 @@ def verify(unit, env):
         f.write('path\tsize\tmd5_local\tmd5_remote\tok\n')
         for p in files:
             rel = p.relative_to(SRC)
-            r = subprocess.run(['smbclient', '--use-kerberos=required', SHARE, '-c', f'get "{DEST}/{rel}" -'],
+            r = subprocess.run(['smbclient', '-N', '--use-kerberos=required', SHARE, '-c', f'get "{DEST}/{rel}" -'],
                                capture_output=True, env=env)
             remote = hashlib.md5(r.stdout).hexdigest() if r.returncode == 0 else 'missing'
             local = md5(p)
