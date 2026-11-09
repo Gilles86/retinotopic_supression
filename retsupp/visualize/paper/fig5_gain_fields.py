@@ -289,7 +289,7 @@ def dn_numbers(dn, dog, cond):
     def fmt(d, term):
         ps = [stats.wilcoxon(d[d.roi == r][term].dropna()).pvalue for r in ROI_ORDER]
         q = stats.false_discovery_control(ps)
-        return ', '.join(f'{r} {d[d.roi == r][term].median():+.3f}{" (q = %.2g)" % qq if qq < .05 else ""}'
+        return ', '.join(f'{r} {d[d.roi == r][term].median():+.3f}{" (q = %.3g)" % qq if qq < .05 else ""}'
                          for r, qq in zip(ROI_ORDER, q))
     return dict(dn_a=f'target {fmt(dn, "T")}; distractor {fmt(dn, "D")} (DoG joint: target {fmt(dog, "T")}; distractor '
                      f'{fmt(dog, "D")})',
