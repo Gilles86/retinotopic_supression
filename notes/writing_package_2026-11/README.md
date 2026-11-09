@@ -108,13 +108,13 @@ runs, sub-20 ses-1 and sub-24 ses-2 have 5 runs).
 | 1 Paradigm and behaviour | `fig1_paradigm_behaviour.pdf`; c, d as within-subject differences: `fig1_paradigm_behaviour_diff.pdf` | final |
 | 2 Gain-field model | `fig2_model_hp_blocks.pdf` (chosen 2026-11-06) | final |
 | 3 Model fits | `fig3_model_fits.pdf` | provisional; example voxel to be replaced |
-| 4 Target and distractor gain along the hierarchy | `fig4_hierarchy.pdf` | provisional |
-| 5 Sustained gain at HP | `fig5_sustained_hp.pdf` | provisional; null panel pending |
+| 4 Responses at the item locations (model-free) | `fig4_item_locations.pdf` | final apart from layout |
+| 5 Gain fields (model parameters) | `fig5_gain_fields.pdf` | provisional |
 | 6 Decoding | not made | pending (plan C6) |
 | 7 Behaviour, trial by trial | `fig7_behaviour.pdf` | prototype on earlier fits (Oct 2026) |
 | Table 1 Ladder | `table1_ladder.md` | provisional |
 | Table S Parameters | `table_parameters_2026-11.md` | provisional |
-| Supplement | `figS_field_size.pdf`, `figS_cv_power.pdf`, `figS_gainfield_size.pdf` | provisional |
+| Supplement | `figS_field_size.pdf`, `figS_cv_power.pdf`, `figS_pooled_dS_dD.pdf`, `figS_gainfield_size.pdf` | provisional |
 
 ## Open items the text must leave room for
 

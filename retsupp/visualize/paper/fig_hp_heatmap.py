@@ -49,8 +49,8 @@ def stars(p):
     return '***' if p < .001 else '**' if p < .01 else '*' if p < .05 else ''
 
 
-def table(groups):
-    p = item_timecourses(groups=groups)
+def table(groups, folder='notes/data/event_deconv_2026-11'):
+    p = item_timecourses(folder, groups=groups)
     pk = p[p.t.between(*WINDOW)].groupby(['subject', 'grp', 'cls']).r.mean().unstack()
     rows = []
     for (s, g), x in pk.iterrows():
@@ -61,16 +61,15 @@ def table(groups):
     return pd.DataFrame(rows)
 
 
-def main(name='fig_hp_heatmap'):
+def hp_tests(folder='notes/data/event_deconv_2026-11'):
+    """Per pathway and all areas: per-subject HP − LP per item (% of LP), and the location × item ANOVA.
+
+    Returns (diff, res): diff has one row per subject, group and item; res one row per group."""
     groups = {r: g for g, rs in PATHWAY.items() for r in rs}
-    d = table(groups)
-    d_all = table(None).assign(grp='All areas')
-    d = pd.concat([d, d_all])
+    d = pd.concat([table(groups, folder), table(None, folder).assign(grp='All areas')])
     order = list(PATHWAY) + ['All areas']
     diff = d.pivot_table(index=['subject', 'grp', 'item'], columns='loc', values='r')
     diff = (diff.hp - diff.lp).rename('diff').reset_index()
-    cell = diff.groupby(['grp', 'item'])['diff'].mean().unstack().loc[order, [it for it, _, _ in ITEMS]]
-    pcell = diff.groupby(['grp', 'item'])['diff'].apply(lambda v: stats.wilcoxon(v).pvalue).unstack().loc[order, cell.columns]
     res = []
     for g in order:
         x = d[d.grp == g]
@@ -83,7 +82,14 @@ def main(name='fig_hp_heatmap'):
         c = w.distractor - (w.target + w.neutral) / 2
         res.append(dict(grp=g, main_F=main_f, main_p=main_p, main=w.mean(1).mean(), int_F=int_f, int_p=int_p,
                         d_vs_others=c.mean(), d_vs_others_p=stats.wilcoxon(c).pvalue, n=len(w)))
-    res = pd.DataFrame(res).set_index('grp')
+    return diff, pd.DataFrame(res).set_index('grp')
+
+
+def main(name='fig_hp_heatmap'):
+    diff, res = hp_tests()
+    order = list(PATHWAY) + ['All areas']
+    cell = diff.groupby(['grp', 'item'])['diff'].mean().unstack().loc[order, [it for it, _, _ in ITEMS]]
+    pcell = diff.groupby(['grp', 'item'])['diff'].apply(lambda v: stats.wilcoxon(v).pvalue).unstack().loc[order, cell.columns]
     print(cell.round(1).to_string(), '\n', res.round(4).to_string())
 
     fig = plt.figure(figsize=(SINGLE * 1.45, 2.3))
