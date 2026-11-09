@@ -16,7 +16,7 @@ responses Fig. 3 and the model Fig. 4.
 | 5 Gain fields: target and distractor gain, sustained and distractor HP − LP gain, the field to scale, leave-one-subject-out test per ROI (e) | `fig5_gain_fields` | `fig5_gain_fields.py` | provisional |
 | Responses at a pRF's item location (model-free; place to be decided) | `fig_event_responses_2x3_deconv` | `fig_event_responses_2x3.py --deconv notes/data/event_deconv_2026-11` | final apart from layout |
 | 6 Decoding | not made yet | `fig6_decoding.py` | pending (final pRF fold fits) |
-| 7 The behavioural effects of Fig. 1 in the gains (b location HP − LP, c history repeat − switch; target and distractor side by side), and gain vs response time trial by trial (d) | `fig7_behaviour` | `fig7_behaviour.py` | prototype: b provisional (current fits), c, d on the October fits |
+| 7 The behavioural effects of Fig. 1 in the gains (a location HP − LP, b history repeat − switch; target and distractor side by side), and gain vs response time trial by trial (c) | `fig7_behaviour` | `fig7_behaviour.py` | prototype: a provisional (current fits), b, c on the October fits |
 | Table 1 The ladder | `table1_ladder` | `table1_ladder.py` | provisional |
 | Table S Parameters | `table_parameters_2026-11` | written by `fig5_gain_fields.py` | provisional |
 | S Gain against pRF size (was Fig. 5a) | `figS_gain_vs_prf_size` | `fig5_gain_fields.py` | provisional |

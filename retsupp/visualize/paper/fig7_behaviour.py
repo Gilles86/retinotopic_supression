@@ -1,15 +1,13 @@
 """Figure 7 (prototype): the gains behind the behavioural effects of Fig. 1, and behaviour trial by trial.
 
-a  Illustration: gain at the target (each trial), at the distractor (each trial), at the learned HP location (whole block;
-   Fig. 5) and over the whole display (global).
-b  Location, the gain analogue of Fig. 1c, d: distractor gain HP − LP (each term estimated alone, as Fig. 5c) next to the
+a  Location, the gain analogue of Fig. 1c, d: distractor gain HP − LP (each term estimated alone, as Fig. 5c) next to the
    target gain HP − LP (also estimated alone), per ROI.
-c  History, the gain analogue of Fig. 1e, f: target gain repeat − switch next to distractor gain repeat − switch, per ROI
+b  History, the gain analogue of Fig. 1e, f: target gain repeat − switch next to distractor gain repeat − switch, per ROI
    (October attention-field fits with the gains split by repeat).
-d  Trial by trial: target, distractor-at-HP and global gain as predictors of log RT (one Bayesian hierarchical model per
-   ROI); the global gain's sign flips along the hierarchy.
+c  Trial by trial: target, distractor-at-HP and global gain as predictors of log RT (one Bayesian hierarchical model per
+   ROI); the global gain's sign flips along the hierarchy. Keyed by small drawings of the three gain fields.
 
-b uses the current (provisional) gain fits; c and d the October trial-wise analysis on the earlier attention-field fits
+a uses the current (provisional) gain fits; b and c the October trial-wise analysis on the earlier attention-field fits
 (pSig0.5), stamped as such until they are redone on the ladder fits. Between-subject brain-behaviour correlations (null)
 stay in the text.
 
@@ -28,14 +26,14 @@ import pandas as pd
 from scipy import stats
 
 from retsupp.visualize.paper.fig45_common import conditional, median_ci
-from retsupp.visualize.paper.paper_style import (HP, DISTRACTOR, DOUBLE, FG, MUTED, ROI_ORDER, ROI_X, TARGET, letter, offset_spines,
+from retsupp.visualize.paper.paper_style import (HP, DISTRACTOR, DOUBLE, FG, MUTED, ROI_ORDER, ROI_X, TARGET, offset_spines,
                                                  roi_axis, save)
 from retsupp.visualize.paper.plot_fig1 import RING, item_positions
 
 LEGEND = """
-**Figure 7 (prototype). The behavioural effects of Fig. 1 in the gains, and gain and behaviour trial by trial.** a, The gain terms (illustrative): at the target and at the distractor on each trial, at the HP location over a whole block (Fig. 5), and a global gain over the whole display on each trial. b, c, The gain analogues of the response-time effects in Fig. 1c-f; the display icons are those of Fig. 1 (four possible locations, HP ringed in red; filled, the item on this trial; hollow, on the previous trial), and each series is the gain in the first condition minus that in the second. b, Location (Fig. 1c, d): the gain the distractor draws at the HP location minus at an LP location (dD, estimated alone, as in Fig. 5c; current fits, provisional) and the target gain at the HP location minus at an LP location (dT, likewise estimated alone; current fits, provisional). Less gain for a distractor at HP in V3AB, IPS, hV4 and VO; the target gain shows no reliable HP − LP difference after correction (smallest q = .07, V3, and a positive trend in IPS, q = .10). Fitted jointly with all other terms, dT is null in every ROI as well (text). c, History (Fig. 1e, f): target gain on target-repeat minus target-switch trials (fits with the target gain split by repeat), and distractor gain on distractor-repeat minus distractor-switch trials (fits with separate distractor gains on repeat and switch trials, the difference taken within HP and within LP and averaged, as for the response times in Fig. 1f). Less target gain on repeats in V3AB, IPS, hV4 and VO; the distractor gain does not differ after correction. b, c: points and bars are the median over subjects (n = 30) and its bootstrapped 95% CI (subject-level spread: Fig. 5); stars, Wilcoxon signed-rank test against 0, Benjamini-Hochberg across the nine ROIs within each series: * q < .05, ** q < .01, *** q < .001; all values below (n per ROI in the table). d, Within subjects, trial by trial: Bayesian hierarchical linear model of log RT (z within subject) per ROI on the per-trial target gain, distractor gain on HP and on LP trials, and global gain (each z-scored within run and trial type), with trial number, target repeat, distractor repeat and target-at-previous-distractor as covariates, and random intercepts and gain slopes per subject (bambi, 4 × 1000 draws, no divergences, R̂ ≤ 1.01). Points are posterior means, bars 95% HDIs; stars give the posterior probability that the effect has the sign shown: * > .975, ** > .995, *** > .9995 (not corrected across ROIs). The distractor gain on LP trials and the HP − LP difference are in the table. c, d use the earlier attention-field fits (October 2026) and will be redone on the final fits.
+**Figure 7 (prototype). The behavioural effects of Fig. 1 in the gains, and gain and behaviour trial by trial.** a, b, The gain analogues of the response-time effects in Fig. 1c-f; the display icons are those of Fig. 1 (four possible locations, HP ringed in red; filled, the item on this trial; hollow, on the previous trial), and each series is the gain in the first condition minus that in the second. a, Location (Fig. 1c, d): the gain the distractor draws at the HP location minus at an LP location (dD, estimated alone, as in Fig. 5c; current fits, provisional) and the target gain at the HP location minus at an LP location (dT, likewise estimated alone; current fits, provisional). Less gain for a distractor at HP in V3AB, IPS, hV4 and VO; the target gain shows no reliable HP − LP difference after correction (smallest q = .07, V3, and a positive trend in IPS, q = .10). Fitted jointly with all other terms, dT is null in every ROI as well (text). b, History (Fig. 1e, f): target gain on target-repeat minus target-switch trials (fits with the target gain split by repeat), and distractor gain on distractor-repeat minus distractor-switch trials (fits with separate distractor gains on repeat and switch trials, the difference taken within HP and within LP and averaged, as for the response times in Fig. 1f). Less target gain on repeats in V3AB, IPS, hV4 and VO; the distractor gain does not differ after correction. a, b: points and bars are the median over subjects (n = 30) and its bootstrapped 95% CI (subject-level spread: Fig. 5); stars, Wilcoxon signed-rank test against 0, Benjamini-Hochberg across the nine ROIs within each series: * q < .05, ** q < .01, *** q < .001; all values below (n per ROI in the table). c, Within subjects, trial by trial: Bayesian hierarchical linear model of log RT (z within subject) per ROI on the per-trial target gain (gain field at the target), distractor gain on HP and on LP trials (gain field at the distractor), and global gain (over the whole display) (each z-scored within run and trial type), with trial number, target repeat, distractor repeat and target-at-previous-distractor as covariates, and random intercepts and gain slopes per subject (bambi, 4 × 1000 draws, no divergences, R̂ ≤ 1.01); the icons show each gain field (illustrative). Points are posterior means, bars 95% HDIs; stars give the posterior probability that the effect has the sign shown: * > .975, ** > .995, *** > .9995 (not corrected across ROIs). The distractor gain on LP trials and the HP − LP difference are in the table. b, c use the earlier attention-field fits (October 2026) and will be redone on the final fits.
 """
-STAMP = 'b: provisional, current fits · c, d: earlier fits (Oct 2026)'
+STAMP = 'a: provisional, current fits · b, c: earlier fits (Oct 2026)'
 
 
 def stars(q):
@@ -48,7 +46,7 @@ def pd_stars(row):
     return '***' if pdir > .9995 else '**' if pdir > .995 else '*' if pdir > .975 else ''
 
 
-def panel_bayes(ax, bayes, terms, ylim, ylabel, notes, stack=True):
+def panel_bayes(ax, bayes, terms, ylim, ylabel, notes, stack=True, rotate=False):
     d = bayes[bayes.roi.isin(ROI_ORDER)]
     off = np.linspace(-.22, .22, len(terms)) if len(terms) > 1 else [0]
     for k, (o, (term, col)) in enumerate(zip(off, terms)):
@@ -65,54 +63,45 @@ def panel_bayes(ax, bayes, terms, ylim, ylabel, notes, stack=True):
     ax.set_ylim(*ylim)
     ax.set_ylabel(ylabel)
     offset_spines(ax)
-    roi_axis(ax)
+    roi_axis(ax, rotate=rotate)
 
 
-def panel_sources(ax):
-    """Four displays in a column, each with one gain field: target, distractor, HP location, global (whole display)."""
+def draw_source(ax, kind):
+    """One display with one gain field (as the gain-term illustrations): 'target', 'distractor' or 'global'."""
     from matplotlib.patches import Circle
     ring = 4. / np.sqrt(2) * np.array([[1, 1], [-1, 1], [-1, -1], [1, -1]])
-    g = np.linspace(-8.5, 8.5, 281)
+    g = np.linspace(-6.2, 6.2, 201)
     xx, yy = np.meshgrid(g, g)
-    step = 19.
-    # title, where and when, colour, centre (None: everywhere), width
-    src = [('Target', 'At the target, each trial', TARGET, 1, 1.4),
-           ('Distractor', 'At the distractor, each trial', DISTRACTOR, 3, 1.4),
-           ('HP location', 'At HP, whole block (Fig. 5)', HP, 3, 2.),
-           ('Global', 'Everywhere, each trial', FG, None, None)]
-    for k, (title, sub, col, ix, sig) in enumerate(src):
-        x0, y0 = 0., -k * step
-        if ix is None:
-            f = .3 / (1 + np.exp((np.hypot(xx, yy) - 5.6) / .25))   # flat over the display, soft edge
-        else:
-            f = .75 * np.exp(-((xx - ring[ix, 0]) ** 2 + (yy - ring[ix, 1]) ** 2) / (2 * sig ** 2))
-        rgba = np.zeros(f.shape + (4,))
-        rgba[..., :3] = mpl.colors.to_rgb(col)
-        rgba[..., 3] = f
-        ax.imshow(rgba, extent=(x0 - 6.2, x0 + 6.2, y0 - 6.2, y0 + 6.2), origin='lower', zorder=1)
-        ax.add_patch(Circle((x0, y0), 3.17, fill=False, ec=MUTED, lw=.6, zorder=2))
-        for p in ring:
-            ax.add_patch(Circle((x0 + p[0], y0 + p[1]), .55, facecolor='w', ec=MUTED, lw=.6, zorder=2))
-        ax.add_patch(Circle((x0 + ring[3, 0], y0 + ring[3, 1]), 1.15, fill=False, ec=HP, lw=.9, ls=(0, (2, 1.2)), zorder=3))
-        if title == 'Target':
-            ax.scatter(x0 + ring[1, 0], y0 + ring[1, 1], marker='D', s=14, color=TARGET, lw=0, zorder=4)
-        if title == 'Distractor':
-            ax.scatter(x0 + ring[3, 0], y0 + ring[3, 1], marker='o', s=18, color=DISTRACTOR, lw=0, zorder=4)
-        ax.plot(x0, y0, '+', color=FG, ms=3.5, mew=.6, zorder=4)
-        ax.text(x0, y0 + 5.9, title, ha='center', va='bottom', fontsize=7, color=col)
-        ax.text(x0, y0 - 5.9, sub, ha='center', va='top', fontsize=5.8, color='.35')
-    ax.set_xlim(-13, 13)
-    ax.set_ylim(-3 * step - 9.5, 9.6)
+    col, ix = {'target': (TARGET, 1), 'distractor': (DISTRACTOR, 3), 'global': (FG, None)}[kind]
+    if ix is None:
+        f = .3 / (1 + np.exp((np.hypot(xx, yy) - 5.6) / .25))   # flat over the display, soft edge
+    else:
+        f = .75 * np.exp(-((xx - ring[ix, 0]) ** 2 + (yy - ring[ix, 1]) ** 2) / (2 * 1.4 ** 2))
+    rgba = np.zeros(f.shape + (4,))
+    rgba[..., :3] = mpl.colors.to_rgb(col)
+    rgba[..., 3] = f
+    ax.imshow(rgba, extent=(-6.2, 6.2, -6.2, 6.2), origin='lower', zorder=1)
+    ax.add_patch(Circle((0, 0), 3.17, fill=False, ec=MUTED, lw=.5, zorder=2))
+    for p in ring:
+        ax.add_patch(Circle(p, .7, facecolor='w', ec=MUTED, lw=.4, zorder=2))
+    ax.add_patch(Circle(ring[3], 1.3, fill=False, ec=HP, lw=.7, ls=(0, (2, 1.2)), zorder=3))
+    if kind == 'target':
+        ax.plot(*ring[1], 'D', ms=2.6, color=TARGET, mew=0, zorder=4)
+    if kind == 'distractor':
+        ax.plot(*ring[3], 'o', ms=3, color=DISTRACTOR, mew=0, zorder=4)
+    ax.plot(0, 0, '+', color=FG, ms=2.5, mew=.5, zorder=4)
+    ax.set_xlim(-6.2, 6.2)
+    ax.set_ylim(-6.2, 6.2)
     ax.set_aspect('equal')
     ax.set_axis_off()
 
 
-def display_icon(ax, bounds, items):
-    """The display icon of Fig. 1 (``fig1_paradigm_behaviour.cond_icons``): the four diagonal locations, HP ringed in red,
-    and the items, (location index, 'target' or 'distractor', filled); hollow is the previous trial's item."""
+def display_icon(ins, items):
+    """The display icon of Fig. 1 (``fig1_paradigm_behaviour.cond_icons``) drawn into ``ins``: the four diagonal
+    locations, HP ringed in red, and the items, (location index, 'target' or 'distractor', filled); hollow is the previous
+    trial's item."""
     from matplotlib.patches import Circle
     pos = item_positions()
-    ins = ax.inset_axes(bounds, transform=ax.transAxes)
     ins.add_patch(Circle((0, 0), RING, fill=False, ec=MUTED, lw=.5))
     for j in (1, 3, 5, 7):
         ins.add_patch(Circle(pos[j], .95, facecolor='w', ec=MUTED, lw=.4))
@@ -133,21 +122,36 @@ ICONS = {'location': {'distractor': ([(7, 'distractor', True)], [(3, 'distractor
          'history': {k: ([(3, k, False), (3, k, True)], [(1, k, False), (3, k, True)]) for k in ('target', 'distractor')}}
 
 
-def icon_key(ax, contrast, entries, ref, y=1.2, h=.36, step=.47):
-    """Above the panel, per series: the Fig. 1 icon pair 'A − B' and what the series shows; the Fig. 1 panels at the right."""
-    fig = ax.figure
+ICON = .3   # icon size (inches)
+
+
+def row(fig, y, let, title, color, entries, ref=None, x_title=.2):
+    """One heading line (as Fig. 6): panel letter, a title stating the finding, then the key: per series its icon(s) and a
+    coloured label; the Fig. 1 panels it corresponds to at the right. entries: (draw functions, colour, label)."""
+    W, H = fig.get_size_inches()
+    fig.text(.02 / W, y / H, let, fontsize=8, fontweight='bold', va='center', ha='left')
+    t = fig.text(x_title / W, y / H, title, fontsize=7.5, color=color, va='center', ha='left')
     fig.canvas.draw()
-    bb = ax.get_window_extent()
-    w = h * bb.height / bb.width
-    x = 0.
-    for kind, col, label in entries:
-        a, b = ICONS[contrast][kind]
-        display_icon(ax, [x, y, w, h], a)
-        ax.text(x + w + .004, y + h / 2, '−', transform=ax.transAxes, fontsize=8, color=FG, va='center', ha='left')
-        display_icon(ax, [x + w + .02, y, w, h], b)
-        ax.text(x + 2 * w + .03, y + h / 2, label, transform=ax.transAxes, fontsize=6.5, color=col, va='center', ha='left')
-        x += step
-    ax.text(1., y + h / 2, ref, transform=ax.transAxes, fontsize=6, color='.4', va='center', ha='right')
+    x = t.get_window_extent().x1 / fig.dpi + .3
+    for draws, col, label in entries:
+        for k, draw in enumerate(draws):
+            if k:
+                fig.text((x + .015) / W, y / H, '−', fontsize=8, color=FG, va='center', ha='left')
+                x += .1
+            draw(fig.add_axes([x / W, (y - ICON / 2) / H, ICON / W, ICON / H]))
+            x += ICON
+        lt = fig.text((x + .04) / W, y / H, label, fontsize=6.5, color=col, va='center', ha='left')
+        fig.canvas.draw()
+        x = lt.get_window_extent().x1 / fig.dpi + .22
+    if ref:
+        r = fig.text((W - .08) / W, y / H, ref, fontsize=6, color='.4', va='center', ha='right')
+        fig.canvas.draw()
+        assert r.get_window_extent().x0 / fig.dpi > x - .15, 'heading line too long'
+
+
+def icons(contrast, kind):
+    a, b = ICONS[contrast][kind]
+    return [lambda ax, it=a: display_icon(ax, it), lambda ax, it=b: display_icon(ax, it)]
 
 
 def series_stats(df, col):
@@ -161,7 +165,7 @@ def series_stats(df, col):
     return out
 
 
-def panel_pair(ax, series, ylim, ylabel, xlabels=True):
+def panel_pair(ax, series, ylim, ylabel, xlabels=True, rotate=False):
     """Per ROI, two series side by side: median and bootstrapped 95% CI (as the points and HDIs of d); stars per series,
     Benjamini-Hochberg across ROIs. Subject-level spread is in Fig. 5."""
     lo, hi = ylim
@@ -182,7 +186,7 @@ def panel_pair(ax, series, ylim, ylabel, xlabels=True):
     ax.set_ylabel(ylabel)
     offset_spines(ax)
     if xlabels:
-        roi_axis(ax)
+        roi_axis(ax, rotate=rotate)
     else:
         ax.set_xticks([ROI_X[r] for r in ROI_ORDER])
         ax.set_xticklabels([])
@@ -190,14 +194,8 @@ def panel_pair(ax, series, ylim, ylabel, xlabels=True):
     return out
 
 
-def header(fig, y, text, x0=.02, x1=.99):
-    """Row header across the figure: what the panels below have in common."""
-    fig.text(x0, y, text, fontsize=7.5, fontweight='bold', color=FG, va='bottom', ha='left')
-    fig.add_artist(plt.Line2D([x0, x1], [y - .005] * 2, color=MUTED, lw=.6, transform=fig.transFigure))
-
-
 def stats_table(results):
-    lines = ['', '**Per-ROI statistics (b, c).** Median [bootstrapped 95% CI], Wilcoxon signed-rank p against 0, '
+    lines = ['', '**Per-ROI statistics (a, b).** Median [bootstrapped 95% CI], Wilcoxon signed-rank p against 0, '
              'Benjamini-Hochberg q across the nine ROIs within each series; n = 30 subjects per ROI unless given otherwise.', '']
     for name, st in results.items():
         lines += [f'*{name}*', '', '| ROI | n | Median [95% CI] | p | q |', '|---|---|---|---|---|']
@@ -223,44 +221,38 @@ def main(repeat_table, bayes_table, conditional_table, dt_table, name='fig7_beha
     # gains); repeat − switch is taken within HP and within LP trials and averaged, as for the response times (Fig. 1f).
     d_rep = rep[rep.model == 'repeat'].assign(d=lambda d: ((d.g_HP_dyn_repeat - d.g_HP_dyn) + (d.g_LP_dyn_repeat - d.g_LP_dyn)) / 2)
 
-    W, H = DOUBLE, 6.05
+    W, H = DOUBLE, 4.55
     fig = plt.figure(figsize=(W, H))
-    x0, pw = 1.85, 5.1             # left edge and width of the per-ROI panels (inches)
-    # a: the gain terms, a column at the left.
-    ax = ax_in(fig, 0., 2.72, 1.45, 3.15)
-    panel_sources(ax)
-    letter(ax, 'a', x=.12, y=1.0)
-    header(fig, (H - .2) / H, 'The behavioural effects of Fig. 1, in the gains', x0=1.42 / W)
+    x0, pw = .75, 6.2              # left edge and width of the per-ROI panels (inches)
     results = {}
-    # b: location, HP − LP (Fig. 1c, d).
-    ax = ax_in(fig, x0, 4.33, pw, .85)
+    # a: location, HP − LP (Fig. 1c, d).
+    row(fig, 4.28, 'a', 'Location: less gain for a distractor at HP', DISTRACTOR,
+        [(icons('location', 'distractor'), DISTRACTOR, 'Distractor gain'), (icons('location', 'target'), TARGET, 'Target gain')],
+        'As Fig. 1c, d')
+    ax = ax_in(fig, x0, 3.33, pw, .67)
     results.update(panel_pair(ax, [('Distractor gain, HP − LP (estimated alone)', cond, 'dD', DISTRACTOR),
                                    ('Target gain, HP − LP (estimated alone)', dt, 'dT', TARGET)],
-                              (-.15, .12), 'Gain, HP − LP', xlabels=False))
+                              (-.15, .12), 'Gain,\nHP − LP', xlabels=False))
     ax.set_yticks([-.1, 0, .1])
-    icon_key(ax, 'location', [('distractor', DISTRACTOR, 'Distractor: less gain at HP'), ('target', TARGET, 'Target: no reliable difference')],
-             'As Fig. 1c, d')
-    letter(ax, 'b', x=-.08, y=1.28)
-    # c: history, repeat − switch (Fig. 1e, f).
-    ax = ax_in(fig, x0, 2.8, pw, .85)
+    # b: history, repeat − switch (Fig. 1e, f).
+    row(fig, 3.12, 'b', 'History: less target gain when its location repeats', TARGET,
+        [(icons('history', 'target'), TARGET, 'Target gain'), (icons('history', 'distractor'), DISTRACTOR, 'Distractor gain')],
+        'As Fig. 1e, f')
+    ax = ax_in(fig, x0, 2.17, pw, .67)
     results.update(panel_pair(ax, [('Target gain, repeat − switch', t_rep, 'd', TARGET),
                                    ('Distractor gain, repeat − switch', d_rep, 'd', DISTRACTOR)],
-                              (-1.15, .55), 'Gain, repeat − switch'))
-    ax.set_yticks([-1, -.5, 0, .5])
-    icon_key(ax, 'history', [('target', TARGET, 'Target: less gain on repeats'), ('distractor', DISTRACTOR, 'Distractor: no reliable difference')],
-             'As Fig. 1e, f')
-    letter(ax, 'c', x=-.08, y=1.28)
-    # d: trial by trial.
-    header(fig, 1.98 / H, 'Trial by trial: gain on a trial predicts its response time')
-    ax = ax_in(fig, .75, .62, 6.2, 1.05)
-    panel_bayes(ax, bayes, [('T', TARGET), ('D_HP', DISTRACTOR), ('G', FG)], (-.08, .13), 'Log RT per\nunit gain (z)',
+                              (-1.15, .55), 'Gain,\nrepeat − switch'))
+    ax.set_yticks([-1, 0])
+    # c: trial by trial, keyed by the gain fields themselves.
+    row(fig, 1.62, 'c', 'Trial by trial: gain on a trial predicts its response time', FG,
+        [([lambda a: draw_source(a, 'target')], TARGET, 'Target gain'),
+         ([lambda a: draw_source(a, 'distractor')], DISTRACTOR, 'Distractor gain, HP trials'),
+         ([lambda a: draw_source(a, 'global')], FG, 'Global gain: the sign flips')])
+    ax = ax_in(fig, x0, .4, pw, .88)
+    panel_bayes(ax, bayes, [('T', TARGET), ('D_HP', DISTRACTOR), ('G', FG)], (-.07, .125), 'Log RT per\nunit gain (z)',
                 ('Slower', 'Faster'), stack=False)
     ax.set_yticks([-.05, 0, .05, .1])
-    for k, (lab, col) in enumerate((('Target gain', TARGET), ('Distractor gain, HP trials', DISTRACTOR),
-                                    ('Global gain: the sign flips', FG))):
-        ax.text(-.4, .125 - .026 * k, lab, color=col, fontsize=6.5, ha='left', va='center')
-    letter(ax, 'd', x=-.09, y=1.12)
-    fig.text(.995, .998, STAMP, fontsize=5.5, color=MUTED, ha='right', va='top')
+    fig.text(.995, .998, STAMP, fontsize=6, color=MUTED, ha='right', va='top')
     for a in fig.axes:
         if a.get_ylabel().startswith('Gain'):
             bb = a.get_window_extent()
