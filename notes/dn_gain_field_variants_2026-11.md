@@ -176,3 +176,13 @@ DN ladder), so the cheapest valid test keeps every voxel's pRF at the all-runs f
 leak into the held-out runs does not favour any model) and refits only the shared field terms per run3 fold (one run
 of each HP condition held out). Collect: `collect_dn_baseline_field --root/--cv-root`; figure:
 `retsupp/visualize/paper/figS_dn_gain_locus.py`.
+
+## Update 14:50: all-runs fits done (30 subjects × 9 ROIs)
+
+Job 8203960 finished within its limit (≤ 2 h 28, peak RSS 29 GB, ~11 CPU-h per task), so the resume job 8206646 was
+cancelled. Table: `notes/data/dn_basefield_full_2026-11.tsv` (`collect_dn_baseline_field`, also m7_full). The canary
+generalises: b-only and d-only barely move (median |w| 0.004, training-SSE gain 4e-6 relative); the joint model moves
+along w_b = w_d (median |w_b − w_d| 0.003 vs median |w_amp| 0.21), Gauss-Newton corr(w_b, w_d) median 0.999, while
+the rotated pair is separable (corr(w_amp, w_ratio) 0.13). The amplitude direction trades off with the input gain
+(corr(w_amp, g_HP) 0.57; dS of the joint model vs m7 across subject × ROI: r = 0.65, median |change| 0.05). The b/d
+(DN-specific) direction is not used. Held-out comparison (8206793) and recovery (8206356/8206625) still running.
