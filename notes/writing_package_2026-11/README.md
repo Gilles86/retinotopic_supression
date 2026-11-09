@@ -146,6 +146,9 @@ Running on the cluster (2026-11-09):
 - Decoder simulation with an HP-only gain field (can the decoder see a gain of our size?).
 
 Not yet run:
-- HP-rotation null for dS, the pre-specified primary test (`notes/primary_test_2026-11.md`).
+- HP-rotation null for dS (relabelling HP to the other locations), on the final fits.
 - Trial-wise gain at HP split by what HP holds (plan D4).
 - Reliability of per-subject dS across sessions (would put a number on the power framing).
+
+
+**Framing (user, 2026-11-09):** no test is presented as pre-specified or pre-registered. Decoding uses BH across the nine areas.

@@ -31,7 +31,7 @@ on 20% of trials; bar aperture 3.17°; four sweep directions, 42 s each with 4.8
   pRF with the canonical HRF (computed from `notes/data/prf_cv_roi_summary.tsv` + `notes/data/hrf_comparison_2026-11.tsv`,
   as `fig2_prf_fits.py gain_r2`): DoG pRF +.0035 (30/30 positive, p < .001); one HRF per subject × ROI on top of the DoG
   +.011 (29/30, p < .001); both +.017 (29/30, p < .001). **d may change** when the jointly fitted HRF replaces the
-  median-of-voxels HRF (legend says so). This also meets the pre-specified HRF rule (> 15/30 positive, p < .05).
+  median-of-voxels HRF (legend says so). (per-ROI HRF improves held-out R² in > 15/30 subjects, p < .05).
 - Held-out R² by pRF model (reliable voxels, median over subjects; `prf_cv_roi_summary.tsv`, per-voxel HRF variants):
   Gaussian .201, DoG .210, DN .216; with a fitted HRF DoG .238, DN .245. DN > DoG in 30/30 subjects (by ≈ .007 with
   fitted HRF).

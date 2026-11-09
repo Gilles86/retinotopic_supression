@@ -67,8 +67,7 @@ DoG rerun; the wording below is chosen so that it should survive the rerun, but 
   differ, dD is not reliable in the joint fit, and the measured item responses show no location × item interaction.
   Say "less transient gain for a distractor at HP", never "the distractor, unlike the target, is suppressed at HP".
 - **Decoding effects in single areas after correction.** No area survives BH across the nine (smallest q = .076).
-  Only the pooled V1–V3 contrast and the identical-stimulus bar halves are claims. Under the pre-specified test
-  (V1–V3, Holm) only V2 would pass (see section 3).
+  Only the pooled V1–V3 contrast and the identical-stimulus bar halves are claims.
 - **A per-area dS claim from the joint fit.** No area survives correction jointly; per-area dS is only claimed
   estimated alone, and then as a pattern, not area by area.
 - **DN-parameter-specific effects.** The per-condition DN fits (b, d, σ, amplitudes by quadrant) are exploratory and
@@ -93,11 +92,9 @@ DoG rerun; the wording below is chosen so that it should survive the rerun, but 
 - Within-subject CV cannot detect a dS of our size (simulation), so it is not evidence against dS.
 - HP lies at 4°, outside the 3.17° bar aperture; only pRFs that reach the ring carry the gain effect, and the decoded
   bar measures drive *between* the items, not at them.
-- The pre-specified decoding test (`notes/primary_test_2026-11.md`: HP vs the three other quadrants in V1, V2, V3,
-  one-sided, Holm) differs from what Fig. 6d reports (BH across nine ROIs). Under the pre-specified test V2 passes
-  (p_Holm = .039), V3 does not (.054). The text should report the pre-specified test and say that the nine-area
-  version was added later, or the user should decide which to report. **Decision needed.**
-- The primary test of dS (HP-rotation null) has not been run.
+- Decoding statistics: one-sided Wilcoxon per area, Benjamini-Hochberg across the nine areas (as in Fig. 6d). The paper
+  does not frame any test as pre-specified (user decision, 2026-11-09).
+- The HP-rotation null for dS (relabelling HP to the other locations) has not been run yet; it runs on the final fits.
 - Fig. 3 location contrasts are uncorrected planned contrasts; the ANOVA main effect of location type is the
   protected test in early areas.
 - V1 pRF sizes are at a floor.
@@ -134,7 +131,7 @@ pre-crossing baseline (p = .16), so cite it only as consistent, not as evidence.
 | Question | Analysis | Status |
 |---|---|---|
 | Do the gain numbers hold on the final inputs (per-ROI HRF)? | Final DoG rerun, job 8196318; then Fig. 5, Table 1, parameter table, LOSO, Fig. 7 redone | running |
-| Is dS below what relabelling HP gives (pre-specified primary test)? | HP-rotation null on the conditional dS, 100,000 draws | not yet run |
+| Is dS below what relabelling HP gives? | HP-rotation null on the conditional dS, 100,000 draws | not yet run |
 | Is the sustained loss at HP shared with the neighbours (as in Fig. 3 and Richter et al.), or HP-only? | Split model: separate sustained terms next to HP and opposite HP | running |
 | Is the target gain at HP lower than at LP (dT), and does it differ from dD? | Split model: target at HP | running |
 | Is the transient-field width separable from the sustained width? | m7_full_sigtied (one shared width) | running |
