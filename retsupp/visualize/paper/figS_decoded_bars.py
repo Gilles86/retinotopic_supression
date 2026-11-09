@@ -62,8 +62,12 @@ def one_run(f):
     return sub, s, n
 
 
-def collect(bids, source, out_dir, jobs=4):
-    root = Path(bids) / 'derivatives' / 'decoded_final_2026-11' / source / 'free'
+def data_name(source, decoder):
+    return f'decoded_bars_{source}_2026-11.npz' if decoder == 'free' else f'decoded_bars_{source}_{decoder}_2026-11.npz'
+
+
+def collect(bids, source, out_dir, jobs=4, decoder='free'):
+    root = Path(bids) / 'derivatives' / 'decoded_final_2026-11' / source / decoder
     files = [f for f in sorted(root.glob('sub-*/decoded_ses-*_run-*_roi-*.npz')) if f.stem.split('roi-')[1] in ROIS]
     print(len(files), 'decoded runs', flush=True)
     acc, cnt = {}, {}
@@ -75,10 +79,76 @@ def collect(bids, source, out_dir, jobs=4):
     with np.errstate(invalid='ignore'):
         mean = np.array([acc[s] / cnt[s][:, :, None, None] for s in subs]).astype(np.float32)
     grid = np.load(files[0])['grid']
-    out = Path(out_dir) / f'decoded_bars_{source}_2026-11.npz'
+    out = Path(out_dir) / data_name(source, decoder)
     np.savez_compressed(out, mean=mean.reshape(len(subs), 2, N_BINS, 2, 50, 50), n=np.array([cnt[s] for s in subs]),
                         subjects=np.array(subs), edges=EDGES, grid=grid)
     print('Wrote', out, 'frames per bin (all subjects):', np.array([cnt[s] for s in subs]).sum(0))
+
+
+def one_subject_roi(args):
+    """Condition-difference frames for one subject × ROI: each run's decoded frame minus the mean decoded frame at the
+    same time point over the subject's runs (mean within each HP location first, then over the four), then rotated so
+    HP lies upper right and binned by bar orientation and position. Returns sums over runs."""
+    from retsupp.visualize.paper.fig6_collect import rotation_index
+    files = args
+    runs = []
+    for f in files:
+        with np.load(f) as z:
+            runs.append((z['decoded'].astype(np.float32), z['paradigm'].astype(np.float32), z['grid'],
+                         str(z['hp_location'])))
+    T = min(r[0].shape[0] for r in runs)
+    grid = runs[0][2]
+    by_hp = {}
+    for dec, _, _, hp in runs:
+        by_hp.setdefault(hp, []).append(dec[:T].reshape(T, -1))
+    base = np.mean([np.mean(v, 0) for v in by_hp.values()], 0)          # balanced over HP locations
+    x, y = grid[:, 0], grid[:, 1]
+    inside = np.hypot(x, y) <= APERTURE
+    s = np.zeros((2, N_BINS, 3, len(x)))            # orientation, bin, (decoded, decoded − mean over HP, true), pixel
+    n = np.zeros((2, N_BINS))
+    for dec, par, _, hp in runs:
+        ri = rotation_index(grid, hp)
+        D = dec[:T].reshape(T, -1)
+        Dd = (D - base)[:, ri]
+        D, P = D[:, ri], par[:T].reshape(T, -1)[:, ri]
+        for t in range(T):
+            on = (P[t] > 0) & inside
+            if on.sum() < 5:
+                continue
+            o = 0 if np.ptp(x[on]) < np.ptp(y[on]) else 1
+            pos = (x[on] if o == 0 else y[on]).mean()
+            b = np.clip(np.searchsorted(EDGES, pos) - 1, 0, N_BINS - 1)
+            s[o, b, 0] += D[t]
+            s[o, b, 1] += Dd[t]
+            s[o, b, 2] += P[t]
+            n[o, b] += 1
+    sub = int(files[0].parent.name.split('-')[1])
+    return sub, s, n, len(by_hp)
+
+
+def collect_condition(bids, source, out_dir, jobs=4, decoder='free'):
+    root = Path(bids) / 'derivatives' / 'decoded_final_2026-11' / source / decoder
+    tasks = []
+    for d in sorted(root.glob('sub-*')):
+        for roi in ROIS:
+            fs = sorted(d.glob(f'decoded_ses-*_run-*_roi-{roi}.npz'))
+            if fs:
+                tasks.append(fs)
+    print(len(tasks), 'subject x ROI', flush=True)
+    acc, cnt = {}, {}
+    with Pool(jobs) as pool:
+        for sub, s, n, nhp in pool.imap_unordered(one_subject_roi, tasks):
+            if nhp < 4:
+                print(f'sub-{sub:02d}: only {nhp} HP locations', flush=True)
+            acc[sub] = acc.get(sub, 0) + s
+            cnt[sub] = cnt.get(sub, 0) + n
+    subs = sorted(acc)
+    with np.errstate(invalid='ignore'):
+        mean = np.array([acc[s] / cnt[s][:, :, None, None] for s in subs]).astype(np.float32)
+    out = Path(out_dir) / data_name(source, decoder).replace('decoded_bars_', 'decoded_bars_condition_')
+    np.savez_compressed(out, mean=mean.reshape(len(subs), 2, N_BINS, 3, 50, 50), n=np.array([cnt[s] for s in subs]),
+                        subjects=np.array(subs), edges=EDGES, grid=np.load(tasks[0][0])['grid'])
+    print('Wrote', out, 'frames per bin:', np.array([cnt[s] for s in subs]).sum(0))
 
 
 def half_contrast(mean, grid):
@@ -99,47 +169,97 @@ def half_contrast(mean, grid):
     return out
 
 
-def plot(source, name='figS_decoded_bars_rotated'):
+def mirror_diff(mean, grid, sigma=2.):
+    """Per subject, orientation and bin: decoded image minus its mirror image (vertical bars flipped top-bottom,
+    horizontal bars left-right, so the bar maps onto itself and the HP quadrant onto the neighbouring one), in % of
+    the mean decoded intensity on the bar, smoothed (Gaussian, ``sigma`` pixels) inside the aperture."""
+    from scipy import ndimage
+    x, y = grid[:, 0].reshape(50, 50), grid[:, 1].reshape(50, 50)
+    inside = np.hypot(x, y) <= APERTURE
+    S, O, B = mean.shape[:3]
+    out = np.full((S, O, B, 50, 50), np.nan)
+    wsm = ndimage.gaussian_filter(inside.astype(float), sigma)
+    for o in range(O):
+        for b in range(B):
+            bar = (np.nanmean(mean[:, o, b, 1], 0) > .5) & inside
+            for s_ in range(S):
+                d = mean[s_, o, b, 0]
+                mir = np.flip(d, axis=0 if o == 0 else 1)
+                diff = 100 * (d - mir) / np.nanmean(d[bar])
+                sm = ndimage.gaussian_filter(np.where(inside, np.nan_to_num(diff), 0), sigma) / wsm
+                out[s_, o, b] = np.where(inside, sm, np.nan)
+    return out
+
+
+def plot(source, name='figS_decoded_bars_rotated', decoder='free'):
     import matplotlib.colors as mcolors
     import matplotlib.pyplot as plt
     from matplotlib.patches import Circle
     from retsupp.visualize.paper.paper_style import FG, HP, MUTED, STIM, letter, offset_spines, save
-    z = np.load(Path('notes/data') / f'decoded_bars_{source}_2026-11.npz')
+    z = np.load(Path('notes/data') / data_name(source, decoder))
     mean, n, grid, edges = z['mean'], z['n'], z['grid'], z['edges']
     centres = (edges[:-1] + edges[1:]) / 2
     grp = np.nanmean(mean, 0)                                   # orientation, bin, (dec, true), 50, 50
     hc = half_contrast(mean, grid)
     pooled = np.nanmean(hc, 1)                                  # subjects × bins (vertical and horizontal pooled)
 
-    W, H = 7.25, 3.45
+    md = np.nanmean(mirror_diff(mean, grid), 0)                 # orientation, bin, 50, 50
+    from scipy import ndimage
+    W, H = 7.25, 4.75
     fig = plt.figure(figsize=(W, H))
     cm = mcolors.LinearSegmentedColormap.from_list('stim', ['#FFFFFF', STIM])
     vmax = np.nanpercentile(grp[:, :, 0], 99.5)
     c = np.linspace(-5, 5, 50)
     X, Y = np.meshgrid(c, c)
     size, gap, x0 = .62, .1, 1.3
+    dvm = 3.
+    tops = {}
     for o, lab in enumerate(['Vertical bar,\nleft to right', 'Horizontal bar,\nbottom to top']):
-        for b in range(len(centres)):
-            ax = fig.add_axes([(x0 + b * (size + gap)) / W, (H - .55 - (o + 1) * size - o * .12) / H, size / W, size / H])
-            img = np.where(np.hypot(X, Y) <= APERTURE + .3, grp[o, b, 0], np.nan)
-            im = ax.imshow(img, origin='lower', extent=[-5.1, 5.1, -5.1, 5.1], cmap=cm, vmin=0, vmax=vmax,
-                           interpolation='nearest')
-            clip = Circle((0, 0), APERTURE, transform=ax.transData, fc='none', ec='none')
-            ax.add_patch(clip)
-            im.set_clip_path(clip)
-            ax.add_patch(Circle((0, 0), APERTURE, fill=False, ec='.6', lw=.5))
-            ax.contour(X, Y, grp[o, b, 1], levels=[.5], colors=[FG], linewidths=.4, linestyles='dotted')
-            q = 4 / np.sqrt(2)
-            ax.add_patch(Circle((q, q), .75, fill=False, ec=HP, lw=.8, ls=(0, (2, 1.2))))
-            ax.set_xlim(-4.9, 4.9)
-            ax.set_ylim(-4.9, 4.9)
-            ax.set_aspect('equal')
-            ax.set_axis_off()
-            if o == 0:
-                ax.text(.5, 1.02, f'{centres[b]:+.1f}°'.replace('-', '−'), transform=ax.transAxes, ha='center', va='bottom', fontsize=6,
-                        color='.4')
-            if b == 0:
-                ax.text(-.08, .5, lab, transform=ax.transAxes, ha='right', va='center', fontsize=6.5, color=FG)
+        for k in range(2):                              # 0: decoded image, 1: minus its mirror image
+            yb = H - .55 - (2 * o + k + 1) * size - k * .06 - o * .2
+            for b in range(len(centres)):
+                ax = fig.add_axes([(x0 + b * (size + gap)) / W, yb / H, size / W, size / H])
+                if k == 0:
+                    img = np.where(np.hypot(X, Y) <= APERTURE + .3, grp[o, b, 0], np.nan)
+                    im = ax.imshow(img, origin='lower', extent=[-5.1, 5.1, -5.1, 5.1], cmap=cm, vmin=0, vmax=vmax,
+                                   interpolation='nearest')
+                else:
+                    foot = ndimage.binary_dilation(grp[o, b, 1] > .5, iterations=1) & (np.hypot(X, Y) <= APERTURE)
+                    foot &= (Y > 0) if o == 0 else (X > 0)          # the half nearer HP (the other is its negative)
+                    img = np.where(foot, md[o, b], np.nan)
+                    im = ax.imshow(img, origin='lower', extent=[-5.1, 5.1, -5.1, 5.1], cmap='RdBu_r', vmin=-dvm,
+                                   vmax=dvm, interpolation='nearest')
+                    dim = im
+                clip = Circle((0, 0), APERTURE, transform=ax.transData, fc='none', ec='none')
+                ax.add_patch(clip)
+                im.set_clip_path(clip)
+                ax.add_patch(Circle((0, 0), APERTURE, fill=False, ec='.6', lw=.5))
+                if k == 0:
+                    ax.contour(X, Y, grp[o, b, 1], levels=[.5], colors=[FG], linewidths=.4, linestyles='dotted')
+                else:
+                    ax.plot([-APERTURE, APERTURE] if o == 0 else [0, 0], [0, 0] if o == 0 else [-APERTURE, APERTURE],
+                            color='.6', lw=.4, ls=':')
+                q = 4 / np.sqrt(2)
+                ax.add_patch(Circle((q, q), .75, fill=False, ec=HP, lw=.8, ls=(0, (2, 1.2))))
+                ax.set_xlim(-4.9, 4.9)
+                ax.set_ylim(-4.9, 4.9)
+                ax.set_aspect('equal')
+                ax.set_axis_off()
+                if o == 0 and k == 0:
+                    ax.text(.5, 1.02, f'{centres[b]:+.1f}°'.replace('-', '−'), transform=ax.transAxes, ha='center',
+                            va='bottom', fontsize=6, color='.4')
+                if b == 0:
+                    ax.text(-.08, .5, lab if k == 0 else ('Upper half minus\nlower half' if o == 0 else
+                                                          'Right half minus\nleft half'),
+                            transform=ax.transAxes, ha='right', va='center', fontsize=6.5, color=FG if k == 0 else '.35')
+    cax = fig.add_axes([(x0 + 7 * (size + gap) + .05) / W, (H - .55 - 4 * size - .5) / H, .07 / W, (2.5 * size) / H])
+    cb = fig.colorbar(dim, cax=cax, ticks=[-dvm, 0, dvm])
+    cb.ax.set_yticklabels([f'−{dvm:.0f}%', '0', f'{dvm:.0f}%'], fontsize=6)
+    cb.ax.tick_params(length=2, width=.5, pad=1)
+    cb.outline.set_linewidth(.4)
+    cb.ax.text(.5, 1.04, 'Stronger\nthan mirror', transform=cb.ax.transAxes, ha='center', va='bottom', fontsize=6,
+               color='#B2182B')
+    cb.ax.text(.5, -.04, 'Weaker', transform=cb.ax.transAxes, ha='center', va='top', fontsize=6, color='#2166AC')
     fig.text(.02 / W, (H - .2) / H, 'a', fontsize=8, fontweight='bold', va='center')
     fig.text(.2 / W, (H - .2) / H, 'Decoded bars, HP location rotated to the upper right (V1–V3, mean of 30 subjects)',
              fontsize=7.5, color=STIM, va='center')
@@ -181,14 +301,22 @@ def plot(source, name='figS_decoded_bars_rotated'):
     sk.set_aspect('equal')
     sk.set_axis_off()
     nb = n.sum(0)
+    dec_txt = {'free': 'unconstrained decoder, every pixel decoded',
+               'outline': 'decoder with the bar outline given: only the pixels the bar covers are decoded, the rest is 0'}[decoder]
     legend = f"""
 **Figure S. The decoded bars, averaged per bar position with the HP location rotated to the upper right.** Every run's
-decoded frames (unconstrained decoder, V1, V2 and V3; pRFs: {source} fold fits) and its true bar frames were rotated in
+decoded frames ({dec_txt}, V1, V2 and V3; pRFs: {source} fold fits) and its true bar frames were rotated in
 90° steps so that the HP location (red dashed circle) lies upper right; 90° steps keep the bars vertical or horizontal.
 Frames with a bar inside the aperture (grey circle, {APERTURE}°) were grouped by bar orientation and by the position of
 the bar centre along its motion ({N_BINS} bins; centres above row 1), averaged over runs and ROIs per subject, then over
 subjects (n = {mean.shape[0]}). Dotted outline, the true bar. Frames per bin, all subjects and ROIs: vertical
-{', '.join(str(int(v)) for v in nb[0])}; horizontal {', '.join(str(int(v)) for v in nb[1])}. b, Decoded intensity on the
+{', '.join(str(int(v)) for v in nb[0])}; horizontal {', '.join(str(int(v)) for v in nb[1])}. Rows 2 and 4: each
+subject's decoded image minus its mirror image (vertical bars flipped top to bottom, horizontal bars left to right, so the
+bar maps onto itself and the HP quadrant onto a neighbouring one), in % of the mean decoded intensity on the bar,
+smoothed (Gaussian, σ = 0.4°), averaged over subjects, and shown on the bar's footprint (one pixel of margin) in the half
+nearer HP only, the other half being its negative: blue, weaker than the mirror image. Where the bar crosses the
+quadrant facing HP (upper right) the near half is blue; on the other side of the aperture the near half (a quadrant next
+to HP) is red against the opposite quadrant. b, Decoded intensity on the
 bar's pixels in the half of the bar nearer HP (upper half of a vertical bar, right half of a horizontal one) minus the
 half farther away, in % of the bar's mean, vertical and horizontal bars pooled; positive positions are on HP's side of the
 aperture (shaded), where the near half lies in the quadrant facing HP and the far half in a neighbouring one; on the
@@ -202,13 +330,19 @@ Wilcoxon signed-rank test against 0 per position, two-sided, uncorrected (* p < 
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('step', choices=['collect', 'plot'])
+    ap.add_argument('step', choices=['collect', 'collect_condition', 'plot', 'plot_condition'])
     ap.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
     ap.add_argument('--source', default='jointhrf')
     ap.add_argument('--out-dir', default='notes/data')
     ap.add_argument('-j', '--jobs', type=int, default=4)
+    ap.add_argument('--decoder', default='free', choices=['free', 'outline'])
+    ap.add_argument('--name', default='figS_decoded_bars_rotated')
     a = ap.parse_args()
-    if a.step == 'collect':
-        collect(a.bids_folder, a.source, a.out_dir, a.jobs)
+    if a.step == 'collect_condition':
+        collect_condition(a.bids_folder, a.source, a.out_dir, a.jobs, a.decoder)
+    elif a.step == 'plot_condition':
+        plot_condition(a.source, a.name, a.decoder)
+    elif a.step == 'collect':
+        collect(a.bids_folder, a.source, a.out_dir, a.jobs, a.decoder)
     else:
-        plot(a.source)
+        plot(a.source, a.name, a.decoder)
