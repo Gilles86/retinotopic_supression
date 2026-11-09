@@ -511,7 +511,7 @@ def plot_condition(source, name='figS_decoded_bars_rotated', decoder='free'):
             ax.set_aspect('equal')
             ax.set_axis_off()
             if k == 0:
-                ax.text(.5, 1.0, f'Bar at {centres[b]:+.1f}°'.replace('-', '−').replace('+0.0', '0'),
+                ax.text(.5, 1.0, f'Bar at {centres[b]:+.1f}°'.replace('-', '−').replace('+0.0', '0').replace('−0.0', '0'),
                         transform=ax.transAxes, ha='center', va='bottom', fontsize=6.5, color='.35')
             if j == 0:
                 ax.text(-.06, .5, lab, transform=ax.transAxes, ha='right', va='center', fontsize=7, color=FG)
@@ -589,6 +589,35 @@ def _disc(ax, img, cmap, vmin, vmax, hp=True, outline=None):
     return im
 
 
+def _half_test(e_o, b, oname, centre):
+    """Per subject (V1–V3 mean): the half of the bar nearer HP minus the other half (upper − lower for vertical bars,
+    right − left for horizontal ones), two-sided Wilcoxon; None for the central bin."""
+    if abs(centre) < .3:
+        return None
+    g = e_o[e_o.bin == b].groupby(['subject', 'quadrant', 'roi']).diff_pct.mean().groupby(['subject', 'quadrant']).mean().unstack()
+    if oname == 'vertical':
+        a, c = ('hp', 'next_lr') if centre > 0 else ('next_ul', 'opposite')
+    else:
+        a, c = ('hp', 'next_ul') if centre > 0 else ('next_lr', 'opposite')
+    if a not in g or c not in g:
+        return None
+    d = (g[a] - g[c]).dropna()
+    return stats.wilcoxon(d).pvalue if len(d) > 10 else None
+
+
+def _half_contrasts(seg, rois, orientation):
+    """Per subject: bars on HP's side (0.4–1.5°), HP-quadrant half minus the other half; bars on the far side,
+    next-to-HP half minus the opposite-quadrant half; and the bar's overall difference."""
+    d = seg[seg.roi.isin(rois) & (seg.orientation == orientation)]
+    w = d.pivot_table(index=['subject', 'roi', 'bin', 'centre'], columns='quadrant', values='diff_pct').reset_index()
+    nq, oq = ('next_lr', 'next_ul') if orientation == 'horizontal' else ('next_ul', 'next_lr')
+    a = w[(w.centre > .4) & (w.centre < 1.5)]
+    b = w[(w.centre < -.4) & (w.centre > -1.5)]
+    f = lambda x, v: v.groupby([x.subject, x.roi]).mean().groupby(level=0).mean()
+    overall = d.groupby(['subject', 'roi']).diff_pct.mean().groupby('subject').mean()
+    return f(a, a['hp'] - a[oq]), f(b, b[nq] - b['opposite']), overall
+
+
 def plot_split(source='jointhrf', decoder='outline', n_bins=11, name='figS_decoded_bars_rotated'):
     """Main decoded-bars supplement: V1–V3, vertical and horizontal bars in separate rows (no reflection)."""
     import matplotlib.colors as mcolors
@@ -610,8 +639,8 @@ def plot_split(source='jointhrf', decoder='outline', n_bins=11, name='figS_decod
     vmax = np.nanpercentile(z['early_dec'], 99.5)
     # per-segment tests (V1–V3 mean per subject), two-sided, uncorrected
     early = seg[seg.roi.isin(EARLY_ROIS)]
-    labels = [('Vertical bars,\nleft to right', 'Minus mean\nover HP locations'),
-              ('Horizontal bars,\nbottom to top', 'Minus mean\nover HP locations')]
+    labels = [('Vertical bars,\nleft to right', 'Minus mean over HP\nlocations, centred'),
+              ('Horizontal bars,\nbottom to top', 'Minus mean over HP\nlocations, centred')]
     y = H - .5
     for o, oname in enumerate(['vertical', 'horizontal']):
         e_o = early[early.orientation == oname]
@@ -624,17 +653,16 @@ def plot_split(source='jointhrf', decoder='outline', n_bins=11, name='figS_decod
                 if k == 0:
                     _disc(ax, z['early_dec'][o, b], cm, 0, vmax)
                 else:
-                    im = _disc(ax, _smooth_masked(z['early_diff'][o, b], foot), 'RdBu_r', -dvm, dvm, outline=bar > .5)
-                    g = e_o[e_o.bin == b].groupby(['subject', 'quadrant', 'roi']).diff_pct.mean().groupby(['subject', 'quadrant']).mean().unstack()
-                    for qn, (sx, sy) in SEG_QUAD.items():
-                        if qn in g and g[qn].notna().sum() > 10:
-                            p = stats.wilcoxon(g[qn].dropna()).pvalue
-                            if p < .05:
-                                st = '***' if p < .001 else '**' if p < .01 else '*'
-                                px, py = (cb_ + 1.1 * np.sign(cb_ or 1), sy * 1.7) if o == 0 else (sx * 1.7, cb_ + 1.1 * np.sign(cb_ or 1))
-                                ax.text(px, py, st, ha='center', va='center', fontsize=5.5, color=FG)
+                    dimg = z['early_diff'][o, b]
+                    dimg = dimg - np.nanmean(dimg[bar > .5])               # centred on the bar's own mean difference
+                    im = _disc(ax, _smooth_masked(dimg, foot), 'RdBu_r', -dvm, dvm, outline=bar > .5)
+                    p = _half_test(e_o, b, oname, cb_)
+                    if p is not None and p < .05:
+                        st = '***' if p < .001 else '**' if p < .01 else '*'
+                        px, py = (cb_ - 1.1 * np.sign(cb_), 1.7) if o == 0 else (1.7, cb_ - 1.0 * np.sign(cb_))
+                        ax.text(px, py, st, ha='center', va='center', fontsize=5.5, color=FG)
                 if o == 0 and k == 0:
-                    ax.text(.5, 1.02, f'{cb_:+.1f}°'.replace('-', '−').replace('+0.0', '0'), transform=ax.transAxes,
+                    ax.text(.5, 1.02, f'{cb_:+.1f}°'.replace('-', '−').replace('+0.0', '0').replace('−0.0', '0'), transform=ax.transAxes,
                             ha='center', va='bottom', fontsize=5.5, color='.4')
                 if b == 0:
                     ax.text(-.08, .5, labels[o][k], transform=ax.transAxes, ha='right', va='center', fontsize=6.5,
@@ -651,11 +679,14 @@ def plot_split(source='jointhrf', decoder='outline', n_bins=11, name='figS_decod
              'horizontal bars (V1–V3)', fontsize=7.5, color=HP, va='center')
     summ = {}
     for oname in ('vertical', 'horizontal', 'pooled'):
-        a_, b_ = _seg_contrasts(seg, EARLY_ROIS, oname)
-        summ[oname] = [(v.mean(), v.sem(), stats.wilcoxon(v).pvalue, len(v)) for v in (a_, b_)]
+        summ[oname] = [(v.mean(), v.sem(), stats.wilcoxon(v).pvalue, len(v)) for v in _half_contrasts(seg, EARLY_ROIS, oname)]
     fmt = lambda t: f'{t[0]:+.2f} ± {t[1]:.2f}% (p = {t[2]:.3f})'
-    summary = '; '.join(f'{o} bars: HP-quadrant segment of bars on HP\'s side {fmt(v[0])}, next-to-HP segment of bars '
-                        f'on the far side {fmt(v[1])}' for o, v in summ.items())
+    summary = '; '.join(f'{o} bars: HP-quadrant half minus the other half, bars on HP\'s side (centre 0.4–1.5°), '
+                        f'{fmt(v[0])}; next-to-HP half minus the opposite-quadrant half, bars on the far side, {fmt(v[1])}'
+                        for o, v in summ.items() if o != 'pooled')
+    summary += (f'; pooled (horizontal bars reflected onto vertical ones) {fmt(summ["pooled"][0])} and '
+                f'{fmt(summ["pooled"][1])}')
+    offset = (f'vertical bars {fmt(summ["vertical"][2])}, horizontal bars {fmt(summ["horizontal"][2])}')
     dec_txt = {'free': 'unconstrained decoder', 'outline': 'decoder with the bar outline given: only the pixels the bar '
                'covers are decoded'}[decoder]
     legend = f"""
@@ -666,13 +697,18 @@ HP location first and then over the four (three for sub-01 and sub-02); the stim
 subtraction. Each run's frames were rotated in 90° steps so that the HP location (red dashed circle) lies upper right;
 vertical bars (rows 1, 2) and horizontal bars (rows 3, 4) are shown separately, grouped by the position of the bar centre
 ({n_bins} bins of {centres[1] - centres[0]:.2f}° across the {APERTURE}° aperture; bars at the edge are clipped by the
-aperture). Rows 1 and 3: the decoded bar; rows 2 and 4: the difference, in % of the mean decoded intensity on the bar,
-on the bar's footprint (grey outline), smoothed (Gaussian, σ = 0.2°). Per subject the mean over runs and over V1, V2 and
+aperture). Each run's decoded frames were first scaled to a common mean intensity on the bar. Rows 1 and 3: the decoded
+bar; rows 2 and 4: the difference, in % of the mean decoded intensity on the bar, on the bar's footprint (grey outline),
+smoothed (Gaussian, σ = 0.2°), and centred on the bar's own mean difference, so the images show where along the bar it is
+weaker or stronger. The centring removes an offset that differs between the orientations (the difference averaged over
+the whole bar: {offset}): in the HP-rotated frame, bars of one orientation are decoded somewhat stronger and bars of the
+other somewhat weaker; this is an interaction of bar orientation with the diagonal the HP location lies on (it cancels
+when the orientations are pooled, and it does not enter the within-run quadrant comparisons of Fig. 6). Per subject the mean over runs and over V1, V2 and
 V3, then over subjects (n = {int(z['n_early'])}). Frames per bin (V1–V3, all subjects): vertical
-{', '.join(str(int(v)) for v in frames[0])}; horizontal {', '.join(str(int(v)) for v in frames[1])}. Stars: the
-difference on the bar's segment in that quadrant, two-sided Wilcoxon signed-rank test against 0, uncorrected (* p < .05,
-** p < .01, *** p < .001). Mean ± SEM over subjects, two-sided Wilcoxon: {summary}. Both orientations show the effect,
-an internal replication.
+{', '.join(str(int(v)) for v in frames[0])}; horizontal {', '.join(str(int(v)) for v in frames[1])}. Stars, next to the half of the bar nearer HP: that half minus the other half, two-sided
+Wilcoxon signed-rank test, uncorrected (* p < .05, ** p < .01, *** p < .001). Mean ± SEM over subjects, two-sided
+Wilcoxon: {summary}. The half of the bar in the quadrant facing HP is weaker for both orientations, an internal
+replication.
 """
     save(fig, name, legend)
     print(summary)
@@ -694,13 +730,13 @@ def plot_per_roi(source='jointhrf', decoder='outline', n_bins=11, name='figS_dec
     bars = (z['early_bar'][0] + np.swapaxes(z['early_bar'][1], -1, -2)) / 2      # pooled footprint per bin
     rows = {}
     for roi in rois:
-        a_, b_ = _seg_contrasts(seg, [roi], 'pooled')
+        a_, b_, _ = _half_contrasts(seg, [roi], 'pooled')
         rows[roi] = [(v.mean(), v.std(ddof=1) / np.sqrt(len(v)) * stats.t.ppf(.975, len(v) - 1),
                       stats.wilcoxon(v).pvalue, len(v)) for v in (a_, b_)]
     q = [stats.false_discovery_control([rows[r][k][2] for r in rois]) for k in range(2)]
-    W, H = 7.25, 6.4
+    W, H = 7.25, 6.0
     fig = plt.figure(figsize=(W, H))
-    size, gap, x0 = .56, .04, 1.05
+    size, gap, x0 = .5, .03, 1.0
     dvm = 6.
     top = H - .45
     rowpos = {}
@@ -717,7 +753,7 @@ def plot_per_roi(source='jointhrf', decoder='outline', n_bins=11, name='figS_dec
             foot = ndimage.binary_dilation(bars[b] > .5, iterations=1) & inside
             im = _disc(ax, _smooth_masked(z['roi_diff'][i, b], foot), 'RdBu_r', -dvm, dvm, outline=bars[b] > .5)
             if roi == rois[0]:
-                ax.text(.5, 1.03, f'{centres[b]:+.1f}°'.replace('-', '−').replace('+0.0', '0'), transform=ax.transAxes,
+                ax.text(.5, 1.03, f'{centres[b]:+.1f}°'.replace('-', '−').replace('+0.0', '0').replace('−0.0', '0'), transform=ax.transAxes,
                         ha='center', va='bottom', fontsize=6, color='.4')
             if j == 0:
                 ax.text(-.08, .5, f'{roi}\nn = {int(z["roi_n"][i])}', transform=ax.transAxes, ha='right', va='center',
@@ -727,10 +763,10 @@ def plot_per_roi(source='jointhrf', decoder='outline', n_bins=11, name='figS_dec
         fig.add_artist(plt.Line2D([.2 / W] * 2, [y0 / H, y1 / H], color=MUTED, lw=.7))
         fig.text(.12 / W, (y0 + y1) / 2 / H, gname, rotation=90, ha='center', va='center', fontsize=6, color='.4')
     # Right: the two segment contrasts per ROI.
-    xa = x0 + len(show) * (size + gap) + .45
-    for k, (title, col) in enumerate([('HP-quadrant segment,\nbars on HP\'s side', HP),
-                                      ('Next-to-HP segment,\nbars on the far side', '#52606D')]):
-        ax = fig.add_axes([(xa + k * 1.05) / W, rowpos[rois[-1]] / H, .8 / W, (top - rowpos[rois[-1]]) / H])
+    xa = x0 + len(show) * (size + gap) + .4
+    for k, (title, col) in enumerate([('HP half − other half,\nbars on HP\'s side', HP),
+                                      ('Next-to-HP half −\nopposite, far side', '#52606D')]):
+        ax = fig.add_axes([(xa + k * 1.0) / W, rowpos[rois[-1]] / H, .82 / W, (top - rowpos[rois[-1]]) / H])
         for roi in rois:
             m, ci, p, n = rows[roi][k]
             yc = rowpos[roi] + size / 2
@@ -749,7 +785,7 @@ def plot_per_roi(source='jointhrf', decoder='outline', n_bins=11, name='figS_dec
         ax.set_xlabel('Difference (%)', fontsize=6.5)
         ax.set_title(title, fontsize=6.5, color=col, pad=3)
         offset_spines(ax)
-    cax = fig.add_axes([(x0 + 1.0) / W, .25 / H, 2.0 / W, .07 / H])
+    cax = fig.add_axes([(x0 + .85) / W, .22 / H, 2.0 / W, .07 / H])
     cbar = fig.colorbar(im, cax=cax, orientation='horizontal', ticks=[-dvm, 0, dvm])
     cbar.ax.set_xticklabels([f'−{dvm:.0f}%', '0', f'+{dvm:.0f}%'], fontsize=6)
     cbar.ax.tick_params(length=2, width=.5, pad=1)
@@ -767,9 +803,9 @@ outline given; pRFs: {source} fold fits; HP rotated to the upper right in 90° s
 reflected across the diagonal through HP onto vertical ones (a symmetry of the rotated display that keeps HP in place),
 for the bar positions with the bar inside the aperture ({n_bins} bins in total); difference in % of the mean decoded
 intensity on the bar, on the bar's footprint, smoothed (σ = 0.2°), mean over subjects (n per ROI at the left; an ROI
-was skipped for a subject with fewer than 20 usable voxels). Right: per ROI, the difference on the bar's segment in the
-quadrant facing HP for bars on HP's side (centre 0.4–1.5°), and on the segment in the quadrant next to HP (upper left)
-for bars on the far side (centre −1.5 to −0.4°); mean and 95% CI over subjects; two-sided Wilcoxon signed-rank test,
+was skipped for a subject with fewer than 20 usable voxels). Right: per ROI, for bars on HP's side (centre 0.4–1.5°) the
+difference on the half of the bar in the quadrant facing HP minus that on the other half, and for bars on the far side
+(centre −1.5 to −0.4°) the half in the quadrant next to HP (upper left) minus the half in the opposite quadrant; mean and 95% CI over subjects; two-sided Wilcoxon signed-rank test,
 Benjamini-Hochberg across the nine ROIs per contrast (* q < .05). HP-quadrant / next-to-HP: {txt}.
 """
     save(fig, name, legend)

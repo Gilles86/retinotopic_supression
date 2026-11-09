@@ -20,20 +20,11 @@ the mean over runs and V1–V3; dots are subjects, points and bars the mean and 
 HP -0.89 ± 0.38%, next to HP +0.50 ± 0.18%, opposite -0.12 ± 0.24% (mean ± SEM); HP below next to HP, one-sided Wilcoxon p = 0.008 (**); HP below opposite, p = 0.17; Friedman test across the four quadrants p = 0.10. e, The pre-specified test: per subject and ROI, the mean decoded intensity
 on the bar's pixels in the quadrant facing HP minus the mean over the three other quadrants, averaged over runs; dots are
 subjects, points and bars the median and bootstrapped 95% CI. Wilcoxon signed-rank test, one-sided (HP < other
-quadrants), Holm across V1–V3 (the pre-specified test); * p_Holm < .05. V1 median -0.0002, 50% of subjects below 0, p = 0.202, p_Holm = 0.202; V2 median -0.0014, 73% of subjects below 0, p = 0.015, p_Holm = 0.044; V3 median -0.0006, 67% of subjects below 0, p = 0.022, p_Holm = 0.045. The decoder with the bar outline given (only the bar's pixels decoded) gives the same result: V1 p_Holm = 0.232, V2 p_Holm = 0.037, V3 p_Holm = 0.038. f, The difference of e by eccentricity, in %
+quadrants), Holm across V1–V3 (the pre-specified test); * p_Holm < .05. V1 median -0.0002, 50% of subjects below 0, p = 0.202, p_Holm = 0.202; V2 median -0.0014, 73% of subjects below 0, p = 0.015, p_Holm = 0.044; V3 median -0.0006, 67% of subjects below 0, p = 0.022, p_Holm = 0.045. Open markers and the upper row of stars: the decoder with the bar outline given (only the pixels the bar covers are decoded, the rest fixed at 0; median and bootstrapped 95% CI), same tests: V1 median -0.0003, p = 0.232, p_Holm = 0.232; V2 median -0.0014, p = 0.012, p_Holm = 0.037; V3 median -0.0006, p = 0.019, p_Holm = 0.038. Filled markers and the lower row of stars: the unconstrained decoder. f, The difference of e by eccentricity, in %
 of the decoded intensity in the other quadrants at the same eccentricity, mean of V1–V3 per subject; line and band, mean ± SEM over
 subjects (rings of 0.25°); left, the three bands drawn on the display. Items (radius 0.75°) begin at 3.25°
 eccentricity, just outside the aperture, and their responses are in the BOLD data but not in the encoding model; if item
 responses leaking into the aperture produced the difference, it would grow toward the aperture edge. It does not: per
 band (mean ± SEM; one-sided Wilcoxon signed-rank test, uncorrected, * p < .05) 0–1.5° -0.8 ± 0.5%, p = 0.052; 1.5–2.5° -1.4 ± 0.7%, p = 0.032; 2.5°+ -1.3 ± 0.6%, p = 0.055; whole aperture -1.2 ± 0.5%, p = 0.019; the three bands do not differ
 (Friedman test, p = 0.67; outer minus inner band, two-sided Wilcoxon p = 0.61). Within 0.75° of
-the fovea, where the four quadrants meet, there is no difference (+0.1 ± 0.4%). g, Without a model: the measured response
-(cleaned BOLD, % signal) of V1–V3 voxels with cross-run reliability > 0 and a pRF centre within 2° of an item location,
-locked to the moment the bar centre crosses the pRF centre along the bar's direction of motion (left: sketch, and the
-mean response of these voxels, which peaks about 3 s after the crossing). Each voxel's location is classed relative to
-the run's HP location as in d: HP (red), next to HP (the two neighbouring LP locations, dark grey) or opposite (light
-grey); responses are averaged over passes and voxels per subject, ROIs pooled weighted by voxel count, and shown
-relative to the mean of the four locations; lines and bands, mean ± SEM over subjects. HP minus the mean of the three LP
-locations in 1.6–6.4 s (grey; * one-sided Wilcoxon p < .05): -0.060% signal (-2.6% of the LP response), 67% of subjects below 0, one-sided Wilcoxon p = 0.017 (vs the two neighbouring LP locations -3.1%, p = 0.021; vs the opposite one -1.4%, p = 0.085). Search items are not removed and the
-response before the crossing is already rising (the bar enters the pRF earlier), so no pre-crossing baseline is
-subtracted; with one (−6.4 to 0 s) the difference is -2.1%, p = 0.16, not significant. pRFs: canonical fold fits.
+the fovea, where the four quadrants meet, there is no difference (+0.1 ± 0.4%). pRFs: canonical fold fits.

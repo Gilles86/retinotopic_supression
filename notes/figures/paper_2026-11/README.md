@@ -15,7 +15,7 @@ responses Fig. 3 and the model Fig. 4.
 | 4 Gain-field model | `fig4_model_hp_blocks` | `fig4_model.py` | final |
 | 5 Gain fields: top row a target and distractor gain, b the sustained field to scale; bottom row c sustained HP − LP gain, d distractor and target HP − LP gain (as Fig. 1c, d) | `fig5_gain_fields` | `fig5_gain_fields.py` | provisional |
 | Responses at a pRF's item location (model-free; place to be decided) | `fig_event_responses_2x3_deconv` | `fig_event_responses_2x3.py --deconv notes/data/event_deconv_2026-11` | final apart from layout |
-| 6 Decoding: the bar decoded from held-out runs in nine ROIs (b), lower decoded intensity in the quadrant facing HP (c–e; pre-specified V1–V3, exploratory higher areas), by eccentricity (f) and in the measured bar-pass response (g) | `fig6_decoding` | `fig6_decoding.py` (collect: `fig6_collect.py`) | final inputs (pRFs with an HRF per subject × ROI) |
+| 6 Decoding: the bar decoded from held-out runs in nine ROIs (b), lower decoded intensity in the quadrant facing HP (c, with two decoded-bar differences; d, e: pre-specified V1–V3, exploratory higher areas, bar-outline decoder as open markers), by eccentricity (f) | `fig6_decoding` | `fig6_decoding.py` (collect: `fig6_collect.py`) | final inputs (pRFs with an HRF per subject × ROI) |
 | 7 Trial history in the gains (a, repeat − switch, as Fig. 1e, f; the location effects are Fig. 5d), and gain vs response time trial by trial (b) | `fig7_behaviour` | `fig7_behaviour.py` | prototype on the October fits |
 | Table 1 The ladder | `table1_ladder` | `table1_ladder.py` | provisional |
 | Table S Parameters | `table_parameters_2026-11` | written by `fig5_gain_fields.py` | provisional |
@@ -26,7 +26,9 @@ responses Fig. 3 and the model Fig. 4.
 | S Leave-one-subject-out per ROI and term (was Fig. 5b) | `figS_loso_per_roi` | `fig5_gain_fields.py` | provisional (earlier fits) |
 | S Fitted gain fields | `figS_gainfield_size` | see its legend | provisional |
 | S Decoding with canonical-HRF pRFs (robustness of Fig. 6) | `figS_decoding_canonical` | `fig6_decoding.py --source canonical --rois V1 V2 V3 --name figS_decoding_canonical` | final |
-| S Decoded bars per position, HP rotated to the upper right | `figS_decoded_bars_rotated` | `figS_decoded_bars.py` | final |
+| S Decoded bars per position, HP rotated to the upper right; vertical and horizontal bars separately, minus the mean over HP locations | `figS_decoded_bars_rotated` | `figS_decoded_bars.py plot_split --n-bins 11` | final |
+| S The same per ROI, orientations pooled | `figS_decoded_bars_per_roi` | `figS_decoded_bars.py plot_per_roi --n-bins 11` | final |
+| S Measured response when the bar crosses a pRF near an item location (was Fig. 6g) | `figS_bar_crossing_response` | `fig6_decoding.py plot_bar_crossing` | final; test depends on the baseline choice |
 
 `_archive/` (numbers there are the order before 2026-11-09: old Fig. 2 = model, 3 = pRF fits, 4 = item locations): Figs. 4 and 5 before the split by question (`fig4_hierarchy`, `fig5_sustained_hp`), earlier Fig. 2 (pRF-location version), Fig. 3 versions with the example voxel, the voxel scans, the
 event-average prototypes (plain averages, before deconvolution) and the joint bar-and-items variant of the event figure.

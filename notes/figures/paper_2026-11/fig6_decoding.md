@@ -12,7 +12,7 @@ Points and bars: median and bootstrapped 95% CI. Decoded vs shuffled: Wilcoxon s
 run's visual field rotated so that the HP location (red dashed circle; grey, the LP locations, drawn with the item
 footprint, radius 0.75°) lies at 12 o'clock (90° steps, then 45° with bilinear interpolation); shown is the decoded
 intensity on the bar's pixels minus its average over the four rotations (in % of that average), averaged over runs,
-V1–V3 and subjects, smoothed (Gaussian, σ = 0.4°). The dotted diagonals bound the quadrant facing HP. d, Decoded
+V1–V3 and subjects, smoothed (Gaussian, σ = 0.4°). The dotted diagonals bound the quadrant facing HP. Right of the map, the same contrast on single bar positions without any averaging over the visual field: the decoded bar (decoder with the bar outline given) minus the mean decoded bar at the same time point over the subject's runs, averaged within each HP location first and then over the four, so the stimulus is identical and only the HP location differs; each run scaled to a common mean intensity on the bar first, rotated so HP is at the upper right in 90° steps (horizontal bars reflected onto vertical ones across the diagonal through HP); a bar through the quadrant facing HP (centre +0.9°) and one on the far side (centre −0.9°); same colour scale as the map, on the bar's footprint (supplementary figure of decoded bars for all positions). d, Decoded
 intensity on the bar's pixels per quadrant of the aperture, in % of the mean of the four quadrants, in the same rotated
 frame (icons: HP ringed in red at the top, the quadrant shaded): the quadrant facing HP, the two quadrants next to it
 (left and right pooled; they do not differ, two-sided Wilcoxon p = 0.22) and the opposite quadrant; per subject
@@ -27,13 +27,4 @@ eccentricity, just outside the aperture, and their responses are in the BOLD dat
 responses leaking into the aperture produced the difference, it would grow toward the aperture edge. It does not: per
 band (mean ± SEM; one-sided Wilcoxon signed-rank test, uncorrected, * p < .05) 0–1.5° -0.6 ± 0.5%, p = 0.103; 1.5–2.5° -1.4 ± 0.6%, p = 0.029; 2.5°+ -1.3 ± 0.6%, p = 0.040; whole aperture -1.1 ± 0.5%, p = 0.033; the three bands do not differ
 (Friedman test, p = 0.53; outer minus inner band, two-sided Wilcoxon p = 0.38). Within 0.75° of
-the fovea, where the four quadrants meet, there is no difference (+0.2 ± 0.5%). g, Without a model: the measured response
-(cleaned BOLD, % signal) of V1–V3 voxels with cross-run reliability > 0 and a pRF centre within 2° of an item location,
-locked to the moment the bar centre crosses the pRF centre along the bar's direction of motion (left: sketch, and the
-mean response of these voxels, which peaks about 3 s after the crossing). Each voxel's location is classed relative to
-the run's HP location as in d: HP (red), next to HP (the two neighbouring LP locations, dark grey) or opposite (light
-grey); responses are averaged over passes and voxels per subject, ROIs pooled weighted by voxel count, and shown
-relative to the mean of the four locations; lines and bands, mean ± SEM over subjects. HP minus the mean of the three LP
-locations in 1.6–6.4 s (grey; * one-sided Wilcoxon p < .05): -0.060% signal (-2.6% of the LP response), 67% of subjects below 0, one-sided Wilcoxon p = 0.017 (vs the two neighbouring LP locations -3.1%, p = 0.021; vs the opposite one -1.4%, p = 0.085). Search items are not removed and the
-response before the crossing is already rising (the bar enters the pRF earlier), so no pre-crossing baseline is
-subtracted; with one (−6.4 to 0 s) the difference is -2.1%, p = 0.16, not significant. pRFs: jointhrf fold fits.
+the fovea, where the four quadrants meet, there is no difference (+0.2 ± 0.5%). pRFs: jointhrf fold fits.

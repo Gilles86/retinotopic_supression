@@ -45,6 +45,19 @@ BANDS = [('0-1.5', 0, 1.5, '0–1.5°'), ('1.5-2.5', 1.5, 2.5, '1.5–2.5°'), (
 ITEM_ANGLES = (90, 180, 270, 0)              # HP first: after rotation HP sits at 12 o'clock
 ECC_MAX = 3.45                               # f's x axis ends just past the aperture edge
 BAND_SHADE = ['#E8ECF0', '#D5DCE3', '#C2CBD5']
+INSET_TXT = """ Right of the map, the same contrast on single bar positions without any averaging over the visual field: the decoded bar (decoder with the bar outline given) minus the mean decoded bar at the same time point over the subject's runs, averaged within each HP location first and then over the four, so the stimulus is identical and only the HP location differs; each run scaled to a common mean intensity on the bar first, rotated so HP is at the upper right in 90° steps (horizontal bars reflected onto vertical ones across the diagonal through HP); a bar through the quadrant facing HP (centre {ins_hp}) and one on the far side (centre {ins_far}); same colour scale as the map, on the bar's footprint (supplementary figure of decoded bars for all positions)."""
+BAR_LEGEND = """
+**Figure S. The measured response when the bar crosses a pRF near an item location, by where HP is.** Without a model, the measured response
+(cleaned BOLD, % signal) of V1–V3 voxels with cross-run reliability > 0 and a pRF centre within 2° of an item location,
+locked to the moment the bar centre crosses the pRF centre along the bar's direction of motion (left: sketch, and the
+mean response of these voxels, which peaks about 3 s after the crossing). Each voxel's location is classed relative to
+the run's HP location as in Fig. 6d: HP (red), next to HP (the two neighbouring LP locations, dark grey) or opposite (light
+grey); responses are averaged over passes and voxels per subject, ROIs pooled weighted by voxel count, and shown
+relative to the mean of the four locations; lines and bands, mean ± SEM over subjects. HP minus the mean of the three LP
+locations in {w0:.1f}–{w1:.1f} s (grey; * one-sided Wilcoxon p < .05): {bar}. Search items are not removed and the
+response before the crossing is already rising (the bar enters the pRF earlier), so no pre-crossing baseline is
+subtracted; with one (−6.4 to 0 s) the difference is {bar_base}, not significant. {source}
+"""
 LEGEND = """
 {title} The bar stimulus of every run was decoded from the BOLD activity of one ROI at a time with pRFs
 (difference of Gaussians, {hrf}, no gain terms) fitted on the other runs (cross-validation folds), so the decoded run
@@ -60,7 +73,7 @@ Points and bars: median and bootstrapped 95% CI. Decoded vs shuffled: Wilcoxon s
 run's visual field rotated so that the HP location (red dashed circle; grey, the LP locations, drawn with the item
 footprint, radius {item_r}°) lies at 12 o'clock (90° steps, then 45° with bilinear interpolation); shown is the decoded
 intensity on the bar's pixels minus its average over the four rotations (in % of that average), averaged over runs,
-V1–V3 and subjects, smoothed (Gaussian, σ = 0.4°). The dotted diagonals bound the quadrant facing HP. d, Decoded
+V1–V3 and subjects, smoothed (Gaussian, σ = 0.4°). The dotted diagonals bound the quadrant facing HP.{insets} d, Decoded
 intensity on the bar's pixels per quadrant of the aperture, in % of the mean of the four quadrants, in the same rotated
 frame (icons: HP ringed in red at the top, the quadrant shaded): the quadrant facing HP, the two quadrants next to it
 (left and right pooled; they do not differ, two-sided Wilcoxon p = {q_lr:.2f}) and the opposite quadrant; per subject
@@ -75,16 +88,7 @@ eccentricity, just outside the aperture, and their responses are in the BOLD dat
 responses leaking into the aperture produced the difference, it would grow toward the aperture edge. It does not: per
 band (mean ± SEM; one-sided Wilcoxon signed-rank test, uncorrected, * p < .05) {bands}; the three bands do not differ
 (Friedman test, p = {friedman:.2f}; outer minus inner band, two-sided Wilcoxon p = {outer_inner:.2f}). Within 0.75° of
-the fovea, where the four quadrants meet, there is no difference ({fovea}). g, Without a model: the measured response
-(cleaned BOLD, % signal) of V1–V3 voxels with cross-run reliability > 0 and a pRF centre within 2° of an item location,
-locked to the moment the bar centre crosses the pRF centre along the bar's direction of motion (left: sketch, and the
-mean response of these voxels, which peaks about 3 s after the crossing). Each voxel's location is classed relative to
-the run's HP location as in d: HP (red), next to HP (the two neighbouring LP locations, dark grey) or opposite (light
-grey); responses are averaged over passes and voxels per subject, ROIs pooled weighted by voxel count, and shown
-relative to the mean of the four locations; lines and bands, mean ± SEM over subjects. HP minus the mean of the three LP
-locations in {w0:.1f}–{w1:.1f} s (grey; * one-sided Wilcoxon p < .05): {bar}. Search items are not removed and the
-response before the crossing is already rising (the bar enters the pRF earlier), so no pre-crossing baseline is
-subtracted; with one (−6.4 to 0 s) the difference is {bar_base}, not significant. {source}
+the fovea, where the four quadrants meet, there is no difference ({fovea}). {source}
 """
 
 
@@ -242,7 +246,7 @@ def finish_roi_axis(ax, rois):
         ax.set_xticklabels(rois)
         ax.set_xlim(-.5, len(rois) - .5)
     else:
-        roi_axis(ax, labels=rois, rotate=False, fontsize=6.5)
+        roi_axis(ax, labels=rois, rotate=False, fontsize=6 if ax.get_position().width * ax.figure.get_figwidth() < 2.3 else 6.5)
 
 
 def panel_quality(ax, qs, pq, rois=ROIS):
@@ -468,13 +472,14 @@ def panel_test(ax, e, t, rois=ROIS, decoder=DECODER, t_exp=None, t_o=None, t_exp
             ax.text(x_, hi, stars(q.p_holm if roi in EARLY else q.p_bh), ha='center', va='bottom', fontsize=7, color=HP)
     ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
     ax.set_ylim(lo, hi)
-    ax.set_ylabel('Decoded intensity,\nHP − other quadrants')
+    ax.set_ylabel('Decoded intensity,\nHP − other quadrants' if len(rois) <= 3 else 'HP − other\nquadrants')
     offset_spines(ax)
     if t_o is not None:                             # star-row keys: filled = unconstrained, open = bar outline given
         import matplotlib.transforms as mtrans
-        x0 = roi_xs(rois)[0] - 1.25
-        for yy, mfc in ((hi + .035 * (hi - lo), HP), (hi + .145 * (hi - lo), 'w')):
+        x0 = roi_xs(rois)[-1] + .9
+        for yy, mfc, lab in ((hi + .035 * (hi - lo), HP, 'Unconstrained'), (hi + .145 * (hi - lo), 'w', 'Outline given')):
             ax.plot(x0, yy, 'o', ms=3.5, color=HP, mfc=mfc, mec=HP, mew=.9, clip_on=False)
+            ax.text(x0 + .35, yy, lab, ha='left', va='center', fontsize=5.5, color=HP, clip_on=False)
     if len(rois) > 3:
         import matplotlib.transforms as mtrans
         from retsupp.visualize.paper.paper_style import ROI_X
@@ -665,6 +670,48 @@ def panel_bar_pass(ax, w, st):
     offset_spines(ax)
 
 
+def bar_insets(fig, source, xy, W, H, size=.5, vmax=3., bins=(4, 2)):
+    """Two small decoded-bar difference images beside c (decoder with the bar outline given): a bar through the quadrant
+    facing HP and one on the far side. Returns their centre labels."""
+    from scipy import ndimage
+    from retsupp.visualize.paper.figS_decoded_bars import _disc, _smooth_masked, data_name, pooled_condition
+    z = np.load(DATA / data_name(source, 'outline').replace('decoded_bars_', 'decoded_bars_condition_'))
+    P = pooled_condition(z['mean'])
+    centres = (z['edges'][:-1] + z['edges'][1:]) / 2
+    c = np.linspace(-5, 5, 50)
+    X, Y = np.meshgrid(c, c)
+    inside = np.hypot(X, Y) <= APERTURE
+    labs = []
+    for k, (b, lab) in enumerate(zip(bins, ('Bar through\nHP quadrant', 'Bar on the\nfar side'))):
+        bar = P[:, b, 2].mean(0) > .5
+        foot = ndimage.binary_dilation(bar, iterations=1) & inside
+        rel = np.mean([100 * P[s_, b, 1] / P[s_, b, 0][bar & inside].mean() for s_ in range(len(P))], 0)
+        ax = fig.add_axes([xy[0] / W, (xy[1] + (1 - k) * (size + .2)) / H, size / W, size / H])
+        _disc(ax, _smooth_masked(rel, foot), 'RdBu_r', -vmax, vmax, outline=bar & inside)
+        ax.text(.5, -.02, lab, transform=ax.transAxes, ha='center', va='top', fontsize=5.5, color='.35', linespacing=1.)
+        labs.append(f'{centres[b]:+.1f}°'.replace('-', '−'))
+    return labs
+
+
+def plot_bar_crossing(name='figS_bar_crossing_response', source_note=''):
+    """Supplementary figure (was Fig. 6g): the measured response when the bar crosses a pRF near an item location."""
+    import matplotlib.pyplot as plt
+    from retsupp.visualize.paper.paper_style import save
+    bp = load_bar_pass()
+    bst = bar_pass_stats(bp)
+    W, H = 3.6, 1.75
+    fig = plt.figure(figsize=(W, H))
+    bar_pass_icon(fig, .05, .2, .95, bp.groupby('t')[['hp', 'adjacent', 'opposite']].mean().mean(1))
+    ax = fig.add_axes([1.75 / W, .42 / H, 1.4 / W, 1.0 / H])
+    panel_bar_pass(ax, bp, bst)
+    r_, b_ = bst['raw'], bst['base']
+    bar_txt = (f'{r_["diff"]:+.3f}% signal ({r_["rel"]:+.1f}% of the LP response), {r_["below"]:.0f}% of subjects below 0, '
+               f'one-sided Wilcoxon p = {r_["p"]:.3f} (vs the two neighbouring LP locations {r_["rel_adjacent"]:+.1f}%, '
+               f'p = {r_["p_adjacent"]:.3f}; vs the opposite one {r_["rel_opposite"]:+.1f}%, p = {r_["p_opposite"]:.3f})')
+    save(fig, name, BAR_LEGEND.format(bar=bar_txt, bar_base=f'{b_["rel"]:+.1f}%, p = {b_["p"]:.2f}', w0=BAR_WINDOW[0],
+                                      w1=BAR_WINDOW[1], source=source_note))
+
+
 # ------------------------------------------------------------------------------------------------------------ figure
 def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, source_note=''):
     import matplotlib.pyplot as plt
@@ -731,6 +778,8 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
              color=HP, va='center')
     ax = fig.add_axes([.1 / W, (1.78 + DY) / H, 1.42 / W, 1.42 / H])
     im = panel_map(ax, rm)
+    ins_file = DATA / f'decoded_bars_condition_{source}_outline_2026-11.npz'
+    ins_lab = bar_insets(fig, source, (1.5, 1.86 + DY), W, H) if ins_file.exists() else None
     fig.text(.02 / W, (3.4 + DY) / H, 'c', fontsize=8, fontweight='bold', va='center', ha='left')
     cax = fig.add_axes([.38 / W, (1.68 + DY) / H, .86 / W, .06 / H])
     cb = fig.colorbar(im, cax=cax, orientation='horizontal', ticks=[-3, 0, 3])
@@ -741,30 +790,25 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     cb.ax.text(1.06, .5, 'More', transform=cb.ax.transAxes, ha='left', va='center', fontsize=6, color='#B2182B')
     qe = quadrant_effects(d, decoder)
     qst = quadrant_stats(qe)
-    ax = fig.add_axes([(2.1 if many else 2.35) / W, (2.32 + DY) / H, (1.3 if many else 1.45) / W, .9 / H])
+    ax = fig.add_axes([(2.65 if many else 2.75) / W, (2.32 + DY) / H, (1.2 if many else 1.3) / W, .9 / H])
     panel_quadrants(ax, qe, qst)
     area_tag(ax, x=1.0, y=1.0, ha='right')
-    letter(ax, 'd', x=-.5, y=1.04)
+    letter(ax, 'd', x=-.62, y=.98)
     if many:
-        ax = fig.add_axes([4.4 / W, (2.2 + DY) / H, 2.75 / W, .9 / H])
+        ax = fig.add_axes([4.45 / W, (2.2 + DY) / H, 2.15 / W, .9 / H])
     else:
         ax = fig.add_axes([5.55 / W, (1.98 + DY) / H, 1.6 / W, 1.15 / H])
     panel_test(ax, e, t, rois, decoder, t_exp, t_out, t_exp_out)
     letter(ax, 'e', x=-.17 if many else -.42, y=1.15 if many else 1.04)
 
-    # Row 3: f eccentricity, g the measured response.
-    fig.text(.2 / W, 1.93 / H, 'Not driven by the items outside the aperture, and seen in the measured response', fontsize=7.5,
-             color=HP, va='center')
+    # Row 3: f eccentricity.
+    fig.text(.2 / W, 1.93 / H, 'Not driven by the items outside the aperture', fontsize=7.5, color=HP, va='center')
     fig.text(.02 / W, 1.93 / H, 'f', fontsize=8, fontweight='bold', va='center', ha='left')
-    ax = fig.add_axes([.05 / W, .35 / H, 1.05 / W, 1.05 / H])
+    ax = fig.add_axes([.6 / W, .35 / H, 1.15 / W, 1.15 / H])
     panel_bands_sketch(ax)
-    ax = fig.add_axes([1.65 / W, .42 / H, 2.25 / W, 1.2 / H])
+    ax = fig.add_axes([2.75 / W, .42 / H, 4.1 / W, 1.2 / H])
     panel_ecc(ax, be, pb)
     area_tag(ax, x=.02, y=.3)
-    ico, _ = bar_pass_icon(fig, 4.12, .3, .95, bp.groupby('t')[['hp', 'adjacent', 'opposite']].mean().mean(1))
-    ico.text(-5.3, 5.6, 'g', fontsize=8, fontweight='bold', ha='left', va='bottom', color='k')
-    ax = fig.add_axes([5.75 / W, .42 / H, 1.35 / W, 1.2 / H])
-    panel_bar_pass(ax, bp, bst)
 
     nq = qs.groupby('roi').r.median()
     quality = '; '.join(f'{r} median r = {nq[r]:.2f} vs {qs[qs.roi == r].r_shuffle.median():.3f}, {fmt_p(pq[r])}'
@@ -814,7 +858,7 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     save(fig, name, LEGEND.format(title=title, borderline=borderline, areas=areas, explore=explore, hrf=hrf, n=qs.subject.nunique(), quality=quality, tests=tests, outline=outline,
                                   bands=band_txt, friedman=fried, outer_inner=oi, fovea=fovea, ex_sub=sub, ex_r=ex_r,
                                   ex_rank=ex_rank, n_runs=len(qf), r_med=qf.r.median(), ex_run=run.replace('_', ' '),
-                                  ap=APERTURE, item_r=ITEM_R, item_in=ITEM_ECC - ITEM_R, bar=bar_txt, bar_base=bar_base,
+                                  ap=APERTURE, item_r=ITEM_R, insets=(INSET_TXT.format(ins_hp=ins_lab[0], ins_far=ins_lab[1]) if ins_lab else ''), item_in=ITEM_ECC - ITEM_R, bar=bar_txt, bar_base=bar_base,
                                   w0=BAR_WINDOW[0], w1=BAR_WINDOW[1], source=source_note,
                                   q_lr=qst['p_lr'], quad=qst['text']))
     print('quadrants', qst['text'], 'left vs right', round(qst['p_lr'], 3))
@@ -829,7 +873,7 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('step', choices=['collect', 'plot'])
+    ap.add_argument('step', choices=['collect', 'plot', 'plot_bar_crossing'])
     ap.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
     ap.add_argument('--source', default='jointhrf', help='jointhrf (main Fig. 6) or canonical (figS_decoding_canonical)')
     ap.add_argument('--rois', nargs='+', default=['V1', 'V2', 'V3', 'V3AB', 'IPS', 'hV4', 'VO', 'LO', 'TO'],
@@ -840,5 +884,7 @@ if __name__ == '__main__':
     a = ap.parse_args()
     if a.step == 'collect':
         collect(a.bids_folder, a.source, a.out)
+    elif a.step == 'plot_bar_crossing':
+        plot_bar_crossing(source_note='')
     else:
         plot(a.name, a.source, a.rois, a.decoder, source_note=f'pRFs: {a.source} fold fits.')
