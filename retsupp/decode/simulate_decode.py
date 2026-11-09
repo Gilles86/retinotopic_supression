@@ -6,7 +6,7 @@ run out) and decoder settings of ``decode_final.py``:
 
 1. Truth. The bar paradigm of the run is multiplied by a sustained gain field
    ``g(x, y) = 1 + A · exp(-d² / 2σ²)``, with ``d`` the distance to the HP item (the run's
-   ``eccentricity_stimulus`` on the HP diagonal), FWHM ``--fwhm`` (4.8°) and amplitude ``A`` (``--amplitudes``;
+   ``eccentricity_stimuli`` on the HP diagonal), FWHM ``--fwhm`` (4.8°) and amplitude ``A`` (``--amplitudes``;
    0 is the null). Nothing else changes, so the neighbouring quadrants have no effect of their own beyond the
    tail of the one Gaussian (the true readout is written alongside, ``true_drive_bar``).
 2. Signal. The fold pRF model (same class and HRF as the decoder: with ``--prf-source canonical`` the canonical
@@ -87,7 +87,7 @@ def main(subject, session, run, rois, bids, source, decoders, joint_tag, amplitu
     hp = sub.get_hpd_locations().get((session, run))
     settings = sub.get_experimental_settings(session, run)
     aperture = float(settings['radius_bar_aperture'])
-    ecc = float(settings['eccentricity_stimulus'])
+    ecc = float(settings['eccentricity_stimuli'])
     sx, sy = QUADRANTS[hp]
     center = (sx * ecc / np.sqrt(2), sy * ecc / np.sqrt(2))
     print(f'sub-{subject:02d} ses-{session} run-{run}: fold {fold}, HP {hp} at ({center[0]:.2f}, {center[1]:.2f})°, '
