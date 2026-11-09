@@ -31,6 +31,9 @@ import pandas as pd
 from braincoder.hrf import SPMHRFModel
 from retsupp.modeling.dn_baseline_field import DNBaselineField
 from retsupp.modeling.fit_af_prf_cv_v2 import get_ring_positions
+from retsupp.modeling.local_models import (
+    DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_factorial_items as DoGItems,
+)
 
 APERTURE, BAR_WIDTH, RING_ECC, ITEM_RADIUS = 3.17, 0.8, 4.0, 0.6
 QUADRANT = {0: 'HP', 1: 'next', 2: 'opposite', 3: 'next'}   # ring steps from HP (UR, UL, LL, LR)
@@ -109,19 +112,28 @@ def main(out, sigma_af=1.5):
             p[k_] = v_
         resp[name] = np.asarray(model._basis_predictions(
             par[np.newaxis], p[model.parameter_labels].to_numpy(np.float32)[np.newaxis]))[0]
+    # DoG with the same input field (subtractive surround with half the centre's volume, srf_amplitude = 0.5 / srf_size²), for comparison.
+    dog = DoGItems(grid_coordinates=grid, paradigm=par, hrf_model=SPMHRFModel(tr=1.6),
+                   condition_indicator=ci, dynamic_indicator=zeros, target_indicator=zeros,
+                   ring_positions=get_ring_positions(), sign_pattern=sp, item_scale_mode='free')
+    for name, g_hp in [('none_dog', 0.0), ('c_input_gain_dog', -0.3)]:
+        p = base.assign(srf_amplitude=0.5 / base.srf_size ** 2, amplitude=1.0, g_HP=g_hp)
+        resp[name] = np.asarray(dog._basis_predictions(
+            par[np.newaxis], p[dog.parameter_labels].to_numpy(np.float32)[np.newaxis]))[0]
     with np.errstate(invalid='ignore'):
-        ref = np.nanmean(np.where(centre, resp['none'], np.nan), 0)
+        ref = {k: np.nanmean(np.where(centre, resp[k], np.nan), 0) for k in ('none', 'none_dog')}
     rows = []
-    for name in VARIANTS:
+    for name in list(VARIANTS) + ['c_input_gain_dog']:
         if name == 'none':
             continue
+        nofield = 'none_dog' if name.endswith('_dog') else 'none'
         for cls, mask in [('centre', centre), ('surround', surround), ('items_only', blank)]:
-            m0 = np.where(mask, resp['none'], np.nan)
+            m0 = np.where(mask, resp[nofield], np.nan)
             m1 = np.where(mask, resp[name], np.nan)
             with np.errstate(invalid='ignore', divide='ignore'):
                 r0, r1 = np.nanmean(m0, 0), np.nanmean(m1, 0)
             out_v = vox.assign(variant=name, bar_class=cls, resp_nofield=r0, resp_field=r1,
-                               rel_change=(r1 - r0) / ref, n_trs=mask.sum(0))
+                               rel_change=(r1 - r0) / ref[nofield], n_trs=mask.sum(0))
             rows.append(out_v)
     df = pd.concat(rows, ignore_index=True)
     out = Path(out)
@@ -131,11 +143,11 @@ def main(out, sigma_af=1.5):
             [['HP', 'next', 'opposite']])
     summ['next_minus_opp'] = summ['next'] - summ['opposite']
     print((100 * summ).round(2).to_string())
-    big = df[(df.variant == 'c_input_gain') & (df.bar_class == 'centre')]
-    print('\nc_input_gain, centre, median % change by surround size (srf_size) and quadrant:')
-    print((100 * big.groupby(['srf_size', 'quadrant']).rel_change.median().unstack()).round(2).to_string())
-    print('\nc_input_gain, centre, median % change by eccentricity and quadrant:')
-    print((100 * big.groupby(['ecc', 'quadrant']).rel_change.median().unstack()).round(2).to_string())
+    for v in ('c_input_gain', 'c_input_gain_dog'):
+        big = df[(df.variant == v) & (df.bar_class == 'centre')]
+        for by in ('srf_size', 'ecc'):
+            print(f'\n{v}, bar on centre, median % change by {by} and quadrant:')
+            print((100 * big.groupby([by, 'quadrant']).rel_change.median().unstack()).round(2).to_string())
     print(f'\nWritten {out}')
 
 

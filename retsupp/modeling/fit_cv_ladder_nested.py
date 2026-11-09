@@ -65,8 +65,8 @@ refitting σ_AF and the gains from m7_full.
 ``--models m8_full_dnb m8_full_dnd m8_full_dnbd`` (``--family dn`` only) add a second sustained field that scales
 the DN neural baseline (w_b), the surround baseline (w_d) or both, with one shape (σ_AF, HP/LP pattern θ) shared
 (``dn_baseline_field``). Started from m7_full with the weights at 0 (checked to reproduce m7's prediction) and
-from three other θ; the joint model also starts from both one-weight fits. A finite-difference Hessian of the
-loss over the shared terms is stored (``hessian_corr``) to show whether w_b and w_d trade off.
+from three other θ; the joint model also starts from both one-weight fits. A Gauss-Newton Hessian (JᵀJ) of the
+SSE over the shared terms is stored (``hessian_corr``) to show whether w_b and w_d trade off.
 
 ``--reliable-only`` keeps the selected voxels with model-free cross-run reliability > 0 (mean over
 the ``prf_cv_reliability`` folds). The m00, m0, m1 and m3b fits come from ``--base-root``, restricted
@@ -335,23 +335,31 @@ def shared_fit(model, bold_train, paradigm, init_pars, free_shared,
                 loss=loss, sse_parent_start=f_parent, sse_final=best[0],
                 grad_norm=float(np.linalg.norm(g)), starts=starts)
     if hessian:
-        info.update(fd_hessian(fun, best[1], free_shared))
+        info.update(gn_hessian(model, paradigm, raw_best, free_ix, free_shared))
     return fit_pars, info
 
 
-def fd_hessian(fun, x, labels, h=2e-3):
-    """Central-difference Hessian of the loss in raw space at ``x``, and the correlations of its inverse.
+def gn_hessian(model, paradigm, raw_pars, free_ix, labels):
+    """Gauss-Newton Hessian JᵀJ of the SSE over the free shared terms (raw space), at ``raw_pars``.
 
-    For SSE the inverse Hessian is proportional to the Laplace covariance of the shared terms, so its
-    correlation matrix shows which terms trade off (e.g. w_b against w_d).
+    J is the Jacobian of all predictions (T × V) with respect to each shared term, by forward-mode
+    differentiation (one pass per term; the shared value sits in every voxel's row). JᵀJ is positive
+    semi-definite, and its inverse is proportional to the Laplace covariance of the shared terms, so the
+    correlations show which terms trade off (e.g. w_b against w_d). Not the full Hessian: residual
+    curvature is ignored, which is standard for least squares near the optimum.
     """
-    n = len(x)
-    hess = np.zeros((n, n))
-    for i in range(n):
-        e = np.zeros(n)
-        e[i] = h
-        hess[i] = (fun(x + e)[1] - fun(x - e)[1]) / (2 * h)
-    hess = 0.5 * (hess + hess.T)
+    par_ = model.stimulus._clean_paradigm(paradigm)
+    raw = tf.constant(np.asarray(raw_pars, dtype=np.float32))
+    cols = []
+    for k in free_ix:
+        tangent = np.zeros(raw.shape, dtype=np.float32)
+        tangent[:, k] = 1.0
+        with tf.autodiff.ForwardAccumulator(raw, tf.constant(tangent)) as acc:
+            pred = model._predict(par_[tf.newaxis, ...],
+                                  model._transform_parameters_forward(raw)[tf.newaxis, ...], None)
+        cols.append(np.asarray(acc.jvp(pred), dtype=np.float64).ravel())
+    jac = np.stack(cols, axis=1)
+    hess = jac.T @ jac
     cov = np.linalg.pinv(hess)   # θ has no curvature where both weights are 0
     sd = np.sqrt(np.abs(np.diag(cov)))
     with np.errstate(divide='ignore', invalid='ignore'):
