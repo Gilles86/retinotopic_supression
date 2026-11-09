@@ -569,18 +569,19 @@ def panel_bar_pass(ax, w, st):
         ax.plot(m.index, m.values, color=LOC_COLORS[c], lw=1.4 if c == 'hp' else 1.1)
     ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
     ax.axvline(0, color='.75', lw=.6, zorder=0)
-    ax.text(np.mean(BAR_WINDOW), -.083, stars(st['raw']['p']), ha='center', va='top', fontsize=7, color=HP)
+    ax.text(np.mean(BAR_WINDOW), .062, stars(st['raw']['p']), ha='center', va='bottom', fontsize=7, color=HP)
     ax.set_xlim(-4.8, 14.4)
     ax.set_xticks([0, 5, 10])
     ax.set_ylim(-.095, .11)
     ax.set_yticks([-.05, 0, .05])
     ax.set_yticklabels(['−.05', '0', '.05'])
-    ax.set_ylabel('Response vs mean of\nlocations (% signal)')
+    ax.set_ylabel('Δ response vs mean of\n4 locations (% signal)')
+    ax.set_title('V1–V3: each location minus\nthe mean of the four', fontsize=6.5, color=FG, pad=4)
     ax.set_xlabel('Time from crossing (s)')
     for k, (c, lab) in enumerate(QUAD_CLASSES):
-        y = 1.0 - k * .1
-        ax.plot([.5, .58], [y, y], transform=ax.transAxes, color=LOC_COLORS[c], lw=1.4, clip_on=False)
-        ax.text(.6, y, lab, transform=ax.transAxes, color=LOC_COLORS[c] if c != 'opposite' else '.5', fontsize=6,
+        y = .97 - k * .1
+        ax.plot([.6, .67], [y, y], transform=ax.transAxes, color=LOC_COLORS[c], lw=1.4, clip_on=False)
+        ax.text(.69, y, lab, transform=ax.transAxes, color=LOC_COLORS[c] if c != 'opposite' else '.5', fontsize=6,
                 va='center')
     offset_spines(ax)
 
@@ -670,7 +671,6 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     ico.text(-5.3, 5.6, 'g', fontsize=8, fontweight='bold', ha='left', va='bottom', color='k')
     ax = fig.add_axes([5.75 / W, .42 / H, 1.35 / W, 1.2 / H])
     panel_bar_pass(ax, bp, bst)
-    area_tag(ax, x=.02, y=.12)
 
     nq = qs.groupby('roi').r.median()
     quality = '; '.join(f'{r} median r = {nq[r]:.2f} vs {qs[qs.roi == r].r_shuffle.median():.3f}, {fmt_p(pq[r])}' for r in rois)
