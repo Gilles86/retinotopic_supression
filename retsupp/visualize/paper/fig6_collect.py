@@ -142,13 +142,13 @@ def one_run(args):
     return meta, q, rows, maps, (D.reshape(T, 50, 50) if T == N_TR else None), P.reshape(T, 50, 50)
 
 
-def main(bids, source, out_dir, jobs, rois=None):
+def main(bids, source, out_dir, jobs, rois=None, decoders=('free', 'outline')):
     root = Path(bids) / 'derivatives' / 'decoded_final_2026-11' / source
     files = sorted(root.glob('*/sub-*/decoded_ses-*_run-*_roi-*.npz'))
     found = {f.stem.split('roi-')[1] for f in files}
     ROIS = [r for r in ALL_ROIS if r in found and (rois is None or r in rois)]
-    DECODERS = [d for d in ('free', 'outline') if any(f.parent.parent.name == d for f in files)]
-    files = [f for f in files if f.stem.split('roi-')[1] in ROIS]
+    DECODERS = [d for d in decoders if any(f.parent.parent.name == d for f in files)]
+    files = [f for f in files if f.stem.split('roi-')[1] in ROIS and f.parent.parent.name in DECODERS]
     print('ROIs', ROIS, 'decoders', DECODERS, flush=True)
     print(f'{len(files)} decoded runs', flush=True)
     out_dir = Path(out_dir)
@@ -236,6 +236,7 @@ if __name__ == '__main__':
     ap.add_argument('--out-dir', default='notes/data')
     ap.add_argument('-j', '--jobs', type=int, default=4)
     ap.add_argument('--rois', nargs='+', default=None, help='default: every ROI found under the source')
+    ap.add_argument('--decoders', nargs='+', default=['free', 'outline'], help='decoder folders to read (others are ignored)')
     ap.add_argument('--trim', nargs='+', default=None, help="only trim the example runs, e.g. 'sub-23_ses-2_run-3'")
     ap.add_argument('--extract', nargs='+', default=None, help="only extract decoded runs, e.g. 'sub-18_ses-2_run-5_roi-V1'")
     ap.add_argument('--extract-name', default='example_candidates')
@@ -245,4 +246,4 @@ if __name__ == '__main__':
     elif a.trim:
         trim_examples(a.source, a.out_dir, a.trim)
     else:
-        main(a.bids_folder, a.source, a.out_dir, a.jobs, a.rois)
+        main(a.bids_folder, a.source, a.out_dir, a.jobs, a.rois, a.decoders)
