@@ -37,7 +37,7 @@ LEGEND_LOSO = """
 **Figure S. Do the gain terms predict new subjects?** Leave-one-subject-out test per ROI and term: the term added with the size estimated from the other 29 subjects (+δ) vs the opposite size (−δ); numbers, the percentage of subjects predicted better with +δ (cell colour: red above 50%, blue below); bold: q < .05 (non-significant cells muted), one-sided Wilcoxon signed-rank test, Benjamini-Hochberg across the nine ROIs per term (q per cell below). The distractor gain is tested on top of the target term, whose size and field width are the subject's own fit ("with target"); added to the pRF model alone it predicts new subjects no better (52–67% per ROI, TO 8%). These tests use the earlier gain fits (canonical HRF, before the selection on cross-run reliability) and will be redone on the final fits. Provisional.
 """
 LEGEND_DN = """
-**Figure S. The gain fields with divisive-normalization (DN) pRFs (as Fig. 5, which uses DoG pRFs).** The same gain-field model (m7_full) fitted on DN pRFs (earlier fits, canonical HRF; the final DN fits with per-ROI HRFs are pending); n = 30. Dots are subjects (triangles, beyond the axis), points and bars the median and bootstrapped 95% CI; stars, Wilcoxon signed-rank test against 0, Benjamini-Hochberg across the nine ROIs, * q < .05, ** q < .01, *** q < .001. a, Gain at the target and at the distractor (averaged over its locations), all terms fitted jointly; {dn_a}. b, Field sizes as in Fig. 5b: sustained FWHM, median {fwhm:.1f}° ({fw_bound:.0f}% of the fits at a σ bound; per ROI {fw_bound_roi}; median [IQR] {fw_iqr}); transient FWHM median [IQR] {tr_iqr}, at a bound in {tr_bound_roi}. c, d: no DN estimates with each term alone or with the target gain split by HP exist yet, so c and d show the joint DN fit (all terms together) and no target series; the DoG joint fit is in the parameter table for comparison. c, dS = g_HP − g_LP (joint): {dn_ds}. d, dD = g_HP_dyn − g_LP_dyn (joint): {dn_dd}. Provisional.
+**Figure S. The gain fields with divisive-normalization (DN) pRFs (as Fig. 5, which uses DoG pRFs).** The same gain-field model (m7_full) fitted on DN pRFs (earlier fits, canonical HRF; the final DN fits with per-ROI HRFs are pending); n = 30. Dots are subjects (triangles, beyond the axis), points and bars the median and bootstrapped 95% CI; stars, Wilcoxon signed-rank test against 0, Benjamini-Hochberg across the nine ROIs, * q < .05, ** q < .01, *** q < .001. a, Gain at the target and at the distractor (averaged over its locations), all terms fitted jointly; {dn_a}. b, Field sizes as in Fig. 5b: sustained FWHM, median {fwhm:.1f}° ({fw_bound:.0f}% of the fits at a σ bound; per ROI {fw_bound_roi}; median [IQR] {fw_iqr}); transient FWHM median [IQR] {tr_iqr}, at a bound in {tr_bound_roi}. c, d: each term estimated alone, as in Fig. 5 (for DN, each subject's minimum of the exact ΔSSE curve of the term added alone; ROIs with at least 20 voxels, so n per ROI: {dn_n}); there is no DN target split by HP yet, so d has no target series. c, dS = g_HP − g_LP, estimated alone: {dn_ds_alone}; pooled over ROIs, per-subject median −0.014, p = .001. Joint DN fit for comparison: {dn_ds}. d, dD = g_HP_dyn − g_LP_dyn, estimated alone: {dn_dd_alone}. Joint DN fit: {dn_dd}. Provisional.
 """
 LEGEND_HIERARCHY = """
 **Figure S. Gain at the target and the distractor against pRF size.** Median target and distractor gain per ROI (as in Fig. 5a) against the ROI's pRF size (median over subjects of the voxel-weighted mean pRF σ at 1–2.5° eccentricity, log scale). Lines: slope per doubling of pRF size, the median of the per-subject OLS slopes over the nine ROIs, drawn through the centre of the points; target {t_slope}; distractor {d_slope} (Wilcoxon signed-rank test of the per-subject slopes, Benjamini-Hochberg over the eight parameters tested). The slope may partly reflect a trade-off in the fits: within subjects, the target gain correlates with the fitted weight of the items relative to the bar (ρ = .25, p = .011) and negatively with the size of the gain field (ρ = −.22, p = .049), and the model-free enhancement at the item locations (Fig. 3) rises much less up the hierarchy. Provisional: current inputs.
@@ -284,7 +284,7 @@ def panel_sketch(ax, fwhm, lo_hi, g_lp=1., g_hp=.2, hp_ix=3, ecc=4., aperture=3.
 
 
 
-def dn_numbers(dn, dog):
+def dn_numbers(dn, dog, cond):
     """Per-ROI medians (with BH q) of the joint DN terms next to the joint DoG ones, for the DN legend."""
     def fmt(d, term):
         ps = [stats.wilcoxon(d[d.roi == r][term].dropna()).pvalue for r in ROI_ORDER]
@@ -294,7 +294,9 @@ def dn_numbers(dn, dog):
     return dict(dn_a=f'target {fmt(dn, "T")}; distractor {fmt(dn, "D")} (DoG joint: target {fmt(dog, "T")}; distractor '
                      f'{fmt(dog, "D")})',
                 dn_ds=f'{fmt(dn, "dS")} (DoG joint: {fmt(dog, "dS")})',
-                dn_dd=f'{fmt(dn, "dD")} (DoG joint: {fmt(dog, "dD")})')
+                dn_dd=f'{fmt(dn, "dD")} (DoG joint: {fmt(dog, "dD")})',
+                dn_ds_alone=fmt(cond, 'dS'), dn_dd_alone=fmt(cond, 'dD'),
+                dn_n=', '.join(f'{r} {cond[cond.roi == r].dS.notna().sum()}' for r in ROI_ORDER))
 
 
 def fwhm_text(d):
@@ -594,7 +596,8 @@ def header(fig, y, text, x0=.012, x1=.99):
 
 
 def main(gain_table, conditional_table, power_table, slope_table, sigma_table, name='fig5_gain_fields',
-         dt_table='notes/data/conditional_dT_dog_2026-11.tsv', family='dog'):
+         dt_table='notes/data/conditional_dT_dog_2026-11.tsv', family='dog',
+         dn_conditional_table='notes/data/conditional_exact_dog_dn_2026-11.tsv'):
     from retsupp.visualize.paper.hierarchy_regression import roi_size
     js = {f: joint(gain_table, f) for f in FAM}
     cond = conditional(conditional_table)
@@ -605,8 +608,11 @@ def main(gain_table, conditional_table, power_table, slope_table, sigma_table, n
     fw, fw_roi, fw_bound = sustained_fwhm(js, family)
     dn = family == 'dn'
     if dn:
-        # No DN conditional (each term alone) or target-split fits yet: the joint DN estimates, and no target series.
-        cond = d[['subject', 'roi', 'dS', 'dD']]
+        # DN terms estimated alone: each subject's minimum of the exact ΔSSE curve ('own'), ROIs with ≥ 20 voxels.
+        # No DN target split (dT) yet, so no target series in d.
+        c = pd.read_csv(dn_conditional_table, sep='\t')
+        c = c[(c.family == 'dn') & (c.nvox >= 20) & c.roi.isin(ROI_ORDER)]
+        cond = c.pivot_table(index=['subject', 'roi'], columns='mech', values='own').reset_index()
     sl = pd.read_csv(slope_table, sep='\t')
     sl = sl[sl.rois == 'all nine'].set_index('parameter')
     size = roi_size(sigma_table)
@@ -658,26 +664,24 @@ def main(gain_table, conditional_table, power_table, slope_table, sigma_table, n
     from retsupp.visualize.paper.paper_style import stimulus_icon
     hp_lp = [lambda a: (a.set_axis_off(), stimulus_icon(a, (0, 0, 1, 1), ('hp',))),
              lambda a: (a.set_axis_off(), stimulus_icon(a, (0, 0, 1, 1), ('lp',)))]
-    title_c = [('Sustained gain (joint fit): less at ', FG), ('HP', HP), (' only in V3', FG)] if dn else \
-        [('Sustained gain: less at ', FG), ('HP', HP)]
+    title_c = [('Sustained gain: less at ', FG), ('HP', HP)]
     row(fig, Y(y2), 'c', title_c, [(hp_lp, HP, 'Whole block, at HP − at LP')], x_let=.02, x_title=.2, key_y=Y(y2 + .27))
     ax = at(LX, Y(y2 + .62 + 1.0), PW, 1.0)
-    dot_panel(ax, [(cond, 'dS', HP, None)], (-.3, .2) if dn else (-.12, .06), 'Gain, HP − LP')
-    ax.set_yticks([-.2, 0, .2] if dn else [-.1, 0, .05])
-    title_d = [('Transient gain at HP (joint fit): no reliable decrease for the ', FG), ('distractor', DISTRACTOR)] if dn else \
-        [('Transient gain at HP: less for the ', FG), ('distractor', DISTRACTOR)]
+    dot_panel(ax, [(cond, 'dS', HP, None)], (-.14, .08) if dn else (-.12, .06), 'Gain, HP − LP')
+    ax.set_yticks([-.1, 0, .05])
+    title_d = [('Transient gain at HP: less for the ', FG), ('distractor', DISTRACTOR)]
     keys_d = [(icons('location', 'distractor'), DISTRACTOR, 'Each trial')] + \
         ([] if dn else [(icons('location', 'target'), TARGET, '')])
     row(fig, Y(y2), 'd', title_d, keys_d, x_let=RX - .5, x_title=RX - .32, key_y=Y(y2 + .27))
     fig.text((RX + PW) / W, Y(y2 + .27) / H, 'As Fig. 1c, d', fontsize=6, color='.45', ha='right', va='center')
     ax = at(RX, Y(y2 + .62 + 1.0), PW, 1.0)
     series_d = [(cond, 'dD', DISTRACTOR, None)] + ([] if dn else [(pd.read_csv(dt_table, sep='\t'), 'dT', TARGET, None)])
-    dot_panel(ax, series_d, (-.6, .7) if dn else (-.35, .3), 'Gain, HP − LP')
-    ax.set_yticks([-.5, 0, .5] if dn else [-.2, 0, .2])
+    dot_panel(ax, series_d, (-.3, .25) if dn else (-.35, .3), 'Gain, HP − LP')
+    ax.set_yticks([-.2, 0, .2])
     fig.text(.995, .005, 'DN pRFs, earlier fits (canonical HRF)' if dn else PROVISIONAL, fontsize=6, color=MUTED, ha='right',
              va='bottom')
     if dn:
-        save(fig, name, LEGEND_DN.format(fwhm=fw, fw_bound=100 * fw_bound, **fwhm_text(d), **dn_numbers(d, js['dog'])))
+        save(fig, name, LEGEND_DN.format(fwhm=fw, fw_bound=100 * fw_bound, **fwhm_text(d), **dn_numbers(d, js['dog'], cond)))
         return
     save(fig, name, LEGEND.format(spacing=4 * np.sqrt(2), fwhm=fw, fw_bound=100 * fw_bound,
                                   fw_roi='; '.join(f'{r} {v:.1f}°' for r, v in fw_roi.items()), **fwhm_text(d)))
