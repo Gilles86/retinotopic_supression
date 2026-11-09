@@ -125,8 +125,6 @@ correlates with item weight (ρ = .25, p = .011) and negatively with field size 
 - d, HP quadrant − other three quadrants, one-sided, BH over nine ROIs (unconstrained decoder): V2 p = .013,
   V3 .027, VO .034, TO .031, V3AB .043, all q = .076–.077; V1 p = .32 (q = .41); none q < .05. Outline decoder: V2, V3,
   V3AB, TO q = .090.
-- **Pre-specified test** (`primary_test_2026-11.md`: V1–V3, one-sided, Holm): computed from the same p values:
-  V2 p_Holm = .039, V3 .054, V1 .32. Not reported in the legend (see caveats).
 - e, per quadrant, V1–V3 pooled, % of the four-quadrant mean (mean ± within-subject SEM): HP −0.85 ± 0.38%, next to
   HP +0.46 ± 0.18%, opposite −0.08 ± 0.22%. HP < next one-sided p = .015; HP < opposite p = .13; Friedman p = .06;
   left vs right neighbour p = .22. Next vs opposite (two-sided, `decoding_prf_models_quadrants_2026-11.tsv`): p = .16
