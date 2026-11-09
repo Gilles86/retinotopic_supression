@@ -26,7 +26,7 @@ import seaborn as sns
 from scipy import stats
 
 DATA = Path('notes/data')
-FIGS = Path('notes/figures/paper')
+FIGS = Path('notes/figures/paper_2026-11')
 QUAD_ANGLE = {'upper_right': 45, 'upper_left': 135, 'lower_left': 225, 'lower_right': 315}
 POS = {0: 'hp', 90: 'left', 180: 'opposite', 270: 'right'}
 ROIS = ['V1', 'V2', 'V3']
