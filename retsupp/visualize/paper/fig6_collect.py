@@ -212,6 +212,19 @@ def trim_examples(source, out_dir, keep):
     print('Kept', sorted(sel), '->', out)
 
 
+def extract_runs(bids, source, out_dir, keys, name):
+    """Decoded frames (free decoder) of the given runs ('sub-18_ses-2_run-5_roi-V1' ...) into one small NPZ."""
+    root = Path(bids) / 'derivatives' / 'decoded_final_2026-11' / source / 'free'
+    out = {}
+    for k in keys:
+        sub, ses, run, roi = k.split('_')
+        with np.load(root / sub / f'decoded_{ses}_{run}_{roi}.npz') as z:
+            out[k] = z['decoded']
+    dst = Path(out_dir) / f'decoding_{name}_{source}_2026-11.npz'
+    np.savez_compressed(dst, **out)
+    print('Wrote', sorted(out), '->', dst)
+
+
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
@@ -219,8 +232,12 @@ if __name__ == '__main__':
     ap.add_argument('--out-dir', default='notes/data')
     ap.add_argument('-j', '--jobs', type=int, default=4)
     ap.add_argument('--trim', nargs='+', default=None, help="only trim the example runs, e.g. 'sub-23_ses-2_run-3'")
+    ap.add_argument('--extract', nargs='+', default=None, help="only extract decoded runs, e.g. 'sub-18_ses-2_run-5_roi-V1'")
+    ap.add_argument('--extract-name', default='example_candidates')
     a = ap.parse_args()
-    if a.trim:
+    if a.extract:
+        extract_runs(a.bids_folder, a.source, a.out_dir, a.extract, a.extract_name)
+    elif a.trim:
         trim_examples(a.source, a.out_dir, a.trim)
     else:
         main(a.bids_folder, a.source, a.out_dir, a.jobs)
