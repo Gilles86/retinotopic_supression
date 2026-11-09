@@ -138,7 +138,7 @@ def display(ax, search=True, fix='w', lim=5.4, scale=1., bar=True, hp=None):
 
 
 def panel_display(ax, margin=9.3):
-    display(ax)
+    display(ax, lim=5.9)   # a little more screen, so the 1.5° label above the top item sits on grey
     pos = item_positions()
     ax.add_patch(Circle(pos[7], 1.12, fill=False, ec=HP, lw=1.1, ls=(0, (2.5, 1.5)), zorder=6, clip_on=False))
     kw = dict(fontsize=7, color=FG, annotation_clip=False,
@@ -161,8 +161,8 @@ def panel_display(ax, margin=9.3):
     ax.set_xlim(-margin - .2, margin + .2)
     ax.set_ylim(-8, 8.6)
     # Where the distractor can appear, with its probability over all trials.
-    ax.text(5.65, pos[7][1], 'HP\n50%', color=HP, fontsize=7, fontweight='bold', va='center', ha='left')
-    for j, x, ha in ((1, 5.65, 'left'), (3, -5.65, 'right'), (5, -5.65, 'right')):
+    ax.text(6.15, pos[7][1], 'HP\n50%', color=HP, fontsize=7, fontweight='bold', va='center', ha='left')
+    for j, x, ha in ((1, 6.15, 'left'), (3, -6.15, 'right'), (5, -6.15, 'right')):
         ax.add_patch(Circle(pos[j], 1.12, fill=False, ec='w', lw=.8, ls=(0, (2.5, 1.5)), zorder=6))
         ax.text(x, pos[j][1], 'LP\n10%', color=FG, fontsize=7, va='center', ha=ha)
 
