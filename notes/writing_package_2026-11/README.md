@@ -87,8 +87,11 @@ contrasts. End with what we did and found.
    `[PENDING: D2, target gain at HP vs LP]`.
 6. Converging evidence without gain terms (Fig. 6, decoding). `[PENDING: rerun on final inputs; the
    May numbers must not be cited]`.
-7. Gain and behaviour, trial by trial (Fig. 7). Repeats speed search and lower target gain; per-trial
-   gain predicts response time, sign flips between early visual and parietal cortex.
+7. The behavioural effects of Fig. 1 in the gains, and gain and behaviour trial by trial (Fig. 7). Location
+   (Fig. 7b, as Fig. 1c, d): less distractor gain at HP in V3AB, IPS, hV4, VO; target gain HP − LP null.
+   History (Fig. 7c, as Fig. 1e, f): repeats lower target gain in V3AB, IPS, hV4, VO; distractor gain
+   repeat − switch not reliable after correction. Per-trial gain predicts response time, sign flips
+   between early visual and parietal cortex (Fig. 7d).
    `[PENDING: D4, gain at HP split by what HP holds on the trial]`.
 
 **Discussion.** Small but consistent proactive suppression as reduced sustained gain at HP; the
@@ -111,7 +114,7 @@ runs, sub-20 ses-1 and sub-24 ses-2 have 5 runs).
 | 4 Responses at the item locations (model-free) | `fig4_item_locations.pdf` | final apart from layout |
 | 5 Gain fields (model parameters) | `fig5_gain_fields.pdf` | provisional |
 | 6 Decoding | not made | pending (plan C6) |
-| 7 Behaviour, trial by trial | `fig7_behaviour.pdf` | prototype on earlier fits (Oct 2026) |
+| 7 Fig. 1 effects in the gains; behaviour trial by trial | `fig7_behaviour.pdf` (b location, c history, d trial by trial) | prototype: b provisional, c, d on earlier fits (Oct 2026) |
 | Table 1 Ladder | `table1_ladder.md` | provisional |
 | Table S Parameters | `table_parameters_2026-11.md` | provisional |
 | Supplement | `figS_field_size.pdf`, `figS_cv_power.pdf`, `figS_pooled_dS_dD.pdf`, `figS_gainfield_size.pdf` | provisional |
