@@ -4,7 +4,7 @@ never entered the pRF fit; voxels with cross-run reliability > 0 on the training
 of every frame decoded; the encoding model contains only the bar, not the search items. Only V1–V3 are shown. a, True bar (top) and decoded intensity in a single held-out run (middle;
 sub-07 ses-1 run-3, V1, frame-wise r = 0.60: rank 3 of 1074 subject × run × ROI decodes, chosen as the
 clearest of the five best; the median run has r = 0.46) and averaged over all runs and subjects (V1; bottom), at
-seven time points of the run (the last one without a bar). Grey circle, the 3.17° aperture of the bar. b, Per subject,
+seven time points of the run (the last one without a bar); decoded rows on a magma scale from 0 to each row's maximum. Grey circle, the 3.17° aperture of the bar. b, Per subject,
 the spatial correlation between decoded and true frame inside the aperture, averaged over the frames with a bar and over
 runs (blue dots, n = 30 subjects), against the same with the order of the true frames shuffled (100 permutations; grey).
 Points and bars: median and bootstrapped 95% CI. Decoded vs shuffled: Wilcoxon signed-rank test, one-sided (*** p <

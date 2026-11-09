@@ -65,7 +65,7 @@ never entered the pRF fit; voxels with cross-run reliability > 0 on the training
 of every frame decoded; the encoding model contains only the bar, not the search items. {areas} a, True bar (top) and decoded intensity in a single held-out run (middle;
 {ex_sub} {ex_run}, V1, frame-wise r = {ex_r:.2f}: rank {ex_rank} of {n_runs} subject × run × ROI decodes, chosen as the
 clearest of the five best; the median run has r = {r_med:.2f}) and averaged over all runs and subjects (V1; bottom), at
-seven time points of the run (the last one without a bar). Grey circle, the {ap}° aperture of the bar. b, Per subject,
+seven time points of the run (the last one without a bar); decoded rows on a magma scale from 0 to each row's maximum. Grey circle, the {ap}° aperture of the bar. b, Per subject,
 the spatial correlation between decoded and true frame inside the aperture, averaged over the frames with a bar and over
 runs (blue dots, n = {n} subjects), against the same with the order of the true frames shuffled (100 permutations; grey).
 Points and bars: median and bootstrapped 95% CI. Decoded vs shuffled: Wilcoxon signed-rank test, one-sided (*** p <
@@ -212,7 +212,7 @@ def panel_frames(fig, box, frames, W, H, style='blue'):
     for i, (lab, arr, vmax) in enumerate(rows):
         for k, t in enumerate(FRAMES):
             ax = fig.add_axes([(x0 + k * (size + gapx)) / W, (y0 + h - (i + 1) * size - i * gapy) / H, size / W, size / H])
-            if style == 'magma':                         # as Fig. 4's model panels: on black, magma, 0 to max
+            if style == 'magma' and i > 0:               # decoded rows as Fig. 4's model panels: magma on black
                 from matplotlib.patches import Circle
                 c = np.linspace(-5, 5, 50)
                 Xg, Yg = np.meshgrid(c, c)
@@ -734,7 +734,7 @@ def plot_bar_crossing(name='figS_bar_crossing_response', source_note=''):
 
 
 # ------------------------------------------------------------------------------------------------------------ figure
-def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, source_note='', frames_style='blue'):
+def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, source_note='', frames_style='magma'):
     import matplotlib.pyplot as plt
     from retsupp.visualize.paper.paper_style import FG, HP, STIM, letter, save
     d = pd.read_csv(DATA / f'decoding_readout_{source}_2026-11.tsv', sep='\t')
@@ -887,7 +887,7 @@ if __name__ == '__main__':
     ap.add_argument('--decoder', default=DECODER)
     ap.add_argument('--out', default=None)
     ap.add_argument('--name', default='fig6_decoding')
-    ap.add_argument('--frames-style', default='blue', choices=['blue', 'magma'])
+    ap.add_argument('--frames-style', default='magma', choices=['blue', 'magma'], help='decoded rows of a: magma on black or blue')
     a = ap.parse_args()
     if a.step == 'collect':
         collect(a.bids_folder, a.source, a.out)
