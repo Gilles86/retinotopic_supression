@@ -11,7 +11,7 @@ responses Fig. 3 and the model Fig. 4.
 |---|---|---|---|
 | 1 Paradigm and behaviour | `fig1_paradigm_behaviour` (c, d response times by HP/LP; e, f repeat vs switch) | `fig1_paradigm_behaviour.py` | final |
 | 2 pRF fits | `fig2_prf_fits` | `fig2_prf_fits.py` | provisional (d: HRF choice) |
-| 3 Responses at the item locations (model-free): target and distractor vs neutral item, HP vs LP per item type | `fig3_item_locations` | `fig3_item_locations.py` (statistics for the DCT basis in its legend) | final apart from layout |
+| 3 Responses at the item locations (model-free): target and distractor vs neutral item; d, e by location type relative to HP (HP, next to HP, opposite) per item type, HP vs all LP in the legend | `fig3_item_locations` | `fig3_item_locations.py`; d, e from `deconvolve_location_responses.py --relative` (`notes/data/event_deconv_relative{,_dct}_2026-11/`; statistics for the DCT basis in its legend) | final apart from layout |
 | 4 Gain-field model | `fig4_model_hp_blocks` | `fig4_model.py` | final |
 | 5 Gain fields: top row a target and distractor gain, b leave-one-subject-out test per ROI (ROIs as rows; bold, q < .05), c the sustained field to scale; bottom row d sustained HP − LP gain, e distractor and target HP − LP gain (as Fig. 1c, d) | `fig5_gain_fields` | `fig5_gain_fields.py` | provisional |
 | Responses at a pRF's item location (model-free; place to be decided) | `fig_event_responses_2x3_deconv` | `fig_event_responses_2x3.py --deconv notes/data/event_deconv_2026-11` | final apart from layout |

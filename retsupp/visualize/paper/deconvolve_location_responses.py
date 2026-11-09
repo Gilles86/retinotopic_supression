@@ -8,6 +8,11 @@ separated by the regression instead of averaged into each epoch. Fourier basis (
 
 Writes ``notes/data/event_deconv_2026-11.tsv``: subject, roi, loc, n_voxels, cls, t, response.
 
+``--relative``: the location is labelled by where it lies relative to the run's HP location instead of HP vs LP, so
+twelve event types (item × HP, next to HP on the left, next to HP on the right, opposite HP). Left and right are seen
+from fixation looking towards HP (HP rotated to the top): left is the counterclockwise neighbour. ``loc`` keeps the
+absolute location, so the neighbours can also be split into the one in the same and the other hemifield.
+
 Usage::
 
     python -m retsupp.visualize.paper.deconvolve_location_responses --folder notes/data/location_timeseries_2026-11
@@ -24,6 +29,18 @@ import pandas as pd
 INTERVAL = [-4., 20.]
 N_REGRESSORS = 13
 CLASSES = [f'{w}_{h}' for w in ('target', 'distractor', 'neutral') for h in ('hp', 'lp')]
+RELATIVE = {0: 'hp', 1: 'nextleft', 2: 'opposite', 3: 'nextright'}   # (loc - HP loc) mod 4; ring runs counterclockwise
+CLASSES += [f'{w}_{h}' for w in ('target', 'distractor', 'neutral') for h in RELATIVE.values() if h != 'hp']
+
+
+def relabel_relative(trials):
+    """target/distractor/neutral × HP/LP -> × HP/next left/next right/opposite, per run's HP location."""
+    hp = trials[trials.cls.str.endswith('_hp')].groupby(['session', 'run'])['loc'].agg(lambda x: x.mode()[0]).rename('hp_loc')
+    t = trials.join(hp, on=['session', 'run'])
+    assert t.hp_loc.notna().all(), 'run without an HP location'
+    rel = ((t['loc'] - t.hp_loc) % 4).astype(int).map(RELATIVE)
+    t['cls'] = t.cls.str.rsplit('_', n=1).str[0] + '_' + rel
+    return t.drop(columns='hp_loc')
 
 
 def deconvolve(ts, trials, tr=1.6, oversample=4, basis='fourier'):
@@ -59,13 +76,15 @@ def deconvolve(ts, trials, tr=1.6, oversample=4, basis='fourier'):
     return tc[['event_type', 'time', 'response']].rename(columns={'event_type': 'cls', 'time': 't'})
 
 
-def main(folder, out, subject=None, basis='fourier'):
+def main(folder, out, subject=None, basis='fourier', relative=False):
     rows = []
     pattern = f'sub-{subject:02d}_timeseries.tsv.gz' if subject else 'sub-*_timeseries.tsv.gz'
     for f in sorted(Path(folder).glob(pattern)):
         subject = int(f.name[4:6])
         ts = pd.read_csv(f, sep='\t')
         trials = pd.read_csv(f.with_name(f'sub-{subject:02d}_trials.tsv'), sep='\t')
+        if relative:
+            trials = relabel_relative(trials)
         keys = ['roi', 'loc'] + (['dbin'] if 'dbin' in ts else [])
         for key, x in ts.groupby(keys):
             tc = deconvolve(x, trials[trials['loc'] == key[1]], basis=basis)
@@ -83,5 +102,7 @@ if __name__ == '__main__':
     ap.add_argument('--subject', type=int, default=None, help='Only this subject (cluster array task).')
     ap.add_argument('--basis', default='fourier', choices=['fourier', 'dct', 'fir'],
                     help="nideconv basis set; 'dct' needs nideconv with the oversampling fix (branch dct-oversample-fix).")
+    ap.add_argument('--relative', action='store_true',
+                    help='Label locations HP / next left / next right / opposite instead of HP / LP.')
     a = ap.parse_args()
-    main(a.folder, a.out, a.subject, a.basis)
+    main(a.folder, a.out, a.subject, a.basis, a.relative)

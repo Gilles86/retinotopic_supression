@@ -79,7 +79,9 @@ contrasts. End with what we did and found.
 2. pRFs and model fits (Fig. 2). Retinotopy, contralaterality, size vs eccentricity, held-out R², responses to the
    search display falling off with distance from the nearest item. DN/Gaussian and HRF choices: supplement.
 3. Responses at the item locations, without a model (Fig. 3). More response to the target and the distractor than to
-   a neutral item; less response at the HP location for every item type, significant in early areas.
+   a neutral item. In early areas a gradient over location types, the same for every item type: least response at
+   HP, less next to HP than opposite it (next − opposite −14%, p = .029; HP − opposite −19%, p = .011; HP − next −5%,
+   n.s.; DCT basis alike); HP vs all LP −8% (p = .042). Dorsal and occipitotemporal: no reliable location effect.
 4. A gain-field model of pRFs during search (Fig. 4, Table 1). Nested ladder of models; items as
    stimuli; LOSO per step (Table 1).
 5. The gain fields (Fig. 5). Target gain everywhere beyond V1; distractor gain weaker, mainly dorsal and hV4/VO
@@ -120,7 +122,7 @@ Order since 2026-11-09: measured results (pRF fits, item locations) before the m
 |---|---|---|
 | 1 Paradigm and behaviour | `fig1_paradigm_behaviour.pdf` (response times; e, f repeat vs switch) | final |
 | 2 pRF fits | `fig2_prf_fits.pdf` | provisional (d: HRF choice) |
-| 3 Responses at the item locations (model-free) | `fig3_item_locations.pdf` | final apart from layout |
+| 3 Responses at the item locations (model-free; d, e by location type: HP, next to HP, opposite) | `fig3_item_locations.pdf` | final apart from layout |
 | 4 Gain-field model | `fig4_model_hp_blocks.pdf` (chosen 2026-11-06) | final |
 | 5 Gain fields (model parameters; b, leave-one-subject-out per ROI; e, distractor and target HP − LP as Fig. 1c, d) | `fig5_gain_fields.pdf` | provisional |
 | 6 Decoding | `fig6_decoding.pdf` | final inputs |

@@ -4,8 +4,10 @@ Voxels whose pRF centre lies within 2° of an item location, deconvolved (nideco
 (``deconvolve_location_responses.py``; read by ``fig45_common.item_timecourses``).
 
 Row 1, what the item is: the target and the distractor evoke more response than a neutral item (a raw, b, c differences
-per pathway). Row 2, where the item is: items at the HP location evoke less response, alike for every item type
-(d HP vs LP time courses per pathway, e HP − LP per item type with the location × item ANOVA of ``fig_hp_heatmap``).
+per pathway). Row 2, where the item is relative to the run's HP location (HP, next to HP, opposite;
+``deconvolve_location_responses.py --relative``): d each location type minus the mean of the four, per pathway; e HP − next
+and next − opposite per item type, with the location type × item ANOVA and planned contrasts (``rel_stats``). The HP vs LP
+ANOVA of ``fig_hp_heatmap`` (earlier deconvolution) stays in the legend.
 
 The model's gain fields are Figure 5 (``fig5_gain_fields.py``).
 
@@ -34,9 +36,15 @@ PRF_TEAL = '#2A9D8F'
 PEAK = (3.2, 6.4)   # s after search onset: the window tested
 SHORT = {'Early': 'Early', 'Dorsal': 'Dorsal', 'Occipitotemporal': 'Occ.-temporal', 'All areas': 'All areas'}
 ITEMS = [('target', 'Target', TARGET), ('distractor', 'Distractor', DISTRACTOR), ('neutral', 'Neutral item', NEUTRAL)]
+# Where the item lies relative to the run's HP location; colours and order as Fig. 6d, g.
+LOC_COLORS = {'hp': HP, 'next': '#52606D', 'opposite': '#9AA5B1'}
+LOC_TYPES = [('hp', 'HP'), ('next', 'Next to HP'), ('opposite', 'Opposite')]
+REL_FOLDER = 'notes/data/event_deconv_relative_2026-11'
+REL_DCT_FOLDER = 'notes/data/event_deconv_relative_dct_2026-11'
+ROW2_TITLE = 'Where the item is: in early areas, least response at HP, less next to it than opposite it, for every item type'
 
 LEGEND = """
-**Figure 3. At the item locations, without a model: more response to the target and the distractor, and less response at the high-probability (HP) location for every item.** All panels: deconvolved response (nideconv, Fourier basis) around search onset of voxels whose pRF centre lies within 2° of an item location (inset in a: the display with one such pRF on an item, and the response it gives), ROIs pooled weighted by voxel count, each subject's pre-onset mean (−4 to 0 s) subtracted; mean over subjects ± SEM (n = 30). Pathways: early, V1–V3; dorsal, V3AB and IPS; occipitotemporal, hV4, VO, LO and TO. Grey band: the window tested, {w0:.1f}–{w1:.1f} s. a, Response at a pRF's item location when the target, the distractor or a neutral item is there, all at low-probability (LP) locations, all nine ROIs pooled. b, Target minus neutral item per pathway (both averaged over HP and LP locations). c, Distractor minus neutral item per pathway (both at LP locations). Stars in b, c: the mean over the window against 0, Wilcoxon signed-rank test, Benjamini-Hochberg over the three pathways per panel; {diff_tests}. d, Response at an item location when it is the HP location (red) vs an LP location (grey), target, distractor and neutral item pooled, per pathway; the percentage is the HP − LP difference over the window relative to the LP response; {hp_tests}. e, HP − LP per item type over the window, in % of each subject's mean LP response over the three item types in that pathway; points and bars, mean ± SEM over subjects (dorsal pathway in b–e: n = {n_dor}, two subjects lack dorsal voxels at some item location). Red rules: the main effect of location (mean over item types); stars, repeated-measures ANOVA location (HP, LP) × item type (target, distractor, neutral) per pathway, uncorrected; {anova}. The location × item interaction is not significant in any pathway ({inter}); the planned contrast of the distractor against the mean of the target and the neutral item (the measured counterpart of the model's distractor-specific term) is closest to significance in the occipitotemporal pathway ({dvo}). DCT basis (robustness): the HP − LP differences keep their sign and size, but the main effect of location is not significant in any pathway; {dct}
+**Figure 3. At the item locations, without a model: more response to the target and the distractor, and, in early areas, least response at the high-probability (HP) location, less next to it than opposite it, for every item.** All panels: deconvolved response (nideconv, Fourier basis) around search onset of voxels whose pRF centre lies within 2° of an item location (inset in a: the display with one such pRF on an item, and the response it gives), ROIs pooled weighted by voxel count, each subject's pre-onset mean (−4 to 0 s) subtracted; mean over subjects ± SEM (n = 30). Pathways: early, V1–V3; dorsal, V3AB and IPS; occipitotemporal, hV4, VO, LO and TO. Grey band: the window tested, {w0:.1f}–{w1:.1f} s. a, Response at a pRF's item location when the target, the distractor or a neutral item is there, all at low-probability (LP) locations, all nine ROIs pooled. b, Target minus neutral item per pathway (both averaged over HP and LP locations). c, Distractor minus neutral item per pathway (both at LP locations). Stars in b, c: the mean over the window against 0, Wilcoxon signed-rank test, Benjamini-Hochberg over the three pathways per panel; {diff_tests}. d, e, Where the item lies relative to the run's HP location (HP rotates between runs, so each location is labelled per run): HP (red), next to HP (the two neighbouring LP locations, left and right seen from fixation facing HP, pooled; dark grey) or opposite HP (light grey), colours and order as Fig. 6d, g; deconvolved with the item type × location type as twelve event types. d, Each location type minus the mean of the four locations, item types pooled, per pathway. e, Per item type, HP − next to HP (left) and next to HP − opposite (right) over the window, in % of each subject's mean response over the four locations and three item types in that pathway; points and bars, mean ± SEM over subjects (dorsal pathway in b–e: n = {n_dor}, two subjects lack dorsal voxels at some item location). Rules: the mean over item types; stars, the planned contrast on it, Wilcoxon signed-rank test, uncorrected (* p < .05, ** p < .01, *** p < .001). Per pathway, repeated-measures ANOVA location type (HP, next, opposite) × item type (target, distractor, neutral), with the planned contrasts (mean ± SEM over subjects): {rel}. HP against all three LP locations (the earlier HP vs LP deconvolution, two event types per item; ANOVA location (HP, LP) × item type): main effect of location {hplp}; location × item {inter}. DCT basis (robustness), b, c and HP vs LP: {dct} Location types, DCT basis: {rel_dct}.
 """
 
 
@@ -92,6 +100,72 @@ def all_stats(folder):
     hl = hp_lp(pw)
     diff, res = hp_tests(folder)
     return pw, dt, dd, hl, diff, res
+
+
+def rel_stats(folder):
+    """Location type relative to the run's HP location (``deconvolve_location_responses.py --relative``).
+
+    Per subject and group (pathways and all areas): the window means per item × location (HP, next left, next right,
+    opposite) in % of the subject's mean over all twelve; next = mean of left and right. Returns (tcs, cells, res):
+    tcs, per subject, group and time, each location type minus the mean of the four locations (items pooled, % signal);
+    cells, one row per subject, group, item and location type; res, one row per group with the repeated-measures
+    ANOVA location type (HP, next, opposite) × item, the planned contrasts (Wilcoxon on the mean over items), left vs
+    right, and the HP vs all LP main effect (ANOVA location (HP, LP) × item, LP = mean of the three LP locations)."""
+    import pingouin as pg
+    groups = {r: g for g, rs in PATHWAY.items() for r in rs}
+    p = pd.concat([item_timecourses(folder, groups), item_timecourses(folder, None).assign(grp='All areas')])
+    w = p.pivot_table(index=['subject', 'grp', 't'], columns='cls', values='r')
+    loc = {c: w[[f'{it}_{c}' for it, _, _ in ITEMS]].mean(1) for c in ('hp', 'nextleft', 'nextright', 'opposite')}
+    m4 = sum(loc.values()) / 4
+    tcs = pd.DataFrame({'hp': loc['hp'] - m4, 'next': (loc['nextleft'] + loc['nextright']) / 2 - m4,
+                        'opposite': loc['opposite'] - m4}).reset_index()
+
+    pk = p[p.t.between(*PEAK)].groupby(['subject', 'grp', 'cls']).r.mean().unstack().dropna()
+    pk = pk.div(pk.mean(1), axis=0) * 100
+    cells = pk.stack().rename('r').reset_index()
+    cells[['item', 'loc']] = cells.cls.str.split('_', expand=True)
+    cells['loc3'] = cells['loc'].replace({'nextleft': 'next', 'nextright': 'next'})
+    fa = lambda a, src: (float(a.loc[a.Source == src, 'F'].iloc[0]), float(a.loc[a.Source == src, 'p-unc'].iloc[0]),
+                         int(a.loc[a.Source == src, 'ddof1'].iloc[0]), int(a.loc[a.Source == src, 'ddof2'].iloc[0]))
+    res = []
+    for g in list(PATHWAY) + ['All areas']:
+        d = cells[cells.grp == g]
+        d3 = d.groupby(['subject', 'item', 'loc3']).r.mean().reset_index()
+        a3 = pg.rm_anova(data=d3, dv='r', within=['loc3', 'item'], subject='subject')
+        d2 = d.assign(l2=np.where(d['loc'] == 'hp', 'hp', 'lp')).groupby(['subject', 'item', 'l2']).r.mean().reset_index()
+        a2 = pg.rm_anova(data=d2, dv='r', within=['l2', 'item'], subject='subject')
+        x = d.pivot_table(index='subject', columns='loc', values='r')   # mean over items
+        nxt = (x.nextleft + x.nextright) / 2
+        row = dict(grp=g, n=len(x))
+        for k, src in (('loc', 'loc3'), ('int', 'loc3 * item')):
+            row[f'{k}_F'], row[f'{k}_p'], row[f'{k}_df1'], row[f'{k}_df2'] = fa(a3, src)
+        row['lp_F'], row['lp_p'], row['lp_df1'], row['lp_df2'] = fa(a2, 'l2')
+        for k, v in (('hp_next', x.hp - nxt), ('next_opp', nxt - x.opposite), ('hp_opp', x.hp - x.opposite),
+                     ('left_right', x.nextleft - x.nextright),
+                     ('hp_lp', x.hp - (x.nextleft + x.nextright + x.opposite) / 3)):
+            row[k], row[f'{k}_se'], row[f'{k}_p'] = v.mean(), v.sem(), stats.wilcoxon(v).pvalue
+        res.append(row)
+    return tcs, cells, pd.DataFrame(res).set_index('grp')
+
+
+def rel_report(folder, res):
+    print(f'--- location types, {folder}')
+    cols = ['n', 'loc_F', 'loc_p', 'int_F', 'int_p', 'lp_F', 'lp_p', 'hp_next', 'hp_next_p', 'next_opp', 'next_opp_p',
+            'hp_opp', 'hp_opp_p', 'left_right', 'left_right_p']
+    print(res[cols].round(3).to_string())
+
+
+def rel_text(res, groups=None):
+    """Per group: the ANOVA and the planned contrasts, for the legend."""
+    out = []
+    for g, r in res.loc[groups or list(res.index)].iterrows():
+        out.append(f"{g.lower()}: location type F({int(r.loc_df1)}, {int(r.loc_df2)}) = {r.loc_F:.2f}, {fmt_p(r.loc_p)}, "
+                   f"location type × item F({int(r.int_df1)}, {int(r.int_df2)}) = {r.int_F:.2f}, {fmt_p(r.int_p)}; "
+                   f"HP − next {r.hp_next:+.1f} ± {r.hp_next_se:.1f}%, {fmt_p(r.hp_next_p)}; "
+                   f"next − opposite {r.next_opp:+.1f} ± {r.next_opp_se:.1f}%, {fmt_p(r.next_opp_p)}; "
+                   f"HP − opposite {r.hp_opp:+.1f}%, {fmt_p(r.hp_opp_p)}; "
+                   f"next left − next right {r.left_right:+.1f}%, {fmt_p(r.left_right_p)}")
+    return '; '.join(out)
 
 
 def report(folder, dt, dd, hl, res):
@@ -202,53 +276,86 @@ def panel_diff(ax, d, ylabel=True):
         ax.set_yticklabels([])
 
 
-def panel_hp_tc(ax, r, name, key=False, ylim=(-.25, 1.2)):
-    for k, (c, col, lab) in enumerate((('lp', LP_GREY, 'LP location'), ('hp', HP, 'HP location'))):
-        tc(ax, r[c].mean(), r[c].sem(), col)
-        if key:
-            ax.text(1.02, .97 - k * .13, lab, transform=ax.transAxes, color=col, fontsize=6, ha='right', va='top')
-    top = r['lp'].mean().max()
-    st = stars(r['p'])
-    if st:
-        ax.text(np.mean(PEAK), top + .04, st, ha='center', va='bottom', fontsize=9, color=HP)
-    ax.text(PEAK[1] + .7, top - .1, f"{r['rel']:.0f}%".replace('-', '−'), ha='left', va='center', fontsize=6,
-            color=HP if st else '.45')
+def loc_icon(ax, bounds, shade, transform=None):
+    """The four item locations with HP rotated to the top and ringed in red; the location type(s) in ``shade`` filled
+    in their colour (as Fig. 6d)."""
+    from matplotlib.patches import Circle
+    ins = ax.inset_axes(list(bounds), transform=transform or ax.transAxes)
+    which = {90: 'hp', 180: 'next', 0: 'next', 270: 'opposite'}
+    ins.add_patch(Circle((0, 0), 3.17, fill=False, ec='.6', lw=.5))
+    for a, c in which.items():
+        q = 4. * np.array([np.cos(np.deg2rad(a)), np.sin(np.deg2rad(a))])
+        ins.add_patch(Circle(q, 1.05, facecolor=LOC_COLORS[c] if c in shade else 'w',
+                             ec=HP if c == 'hp' else '.55', lw=.9 if c == 'hp' else .5, zorder=3))
+    ins.plot(0, 0, '+', color=FG, ms=2.5, mew=.5)
+    ins.set_xlim(-5.3, 5.3)
+    ins.set_ylim(-5.3, 5.3)
+    ins.set_aspect('equal')
+    ins.set_axis_off()
+    return ins
+
+
+def panel_loc_tc(ax, t, name, ylim=(-.125, .1)):
+    """Each location type minus the mean of the four locations, item types pooled."""
+    t = t[t.grp == name]
+    for c, lab in LOC_TYPES[::-1]:
+        x = t.pivot(index='subject', columns='t', values=c)
+        tc(ax, x.mean(), x.sem(), LOC_COLORS[c], lw=1.4 if c == 'hp' else 1.1)
     time_axis(ax, xlabel=False)
+    ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
     ax.set_ylim(*ylim)
-    ax.set_yticks([0, .5, 1])
+    ax.set_yticks([-.1, -.05, 0, .05, .1])
+    ax.set_yticklabels(['−.1', '', '0', '', '.1'])
     ax.set_title(SHORT[name], fontsize=6.5, color=FG, pad=2)
 
 
-def panel_items(ax, diff, res):
-    """HP − LP per item type and pathway (mean ± SEM); red rule, the mean over items (main effect of location)."""
+def panel_contrast(ax, cells, res, which, ylim=(-34, 27), ylabel=True):
+    """HP − next (``which='hp_next'``) or next − opposite per item type and group, % of the mean response; the rule is
+    the mean over item types, stars the planned contrast on it."""
+    a, b = which.split('_')
+    names = {'hp': 'hp', 'next': 'next', 'opp': 'opposite'}
+    rule = LOC_COLORS[names[a]]
     order = list(PATHWAY) + ['All areas']
-    off = {'target': -.25, 'distractor': 0., 'neutral': .25}
+    off = {'target': -.24, 'distractor': 0., 'neutral': .24}
+    lo, hi = ylim
     for i, g in enumerate(order):
-        x = i + (.35 if g == 'All areas' else 0)
-        w = diff[diff.grp == g].pivot(index='subject', columns='item', values='diff')
+        x0 = i + (.3 if g == 'All areas' else 0)
+        w = cells[cells.grp == g].pivot_table(index=['subject', 'item'], columns='loc3', values='r')
+        v = (w[names[a]] - w[names[b]]).unstack('item')
         for it, _, col in ITEMS:
-            v = w[it]
-            ax.errorbar(x + off[it], v.mean(), yerr=v.sem(), fmt='o', ms=4, color=col, mec='w', mew=.6, lw=1.1, capsize=0, zorder=3)
-        m = w.mean(1).mean()
-        ax.plot([x - .4, x + .4], [m, m], color=HP, lw=1.6, solid_capstyle='butt', zorder=4)
-        ax.text(x, 12.5, stars(res.loc[g, 'main_p']) or 'n.s.', ha='center', va='bottom',
-                fontsize=9 if stars(res.loc[g, 'main_p']) else 6, color=HP if res.loc[g, 'main_p'] < .05 else '.5')
+            ax.errorbar(x0 + off[it], v[it].mean(), yerr=v[it].sem(), fmt='o', ms=3.4, color=col, mec='w', mew=.5, lw=1,
+                        capsize=0, zorder=3)
+        m = v.mean(1).mean()
+        ax.plot([x0 - .38, x0 + .38], [m, m], color=rule, lw=1.6, solid_capstyle='butt', zorder=4)
+        pv = res.loc[g, f'{which}_p']
+        ax.text(x0, hi, stars(pv) or 'n.s.', ha='center', va='top', fontsize=8 if stars(pv) else 5.5,
+                color=rule if pv < .05 else '.5')
     ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
-    ax.axvline(len(order) - 1.5 + .175, color='.85', lw=.6, zorder=0)
-    ax.set_xticks([i + (.35 if g == 'All areas' else 0) for i, g in enumerate(order)])
-    ax.set_xticklabels([SHORT[g] for g in order], fontsize=6.5)
-    ax.set_xlim(-.55, len(order) - .1)
-    ax.set_ylim(-31, 12)
-    ax.set_yticks([-20, -10, 0, 10])
-    ax.set_ylabel('HP − LP (% of LP)')
+    ax.axvline(len(order) - 1.5 + .15, color='.85', lw=.6, zorder=0)
+    ax.set_xticks([i + (.3 if g == 'All areas' else 0) for i, g in enumerate(order)])
+    ax.set_xticklabels(['Early', 'Dorsal', 'Occ.-\ntemp.', 'All'], fontsize=6)
+    ax.set_xlim(-.5, len(order) - .2)
+    ax.set_ylim(lo, hi)
+    ax.set_yticks([-30, -20, -10, 0, 10, 20])
+    ax.set_yticklabels(['−30', '', '−10', '0', '10', ''])
+    if ylabel:
+        ax.set_ylabel('Difference (% of mean)')
+    else:
+        ax.set_yticklabels([])
     offset_spines(ax)
-    # Key: item colours, and the red rule for the main effect, drawn as glyphs.
-    tf = ax.transAxes
-    for k, (it, lab, col) in enumerate(ITEMS):
-        ax.plot(.03 + k * .25, .07, 'o', ms=3.5, color=col, mec='w', mew=.5, transform=tf, clip_on=False)
-        ax.text(.055 + k * .25, .07, lab.replace(' item', ''), transform=tf, fontsize=6, color=col, va='center')
-    ax.plot([.79, .85], [.07, .07], color=HP, lw=1.6, transform=tf, solid_capstyle='butt')
-    ax.text(.87, .07, 'All items', transform=tf, fontsize=6, color=HP, va='center')
+    # Title: icon − icon.
+    fig = ax.figure
+    fig.canvas.draw()
+    bb = ax.get_window_extent()
+    h = .27
+    w_ = h * bb.height / bb.width
+    y0 = 1.04
+    loc_icon(ax, (.0, y0, w_, h), {names[a]})
+    ax.text(w_ + .025, y0 + h / 2, '−', transform=ax.transAxes, fontsize=8, color=FG, va='center', ha='left')
+    loc_icon(ax, (w_ + .09, y0, w_, h), {names[b]})
+    lab = {'hp_next': 'HP − next', 'next_opp': 'Next − opposite'}[which]
+    ax.text(2 * w_ + .12, y0 + h / 2, lab, transform=ax.transAxes, fontsize=6.5, color=rule if a == 'hp' else FG,
+            va='center', ha='left')
 
 
 def header(fig, y, text, x0=.012, x1=.99):
@@ -256,7 +363,8 @@ def header(fig, y, text, x0=.012, x1=.99):
     fig.add_artist(plt.Line2D([x0, x1], [y - .006] * 2, color=MUTED, lw=.6, transform=fig.transFigure))
 
 
-def main(folder, name='fig3_item_locations', stats_only=False, dct_folder='notes/data/event_deconv_dct_2026-11'):
+def main(folder, name='fig3_item_locations', stats_only=False, dct_folder='notes/data/event_deconv_dct_2026-11',
+         rel_folder=REL_FOLDER, rel_dct_folder=REL_DCT_FOLDER):
     pw, dt, dd, hl, diff, res = all_stats(folder)
     report(folder, dt, dd, hl, res)
     if stats_only:
@@ -264,6 +372,10 @@ def main(folder, name='fig3_item_locations', stats_only=False, dct_folder='notes
     _, dt2, dd2, hl2, _, res2 = all_stats(dct_folder)
     report(dct_folder, dt2, dd2, hl2, res2)
     pa = item_timecourses(folder, groups=None)
+    tcs, cells, rres = rel_stats(rel_folder)
+    rel_report(rel_folder, rres)
+    _, _, rres2 = rel_stats(rel_dct_folder)
+    rel_report(rel_dct_folder, rres2)
 
     W, H = DOUBLE, 4.55
     fig = plt.figure(figsize=(W, H))
@@ -283,31 +395,50 @@ def main(folder, name='fig3_item_locations', stats_only=False, dct_folder='notes
     ax.text(0, 1.06, 'Distractor − neutral item', transform=ax.transAxes, fontsize=7, color=DISTRACTOR, va='bottom')
     letter(ax, 'c', x=-.08, y=1.06)
 
-    header(fig, 1.98 / H, 'Where the item is: less response at the HP location in early areas, alike for every item type')
+    header(fig, 1.98 / H, ROW2_TITLE)
     for k, g in enumerate(PATHWAY):
-        ax = at(.5 + k * 1.08, .5, .98, 1.08)
-        panel_hp_tc(ax, hl[g], g, key=k == 0)
+        ax = at(.66 + k * .98, .5, .9, .98)
+        panel_loc_tc(ax, tcs, g)
         if k == 0:
-            ax.set_ylabel('Response (% signal)')
-            letter(ax, 'd', x=-.4, y=1.12)
+            ax.set_ylabel('Δ vs mean of the four\nlocations (% signal)')
+            letter(ax, 'd', x=-.5, y=1.27)
+            # Key for d, as glyphs, in the row above the panels.
+            for j, (c, lab) in enumerate(LOC_TYPES):
+                x = .1 + j * .95
+                ax.plot([x, x + .14], [1.27, 1.27], transform=ax.transAxes, color=LOC_COLORS[c], lw=1.4, clip_on=False)
+                ax.text(x + .18, 1.27, lab, transform=ax.transAxes, color=LOC_COLORS[c] if c != 'opposite' else '.5',
+                        fontsize=6.5, va='center')
         else:
             ax.set_yticklabels([])
         if k == 1:
             ax.set_xlabel('Time from search onset (s)')
-    ax = at(4.25, .5, 2.7, 1.08)
-    panel_items(ax, diff, res)
-    letter(ax, 'e', x=-.17, y=1.12)
+    for k, which in enumerate(('hp_next', 'next_opp')):
+        ax = at(4.3 + k * 1.45, .5, 1.3, .98)
+        panel_contrast(ax, cells, rres, which, ylabel=k == 0)
+        if k == 0:
+            letter(ax, 'e', x=-.32, y=1.27)
+    # Key for e, as glyphs, under its x-axis labels.
+    y = .055 / H
+    x = 4.32
+    for it, lab, col in ITEMS:
+        lab = lab.replace(' item', '')
+        fig.add_artist(plt.Line2D([x / W], [y], marker='o', ms=3.4, color=col, mec='w', mew=.5, transform=fig.transFigure))
+        fig.text((x + .06) / W, y, lab, fontsize=6.5, color=col, va='center', ha='left')
+        x += .13 + .045 * len(lab)
+    for j, c in enumerate(('hp', 'next')):
+        fig.add_artist(plt.Line2D([(x + j * .2) / W, (x + j * .2 + .16) / W], [y, y], color=LOC_COLORS[c], lw=1.6,
+                                  solid_capstyle='butt', transform=fig.transFigure))
+    fig.text((x + .41) / W, y, 'Mean of the items', fontsize=6.5, color=FG, va='center', ha='left')
 
     fmt_d = lambda d, lab: f"{lab}: " + ', '.join(f"{g.lower()} {d[g]['mean']:+.2f}% signal, {fmt_p(d[g]['p'])}"
                                                    for g in PATHWAY)
-    hp_txt = ', '.join(f"{g.lower()} {hl[g]['diff']:+.3f}% signal ({hl[g]['rel']:.0f}%), {fmt_p(hl[g]['p'])}"
-                       for g in PATHWAY)
-    an = '; '.join(f"{g.lower()} F(1, {int(r.n) - 1}) = {r.main_F:.2f}, {fmt_p(r.main_p)}" for g, r in res.iterrows())
+    an = '; '.join(f"{g.lower()} {r.main:+.1f}%, F(1, {int(r.n) - 1}) = {r.main_F:.2f}, {fmt_p(r.main_p)}"
+                   for g, r in res.iterrows())
     inter = '; '.join(f"{g.lower()} F(2, {2 * (int(r.n) - 1)}) = {r.int_F:.2f}, {fmt_p(r.int_p)}" for g, r in res.iterrows())
-    dvo = f"{res.loc['Occipitotemporal', 'd_vs_others']:+.1f}%, Wilcoxon {fmt_p(res.loc['Occipitotemporal', 'd_vs_others_p'])}"
-    legend = LEGEND.format(w0=PEAK[0], w1=PEAK[1], diff_tests=fmt_d(dt, 'b') + '; ' + fmt_d(dd, 'c'), hp_tests=hp_txt,
-                           n_dor=int(res.loc['Dorsal', 'n']), anova=an, inter=inter, dvo=dvo,
-                           dct=short_stats(dt2, dd2, hl2, res2)).replace('-0.', '−0.').replace('(-', '(−').replace(' -', ' −')
+    legend = LEGEND.format(w0=PEAK[0], w1=PEAK[1], diff_tests=fmt_d(dt, 'b') + '; ' + fmt_d(dd, 'c'),
+                           n_dor=int(rres.loc['Dorsal', 'n']), rel=rel_text(rres), rel_dct=rel_text(rres2),
+                           hplp=an, inter=inter, dct=short_stats(dt2, dd2, hl2, res2))
+    legend = legend.replace('-0.', '−0.').replace('(-', '(−').replace(' -', ' −')
     save(fig, name, legend)
 
 
@@ -319,5 +450,7 @@ if __name__ == '__main__':
                     help='second basis, reported in the legend')
     ap.add_argument('--stats-only', action='store_true', help='print the statistics, draw nothing')
     ap.add_argument('--name', default='fig3_item_locations')
+    ap.add_argument('--rel-folder', default=REL_FOLDER, help='responses by location type (Fourier), for d and e')
+    ap.add_argument('--rel-dct-folder', default=REL_DCT_FOLDER, help='responses by location type (DCT), legend')
     a = ap.parse_args()
-    main(a.deconv_folder, a.name, a.stats_only, a.dct_folder)
+    main(a.deconv_folder, a.name, a.stats_only, a.dct_folder, a.rel_folder, a.rel_dct_folder)
