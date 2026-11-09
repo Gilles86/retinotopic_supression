@@ -58,7 +58,9 @@ search of the shared fits.
 ``--models m8_full_dT`` fits the target gain split by target at HP vs elsewhere (``target_split``) from
 m7_full; all its ancestors are loaded from ``--base-root``. ``--models m8_full_adjopp`` likewise splits the
 sustained LP gain into the two locations next to HP and the one opposite it (``lp_split``; one new term,
-g_adj_minus_opp = g_adj − g_opp, with g_LP kept as the mean of the three LP gains).
+g_adj_minus_opp = g_adj − g_opp, with g_LP kept as the mean of the three LP gains). ``--models m7_full_sigtied``
+ties the transient width to the sustained one (σ_dyn := σ_AF, ``sigma_tied``; one term fewer than m7_full),
+refitting σ_AF and the gains from m7_full.
 
 ``--reliable-only`` keeps the selected voxels with model-free cross-run reliability > 0 (mean over
 the ``prf_cv_reliability`` folds). The m00, m0, m1 and m3b fits come from ``--base-root``, restricted
@@ -92,6 +94,7 @@ from retsupp.modeling.cv_helpers import per_voxel_r2, write_cv_tsvs
 from retsupp.modeling.dn_attention_field import DNDynamicAttentionFieldPRF2D, init_from_m5
 from retsupp.modeling.target_split import NEW as T_HP, TargetSplitDN, TargetSplitDoG
 from retsupp.modeling.lp_split import NEW as LP_D, LPSplitDN, LPSplitDoG
+from retsupp.modeling.sigma_tied import SigmaTiedDN, SigmaTiedDoG
 from retsupp.modeling.fit_af_prf_cv_v2 import (
     ALL_SHARED_PARS,
     CV_SCHEMES,
@@ -121,12 +124,15 @@ LADDER = {
     'm7_full':   ('free', 'free', 'free', 'free', 'free', 'free', 'm5_TDS_dS'),
     'm8_full_dT': ('free', 'free', 'free', 'free', 'free', 'free', 'm7_full'),
     'm8_full_adjopp': ('free', 'free', 'free', 'free', 'free', 'free', 'm7_full'),
+    'm7_full_sigtied': ('free', 'free', 'free', 'free', 'free', 'free', 'm7_full'),
 }
 # Models fitted on top of finished ladders, run only when asked: the target gain split by target at HP vs
 # elsewhere (``target_split``) and the sustained LP gain split into next to HP vs opposite (``lp_split``).
 # Each adds one shared term to its parent, started at the value that reproduces the parent.
 SPLIT_TERMS = {'m8_full_dT': T_HP, 'm8_full_adjopp': LP_D}
-TARGET_SPLIT = tuple(SPLIT_TERMS)
+# m7_full with one width (σ_dyn := σ_AF): one term fewer, so it is fitted from m7 but is not above it.
+SIGMA_TIED = ('m7_full_sigtied',)
+TARGET_SPLIT = tuple(SPLIT_TERMS) + SIGMA_TIED
 GAINS = ['g_HP', 'g_LP', 'g_HP_dyn', 'g_LP_dyn', 'g_T_dyn']
 # Models whose fit cannot depend on which ring position is labelled HP.
 LABEL_BLIND = ('m1_T', 'm2_D', 'm3_S', 'm3b_TD', 'm4_TDS')
@@ -615,6 +621,8 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                 extra = [SPLIT_TERMS[name]] if name in SPLIT_TERMS else []
                 split_cls = {T_HP: (TargetSplitDoG, TargetSplitDN),
                              LP_D: (LPSplitDoG, LPSplitDN)}.get(extra[0]) if extra else None
+                if name in SIGMA_TIED:
+                    split_cls = (SigmaTiedDoG, SigmaTiedDN)
 
                 def mk(d):
                     if family == 'dn':
@@ -685,9 +693,15 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                     init = child_init(fits[parent][k], m_tr, name)
                     free = [p for p in shared_pars_for(sp, item_scale)
                             if p != 'sigma_T_dyn'] + extra
+                    starts = sigma_starts
+                    if name in SIGMA_TIED:
+                        # One width: σ_AF carries it ('parent' start = the parent's σ_AF); the parent's
+                        # σ_dyn is an extra start.
+                        free = [p for p in free if p != 'sigma_dyn']
+                        starts = tuple(sigma_starts) + (float(fits[parent][k]['sigma_dyn'].iloc[0]),)
                     pars, info = shared_fit(m_tr, y_tr, train['paradigm'],
                                             init, free, bounded=bounded, loss=loss,
-                                            sigma_starts=sigma_starts, lbfgs_rounds=lbfgs_rounds)
+                                            sigma_starts=starts, lbfgs_rounds=lbfgs_rounds)
                     print(f'  fold {k}: SSE parent-start {info["sse_parent_start"]:.2f}'
                           f' -> {info["sse_final"]:.2f} | |grad| '
                           f'{info["grad_norm"]:.3g} | {info["seconds"]:.0f}s')
