@@ -86,7 +86,8 @@ def collect(bids, source, out_dir, jobs=4, decoder='free'):
 
 
 def one_subject_roi(args):
-    """Condition-difference frames for one subject × ROI: each run's decoded frame minus the mean decoded frame at the
+    """Condition-difference frames for one subject × ROI (each run first scaled to a common mean intensity on the bar):
+    each run's decoded frame minus the mean decoded frame at the
     same time point over the subject's runs (mean within each HP location first, then over the four), then rotated so
     HP lies upper right and binned by bar orientation and position. Returns sums over runs."""
     from retsupp.visualize.paper.fig6_collect import rotation_index
@@ -98,6 +99,12 @@ def one_subject_roi(args):
                          str(z['hp_location'])))
     T = min(r[0].shape[0] for r in runs)
     grid = runs[0][2]
+    # Run gain: HP locations come in blocks of consecutive runs, so slow changes in overall decoded intensity (drift,
+    # session) would not cancel in the mean over HP locations; each run is scaled to the subject's mean intensity on
+    # the bar's pixels inside the aperture first.
+    ins = np.hypot(grid[:, 0], grid[:, 1]) <= APERTURE
+    gains = [dec[:T].reshape(T, -1)[:, ins][par[:T].reshape(T, -1)[:, ins] > 0].mean() for dec, par, _, _ in runs]
+    runs = [(dec * (np.mean(gains) / g_), par, gr, hp) for (dec, par, gr, hp), g_ in zip(runs, gains)]
     by_hp = {}
     for dec, _, _, hp in runs:
         by_hp.setdefault(hp, []).append(dec[:T].reshape(T, -1))
@@ -541,10 +548,238 @@ signed-rank test against 0, uncorrected; stars on the image: * p < .05, ** p < .
     print(segtxt)
 
 
+def _seg_contrasts(seg, rois, orientation):
+    """Per subject (mean over ``rois``): the HP-quadrant segment of bars on HP's side (0.4° < centre < 1.5°) and the
+    next-to-HP segment of bars on the far side (−1.5° < centre < −0.4°; upper left for vertical bars, lower right for
+    horizontal ones, pooled: upper left)."""
+    d = seg[seg.roi.isin(rois) & (seg.orientation == orientation)]
+    near = d[(d.centre > .4) & (d.centre < 1.5) & (d.quadrant == 'hp')]
+    nq = 'next_lr' if orientation == 'horizontal' else 'next_ul'
+    far = d[(d.centre < -.4) & (d.centre > -1.5) & (d.quadrant == nq)]
+    f = lambda x: x.groupby(['subject', 'roi']).diff_pct.mean().groupby('subject').mean()
+    return f(near), f(far)
+
+
+def _smooth_masked(img, mask, sigma=1.):
+    from scipy import ndimage
+    num = ndimage.gaussian_filter(np.where(mask, np.nan_to_num(img), 0), sigma)
+    den = ndimage.gaussian_filter(mask * 1., sigma)
+    return np.where(mask, num / np.maximum(den, 1e-6), np.nan)
+
+
+def _disc(ax, img, cmap, vmin, vmax, hp=True, outline=None):
+    from matplotlib.patches import Circle
+    from retsupp.visualize.paper.paper_style import HP
+    im = ax.imshow(img, origin='lower', extent=[-5.1, 5.1, -5.1, 5.1], cmap=cmap, vmin=vmin, vmax=vmax,
+                   interpolation='nearest')
+    clip = Circle((0, 0), APERTURE, transform=ax.transData, fc='none', ec='none')
+    ax.add_patch(clip)
+    im.set_clip_path(clip)
+    ax.add_patch(Circle((0, 0), APERTURE, fill=False, ec='.6', lw=.4))
+    if outline is not None:
+        c = np.linspace(-5, 5, 50)
+        ax.contour(c, c, outline, levels=[.5], colors=['.55'], linewidths=.3)
+    if hp:
+        q = 4 / np.sqrt(2)
+        ax.add_patch(Circle((q, q), .75, fill=False, ec=HP, lw=.7, ls=(0, (2, 1.2))))
+    ax.set_xlim(-4.9, 4.9)
+    ax.set_ylim(-4.9, 4.9)
+    ax.set_aspect('equal')
+    ax.set_axis_off()
+    return im
+
+
+def plot_split(source='jointhrf', decoder='outline', n_bins=11, name='figS_decoded_bars_rotated'):
+    """Main decoded-bars supplement: V1–V3, vertical and horizontal bars in separate rows (no reflection)."""
+    import matplotlib.colors as mcolors
+    import matplotlib.pyplot as plt
+    from scipy import ndimage
+    from retsupp.visualize.paper.paper_style import FG, HP, STIM, save
+    tag = f'{source}_{decoder}_b{n_bins}'
+    z = np.load(Path('notes/data') / f'decoded_bars_images_{tag}_2026-11.npz')
+    seg = pd.read_csv(Path('notes/data') / f'decoded_bars_segments_{tag}_2026-11.tsv', sep='\t')
+    centres, frames = z['centres'], z['frames_early']
+    c = np.linspace(-5, 5, 50)
+    X, Y = np.meshgrid(c, c)
+    inside = np.hypot(X, Y) <= APERTURE
+    W, H = 7.25, 3.3
+    fig = plt.figure(figsize=(W, H))
+    cm = mcolors.LinearSegmentedColormap.from_list('stim', ['#FFFFFF', STIM])
+    size, gap, x0 = .5, .035, 1.0
+    dvm = 4.
+    vmax = np.nanpercentile(z['early_dec'], 99.5)
+    # per-segment tests (V1–V3 mean per subject), two-sided, uncorrected
+    early = seg[seg.roi.isin(EARLY_ROIS)]
+    labels = [('Vertical bars,\nleft to right', 'Minus mean\nover HP locations'),
+              ('Horizontal bars,\nbottom to top', 'Minus mean\nover HP locations')]
+    y = H - .5
+    for o, oname in enumerate(['vertical', 'horizontal']):
+        e_o = early[early.orientation == oname]
+        for k in range(2):
+            y -= size + (.04 if k else .1)
+            for b, cb_ in enumerate(centres):
+                ax = fig.add_axes([(x0 + b * (size + gap)) / W, y / H, size / W, size / H])
+                bar = z['early_bar'][o, b]
+                foot = ndimage.binary_dilation(bar > .5, iterations=1) & inside
+                if k == 0:
+                    _disc(ax, z['early_dec'][o, b], cm, 0, vmax)
+                else:
+                    im = _disc(ax, _smooth_masked(z['early_diff'][o, b], foot), 'RdBu_r', -dvm, dvm, outline=bar > .5)
+                    g = e_o[e_o.bin == b].groupby(['subject', 'quadrant', 'roi']).diff_pct.mean().groupby(['subject', 'quadrant']).mean().unstack()
+                    for qn, (sx, sy) in SEG_QUAD.items():
+                        if qn in g and g[qn].notna().sum() > 10:
+                            p = stats.wilcoxon(g[qn].dropna()).pvalue
+                            if p < .05:
+                                st = '***' if p < .001 else '**' if p < .01 else '*'
+                                px, py = (cb_ + 1.1 * np.sign(cb_ or 1), sy * 1.7) if o == 0 else (sx * 1.7, cb_ + 1.1 * np.sign(cb_ or 1))
+                                ax.text(px, py, st, ha='center', va='center', fontsize=5.5, color=FG)
+                if o == 0 and k == 0:
+                    ax.text(.5, 1.02, f'{cb_:+.1f}°'.replace('-', '−').replace('+0.0', '0'), transform=ax.transAxes,
+                            ha='center', va='bottom', fontsize=5.5, color='.4')
+                if b == 0:
+                    ax.text(-.08, .5, labels[o][k], transform=ax.transAxes, ha='right', va='center', fontsize=6.5,
+                            color=FG if k == 0 else '.35')
+        y -= .12
+    cax = fig.add_axes([(x0 + len(centres) * (size + gap) + .06) / W, .45 / H, .06 / W, 1.0 / H])
+    cbar = fig.colorbar(im, cax=cax, ticks=[-dvm, 0, dvm])
+    cbar.ax.set_yticklabels([f'−{dvm:.0f}%', '0', f'+{dvm:.0f}%'], fontsize=5.5)
+    cbar.ax.tick_params(length=2, width=.5, pad=1)
+    cbar.outline.set_linewidth(.4)
+    cbar.ax.text(.5, 1.05, 'Stronger', transform=cbar.ax.transAxes, ha='center', va='bottom', fontsize=5.5, color='#B2182B')
+    cbar.ax.text(.5, -.05, 'Weaker', transform=cbar.ax.transAxes, ha='center', va='top', fontsize=5.5, color='#2166AC')
+    fig.text(.2 / W, (H - .17) / H, 'The same bar is decoded weaker where it passes the quadrant facing HP, for vertical and '
+             'horizontal bars (V1–V3)', fontsize=7.5, color=HP, va='center')
+    summ = {}
+    for oname in ('vertical', 'horizontal', 'pooled'):
+        a_, b_ = _seg_contrasts(seg, EARLY_ROIS, oname)
+        summ[oname] = [(v.mean(), v.sem(), stats.wilcoxon(v).pvalue, len(v)) for v in (a_, b_)]
+    fmt = lambda t: f'{t[0]:+.2f} ± {t[1]:.2f}% (p = {t[2]:.3f})'
+    summary = '; '.join(f'{o} bars: HP-quadrant segment of bars on HP\'s side {fmt(v[0])}, next-to-HP segment of bars '
+                        f'on the far side {fmt(v[1])}' for o, v in summ.items())
+    dec_txt = {'free': 'unconstrained decoder', 'outline': 'decoder with the bar outline given: only the pixels the bar '
+               'covers are decoded'}[decoder]
+    legend = f"""
+**Figure S. The same bar is decoded at lower intensity where it passes the quadrant facing the HP location, for vertical
+and for horizontal bars.** The bar sequence is the same in every run, so each decoded frame ({dec_txt}; pRFs: {source}
+fold fits) was compared with the mean decoded frame at the same time point over the subject's runs, averaged within each
+HP location first and then over the four (three for sub-01 and sub-02); the stimulus is identical on both sides of the
+subtraction. Each run's frames were rotated in 90° steps so that the HP location (red dashed circle) lies upper right;
+vertical bars (rows 1, 2) and horizontal bars (rows 3, 4) are shown separately, grouped by the position of the bar centre
+({n_bins} bins of {centres[1] - centres[0]:.2f}° across the {APERTURE}° aperture; bars at the edge are clipped by the
+aperture). Rows 1 and 3: the decoded bar; rows 2 and 4: the difference, in % of the mean decoded intensity on the bar,
+on the bar's footprint (grey outline), smoothed (Gaussian, σ = 0.2°). Per subject the mean over runs and over V1, V2 and
+V3, then over subjects (n = {int(z['n_early'])}). Frames per bin (V1–V3, all subjects): vertical
+{', '.join(str(int(v)) for v in frames[0])}; horizontal {', '.join(str(int(v)) for v in frames[1])}. Stars: the
+difference on the bar's segment in that quadrant, two-sided Wilcoxon signed-rank test against 0, uncorrected (* p < .05,
+** p < .01, *** p < .001). Mean ± SEM over subjects, two-sided Wilcoxon: {summary}. Both orientations show the effect,
+an internal replication.
+"""
+    save(fig, name, legend)
+    print(summary)
+
+
+def plot_per_roi(source='jointhrf', decoder='outline', n_bins=11, name='figS_decoded_bars_per_roi'):
+    import matplotlib.pyplot as plt
+    from scipy import ndimage
+    from retsupp.visualize.paper.paper_style import FG, HP, MUTED, ROI_GROUPS, offset_spines, save
+    tag = f'{source}_{decoder}_b{n_bins}'
+    z = np.load(Path('notes/data') / f'decoded_bars_images_{tag}_2026-11.npz')
+    seg = pd.read_csv(Path('notes/data') / f'decoded_bars_segments_{tag}_2026-11.tsv', sep='\t')
+    centres = z['centres']
+    show = [b for b in range(len(centres)) if abs(centres[b]) < 2.]
+    rois = list(z['rois'])
+    c = np.linspace(-5, 5, 50)
+    X, Y = np.meshgrid(c, c)
+    inside = np.hypot(X, Y) <= APERTURE
+    bars = (z['early_bar'][0] + np.swapaxes(z['early_bar'][1], -1, -2)) / 2      # pooled footprint per bin
+    rows = {}
+    for roi in rois:
+        a_, b_ = _seg_contrasts(seg, [roi], 'pooled')
+        rows[roi] = [(v.mean(), v.std(ddof=1) / np.sqrt(len(v)) * stats.t.ppf(.975, len(v) - 1),
+                      stats.wilcoxon(v).pvalue, len(v)) for v in (a_, b_)]
+    q = [stats.false_discovery_control([rows[r][k][2] for r in rois]) for k in range(2)]
+    W, H = 7.25, 6.4
+    fig = plt.figure(figsize=(W, H))
+    size, gap, x0 = .56, .04, 1.05
+    dvm = 6.
+    top = H - .45
+    rowpos = {}
+    yy = top
+    for gname, groi in ROI_GROUPS:
+        for r in groi:
+            yy -= size + .03
+            rowpos[r] = yy
+        yy -= .14
+    for roi in rois:
+        i = rois.index(roi)
+        for j, b in enumerate(show):
+            ax = fig.add_axes([(x0 + j * (size + gap)) / W, rowpos[roi] / H, size / W, size / H])
+            foot = ndimage.binary_dilation(bars[b] > .5, iterations=1) & inside
+            im = _disc(ax, _smooth_masked(z['roi_diff'][i, b], foot), 'RdBu_r', -dvm, dvm, outline=bars[b] > .5)
+            if roi == rois[0]:
+                ax.text(.5, 1.03, f'{centres[b]:+.1f}°'.replace('-', '−').replace('+0.0', '0'), transform=ax.transAxes,
+                        ha='center', va='bottom', fontsize=6, color='.4')
+            if j == 0:
+                ax.text(-.08, .5, f'{roi}\nn = {int(z["roi_n"][i])}', transform=ax.transAxes, ha='right', va='center',
+                        fontsize=6.5, color=FG)
+    for gname, groi in ROI_GROUPS:
+        y0, y1 = rowpos[groi[-1]], rowpos[groi[0]] + size
+        fig.add_artist(plt.Line2D([.2 / W] * 2, [y0 / H, y1 / H], color=MUTED, lw=.7))
+        fig.text(.12 / W, (y0 + y1) / 2 / H, gname, rotation=90, ha='center', va='center', fontsize=6, color='.4')
+    # Right: the two segment contrasts per ROI.
+    xa = x0 + len(show) * (size + gap) + .45
+    for k, (title, col) in enumerate([('HP-quadrant segment,\nbars on HP\'s side', HP),
+                                      ('Next-to-HP segment,\nbars on the far side', '#52606D')]):
+        ax = fig.add_axes([(xa + k * 1.05) / W, rowpos[rois[-1]] / H, .8 / W, (top - rowpos[rois[-1]]) / H])
+        for roi in rois:
+            m, ci, p, n = rows[roi][k]
+            yc = rowpos[roi] + size / 2
+            ax.errorbar(m, yc, xerr=ci, fmt='o', ms=3.5, color=col, mec='w', mew=.5, lw=1., capsize=0)
+            qq = q[k][rois.index(roi)]
+            if qq < .05:
+                ax.text(m + ci + .4, yc, '***' if qq < .001 else '**' if qq < .01 else '*', va='center', fontsize=6.5,
+                        color=col)
+        ax.axvline(0, color='.6', lw=.7, ls='--', zorder=0)
+        ax.set_ylim(rowpos[rois[-1]], top)
+        ax.set_yticks([])
+        ax.spines['left'].set_visible(False)
+        ax.set_xlim(-6, 6)
+        ax.set_xticks([-5, 0, 5])
+        ax.set_xticklabels(['−5', '0', '5'], fontsize=6)
+        ax.set_xlabel('Difference (%)', fontsize=6.5)
+        ax.set_title(title, fontsize=6.5, color=col, pad=3)
+        offset_spines(ax)
+    cax = fig.add_axes([(x0 + 1.0) / W, .25 / H, 2.0 / W, .07 / H])
+    cbar = fig.colorbar(im, cax=cax, orientation='horizontal', ticks=[-dvm, 0, dvm])
+    cbar.ax.set_xticklabels([f'−{dvm:.0f}%', '0', f'+{dvm:.0f}%'], fontsize=6)
+    cbar.ax.tick_params(length=2, width=.5, pad=1)
+    cbar.outline.set_linewidth(.4)
+    cbar.ax.text(-.04, .5, 'Weaker', transform=cbar.ax.transAxes, ha='right', va='center', fontsize=6, color='#2166AC')
+    cbar.ax.text(1.04, .5, 'Stronger', transform=cbar.ax.transAxes, ha='left', va='center', fontsize=6, color='#B2182B')
+    fig.text(.2 / W, (H - .17) / H, 'Decoded bar minus the mean over HP locations, per ROI (HP upper right; vertical and '
+             'horizontal bars pooled)', fontsize=7.5, color=HP, va='center')
+    txt = '; '.join(f'{r} {rows[r][0][0]:+.2f}% (95% CI ± {rows[r][0][1]:.2f}, p = {rows[r][0][2]:.3f}, q = {q[0][i]:.3f}) / '
+                    f'{rows[r][1][0]:+.2f}% (± {rows[r][1][1]:.2f}, p = {rows[r][1][2]:.3f}, q = {q[1][i]:.3f})'
+                    for i, r in enumerate(rois))
+    legend = f"""
+**Figure S. Decoded bars minus their mean over HP locations, per ROI.** As the decoded-bars figure (decoder with the bar
+outline given; pRFs: {source} fold fits; HP rotated to the upper right in 90° steps), per ROI, with horizontal bars
+reflected across the diagonal through HP onto vertical ones (a symmetry of the rotated display that keeps HP in place),
+for the bar positions with the bar inside the aperture ({n_bins} bins in total); difference in % of the mean decoded
+intensity on the bar, on the bar's footprint, smoothed (σ = 0.2°), mean over subjects (n per ROI at the left; an ROI
+was skipped for a subject with fewer than 20 usable voxels). Right: per ROI, the difference on the bar's segment in the
+quadrant facing HP for bars on HP's side (centre 0.4–1.5°), and on the segment in the quadrant next to HP (upper left)
+for bars on the far side (centre −1.5 to −0.4°); mean and 95% CI over subjects; two-sided Wilcoxon signed-rank test,
+Benjamini-Hochberg across the nine ROIs per contrast (* q < .05). HP-quadrant / next-to-HP: {txt}.
+"""
+    save(fig, name, legend)
+    print(txt)
+
+
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('step', choices=['collect', 'collect_condition', 'collect_per_roi', 'plot', 'plot_condition',
-                                     'plot_per_roi'])
+                                     'plot_per_roi', 'plot_split'])
     ap.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
     ap.add_argument('--source', default='jointhrf')
     ap.add_argument('--out-dir', default='notes/data')
@@ -559,7 +794,9 @@ if __name__ == '__main__':
     if a.step == 'collect_per_roi':
         collect_condition_per_roi(a.bids_folder, a.source, a.out_dir, a.jobs, a.decoder)
     elif a.step == 'plot_per_roi':
-        plot_per_roi(a.source, a.decoder)
+        plot_per_roi(a.source, a.decoder, a.n_bins)
+    elif a.step == 'plot_split':
+        plot_split(a.source, a.decoder, a.n_bins, a.name)
     elif a.step == 'collect_condition':
         collect_condition(a.bids_folder, a.source, a.out_dir, a.jobs, a.decoder)
     elif a.step == 'plot_condition':
