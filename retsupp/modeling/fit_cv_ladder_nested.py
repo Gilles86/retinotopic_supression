@@ -44,10 +44,6 @@ of refitting them (their per-voxel pRFs and the voxel set must match).
 instead of the DoG: m00 starts from the whole-brain m5 fit, the gain fields are
 the same. Root gets a _dn suffix.
 
-``--family gauss`` uses a Gaussian pRF: the DoG classes with the surround amplitude fixed at 0
-(``gauss_attention_field``); m00 starts from x, y, sd of the per-ROI-HRF Gaussian fold fits (model 13 of
-``cv/fit_prf_cv_roi_hrf.py``, fold mean; m4 where missing). Root gets a _gauss suffix.
-
 ``--hp-rotation K`` (1-3) relabels every run's HP location as the ring position K
 steps away, for a null distribution of the HP-specific terms. Only the labels move:
 the data, stimulus and distractor and target events stay as they were. Models with
@@ -111,11 +107,6 @@ from retsupp.modeling.target_split import NEW as T_HP, TargetSplitDN, TargetSpli
 from retsupp.modeling.lp_split import NEW as LP_D, LPSplitDN, LPSplitDoG
 from retsupp.modeling.sigma_tied import SigmaTiedDN, SigmaTiedDoG
 from retsupp.modeling.dn_baseline_field import NEW as BF_TERMS, DNBaselineField
-from retsupp.modeling.gauss_attention_field import gauss_init, gaussian
-from retsupp.modeling.local_models import (
-    DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_factorial as DoGFactorial,
-    DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_factorial_items as DoGFactorialItems,
-)
 from retsupp.modeling.fit_af_prf_cv_v2 import (
     ALL_SHARED_PARS,
     CV_SCHEMES,
@@ -737,13 +728,6 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                               dynamic_indicator=d['dynamic_indicator'],
                               target_indicator=d['target_indicator'],
                               ring_positions=ring_positions, hrf_model=hrf_model, sign_pattern=sp)
-                    if family == 'gauss':
-                        # The DoG classes with the surround amplitude fixed at 0 (gauss_attention_field).
-                        if split_cls:
-                            return gaussian(split_cls[0])(item_scale_mode=item_scale, **kw)
-                        if item_scale == 'none':
-                            return gaussian(DoGFactorial)(**kw)
-                        return gaussian(DoGFactorialItems)(item_scale_mode=item_scale, **kw)
                     if split_cls:
                         return split_cls[0](item_scale_mode=item_scale, **kw)
                     return build_model(grid_coords=kw.pop('grid_coordinates'), item_scale=item_scale, **kw)
@@ -776,12 +760,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                     pars, info = gd_fit(m_tr, y_tr, train['paradigm'], init, sp,
                                         item_scale, gd_iterations, learning_rate, gd_min_iterations)
                 elif name == 'm00_bar':
-                    template = prf_pars
-                    if family == 'gauss':
-                        template, n_folds, have = gauss_init(bids_folder, subject, prf_pars)
-                        print(f'  Gaussian template: {np.isin(voxel_ids, have).sum()} of {voxel_ids.size} voxels '
-                              f'from the model-13 fold fits ({n_folds} folds), the rest from m4')
-                    init = make_init_pars(template, voxel_mask, sp,
+                    init = make_init_pars(prf_pars, voxel_mask, sp,
                                           sigma_af_init=2.0, sigma_dyn_init=2.0,
                                           item_scale=item_scale)
                     init = init.reindex(columns=labels)
@@ -960,8 +939,8 @@ if __name__ == '__main__':
     ap.add_argument('--loss', choices=['sse', 'nll'], default='sse',
                     help='Objective of the shared-term fits; nll adds a _nll '
                          'suffix to the root.')
-    ap.add_argument('--family', choices=['dog', 'dn', 'gauss'], default='dog',
-                    help='pRF model under the gain fields; dn / gauss add a _dn / _gauss suffix.')
+    ap.add_argument('--family', choices=['dog', 'dn'], default='dog',
+                    help='pRF model under the gain fields; dn adds a _dn suffix.')
     ap.add_argument('--base-root', nargs='+', default=[],
                     help='Reuse m00 and m0 from these roots, first one holding the fit wins.')
     ap.add_argument('--hp-rotation', type=int, choices=[0, 1, 2, 3], default=0,
