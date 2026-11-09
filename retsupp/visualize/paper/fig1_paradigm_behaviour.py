@@ -21,7 +21,7 @@ from retsupp.visualize.paper.paper_style import DISTRACTOR, DOUBLE, FG, HP, MUTE
 from retsupp.visualize.paper.plot_fig1 import APERTURE, RING, item_positions, panel_display
 
 LEGEND = """
-**Figure 1. Paradigm and behaviour.** a, Search display with the bar in its 3.17° aperture: 8 items on a ring at 4°, with target and distractor at the four diagonal positions; percentages are over all trials. b, Two trials to scale, with the bar position every 2 s below; the bar sweeps the aperture in four directions (rightward, leftward, downward, upward; 42 s each with 4.8 s rest, the sequence twice per run), and the HP location across blocks of runs (example order). c, Response time with the distractor at the HP location, at an LP location, or absent. d, Response time with the target at the HP or an LP location, on trials with a distractor. e, f, Response time when the target (e) or the distractor (f) appears at the same location as on the previous trial, or at another location; distractor repeats are compared within HP and within LP trials and averaged. Icons below each condition: the four possible locations with HP ringed in red; filled, the item on this trial, hollow, on the previous trial. c-f, n = 30, correct trials. Dots are subjects, triangles are subjects beyond the axis limits; large points and bars are the mean ± within-subject SEM (Cousineau-Morey). Wilcoxon signed-rank tests: ** p < .01, *** p < .001.
+**Figure 1. Paradigm and behaviour.** a, Search display with the bar in its 3.17° aperture: 8 items on a ring at 4°, with target and distractor at the four diagonal positions; percentages are over all trials. The target has the odd orientation (participants report the dot on it) and never appears at the distractor's location; there is no distractor on 20% of trials. b, Two trials to scale, with the bar position every 2 s below; the bar sweeps the aperture in four directions (rightward, leftward, downward, upward; 42 s each with 4.8 s rest, the sequence twice per run), and the HP location across blocks of runs (example order). c, Response time with the distractor at the HP location, at an LP location, or absent. d, Response time with the target at the HP or an LP location, on trials with a distractor. e, f, Response time when the target (e) or the distractor (f) appears at the same location as on the previous trial, or at another location; distractor repeats are compared within HP and within LP trials and averaged. Icons below each condition: the four possible locations with HP ringed in red; filled, the item on this trial, hollow, on the previous trial. c-f, n = 30, correct trials. Dots are subjects, triangles are subjects beyond the axis limits; large points and bars are the mean ± within-subject SEM (Cousineau-Morey). Wilcoxon signed-rank tests: ** p < .01, *** p < .001.
 """
 
 
@@ -204,15 +204,15 @@ def main(rt_table, bids, name='fig1_paradigm_behaviour', trial_table='notes/data
     d = pd.read_csv(rt_table, sep='\t')
     rep = repeats_raw(trial_table)
     # Display and timeline on top; the four behaviour panels across the full width below, with room between.
-    fig = plt.figure(figsize=(DOUBLE, 4.3))
-    top = fig.add_gridspec(1, 2, width_ratios=[1, 1.62], left=.005, right=.995, top=.985, bottom=.47, wspace=.12)
+    fig = plt.figure(figsize=(DOUBLE, 4.0))
+    top = fig.add_gridspec(1, 2, width_ratios=[1, 1.62], left=.005, right=.995, top=.985, bottom=.535, wspace=.12)
     ax = fig.add_subplot(top[0])
     panel_display(ax, margin=7.4)
     letter(ax, 'a', x=.05, y=.97)
     ax = fig.add_subplot(top[1])
     panel_timeline(fig, ax)
     letter(ax, 'b', x=0, y=.95)
-    low = fig.add_gridspec(1, 4, width_ratios=[3, 2, 2, 2], left=.08, right=.985, top=.315, bottom=.175, wspace=.32)
+    low = fig.add_gridspec(1, 4, width_ratios=[3, 2, 2, 2], left=.08, right=.985, top=.36, bottom=.185, wspace=.32)
     ylim = (770, 1020)
     ax = fig.add_subplot(low[0])
     rt_panel(ax, d[d.contrast == 'distractor'], ['HP', 'LP', 'Absent'], [HP, FG, MUTED], [('HP', 'LP'), ('LP', 'Absent')], ylim)

@@ -144,12 +144,10 @@ def panel_display(ax, margin=9.3):
     kw = dict(fontsize=7, color=FG, annotation_clip=False,
               arrowprops=dict(arrowstyle='-|>', color=FG, lw=.8, mutation_scale=6, shrinkA=1, shrinkB=2))
     # Item names in the paper's item colours (target orange, distractor blue), their descriptions in the text colour.
-    ax.annotate('Target', xy=pos[3] + [.3, .85], xytext=(-3.3, 7.4), ha='center', va='center',
+    ax.annotate('Target', xy=pos[3] + [.3, .85], xytext=(-3.3, 7.3), ha='center', va='center',
                 **{**kw, 'color': TARGET_C, 'fontweight': 'bold'})
-    ax.text(-2.15, 7.4, 'odd orientation, report the dot,\nnever at the distractor', ha='left', va='center', fontsize=6.5, color=FG)
-    ax.annotate('Distractor', xy=pos[7] + [0, -1.2], xytext=(margin, -6.75), ha='right', va='center',
+    ax.annotate('Distractor', xy=pos[7] + [0, -1.2], xytext=(margin, -7.2), ha='right', va='center',
                 **{**kw, 'color': DISTRACTOR_C, 'fontweight': 'bold'})
-    ax.text(margin, -7.45, 'none on 20% of trials', ha='right', va='center', fontsize=6.5, color=FG)
     ax.annotate('Bar in 3.17°\naperture', xy=(-.5, -3.25), xytext=(-margin, -7.2), ha='left', va='center', **kw)
     # Anchors: the ring and aperture eccentricities, and a 1° scale bar.
     ax.add_patch(Circle((0, 0), RING, fill=False, ec='w', lw=.5, ls=(0, (1.5, 1.5)), zorder=2.5))
