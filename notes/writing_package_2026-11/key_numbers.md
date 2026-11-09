@@ -22,7 +22,7 @@ Source files are under `/Users/gdehol/git/retsupp/notes/`.
 
 DN > DoG in 30/30 subjects (by .005). Per-ROI HRF test pending.
 
-## Gain-field ladder, leave-one-subject-out (`data/loso_per_step_2026-11.tsv`, Table 1; per ROI, Fig. 5b)
+## Gain-field ladder, leave-one-subject-out (`data/loso_per_step_2026-11.tsv`, Table 1; per ROI, figS_loso_per_roi)
 
 Share of subjects whose held-out prediction improves when the term is added with the effect size from
 the other subjects; median over ROIs.

@@ -86,9 +86,9 @@ contrasts. End with what we did and found.
    stimuli; LOSO per step (Table 1).
 5. The gain fields (Fig. 5). Target gain everywhere beyond V1; distractor gain weaker, mainly dorsal and hV4/VO
    (Fig. 5a; gain against pRF size in the supplement, its slope may partly reflect a trade-off with item weight and
-   field size; field sizes: supplement). Less sustained gain at the likely distractor location (Fig. 5d, c): dS
-   conditional and joint; per ROI; LOSO 77% (per ROI, Fig. 5b); `[PENDING: HP-rotation null, the pre-specified
-   primary test]`. Location as in Fig. 1c, d (Fig. 5e): less gain for a distractor at HP (dD, estimated alone) in
+   field size; field sizes: supplement). Less sustained gain at the likely distractor location (Fig. 5c, b): dS
+   conditional and joint; per ROI; LOSO 77% (per ROI, figS_loso_per_roi); `[PENDING: HP-rotation null, the pre-specified
+   primary test]`. Location as in Fig. 1c, d (Fig. 5d): less gain for a distractor at HP (dD, estimated alone) in
    V3AB, IPS, hV4, VO, not robust in the joint fit; target gain HP − LP (estimated alone) not reliable after correction
    (smallest q = .07), and null in the joint fit.
 6. Converging evidence without gain terms (Fig. 6, decoding; pRFs with an HRF per subject × ROI, no gain terms,
@@ -99,7 +99,7 @@ contrasts. End with what we did and found.
    without baseline, n.s. with a pre-crossing baseline). Higher areas exploratory, none after BH (q ≥ .085).
    Canonical-HRF pRFs (supplement): V2 .044, V3 .045.
 7. Trial history in the gains, and gain and behaviour trial by trial (Fig. 7). History (Fig. 7a, as Fig. 1e, f;
-   the location effects of Fig. 1c, d are Fig. 5e): repeats lower target gain in V3AB, IPS, hV4, VO; distractor gain
+   the location effects of Fig. 1c, d are Fig. 5d): repeats lower target gain in V3AB, IPS, hV4, VO; distractor gain
    repeat − switch not reliable after correction. Per-trial gain predicts response time, sign flips between early
    visual and parietal cortex; distractor gain averaged over HP and LP trials (Fig. 7b).
    `[PENDING: D4, gain at HP split by what HP holds on the trial]`.
@@ -124,12 +124,12 @@ Order since 2026-11-09: measured results (pRF fits, item locations) before the m
 | 2 pRF fits | `fig2_prf_fits.pdf` | provisional (d: HRF choice) |
 | 3 Responses at the item locations (model-free; d, e by location type: HP, next to HP, opposite) | `fig3_item_locations.pdf` | final apart from layout |
 | 4 Gain-field model | `fig4_model_hp_blocks.pdf` (chosen 2026-11-06) | final |
-| 5 Gain fields (model parameters; b, leave-one-subject-out per ROI; e, distractor and target HP − LP as Fig. 1c, d) | `fig5_gain_fields.pdf` | provisional |
+| 5 Gain fields (model parameters; d, distractor and target HP − LP as Fig. 1c, d) | `fig5_gain_fields.pdf` | provisional |
 | 6 Decoding | `fig6_decoding.pdf` | final inputs |
 | 7 Trial history in the gains; behaviour trial by trial | `fig7_behaviour.pdf` (a history, as Fig. 1e, f; b trial by trial) | prototype on earlier fits (Oct 2026) |
 | Table 1 Ladder | `table1_ladder.md` | provisional |
 | Table S Parameters | `table_parameters_2026-11.md` | provisional |
-| Supplement | `figS_gain_vs_prf_size.pdf` (was Fig. 5a), `figS_field_size.pdf`, `figS_cv_power.pdf`, `figS_pooled_dS_dD.pdf`, `figS_gainfield_size.pdf` | provisional |
+| Supplement | `figS_gain_vs_prf_size.pdf` (was Fig. 5a), `figS_field_size.pdf`, `figS_cv_power.pdf`, `figS_pooled_dS_dD.pdf`, `figS_gainfield_size.pdf`, `figS_loso_per_roi.pdf` (was Fig. 5b) | provisional |
 | Supplement (decoding) | `figS_decoding_canonical.pdf`, `figS_decoded_bars_rotated.pdf` | final |
 
 ## Open items the text must leave room for

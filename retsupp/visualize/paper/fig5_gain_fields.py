@@ -1,8 +1,8 @@
 """Figure 5: the gain fields, the model's account of the responses at the item locations (Fig. 3). Provisional until the final fits.
 
-Top row: a, target and distractor gain per ROI; b, leave-one-subject-out test of each term per ROI (ROIs as rows); c, the
-sustained field to scale. Bottom row: d, the sustained HP − LP gain (dS); e, distractor (dD) and target (dT) HP − LP gain
-side by side, the gain analogue of Fig. 1c, d.
+Top row: a, target and distractor gain per ROI; b, the sustained field to scale. Bottom row: c, the sustained HP − LP gain
+(dS); d, distractor (dD) and target (dT) HP − LP gain side by side, the gain analogue of Fig. 1c, d. The leave-one-subject-out
+test per ROI is the supplementary figure ``figS_loso_per_roi``.
 The gain against pRF size (the hierarchy) is the supplementary figure ``figS_gain_vs_prf_size``.
 
 Also writes the parameter table ``table_parameters_2026-11.{md,tsv}`` (all terms, DoG and DN, medians, CIs, tests,
@@ -31,7 +31,10 @@ TERMS = [('T', 'Target gain', TARGET), ('D', 'Distractor gain', DISTRACTOR), ('d
          ('dD', 'Distractor gain, HP − LP', '#5E3C99')]
 FAM = {'dog': 'DoG', 'dn': 'DN'}
 LEGEND = """
-**Figure 5. The gain fields: gain at the target and the distractor, and less sustained gain at the high-probability (HP) location.** Gain-field model fits with DoG pRFs (n = 30); a gain is the fractional change in drive at the centre of a field (+0.30: 30% more). a, d, e: dots are subjects (triangles, beyond the axis), points and bars the median and bootstrapped 95% CI; stars, Wilcoxon signed-rank test against 0, Benjamini-Hochberg across the nine ROIs, * q < .05, ** q < .01, *** q < .001 (exact p and q per ROI in the parameter table). a, Gain at the target (orange) and at the distractor (blue, averaged over its locations) while the search display is on, all terms fitted jointly. The gain against pRF size is in a supplementary figure. b, Do the terms predict new subjects? Leave-one-subject-out test per ROI and term: the term added with the size estimated from the other 29 subjects (+δ) vs the opposite size (−δ); rows are ROIs, columns terms; numbers, the percentage of subjects predicted better with +δ (cell colour: red above 50%, blue below); bold: q < .05 (non-significant cells muted), one-sided Wilcoxon signed-rank test, Benjamini-Hochberg across the nine ROIs per term (q per cell below). The distractor gain is tested on top of the target term, whose size and field width are the subject's own fit ("with target"); added to the pRF model alone it predicts new subjects no better (52–67% per ROI, TO 8%). These tests use the earlier gain fits (canonical HRF, before the selection on cross-run reliability) and will be redone on the final fits. c, The sustained gain field over the search display, drawn to scale (red shading): one Gaussian per item (white discs, 4° eccentricity, neighbouring items {spacing:.1f}° apart; grey circle, the 3.17° aperture of the bar stimulus), with less gain at the HP than at the LP locations (the HP − LP difference exaggerated for display). Dashed circle: the full width at half maximum (FWHM = 2.355 σ) of the fitted sustained field, the median over all subjects and ROIs ({fwhm:.1f}°; per-ROI medians: {fw_roi}; {fw_bound:.0f}% of the fits at a bound of σ, 0.5° or 8°). The field reaches beyond the item and overlaps those of its neighbours. d, dS = g_HP − g_LP, the sustained gain at the HP location minus that at the low-probability (LP) locations, each term estimated alone on the item model with sustained gain (conditional estimate). e, The gain analogue of Fig. 1c, d: dD = g_HP_dyn − g_LP_dyn, the gain the distractor draws at the HP location minus at an LP location (blue), next to dT, the target gain at the HP location minus at an LP location (orange), each estimated alone as in d; the display icons are those of Fig. 1 (HP ringed in red; the item at HP minus at an LP location). Less gain for a distractor at HP in V3AB, IPS, hV4 and VO; the target gain shows no reliable HP − LP difference after correction (smallest q = .07, V3; a positive trend in IPS, q = .10), and none when fitted jointly with all other terms either (q ≥ .36). Compared directly (per subject dD − dT, Wilcoxon signed-rank, Benjamini-Hochberg across ROIs), the distractor and target HP − LP terms do not differ reliably in any ROI (V3 +.053, p = .021, q = .094; IPS −.097, p = .012, q = .094; all others p ≥ .36, q = .855; pooled over ROIs per subject, median −.005, p = .89); the target series is shown for context. Stars per series (against 0), one row each. When dS and dD are fitted together with all other terms (supplementary figure and parameter table), no ROI survives correction: dD stays at −7 to −10% in V3AB, IPS, hV4 and VO (q ≈ .09–.15), dS is −4 to −5% in V1–V3 (q ≥ .07). The measured responses at the item locations (Fig. 3) show less response at HP for every item type, significant in the early areas, without a distractor-specific difference. DN pRFs, Bayes factors and all other terms are in the parameter table. Provisional: current inputs.
+**Figure 5. The gain fields: gain at the target and the distractor, and less sustained gain at the high-probability (HP) location.** Gain-field model fits with DoG pRFs (n = 30); a gain is the fractional change in drive at the centre of a field (+0.30: 30% more). a, c, d: dots are subjects (triangles, beyond the axis), points and bars the median and bootstrapped 95% CI; stars, Wilcoxon signed-rank test against 0, Benjamini-Hochberg across the nine ROIs, * q < .05, ** q < .01, *** q < .001 (exact p and q per ROI in the parameter table). a, Gain at the target (orange) and at the distractor (blue, averaged over its locations) while the search display is on, all terms fitted jointly. The gain against pRF size is in a supplementary figure. b, The sustained gain field over the search display, drawn to scale (red shading): one Gaussian per item (white discs, 4° eccentricity, neighbouring items {spacing:.1f}° apart; grey circle, the 3.17° aperture of the bar stimulus), with less gain at the HP than at the LP locations (the HP − LP difference exaggerated for display). Dashed circle: the full width at half maximum (FWHM = 2.355 σ) of the fitted sustained field, the median over all subjects and ROIs ({fwhm:.1f}°; per-ROI medians: {fw_roi}; {fw_bound:.0f}% of the fits at a bound of σ, 0.5° or 8°). The field reaches beyond the item and overlaps those of its neighbours. c, dS = g_HP − g_LP, the sustained gain at the HP location minus that at the low-probability (LP) locations, each term estimated alone on the item model with sustained gain (conditional estimate). d, The gain analogue of Fig. 1c, d: dD = g_HP_dyn − g_LP_dyn, the gain the distractor draws at the HP location minus at an LP location (blue), next to dT, the target gain at the HP location minus at an LP location (orange), each estimated alone as in c; the display icons are those of Fig. 1 (HP ringed in red; the item at HP minus at an LP location). Less gain for a distractor at HP in V3AB, IPS, hV4 and VO; the target gain shows no reliable HP − LP difference after correction (smallest q = .07, V3; a positive trend in IPS, q = .10), and none when fitted jointly with all other terms either (q ≥ .36). Compared directly (per subject dD − dT, Wilcoxon signed-rank, Benjamini-Hochberg across ROIs), the distractor and target HP − LP terms do not differ reliably in any ROI (V3 +.053, p = .021, q = .094; IPS −.097, p = .012, q = .094; all others p ≥ .36, q = .855; pooled over ROIs per subject, median −.005, p = .89); the target series is shown for context. Stars per series (against 0), one row each. When dS and dD are fitted together with all other terms (supplementary figure and parameter table), no ROI survives correction: dD stays at −7 to −10% in V3AB, IPS, hV4 and VO (q ≈ .09–.15), dS is −4 to −5% in V1–V3 (q ≥ .07). The measured responses at the item locations (Fig. 3) show less response at HP for every item type, significant in the early areas, without a distractor-specific difference. Whether the terms predict new subjects (leave-one-subject-out) is in Table 1 and, per ROI, in the supplementary figure figS_loso_per_roi. DN pRFs, Bayes factors and all other terms are in the parameter table. Provisional: current inputs.
+"""
+LEGEND_LOSO = """
+**Figure S. Do the gain terms predict new subjects?** Leave-one-subject-out test per ROI and term: the term added with the size estimated from the other 29 subjects (+δ) vs the opposite size (−δ); numbers, the percentage of subjects predicted better with +δ (cell colour: red above 50%, blue below); bold: q < .05 (non-significant cells muted), one-sided Wilcoxon signed-rank test, Benjamini-Hochberg across the nine ROIs per term (q per cell below). The distractor gain is tested on top of the target term, whose size and field width are the subject's own fit ("with target"); added to the pRF model alone it predicts new subjects no better (52–67% per ROI, TO 8%). These tests use the earlier gain fits (canonical HRF, before the selection on cross-run reliability) and will be redone on the final fits. Provisional.
 """
 LEGEND_HIERARCHY = """
 **Figure S. Gain at the target and the distractor against pRF size.** Median target and distractor gain per ROI (as in Fig. 5a) against the ROI's pRF size (median over subjects of the voxel-weighted mean pRF σ at 1–2.5° eccentricity, log scale). Lines: slope per doubling of pRF size, the median of the per-subject OLS slopes over the nine ROIs, drawn through the centre of the points; target {t_slope}; distractor {d_slope} (Wilcoxon signed-rank test of the per-subject slopes, Benjamini-Hochberg over the eight parameters tested). The slope may partly reflect a trade-off in the fits: within subjects, the target gain correlates with the fitted weight of the items relative to the bar (ρ = .25, p = .011) and negatively with the size of the gain field (ρ = −.22, p = .049), and the model-free enhancement at the item locations (Fig. 3) rises much less up the hierarchy. Provisional: current inputs.
@@ -471,12 +474,22 @@ def panel_loso_t(ax):
 def loso_table():
     """Panel e as a table: % of subjects predicted better with +δ, and the BH q, per term and ROI."""
     from retsupp.visualize.paper.fig45_common import generalization
-    lines = ['', '**Panel b, per cell.** % of subjects predicted better with +δ (q, one-sided Wilcoxon, BH across ROIs).', '',
+    lines = ['', '**Per cell.** % of subjects predicted better with +δ (q, one-sided Wilcoxon, BH across ROIs).', '',
              '| Term | ' + ' | '.join(ROI_ORDER) + ' |', '|---|' + '---|' * len(ROI_ORDER)]
     for term, lab, _ in LOSO_TERMS:
         g = generalization(term).set_index('roi').loc[ROI_ORDER]
         lines.append(f'| {lab} | ' + ' | '.join(f'{r.pct:.0f} ({r.q:.2g})' for _, r in g.iterrows()) + ' |')
     return '\n'.join(lines) + '\n'
+
+
+def loso_figure():
+    """Supplementary figure: the leave-one-subject-out table per ROI and term (formerly Fig. 5b)."""
+    W, H = SINGLE, 2.15
+    fig = plt.figure(figsize=(W, H))
+    ax = fig.add_axes([.62 / W, .08 / H, (W - .75) / W, 1.5 / H])
+    panel_loso_t(ax)
+    fig.text(.05 / W, (H - .12) / H, 'Predicts new subjects (% of subjects)', fontsize=7.5, color=FG, va='center', ha='left')
+    save(fig, 'figS_loso_per_roi', LEGEND_LOSO + loso_table())
 
 
 def hierarchy_figure(t, size, sl):
@@ -515,35 +528,30 @@ def main(gain_table, conditional_table, power_table, slope_table, sigma_table, n
     Y = lambda dd: H - dd           # inches from the top
     LX, RX, PW = .55, 4.05, 2.95    # left and right columns of per-ROI panels
 
-    # Row 1: a (target and distractor gain) | b (new subjects) and c (the sustained field to scale).
+    # Row 1: a (target and distractor gain, wide) | b (the sustained field to scale).
     row(fig, Y(.16), 'a', [('Gain at the ', FG), ('target', TARGET), (' beyond V1, at the ', FG), ('distractor', DISTRACTOR),
                             (' in V3AB, IPS, hV4, VO', FG)], [], x_let=.02, x_title=.2)
-    ax = at(LX, Y(1.82), PW, 1.18)
+    ax = at(LX, Y(1.82), 4.35, 1.18)
     sm = lambda term: t[(t.model == 'DoG') & (t.term == term)].set_index('roi').loc[ROI_ORDER]
     dot_panel(ax, [(d, 'T', TARGET, sm('T')), (d, 'D', DISTRACTOR, sm('D'))], (-.4, 1.2), 'Gain')
     ax.set_yticks([0, .5, 1])
-    ax = at(RX + .12, Y(2.12), 1.74, 1.45)
-    panel_loso_t(ax)
-    fig.text((RX - .13) / W, Y(.16) / H, 'b', fontsize=8, fontweight='bold', va='center', ha='left')
-    fig.text((RX + .05) / W, Y(.16) / H, 'Predicts new subjects (%)', fontsize=7.5, color=FG, va='center', ha='left')
-    ax = at(5.98, Y(1.58), .92, .92)
+    ax = at(5.45, Y(1.95), 1.5, 1.5)
     panel_sketch(ax, fw, (fw_roi.min(), fw_roi.max()))
-    fig.text(6.0 / W, Y(.16) / H, 'c', fontsize=8, fontweight='bold', va='center', ha='left')
-    fig.text(6.16 / W, Y(.16) / H, 'Sustained field', fontsize=7, color=FG, va='center', ha='left')
-    fig.text(6.57 / W, Y(.36) / H, 'To scale', fontsize=6, color='.45', va='center', ha='center')
+    fig.text(5.25 / W, Y(.16) / H, 'b', fontsize=8, fontweight='bold', va='center', ha='left')
+    fig.text(5.43 / W, Y(.16) / H, 'Sustained gain field, to scale', fontsize=7.5, color=FG, va='center', ha='left')
 
-    # Row 2: the gain at the HP location, d (sustained) | e (transient, distractor vs target; Fig. 1c, d); each with its
+    # Row 2: the gain at the HP location, c (sustained) | d (transient, distractor vs target; Fig. 1c, d); each with its
     # icon key under the title, so the two axes and titles line up.
     y2 = 2.38
     from retsupp.visualize.paper.paper_style import stimulus_icon
     hp_lp = [lambda a: (a.set_axis_off(), stimulus_icon(a, (0, 0, 1, 1), ('hp',))),
              lambda a: (a.set_axis_off(), stimulus_icon(a, (0, 0, 1, 1), ('lp',)))]
-    row(fig, Y(y2), 'd', [('Sustained gain: less at ', FG), ('HP', HP)], [(hp_lp, HP, 'Whole block, at HP − at LP')],
+    row(fig, Y(y2), 'c', [('Sustained gain: less at ', FG), ('HP', HP)], [(hp_lp, HP, 'Whole block, at HP − at LP')],
         x_let=.02, x_title=.2, key_y=Y(y2 + .27))
     ax = at(LX, Y(y2 + .62 + 1.0), PW, 1.0)
     dot_panel(ax, [(cond, 'dS', HP, None)], (-.12, .06), 'Gain, HP − LP')
     ax.set_yticks([-.1, 0, .05])
-    row(fig, Y(y2), 'e', [('Transient gain at HP: less for the ', FG), ('distractor', DISTRACTOR)],
+    row(fig, Y(y2), 'd', [('Transient gain at HP: less for the ', FG), ('distractor', DISTRACTOR)],
         [(icons('location', 'distractor'), DISTRACTOR, 'Each trial'), (icons('location', 'target'), TARGET, '')],
         x_let=RX - .5, x_title=RX - .32, key_y=Y(y2 + .27))
     fig.text((RX + PW) / W, Y(y2 + .27) / H, 'As Fig. 1c, d', fontsize=6, color='.45', ha='right', va='center')
@@ -553,7 +561,8 @@ def main(gain_table, conditional_table, power_table, slope_table, sigma_table, n
     ax.set_yticks([-.2, 0, .2])
     fig.text(.995, .005, PROVISIONAL, fontsize=6, color=MUTED, ha='right', va='bottom')
     save(fig, name, LEGEND.format(spacing=4 * np.sqrt(2), fwhm=fw, fw_bound=100 * fw_bound,
-                                  fw_roi='; '.join(f'{r} {v:.1f}°' for r, v in fw_roi.items())) + loso_table())
+                                  fw_roi='; '.join(f'{r} {v:.1f}°' for r, v in fw_roi.items())))
+    loso_figure()
     hierarchy_figure(t, size, sl)
     print('FWHM median', fw, 'per ROI', fw_roi.round(2).to_dict(), 'at bound', fw_bound)
     for term in ('T', 'D', 'dS', 'dD'):
