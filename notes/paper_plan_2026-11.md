@@ -43,6 +43,8 @@ Results lead with group-level gain parameters, LOSO is the model-comparison metr
 
 From current fits, gain panels stamped "Provisional: current inputs", input fits as one argument. Scripts in `retsupp/visualize/paper/`, output in `notes/figures/paper_2026-11/` (180 or 88 mm), legend `.md` beside each, combined `all_figures.pdf`.
 
+*Update 2026-11-09 (user): new order, measured results before the modelling: 1 paradigm and behaviour; 2 pRF fits (planned below as Fig. 3); 3 responses at the item locations, model-free; 4 gain-field model (planned below as Fig. 2); 5 gain fields, with the leave-one-subject-out test per ROI (5e) and the gain against pRF size moved to a supplementary figure; 6 decoding; 7 behaviour. The list below keeps the numbering as planned on 2026-11-05/06.*
+
 - **Fig. 1** Paradigm and behaviour.
 - **Fig. 2** Forward model, with the predicted signals at three pRF locations. No nested-model panel and no effective pRF shifts (user, 2026-11-05); the ladder stays in Table 1.
 - **Fig. 3** pRF maps, held-out R² per ROI, σ vs eccentricity and % contralateral, example voxel, LOSO per step.

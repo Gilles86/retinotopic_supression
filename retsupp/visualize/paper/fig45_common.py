@@ -1,4 +1,4 @@
-"""Shared loading and statistics for Figures 4 and 5 and Table 1."""
+"""Shared loading and statistics for Figures 3 and 5 and Table 1."""
 from __future__ import annotations
 
 import numpy as np

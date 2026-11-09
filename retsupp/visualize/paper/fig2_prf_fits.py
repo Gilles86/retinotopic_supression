@@ -1,14 +1,19 @@
-"""Figure 3 (redesign): the pRF fits are retinotopic, predict held-out runs, and carry the gain terms to new subjects.
+"""Figure 2: the pRF fits are retinotopic, grow with eccentricity, predict held-out runs, and the search display drives
+pRFs near the items.
 
 a, One subject's visual areas, polar angle and eccentricity on the flattened occipital cortex, with keys; insets show
 where the flattened window lies on the inflated surface.
-b, pRF centres in the contralateral field per ROI (subject dots, n per ROI).
-c, Held-out R² gained over the simplest pRF (Gaussian, canonical HRF) by the model used for the gain fits.
-d, Leave-one-subject-out test of the gain terms.
+b, Share of pRF centres in the contralateral field per ROI (subject dots, n per ROI).
+c, pRF size against eccentricity per ROI.
+d, Held-out R² gained over the simplest pRF (Gaussian, canonical HRF) by the model used for the gain fits.
+e, Deconvolved response to the search display per pathway, by distance of the pRF centre from the nearest item.
+
+The leave-one-subject-out test of the gain terms is the "New subjects" row under the per-ROI panels of Fig. 5
+(``fig45_common.generalization_row``).
 
 Usage::
 
-    python -m retsupp.visualize.paper.fig3_prf_fits
+    python -m retsupp.visualize.paper.fig2_prf_fits
 """
 from __future__ import annotations
 
@@ -20,29 +25,31 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from PIL import Image
-from scipy import stats
 
 from retsupp.visualize.paper.paper_style import (DOUBLE, FG, MUTED, ROI_COLORS, ROI_GROUPS, ROI_ORDER, ROI_X, letter, offset_spines,
                                                  provisional, roi_axis, save)
 from retsupp.visualize.paper.plot_fig1 import COVER_TSV, SIGMA_TSV, contralateral
 
 MAP_DIR = Path('notes/figures/fig1_r2low')
-TERMS = [('T', 'Target'), ('D', 'Distractor'), ('S', 'Sustained'), ('dS', 'Sustained, HP − LP'), ('dD', 'Distractor, HP − LP')]
 LEGEND = """
-**Figure 3. The pRF fits.** a, Visual areas (neuropythy atlas), polar angle and eccentricity of the pRF fit on the flattened
+**Figure 2. The pRF fits.** a, Visual areas (neuropythy atlas), polar angle and eccentricity of the pRF fit on the flattened
 cortex of one subject (sub-23; left hemisphere on the left; colour fades in from R² = .05 to .20). Left: the inflated
 surface turned to show its lateral and medial walls, visual areas in their colours; black lines mark the edge of the
 flattened window and, in the medial view, the cut along the calcarine sulcus made to flatten the surface. Polar-angle key: the visual
 field, coloured as mapped on the contralateral hemisphere. b, Share of pRF centres in the contralateral visual field per ROI,
-voxels with R² ≥ .1 inside the bar aperture; dots are subjects, lines medians; numbers give the subjects per ROI. c, Held-out
+voxels with R² ≥ .1 inside the bar aperture; dots are subjects, lines medians; numbers give the subjects per ROI. c, pRF size
+(σ) against eccentricity for six ROIs: per subject, the median σ of voxels with R² ≥ .1 inside the bar aperture in 0.5°
+eccentricity bins (bins with ≥ 5 voxels); lines and bands, mean ± SEM across subjects (bins with ≥ 10 subjects). d, Held-out
 R² gained per ROI over a Gaussian pRF with the canonical HRF by a difference-of-Gaussians pRF (teal), by one HRF per subject
 × ROI on top of the DoG pRF (grey), and by both together, the model used for the gain fits (black): three folds of runs,
 voxels with cross-run reliability > 0 in the training runs, median over voxels, mean over folds; points and bars, median
-over subjects (n = 30) and bootstrapped 95% CI. d, Response to a neutral item (at an LP location) against the distance of the pRF centre from that item: deconvolved
-response (nideconv), mean over 3.2-6.4 s minus −4 to 0 s, reliable voxels binned by distance (1° bins), pooled per pathway
-weighted by voxel count; lines and bands, mean ± SEM across subjects. Items appear at all eight ring positions at once,
-so pRFs far from this item lie near the opposite ones and the response rises again; between the items, near fixation, it
-is close to 0 in early visual cortex. Provisional: c uses the per-ROI HRF from the median of the voxels' own HRF fits until the jointly fitted HRF is in.
+over subjects (n = 30) and bootstrapped 95% CI. e, Deconvolved response to the onset of the search display (nideconv,
+Fourier basis), after subtracting each voxel's predicted response to the bar: voxels with cross-run reliability > 0, binned
+by the distance of the pRF centre from the nearest of the eight items (0.5° bins, ≥ 5 voxels; colour), pooled per pathway
+weighted by voxel count, each subject's pre-onset mean (−4 to 0 s) subtracted; lines, mean over subjects (n = 30). Icon:
+the eight items with pRFs stepping from an item towards fixation, coloured as the lines. Pathways: early, V1–V3; dorsal,
+V3AB and IPS; occipitotemporal, hV4, VO, LO and TO. Provisional: d uses the per-ROI HRF from the median of the voxels' own
+HRF fits until the jointly fitted HRF is in.
 """
 
 
@@ -195,30 +202,6 @@ def panel_r2(ax, d):
     roi_axis(ax)
 
 
-def panel_loso(ax, table):
-    """Per ROI and gain term: share of subjects whose held-out prediction improves (leave-one-subject-out)."""
-    d = pd.read_csv(table, sep='\t')
-    d = d[(d.family == 'dog') & d.roi.isin(ROI_ORDER)]
-    xs = [ROI_X[r] for r in ROI_ORDER]
-    cmap = mpl.colormaps['RdBu_r']
-    for i, (t, lab) in enumerate(TERMS):
-        x = d[d.mech == t]
-        pct = [(x[x.roi == r].dr2_sign.dropna() > 0).mean() * 100 for r in ROI_ORDER]
-        ps = [stats.wilcoxon(x[x.roi == r].dr2_sign.dropna()).pvalue for r in ROI_ORDER]
-        qs = stats.false_discovery_control(ps)
-        for xx, v, q in zip(xs, pct, qs):
-            ax.add_patch(plt.Rectangle((xx - .46, i - .46), .92, .92, color=cmap(.5 + (v - 50) / 100), lw=0))
-            ax.text(xx, i, f'{v:.0f}', ha='center', va='center', fontsize=5.5,
-                    color='w' if abs(v - 50) > 30 else FG, fontweight='bold' if q < .05 else 'normal')
-    ax.set_yticks(range(len(TERMS)))
-    ax.set_yticklabels([l for _, l in TERMS], fontsize=6.5)
-    ax.set_ylim(len(TERMS) - .5, -.5)
-    for sp in ('left',):
-        ax.spines[sp].set_visible(False)
-    ax.tick_params(axis='y', length=0)
-    roi_axis(ax)
-
-
 DIST_DIR = 'notes/data/event_deconv_distance_2026-11'
 PATHWAY = {'Early': ('V1', 'V2', 'V3'), 'Dorsal': ('V3AB', 'IPS'), 'Occipitotemporal': ('hV4', 'VO', 'LO', 'TO')}
 PATHWAY_COL = {'Early': ROI_COLORS['V1'], 'Dorsal': ROI_COLORS['V3AB'], 'Occipitotemporal': ROI_COLORS['LO']}
@@ -350,7 +333,7 @@ def distance_icon(fig, x0, y0, size, n_bins=8):
     return ins
 
 
-def main(cv_table, hrf_table, loso_table, name='fig3_prf_fits'):
+def main(cv_table, hrf_table, name='fig2_prf_fits'):
     d, base = gain_r2(cv_table, hrf_table)
     fig = plt.figure(figsize=(DOUBLE, 7.1))
     top = fig.add_gridspec(1, 2, width_ratios=[.27, 1], left=.01, right=.99, top=0.965, bottom=0.665, wspace=.03)
@@ -388,6 +371,5 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--cv-table', default='notes/data/prf_cv_roi_summary.tsv')
     ap.add_argument('--hrf-table', default='notes/data/hrf_comparison_2026-11.tsv')
-    ap.add_argument('--loso-table', default='notes/data/loso_per_roi_2026-11.tsv')
     a = ap.parse_args()
-    main(a.cv_table, a.hrf_table, a.loso_table)
+    main(a.cv_table, a.hrf_table)

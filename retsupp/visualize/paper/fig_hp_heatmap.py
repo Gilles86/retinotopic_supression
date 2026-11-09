@@ -27,7 +27,7 @@ import pandas as pd
 import pingouin as pg
 from scipy import stats
 
-from retsupp.visualize.paper.fig3_prf_fits import PATHWAY
+from retsupp.visualize.paper.fig2_prf_fits import PATHWAY
 from retsupp.visualize.paper.fig45_common import item_timecourses
 from retsupp.visualize.paper.paper_style import DISTRACTOR, FG, HP, SINGLE, TARGET, save
 

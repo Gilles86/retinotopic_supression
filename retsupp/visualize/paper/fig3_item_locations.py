@@ -1,4 +1,4 @@
-"""Figure 4: the measured responses at the item locations, without a model.
+"""Figure 3: the measured responses at the item locations, without a model.
 
 Voxels whose pRF centre lies within 2° of an item location, deconvolved (nideconv) around search onset
 (``deconvolve_location_responses.py``; read by ``fig45_common.item_timecourses``).
@@ -11,8 +11,8 @@ The model's gain fields are Figure 5 (``fig5_gain_fields.py``).
 
 Usage::
 
-    python -m retsupp.visualize.paper.fig4_item_locations                     # Fourier basis (main)
-    python -m retsupp.visualize.paper.fig4_item_locations --stats-only \\
+    python -m retsupp.visualize.paper.fig3_item_locations                     # Fourier basis (main)
+    python -m retsupp.visualize.paper.fig3_item_locations --stats-only \\
         --deconv-folder notes/data/event_deconv_dct_2026-11                   # DCT basis: statistics only
 """
 from __future__ import annotations
@@ -24,7 +24,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from retsupp.visualize.paper.fig3_prf_fits import PATHWAY, PATHWAY_COL
+from retsupp.visualize.paper.fig2_prf_fits import PATHWAY, PATHWAY_COL
 from retsupp.visualize.paper.fig45_common import item_timecourses
 from retsupp.visualize.paper.paper_style import DISTRACTOR, DOUBLE, FG, HP, MUTED, TARGET, letter, offset_spines, save
 
@@ -36,7 +36,7 @@ SHORT = {'Early': 'Early', 'Dorsal': 'Dorsal', 'Occipitotemporal': 'Occ.-tempora
 ITEMS = [('target', 'Target', TARGET), ('distractor', 'Distractor', DISTRACTOR), ('neutral', 'Neutral item', NEUTRAL)]
 
 LEGEND = """
-**Figure 4. At the item locations, without a model: more response to the target and the distractor, and less response at the high-probability (HP) location for every item.** All panels: deconvolved response (nideconv, Fourier basis) around search onset of voxels whose pRF centre lies within 2° of an item location (inset in a: the display with one such pRF on an item, and the response it gives), ROIs pooled weighted by voxel count, each subject's pre-onset mean (−4 to 0 s) subtracted; mean over subjects ± SEM (n = 30). Pathways: early, V1–V3; dorsal, V3AB and IPS; occipitotemporal, hV4, VO, LO and TO. Grey band: the window tested, {w0:.1f}–{w1:.1f} s. a, Response at a pRF's item location when the target, the distractor or a neutral item is there, all at low-probability (LP) locations, all nine ROIs pooled. b, Target minus neutral item per pathway (both averaged over HP and LP locations). c, Distractor minus neutral item per pathway (both at LP locations). Stars in b, c: the mean over the window against 0, Wilcoxon signed-rank test, Benjamini-Hochberg over the three pathways per panel; {diff_tests}. d, Response at an item location when it is the HP location (red) vs an LP location (grey), target, distractor and neutral item pooled, per pathway; the percentage is the HP − LP difference over the window relative to the LP response; {hp_tests}. e, HP − LP per item type over the window, in % of each subject's mean LP response over the three item types in that pathway; points and bars, mean ± SEM over subjects (dorsal pathway in b–e: n = {n_dor}, two subjects lack dorsal voxels at some item location). Red rules: the main effect of location (mean over item types); stars, repeated-measures ANOVA location (HP, LP) × item type (target, distractor, neutral) per pathway, uncorrected; {anova}. The location × item interaction is not significant in any pathway ({inter}); the planned contrast of the distractor against the mean of the target and the neutral item (the measured counterpart of the model's distractor-specific term) is closest to significance in the occipitotemporal pathway ({dvo}). DCT basis (robustness): the HP − LP differences keep their sign and size, but the main effect of location is not significant in any pathway; {dct}
+**Figure 3. At the item locations, without a model: more response to the target and the distractor, and less response at the high-probability (HP) location for every item.** All panels: deconvolved response (nideconv, Fourier basis) around search onset of voxels whose pRF centre lies within 2° of an item location (inset in a: the display with one such pRF on an item, and the response it gives), ROIs pooled weighted by voxel count, each subject's pre-onset mean (−4 to 0 s) subtracted; mean over subjects ± SEM (n = 30). Pathways: early, V1–V3; dorsal, V3AB and IPS; occipitotemporal, hV4, VO, LO and TO. Grey band: the window tested, {w0:.1f}–{w1:.1f} s. a, Response at a pRF's item location when the target, the distractor or a neutral item is there, all at low-probability (LP) locations, all nine ROIs pooled. b, Target minus neutral item per pathway (both averaged over HP and LP locations). c, Distractor minus neutral item per pathway (both at LP locations). Stars in b, c: the mean over the window against 0, Wilcoxon signed-rank test, Benjamini-Hochberg over the three pathways per panel; {diff_tests}. d, Response at an item location when it is the HP location (red) vs an LP location (grey), target, distractor and neutral item pooled, per pathway; the percentage is the HP − LP difference over the window relative to the LP response; {hp_tests}. e, HP − LP per item type over the window, in % of each subject's mean LP response over the three item types in that pathway; points and bars, mean ± SEM over subjects (dorsal pathway in b–e: n = {n_dor}, two subjects lack dorsal voxels at some item location). Red rules: the main effect of location (mean over item types); stars, repeated-measures ANOVA location (HP, LP) × item type (target, distractor, neutral) per pathway, uncorrected; {anova}. The location × item interaction is not significant in any pathway ({inter}); the planned contrast of the distractor against the mean of the target and the neutral item (the measured counterpart of the model's distractor-specific term) is closest to significance in the occipitotemporal pathway ({dvo}). DCT basis (robustness): the HP − LP differences keep their sign and size, but the main effect of location is not significant in any pathway; {dct}
 """
 
 
@@ -189,8 +189,9 @@ def panel_diff(ax, d, ylabel=True):
     for k, grp in enumerate(PATHWAY):
         g = d[grp]['tc']
         tc(ax, g.mean(), g.sem(), PATHWAY_COL[grp], lw=1.4)
-        ax.text(1., .99 - k * .12, f"{SHORT[grp]} {stars(d[grp]['q'])}", transform=ax.transAxes, color=PATHWAY_COL[grp],
-                fontsize=6.5, ha='right', va='top')
+        ax.text(.9, .99 - k * .12, SHORT[grp], transform=ax.transAxes, color=PATHWAY_COL[grp], fontsize=6.5, ha='right', va='top')
+        ax.text(.91, 1.005 - k * .12, stars(d[grp]['q']), transform=ax.transAxes, color=PATHWAY_COL[grp], fontsize=8.5, ha='left',
+                va='top')
     time_axis(ax)
     ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
     ax.set_ylim(-.1, .38)
@@ -209,7 +210,7 @@ def panel_hp_tc(ax, r, name, key=False, ylim=(-.25, 1.2)):
     top = r['lp'].mean().max()
     st = stars(r['p'])
     if st:
-        ax.text(np.mean(PEAK), top + .06, st, ha='center', va='bottom', fontsize=7, color=HP)
+        ax.text(np.mean(PEAK), top + .04, st, ha='center', va='bottom', fontsize=9, color=HP)
     ax.text(PEAK[1] + .7, top - .1, f"{r['rel']:.0f}%".replace('-', '−'), ha='left', va='center', fontsize=6,
             color=HP if st else '.45')
     time_axis(ax, xlabel=False)
@@ -231,7 +232,7 @@ def panel_items(ax, diff, res):
         m = w.mean(1).mean()
         ax.plot([x - .4, x + .4], [m, m], color=HP, lw=1.6, solid_capstyle='butt', zorder=4)
         ax.text(x, 12.5, stars(res.loc[g, 'main_p']) or 'n.s.', ha='center', va='bottom',
-                fontsize=7 if stars(res.loc[g, 'main_p']) else 6, color=HP if res.loc[g, 'main_p'] < .05 else '.5')
+                fontsize=9 if stars(res.loc[g, 'main_p']) else 6, color=HP if res.loc[g, 'main_p'] < .05 else '.5')
     ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
     ax.axvline(len(order) - 1.5 + .175, color='.85', lw=.6, zorder=0)
     ax.set_xticks([i + (.35 if g == 'All areas' else 0) for i, g in enumerate(order)])
@@ -255,7 +256,7 @@ def header(fig, y, text, x0=.012, x1=.99):
     fig.add_artist(plt.Line2D([x0, x1], [y - .006] * 2, color=MUTED, lw=.6, transform=fig.transFigure))
 
 
-def main(folder, name='fig4_item_locations', stats_only=False, dct_folder='notes/data/event_deconv_dct_2026-11'):
+def main(folder, name='fig3_item_locations', stats_only=False, dct_folder='notes/data/event_deconv_dct_2026-11'):
     pw, dt, dd, hl, diff, res = all_stats(folder)
     report(folder, dt, dd, hl, res)
     if stats_only:
@@ -317,6 +318,6 @@ if __name__ == '__main__':
     ap.add_argument('--dct-folder', default='notes/data/event_deconv_dct_2026-11',
                     help='second basis, reported in the legend')
     ap.add_argument('--stats-only', action='store_true', help='print the statistics, draw nothing')
-    ap.add_argument('--name', default='fig4_item_locations')
+    ap.add_argument('--name', default='fig3_item_locations')
     a = ap.parse_args()
     main(a.deconv_folder, a.name, a.stats_only, a.dct_folder)

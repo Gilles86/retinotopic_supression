@@ -1,8 +1,8 @@
-"""Figure 2: the gain-field model and what it predicts at three pRF locations. No fitted values.
+"""Figure 4: the gain-field model and what it predicts at three pRF locations. No fitted values.
 
 Usage::
 
-    python -m retsupp.visualize.paper.fig2_model
+    python -m retsupp.visualize.paper.fig4_model
 """
 from __future__ import annotations
 
@@ -24,10 +24,10 @@ COMMON = ("A search display on screen is reduced to the model input: the bar and
           "whose gain can also differ between HP and LP. Shown here is less sustained gain at HP than at LP, relative to LP. "
           "HP is at the lower right (red dashed ring). All gains are illustrative and exaggerated for clarity.")
 LEGEND = f"""
-**Figure 2. Gain-field model.** a, {COMMON} b, A schematic stretch of a run with illustrative trials: one bar sweep from left to right and four trials, with symbols above their onsets (target: diamond; distractor: dot; HP: red ring; pRF: teal circle). For three pRFs, the rows show the stimulus reaching the pRF (bar and items), the gain it sees, and the predicted BOLD response after the HRF, with and without gain. Rows share their scale across columns.
+**Figure 4. Gain-field model.** a, {COMMON} b, A schematic stretch of a run with illustrative trials: one bar sweep from left to right and four trials, with symbols above their onsets (target: diamond; distractor: dot; HP: red ring; pRF: teal circle). For three pRFs, the rows show the stimulus reaching the pRF (bar and items), the gain it sees, and the predicted BOLD response after the HRF, with and without gain. Rows share their scale across columns.
 """
 LEGEND_HP = f"""
-**Figure 2. Gain-field model.** a, {COMMON} b, A schematic stretch of a run for one pRF (teal) near a ring location, in a block with HP near it and in a block with HP at the opposite location. One bar sweep from left to right and four illustrative trials, the same in both blocks, so that only the sustained gain differs (in the experiment the distractor is also more frequent at HP). Symbols above the onsets show the screen (target: diamond; distractor: dot; HP: red ring). Rows show the stimulus reaching the pRF (bar and items), the gain it sees (red shading: the sustained loss of gain with HP near, present for the whole block), and the predicted BOLD response after the HRF, with and without gain; coloured arrows mark where each gain changes the prediction. The dotted line marks the peak response in the block with HP not near, in both blocks; with HP near, the response peaks lower (red arrow). With HP near, the item responses are lowered too: each item's own gain lifts its response (orange, blue arrows from below) and the sustained loss at HP pushes it down (red arrows from above); they meet on the predicted response. The size of the HP reduction is exaggerated for clarity. Rows share their scale across columns.
+**Figure 4. Gain-field model.** a, {COMMON} b, A schematic stretch of a run for one pRF (teal) near a ring location, in a block with HP near it and in a block with HP at the opposite location. One bar sweep from left to right and four illustrative trials, the same in both blocks, so that only the sustained gain differs (in the experiment the distractor is also more frequent at HP). Symbols above the onsets show the screen (target: diamond; distractor: dot; HP: red ring). Rows show the stimulus reaching the pRF (bar and items), the gain it sees (red shading: the sustained loss of gain with HP near, present for the whole block), and the predicted BOLD response after the HRF, with and without gain; coloured arrows mark where each gain changes the prediction. The dotted line marks the peak response in the block with HP not near, in both blocks; with HP near, the response peaks lower (red arrow). With HP near, the item responses are lowered too: each item's own gain lifts its response (orange, blue arrows from below) and the sustained loss at HP pushes it down (red arrows from above); they meet on the predicted response. The size of the HP reduction is exaggerated for clarity. Rows share their scale across columns.
 """
 LIM = 5.2
 RING = 4.
@@ -148,7 +148,7 @@ def icon(ax, t, ti, di, contour, hp_ix=None):
     ax.set_axis_off()
 
 
-def main(name='fig2_model'):
+def main(name='fig4_model'):
     sim = simulate()
     fig = plt.figure(figsize=(DOUBLE, 5.2))
     outer = fig.add_gridspec(2, 1, height_ratios=[1.75, 2.1], hspace=.16, left=.012, right=.995, top=.95, bottom=.03)
@@ -283,7 +283,7 @@ def row_labels(fig, lab, key_hp=False):
     letter(key, 'b', x=.1, y=1.0)
 
 
-def main_hp(name='fig2_model_hp_blocks'):
+def main_hp(name='fig4_model_hp_blocks'):
     """One pRF in two blocks: HP at this pRF, or at the opposite location."""
     prf = {'pRF': RING_PRF}
     # The same trials in both blocks, so that only the sustained gain differs.

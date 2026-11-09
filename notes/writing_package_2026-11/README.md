@@ -76,15 +76,17 @@ contrasts. End with what we did and found.
 
 **Results**
 1. Learned suppression in behaviour (Fig. 1). HP benefit 28 ms (30/30); target at HP slower by 28 ms.
-2. A gain-field model of pRFs during search (Fig. 2, Table 1). Nested ladder of models; items as
-   stimuli; LOSO per step (Fig. 3e).
-3. pRFs and model fits (Fig. 3). Retinotopy, held-out R², size vs eccentricity, contralaterality,
-   example voxel. DN/Gaussian and HRF choices: supplement.
-4. Target and distractor gain along the hierarchy (Fig. 4). Target gain everywhere beyond V1 and
-   rising with pRF size; distractor gain weaker, mainly dorsal and hV4/VO. Field sizes: supplement.
-5. Less sustained gain at the likely distractor location (Fig. 5). dS conditional and joint; per ROI;
-   LOSO 77%; `[PENDING: HP-rotation null, the pre-specified primary test]`; dD not robust.
-   `[PENDING: D2, target gain at HP vs LP]`.
+2. pRFs and model fits (Fig. 2). Retinotopy, contralaterality, size vs eccentricity, held-out R², responses to the
+   search display falling off with distance from the nearest item. DN/Gaussian and HRF choices: supplement.
+3. Responses at the item locations, without a model (Fig. 3). More response to the target and the distractor than to
+   a neutral item; less response at the HP location for every item type, significant in early areas.
+4. A gain-field model of pRFs during search (Fig. 4, Table 1). Nested ladder of models; items as
+   stimuli; LOSO per step (Table 1).
+5. The gain fields (Fig. 5). Target gain everywhere beyond V1; distractor gain weaker, mainly dorsal and hV4/VO
+   (Fig. 5a; gain against pRF size in the supplement, its slope may partly reflect a trade-off with item weight and
+   field size; field sizes: supplement). Less sustained gain at the likely distractor location (Fig. 5b, d): dS
+   conditional and joint; per ROI; LOSO 77% (per ROI, Fig. 5e); `[PENDING: HP-rotation null, the pre-specified
+   primary test]`; dD not robust. `[PENDING: D2, target gain at HP vs LP]`.
 6. Converging evidence without gain terms (Fig. 6, decoding). `[PENDING: rerun on final inputs; the
    May numbers must not be cited]`.
 7. The behavioural effects of Fig. 1 in the gains, and gain and behaviour trial by trial (Fig. 7). Location
@@ -106,18 +108,20 @@ runs, sub-20 ses-1 and sub-24 ses-2 have 5 runs).
 
 ## Figures (PNG and legend for each in `figures/`)
 
+Order since 2026-11-09: measured results (pRF fits, item locations) before the model.
+
 | Figure | File | Status |
 |---|---|---|
 | 1 Paradigm and behaviour | `fig1_paradigm_behaviour.pdf` (response times; e, f repeat vs switch) | final |
-| 2 Gain-field model | `fig2_model_hp_blocks.pdf` (chosen 2026-11-06) | final |
-| 3 Model fits | `fig3_model_fits.pdf` | provisional; example voxel to be replaced |
-| 4 Responses at the item locations (model-free) | `fig4_item_locations.pdf` | final apart from layout |
-| 5 Gain fields (model parameters) | `fig5_gain_fields.pdf` | provisional |
+| 2 pRF fits | `fig2_prf_fits.pdf` | provisional (d: HRF choice) |
+| 3 Responses at the item locations (model-free) | `fig3_item_locations.pdf` | final apart from layout |
+| 4 Gain-field model | `fig4_model_hp_blocks.pdf` (chosen 2026-11-06) | final |
+| 5 Gain fields (model parameters; e, leave-one-subject-out per ROI) | `fig5_gain_fields.pdf` | provisional |
 | 6 Decoding | not made | pending (plan C6) |
 | 7 Fig. 1 effects in the gains; behaviour trial by trial | `fig7_behaviour.pdf` (b location, c history, d trial by trial) | prototype: b provisional, c, d on earlier fits (Oct 2026) |
 | Table 1 Ladder | `table1_ladder.md` | provisional |
 | Table S Parameters | `table_parameters_2026-11.md` | provisional |
-| Supplement | `figS_field_size.pdf`, `figS_cv_power.pdf`, `figS_pooled_dS_dD.pdf`, `figS_gainfield_size.pdf` | provisional |
+| Supplement | `figS_gain_vs_prf_size.pdf` (was Fig. 5a), `figS_field_size.pdf`, `figS_cv_power.pdf`, `figS_pooled_dS_dD.pdf`, `figS_gainfield_size.pdf` | provisional |
 
 ## Open items the text must leave room for
 

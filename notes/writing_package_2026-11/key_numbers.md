@@ -22,7 +22,7 @@ Source files are under `/Users/gdehol/git/retsupp/notes/`.
 
 DN > DoG in 30/30 subjects (by .005). Per-ROI HRF test pending.
 
-## Gain-field ladder, leave-one-subject-out (`data/loso_per_step_2026-11.tsv`, Table 1, Fig. 3e)
+## Gain-field ladder, leave-one-subject-out (`data/loso_per_step_2026-11.tsv`, Table 1; per ROI, Fig. 5e)
 
 Share of subjects whose held-out prediction improves when the term is added with the effect size from
 the other subjects; median over ROIs.
@@ -55,7 +55,7 @@ Per ROI (joint, DoG medians; * BH q < .05 across ROIs; `figures/paper_2026-11/ta
 - D: V1 +.03, V2 +.05, V3 +.03, V3AB +.14*, IPS +.18*, hV4 +.21*, VO +.10*, LO +.09, TO +.09
 - dS (joint): V1 −.04, V2 −.05, V3 −.05, others −.00 to −.02 (none survives BH alone; the pooled test is the claim)
 
-## Along the hierarchy (`data/hierarchy_regression_2026-11.tsv`, Fig. 4c)
+## Along the hierarchy (`data/hierarchy_regression_2026-11.tsv`, supplementary figure `figS_gain_vs_prf_size`)
 
 Per subject, OLS slope of the parameter on log₂ pRF size over the nine ROIs (pRF size: group median at
 1-2.5° eccentricity, 0.57° in V1 to 1.63° in IPS); Wilcoxon on the slopes, BH over 8 parameters.
