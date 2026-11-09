@@ -186,3 +186,16 @@ along w_b = w_d (median |w_b − w_d| 0.003 vs median |w_amp| 0.21), Gauss-Newto
 the rotated pair is separable (corr(w_amp, w_ratio) 0.13). The amplitude direction trades off with the input gain
 (corr(w_amp, g_HP) 0.57; dS of the joint model vs m7 across subject × ROI: r = 0.65, median |change| 0.05). The b/d
 (DN-specific) direction is not used. Held-out comparison (8206793) and recovery (8206356/8206625) still running.
+
+## Update 19:00: held-out comparison and recovery
+
+**Held-out** (run3, pRFs frozen, `notes/data/dn_basefield_cv_2026-11.tsv`; 1067 of 1080 fits, subjects 10, 15 and 19
+partly, resubmitted with 64 GB as 8216951 after OOM at 32 GB): every variant predicts held-out runs worse than the
+input-gain model in all 30 subjects (Wilcoxon p = 2e-9 each): mean ΔR² b-field −3.4e-5, d-field −3.4e-5, both
+−1.0e-4, negative in every ROI.
+
+**Recovery** (`notes/data/dn_basefield_recovery_2026-11.tsv`, 16 units × 2 noise draws): at the fitted effect size,
+b and d truths are selected as "input" in 72 % of simulations (b correct 19 %, d correct 12 %); at 4× they are
+detected (input 16-19 %) but b and d are confused (b truth: 44 % b, 38 % d; d truth: 53 % d, 31 % b). A b or d
+effect leaks into the input-gain dS (median 0.3-0.4× at 1×, ~0.9× of the 1× input dS at 4×). Input and none truths:
+94 % and 97 % stay input.
