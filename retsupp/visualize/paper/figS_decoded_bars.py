@@ -458,7 +458,7 @@ if __name__ == '__main__':
     ap.add_argument('--source', default='jointhrf')
     ap.add_argument('--out-dir', default='notes/data')
     ap.add_argument('-j', '--jobs', type=int, default=4)
-    ap.add_argument('--decoder', default='free', choices=['free', 'outline'])
+    ap.add_argument('--decoder', default='outline', choices=['free', 'outline'], help='outline (main figure) or free')
     ap.add_argument('--name', default='figS_decoded_bars_rotated')
     a = ap.parse_args()
     if a.step == 'collect_condition':

@@ -432,7 +432,7 @@ def panel_quadrants(ax, s, st):
     offset_spines(ax)
 
 
-def panel_test(ax, e, t, rois=ROIS, decoder=DECODER, t_exp=None):
+def panel_test(ax, e, t, rois=ROIS, decoder=DECODER, t_exp=None, t_o=None, t_exp_o=None):
     """e: HP − other quadrants per ROI; the pre-specified test (Holm over V1–V3) and, for the higher areas, the
     exploratory one (BH over those areas)."""
     from retsupp.visualize.paper.paper_style import HP, MUTED, offset_spines
@@ -442,8 +442,21 @@ def panel_test(ax, e, t, rois=ROIS, decoder=DECODER, t_exp=None):
         v = e[(e.decoder == decoder) & (e.roi == roi)]['diff'].dropna().to_numpy()
         if not len(v):
             continue
-        subject_dots(ax, x, v, HP, i, s=5 if len(rois) > 3 else 7, width=.1 if len(rois) > 3 else .13,
+        both = t_o is not None
+        xf = x - (.13 if both else 0)
+        subject_dots(ax, xf, v, HP, i, s=5 if len(rois) > 3 else 7, width=.1 if len(rois) > 3 else .13,
                      ms=4.5 if len(rois) > 3 else 5.5)
+        if both:
+            vo = e[(e.decoder == 'outline') & (e.roi == roi)]['diff'].dropna().to_numpy()
+            if len(vo):
+                subject_dots(ax, x + .2, vo, HP, i, s=0, open_=True, ms=4)
+            to = t_o if roi in EARLY else t_exp_o
+            if to is not None and roi in set(to.roi):
+                qo = to[to.roi == roi].iloc[0]
+                ax.text(x, hi + .11 * (hi - lo), stars(qo.p_holm if roi in EARLY else qo.p_bh), ha='center', va='bottom',
+                        fontsize=7, color=HP, clip_on=False)
+        x_ = x
+        x = xf
         for sgn, lim in ((-1, lo), (1, hi)):
             out = (v < lo) if sgn < 0 else (v > hi)
             if out.any():
@@ -452,11 +465,16 @@ def panel_test(ax, e, t, rois=ROIS, decoder=DECODER, t_exp=None):
         tt = t if roi in EARLY else t_exp
         if tt is not None and roi in set(tt.roi):
             q = tt[tt.roi == roi].iloc[0]
-            ax.text(x, hi, stars(q.p_holm if roi in EARLY else q.p_bh), ha='center', va='bottom', fontsize=7, color=HP)
+            ax.text(x_, hi, stars(q.p_holm if roi in EARLY else q.p_bh), ha='center', va='bottom', fontsize=7, color=HP)
     ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
     ax.set_ylim(lo, hi)
     ax.set_ylabel('Decoded intensity,\nHP − other quadrants')
     offset_spines(ax)
+    if t_o is not None:                             # star-row keys: filled = unconstrained, open = bar outline given
+        import matplotlib.transforms as mtrans
+        x0 = roi_xs(rois)[0] - 1.25
+        for yy, mfc in ((hi + .035 * (hi - lo), HP), (hi + .145 * (hi - lo), 'w')):
+            ax.plot(x0, yy, 'o', ms=3.5, color=HP, mfc=mfc, mec=HP, mew=.9, clip_on=False)
     if len(rois) > 3:
         import matplotlib.transforms as mtrans
         from retsupp.visualize.paper.paper_style import ROI_X
@@ -465,8 +483,8 @@ def panel_test(ax, e, t, rois=ROIS, decoder=DECODER, t_exp=None):
         rest = [ROI_X[r] for r in rois if r not in EARLY]
         for xs_, lab in ((early, 'Pre-specified'), (rest, 'Exploratory')):
             if xs_:
-                ax.plot([min(xs_) - .35, max(xs_) + .35], [1.15] * 2, transform=tr, color=MUTED, lw=.7, clip_on=False)
-                ax.text((min(xs_) + max(xs_)) / 2, 1.17, lab, transform=tr, ha='center', va='bottom', fontsize=6,
+                ax.plot([min(xs_) - .35, max(xs_) + .35], [1.27] * 2, transform=tr, color=MUTED, lw=.7, clip_on=False)
+                ax.text((min(xs_) + max(xs_)) / 2, 1.29, lab, transform=tr, ha='center', va='bottom', fontsize=6,
                         color='.4')
         ax.set_yticks([-.005, 0, .005])
         ax.set_yticklabels(['−.005', '0', '.005'])
@@ -658,6 +676,11 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     if t_exp is not None:
         print(t_exp.round(4).to_string(index=False))
     t_out = test(e, EARLY, ('outline',)) if 'outline' in set(d.decoder) else None
+    t_exp_out = test_exploratory(e, rois, 'outline') if (t_out is not None and len(rois) > 3) else None
+    if t_out is not None:
+        print('outline', t_out.round(4).to_string(index=False))
+    if t_exp_out is not None:
+        print(t_exp_out.round(4).to_string(index=False))
     print(t.round(4).to_string(index=False))
 
     q = pd.read_csv(DATA / f'decoding_quality_{source}_2026-11.tsv', sep='\t')
@@ -726,7 +749,7 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
         ax = fig.add_axes([4.4 / W, (2.2 + DY) / H, 2.75 / W, .9 / H])
     else:
         ax = fig.add_axes([5.55 / W, (1.98 + DY) / H, 1.6 / W, 1.15 / H])
-    panel_test(ax, e, t, rois, decoder, t_exp)
+    panel_test(ax, e, t, rois, decoder, t_exp, t_out, t_exp_out)
     letter(ax, 'e', x=-.17 if many else -.42, y=1.15 if many else 1.04)
 
     # Row 3: f eccentricity, g the measured response.
@@ -750,8 +773,14 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
                       f'p_Holm = {r.p_holm:.3f}' for _, r in t.iterrows())
     outline = ''
     if t_out is not None:
-        outline = (' The decoder with the bar outline given (only the bar\'s pixels decoded) gives the same result: '
-                   + ', '.join(f'{r.roi} p_Holm = {r.p_holm:.3f}' for _, r in t_out.iterrows()) + '.')
+        outline = (' Open markers and the upper row of stars: the decoder with the bar outline given (only the pixels the '
+                   'bar covers are decoded, the rest fixed at 0; median and bootstrapped 95% CI), same tests: '
+                   + '; '.join(f'{r.roi} median {r["median"]:+.4f}, p = {r.p:.3f}, p_Holm = {r.p_holm:.3f}'
+                               for _, r in t_out.iterrows()))
+        if t_exp_out is not None and len(t_exp_out):
+            outline += ('; higher areas (exploratory, BH): ' + '; '.join(
+                f'{r.roi} median {r["median"]:+.4f}, n = {r.n}, p = {r.p:.3f}, q = {r.p_bh:.3f}' for _, r in t_exp_out.iterrows()))
+        outline += '. Filled markers and the lower row of stars: the unconstrained decoder.'
     band_txt = '; '.join(f'{lab} {be[k].mean():+.1f} ± {be[k].sem():.1f}%, p = {pb[k]:.3f}' for k, a, b, lab in BANDS)
     band_txt += f'; whole aperture {be["all"].mean():+.1f} ± {be["all"].sem():.1f}%, p = {pb["all"]:.3f}'
     fovea = f'{fov.mean():+.1f} ± {fov.sem():.1f}%'
