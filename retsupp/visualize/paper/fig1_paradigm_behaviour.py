@@ -21,13 +21,10 @@ from retsupp.visualize.paper.paper_style import DISTRACTOR, DOUBLE, FG, HP, MUTE
 from retsupp.visualize.paper.plot_fig1 import APERTURE, RING, item_positions, panel_display
 
 LEGEND = """
-**Figure 1. Paradigm and behaviour.** a, Search display with the bar in its 3.17° aperture: 8 items on a ring at 4°, with target and distractor at the four diagonal positions; percentages are over all trials. b, Two trials to scale, with the bar position every 2 s below; the bar sweeps the aperture in four directions (rightward, leftward, downward, upward; 42 s each with 4.8 s rest, the sequence twice per run), and the HP location across blocks of runs (example order). c, Response time with the distractor at the HP location, at an LP location, or absent. d, Response time with the target at the HP or an LP location, on trials with a distractor. c, d, n = 30, correct trials. Dots are subjects, triangles are subjects beyond the axis limits; large points and bars are the mean ± within-subject SEM (Cousineau-Morey). Wilcoxon signed-rank tests: ** p < .01, *** p < .001.
+**Figure 1. Paradigm and behaviour.** a, Search display with the bar in its 3.17° aperture: 8 items on a ring at 4°, with target and distractor at the four diagonal positions; percentages are over all trials. b, Two trials to scale, with the bar position every 2 s below; the bar sweeps the aperture in four directions (rightward, leftward, downward, upward; 42 s each with 4.8 s rest, the sequence twice per run), and the HP location across blocks of runs (example order). c, Response time with the distractor at the HP location, at an LP location, or absent. d, Response time with the target at the HP or an LP location, on trials with a distractor. e, f, Response time when the target (e) or the distractor (f) appears at the same location as on the previous trial, or at another location; distractor repeats are compared within HP and within LP trials and averaged. c-f, n = 30, correct trials. Dots are subjects, triangles are subjects beyond the axis limits; large points and bars are the mean ± within-subject SEM (Cousineau-Morey). Wilcoxon signed-rank tests: ** p < .01, *** p < .001.
 """
 
 
-LEGEND_DIFF = """
-**Figure 1. Paradigm and behaviour.** a, Search display with the bar in its 3.17° aperture: 8 items on a ring at 4°, with target and distractor at the four diagonal positions; percentages are over all trials. b, Two trials to scale, with the bar position every 2 s below; the bar sweeps the aperture in four directions (rightward, leftward, downward, upward; 42 s each with 4.8 s rest, the sequence twice per run), and the HP location across blocks of runs (example order). c, Within-subject differences in response time: distractor at an LP location minus at the HP location, and at an LP location minus absent. d, Target at the HP location minus at an LP location, on trials with a distractor. e, Repeating a location from the previous trial: response time when the target (or the distractor) switches location minus when it repeats; distractor repeats are compared within HP and within LP trials and averaged. c-e, n = 30, correct trials; dots are subjects, large points and bars the mean and 95% CI (t); counts give the subjects above 0. Wilcoxon signed-rank tests: ** p < .01, *** p < .001.
-"""
 
 
 def build_rt(path, bids):
@@ -100,11 +97,12 @@ def panel_timeline(fig, ax):
     # The HP location per block of runs.
     w = .07
     icon = w * aspect
-    ax.text(x0, icon / 2, 'HP location moves\nevery 3 runs (example)', ha='left', va='center', fontsize=6.5, color=FG)
+    yh = max(0., ys - .14 - icon)   # right under the sweep row, not at the bottom of the panel
+    ax.text(x0, yh + icon / 2, 'HP location moves\nevery 3 runs (example)', ha='left', va='center', fontsize=6.5, color=FG)
     pos = item_positions()
     for i, k in enumerate([1, 5, 7, 3]):
         x = .32 + i * .17
-        inset = ax.inset_axes([x, 0, w, icon])
+        inset = ax.inset_axes([x, yh, w, icon])
         inset.add_patch(Circle((0, 0), RING, fill=False, ec=MUTED, lw=.5))
         for j in (1, 3, 5, 7):
             inset.add_patch(Circle(pos[j], 1.3, facecolor=HP if j == k else 'w', ec=HP if j == k else MUTED, lw=.5))
@@ -113,7 +111,7 @@ def panel_timeline(fig, ax):
         inset.set_aspect('equal')
         inset.set_axis_off()
         if i < 3:
-            ax.annotate('', xy=(x + w + .08, icon / 2), xytext=(x + w + .02, icon / 2),
+            ax.annotate('', xy=(x + w + .08, yh + icon / 2), xytext=(x + w + .02, yh + icon / 2),
                         arrowprops=dict(arrowstyle='-|>', color=MUTED, lw=.7, mutation_scale=5, shrinkA=0, shrinkB=0))
 
 
@@ -155,104 +153,65 @@ def rt_panel(ax, d, conds, colors, pairs, ylim):
     offset_spines(ax)
 
 
-def diff_panel(ax, d, pairs, colors, labels, ylim):
-    """Within-subject differences: one dot per subject, mean and 95% CI (t) beside the dots; every subject on the axis."""
-    w = d.pivot(index='subject', columns='condition', values='rt')
-    rng = np.random.default_rng(4)
-    for i, ((a, b), col) in enumerate(zip(pairs, colors)):
-        v = (w[a] - w[b]).dropna().to_numpy()
-        ax.scatter(i + rng.uniform(-.14, .14, len(v)), v, s=9, color=col, alpha=.4, lw=0, zorder=1)
-        m, h = v.mean(), stats.t.ppf(.975, len(v) - 1) * v.std(ddof=1) / np.sqrt(len(v))
-        ax.errorbar(i + .3, m, yerr=h, color=col, marker='o', ms=6, mec='w', mew=.7, lw=1.4, capsize=0, zorder=4)
-        n = int((v > 0).sum())
-        ax.text(i + .1, ylim[1], f'{n}/{len(v)} > 0 {stars(stats.wilcoxon(v).pvalue)}', ha='center', va='bottom', fontsize=6, color=FG,
-                clip_on=False)
-    ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
-    ax.set_xticks([i + .1 for i in range(len(pairs))])
-    ax.set_xticklabels(labels)
-    ax.set_xlim(-.45, len(pairs) - .35)
-    ax.set_ylim(*ylim)
-    offset_spines(ax)
+def repeats_raw(trial_table):
+    """Per subject, mean RT (ms) on trials where the target (distractor) location repeats or switches from the previous trial.
 
-
-def repeats(trial_table):
-    """Per subject, RT on switch minus repeat trials (ms) for the target and the distractor location.
-
-    Distractor repeats are compared within HP and within LP trials and averaged (HP trials repeat more often and
-    are faster anyway); see ``plot_trialwise_story.behaviour``.
+    Distractor repeats are compared within HP and within LP trials and averaged over the two (HP trials repeat more
+    often and are faster anyway); see ``plot_trialwise_story.behaviour`` for the same contrast as a difference.
     """
-    from retsupp.visualize.paper.plot_trialwise_story import behaviour
-    b = behaviour(pd.read_csv(trial_table, sep='\t'))
-    b = b.assign(condition=b.kind, rt=-b.d)[['subject', 'condition', 'rt']]
-    return pd.concat([b, b.drop_duplicates('subject').assign(condition='zero', rt=0.)])
+    tt = pd.read_csv(trial_table, sep='\t')
+    v = tt[tt['roi'] == 'V1']
+    rows = []
+    for subj, d in v.groupby('subject'):
+        t = d.groupby(d['target_repeat'] > 0)['rt'].mean() * 1000
+        ds = d[d['trial_type'] != 'none']
+        dd = ds.groupby(['trial_type', ds['dist_repeat'] > 0])['rt'].mean().unstack().mean() * 1000
+        rows += [dict(subject=subj, contrast='target', condition='Repeat', rt=t[True]),
+                 dict(subject=subj, contrast='target', condition='Switch', rt=t[False]),
+                 dict(subject=subj, contrast='distractor', condition='Repeat', rt=dd[True]),
+                 dict(subject=subj, contrast='distractor', condition='Switch', rt=dd[False])]
+    return pd.DataFrame(rows)
 
 
-def main(rt_table, bids, name='fig1_paradigm_behaviour', diff=False,
-         trial_table='notes/data/trialwise_af_trial_table.tsv.gz'):
+def main(rt_table, bids, name='fig1_paradigm_behaviour', trial_table='notes/data/trialwise_af_trial_table.tsv.gz'):
     if not Path(rt_table).exists():
         build_rt(rt_table, bids)
     d = pd.read_csv(rt_table, sep='\t')
-    if diff:
-        # Display and timeline on top, the three behaviour panels across the full width below, with room between.
-        fig = plt.figure(figsize=(DOUBLE, 4.7))
-        top = fig.add_gridspec(1, 2, width_ratios=[1, 1.62], left=.005, right=.995, top=.985, bottom=.47, wspace=.12)
-        ax = fig.add_subplot(top[0])
-        panel_display(ax, margin=7.4)
-        letter(ax, 'a', x=.05, y=.97)
-        ax = fig.add_subplot(top[1])
-        panel_timeline(fig, ax)
-        letter(ax, 'b', x=0, y=.95)
-        low = fig.add_gridspec(1, 3, width_ratios=[2, 1.2, 2], left=.09, right=.98, top=.33, bottom=.1, wspace=.3)
-    else:
-        fig = plt.figure(figsize=(DOUBLE, 3.3))
-        gs = fig.add_gridspec(2, 2, width_ratios=[1, 1.62], height_ratios=[1.25, 1], left=.005, right=.995, top=.975, bottom=.13,
-                              hspace=.46, wspace=.17)
-        ax = fig.add_subplot(gs[:, 0])
-        panel_display(ax, margin=7.4)
-        box = ax.get_position()
-        ax.set_position([box.x0, .005, box.width, .985])   # down to the figure edge, the x labels of c and d need no room here
-        ax.set_anchor('N')
-        letter(ax, 'a', x=.05, y=.93)
-        ax = fig.add_subplot(gs[0, 1])
-        panel_timeline(fig, ax)
-        letter(ax, 'b', x=0, y=.9)
-        low = gs[1, 1].subgridspec(1, 2, width_ratios=[1.45, 1], wspace=.2)
+    rep = repeats_raw(trial_table)
+    # Display and timeline on top; the four behaviour panels across the full width below, with room between.
+    fig = plt.figure(figsize=(DOUBLE, 4.8))
+    top = fig.add_gridspec(1, 2, width_ratios=[1, 1.62], left=.005, right=.995, top=.985, bottom=.47, wspace=.12)
+    ax = fig.add_subplot(top[0])
+    panel_display(ax, margin=7.4)
+    letter(ax, 'a', x=.05, y=.97)
+    ax = fig.add_subplot(top[1])
+    panel_timeline(fig, ax)
+    letter(ax, 'b', x=0, y=.95)
+    low = fig.add_gridspec(1, 4, width_ratios=[3, 2, 2, 2], left=.08, right=.985, top=.27, bottom=.095, wspace=.32)
     ylim = (770, 1020)
-    if diff:
-        ax = fig.add_subplot(low[0])
-        diff_panel(ax, d[d.contrast == 'distractor'], [('LP', 'HP'), ('LP', 'Absent')], [HP, FG], ['LP − HP', 'LP − absent'], (-45, 110))
-        ax.set_xlabel('Distractor')
-        ax.set_ylabel('RT difference (ms)')
-        letter(ax, 'c', x=-.17, y=1.2)
-        ax = fig.add_subplot(low[1])
-        diff_panel(ax, d[d.contrast == 'target'], [('HP', 'LP')], [HP], ['HP − LP'], (-45, 110))
-        ax.set_xlabel('Target')
-        ax.set_yticklabels([])
-        letter(ax, 'd', x=-.1, y=1.2)
-        ax = fig.add_subplot(low[2])
-        diff_panel(ax, repeats(trial_table), [('Target', 'zero'), ('Distractor', 'zero')], [TARGET, DISTRACTOR],
-                   ['Target', 'Distractor'], (-45, 110))
-        ax.set_xlabel('Location repeated')
-        ax.set_yticklabels([])
-        letter(ax, 'e', x=-.1, y=1.2)
-        for a in fig.axes[-3:]:
-            bb = a.get_window_extent()
-            assert bb.height <= bb.width * 1.02, (a.get_xlabel(), bb.width, bb.height)   # subject-dot panels never taller than wide
-        save(fig, name, LEGEND_DIFF)
-        return
     ax = fig.add_subplot(low[0])
     rt_panel(ax, d[d.contrast == 'distractor'], ['HP', 'LP', 'Absent'], [HP, FG, MUTED], [('HP', 'LP'), ('LP', 'Absent')], ylim)
     ax.set_xlabel('Distractor')
     ax.set_ylabel('Response time (ms)')
-    letter(ax, 'c', x=-.2, y=1.2)
+    letter(ax, 'c', x=-.2, y=1.55)
+    ax.scatter([.0], [1.5], s=10, marker='^', color=MUTED, lw=0, transform=ax.transAxes, clip_on=False)
+    ax.scatter([.05], [1.5], s=10, marker='v', color=MUTED, lw=0, transform=ax.transAxes, clip_on=False)
+    ax.text(.09, 1.5, 'Off scale', transform=ax.transAxes, fontsize=6, color=FG, va='center')
     ax = fig.add_subplot(low[1])
     rt_panel(ax, d[d.contrast == 'target'], ['HP', 'LP'], [HP, FG], [('HP', 'LP')], ylim)
     ax.set_xlabel('Target')
     ax.set_yticklabels([])
-    letter(ax, 'd', x=-.1, y=1.2)
-    ax.scatter([.1], [1.13], s=10, marker='^', color=MUTED, lw=0, transform=ax.transAxes, clip_on=False)
-    ax.scatter([.16], [1.13], s=10, marker='v', color=MUTED, lw=0, transform=ax.transAxes, clip_on=False)
-    ax.text(.21, 1.13, 'Off scale', transform=ax.transAxes, fontsize=6, color=FG, va='center')
+    letter(ax, 'd', x=-.15, y=1.55)
+    for k, (contrast, col, lab, let) in enumerate((('target', TARGET, 'Target location', 'e'),
+                                                   ('distractor', DISTRACTOR, 'Distractor location', 'f'))):
+        ax = fig.add_subplot(low[2 + k])
+        rt_panel(ax, rep[rep.contrast == contrast], ['Repeat', 'Switch'], [col, FG], [('Repeat', 'Switch')], ylim)
+        ax.set_xlabel(lab)
+        ax.set_yticklabels([])
+        letter(ax, let, x=-.15, y=1.55)
+    for a in fig.axes[-4:]:
+        bb = a.get_window_extent()
+        assert bb.height <= bb.width * 1.02, (a.get_xlabel(), bb.width, bb.height)   # subject-dot panels never taller than wide
     save(fig, name, LEGEND)
 
 
@@ -260,6 +219,5 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--rt-table', default='notes/data/behaviour_rt_2026-11.tsv')
     ap.add_argument('--bids-folder', default='/data/ds-retsupp')
-    ap.add_argument('--diff', action='store_true', help='Panels c, d as within-subject differences.')
     a = ap.parse_args()
-    main(a.rt_table, a.bids_folder, 'fig1_paradigm_behaviour_diff' if a.diff else 'fig1_paradigm_behaviour', a.diff)
+    main(a.rt_table, a.bids_folder)

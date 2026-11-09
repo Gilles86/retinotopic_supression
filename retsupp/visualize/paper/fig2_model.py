@@ -220,7 +220,7 @@ def top_row(fig, gs, prfs=None):
     maps = [('Model input', stimulus(), 'magma', 2.6, FG, False, 'Fixed pRF'),
             ('Sustained', -sus, 'Reds', .9, HP, False, 'Whole block, less at HP'),
             ('Target', tgt, 'Oranges', 1.8, TARGET, False, 'During search'),
-            ('Distractor', dis, 'Blues', 1.8, DISTRACTOR, False, 'During search')]
+            ('Distractor', dis, 'Blues', 1.25, DISTRACTOR, False, 'During search')]   # its own scale, so the smaller distractor gain is still visible
     for j, (title, im, cmap, lim, col, signed, sub) in enumerate(maps, start=1):
         ax = fig.add_subplot(a[0, j])
         show(ax, im, cmap, lim, title, col, signed)
@@ -239,6 +239,9 @@ def top_row(fig, gs, prfs=None):
     ax.imshow(stimulus() * (1 + sus + tgt + dis), origin='lower', extent=(-LIM, LIM, -LIM, LIM), cmap='magma', vmin=0, vmax=2.6)
     ax.set_axis_off()
     ax.set_title('Effective drive', fontsize=7, color=FG, pad=2)
+    # Where the two transient gains land: the target and the distractor item, ringed in their colours.
+    for ix, c in ((T_IX, TARGET), (HP_IX, DISTRACTOR)):
+        ax.add_patch(Circle(POS[ix], 1.12, fill=False, ec=c, lw=1.1, zorder=8))
     for i, sign in ((1, None), (2, '× (1 +'), (3, '+'), (4, '+'), (5, ') =')):
         pos = fig.add_subplot(a[0, i]).get_position()
         fig.axes[-1].remove()
