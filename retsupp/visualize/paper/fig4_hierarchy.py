@@ -218,7 +218,7 @@ def panel_diff(ax, p, term, window_label=False):
     return ps, qs
 
 
-def main(gain_table, conditional_table, name='fig4_hierarchy'):
+def main(gain_table, conditional_table, name='fig4_hierarchy', deconv_folder='notes/data/event_deconv_2026-11'):
     from retsupp.visualize.paper.fig3_prf_fits import PATHWAY
     from retsupp.visualize.paper.fig45_common import item_timecourses
     js = {f: joint(gain_table, f) for f in FAM}
@@ -226,8 +226,8 @@ def main(gain_table, conditional_table, name='fig4_hierarchy'):
     OUT.mkdir(parents=True, exist_ok=True)
     write_table(t, js)
     d = js['dog']
-    raw = item_timecourses(groups={r: ('Early areas' if r in PATHWAY['Early'] else 'Higher areas') for r in ROI_ORDER})
-    pw = item_timecourses(groups={r: g for g, rs in PATHWAY.items() for r in rs})
+    raw = item_timecourses(deconv_folder, groups={r: ('Early areas' if r in PATHWAY['Early'] else 'Higher areas') for r in ROI_ORDER})
+    pw = item_timecourses(deconv_folder, groups={r: g for g, rs in PATHWAY.items() for r in rs})
 
     # Rows tell one story each (target, distractor); columns: model gain | measured response | difference.
     W, H = DOUBLE, 5.0
@@ -264,5 +264,8 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--gain-table', default='notes/data/gain_field_parameters.tsv')
     ap.add_argument('--conditional-table', default='notes/data/conditional_estimates_dog_2026-11.tsv')
+    ap.add_argument('--deconv-folder', default='notes/data/event_deconv_2026-11',
+                    help='deconvolved item responses; notes/data/event_deconv_dct_2026-11 for the DCT basis')
+    ap.add_argument('--name', default='fig4_hierarchy')
     a = ap.parse_args()
-    main(a.gain_table, a.conditional_table)
+    main(a.gain_table, a.conditional_table, a.name, a.deconv_folder)

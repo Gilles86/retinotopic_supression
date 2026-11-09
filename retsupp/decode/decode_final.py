@@ -6,6 +6,11 @@ One task = one subject × held-out run; loops over ROIs (default V1, V2, V3) and
 * ``outline``: the true bar footprint of each frame is the mask (``StimulusFitter.fit(mask=...)``, 3-D
   per-frame mask): only pixels the bar covers are free, everything else is fixed at 0. The outline is
   given, the intensities are decoded.
+* ``free_items`` / ``outline_items``: the same, but the search items are part of the stimulus as well
+  (bar + all 8 items, ``Subject.get_stimulus_with_distractors``, the paradigm the pRFs were fitted on). The
+  noise model is fitted on the residuals of that paradigm, and ``outline_items`` frees the bar and the item
+  footprints. Item-evoked responses then have pixels of their own instead of being pushed into the bar;
+  the readout stays inside the bar aperture, so it measures bar drive only.
 
 pRFs come from the cross-validation fold that held this run out, so the decoded run never entered the
 pRF fit:
@@ -148,8 +153,12 @@ def main(subject, session, run, rois, bids, source, decoders, joint_tag, max_vox
     T = paradigm.shape[0]
     gx, gy = sub.get_extended_grid_coordinates(resolution=resolution, session=session, run=run, grid_radius=grid_radius)
     grid = np.stack([gx.ravel(), gy.ravel()], axis=1).astype(np.float32)
-    par_flat = paradigm.reshape(T, -1)
-    par_df = pd.DataFrame(par_flat, index=pd.Index(np.arange(T), name='frame'))
+    pars_of = {'bar': paradigm}
+    if any(d.endswith('_items') for d in decoders):
+        items = sub.get_stimulus_with_distractors(
+            session=session, run=run, resolution=resolution, grid_radius=grid_radius, distractor_shape='rectangle',
+            distractor_long_side=1.5, distractor_short_side=0.375).astype(np.float32)
+        pars_of['items'] = np.maximum(items, paradigm)
 
     for roi in rois:
         ids = roi_of.index[roi_of.to_numpy() == roi]
@@ -168,22 +177,28 @@ def main(subject, session, run, rois, bids, source, decoders, joint_tag, max_vox
         pars = pars_all.loc[sel].reset_index(drop=True).astype(np.float32)
         data = pd.DataFrame(bold_run[:, np.asarray(sel)], index=pd.Index(np.arange(T), name='frame'))
 
-        def mk():
-            m = make_model(source, grid, par_flat, data, pars)
-            return m
-        pars = pars[list(mk().parameter_labels)]
-        t1 = time.time()
-        rf = ResidualFitter(model=mk(), data=data, paradigm=par_df, parameters=pars)
-        omega, dof = rf.fit(max_n_iterations=resid_max_iter, progressbar=False, method='gauss')
-        print(f'  residual fit {time.time() - t1:.0f} s', flush=True)
+        def mk(kind):
+            par_flat = pars_of[kind].reshape(T, -1)
+            return make_model(source, grid, par_flat, data, pars), pd.DataFrame(
+                par_flat, index=pd.Index(np.arange(T), name='frame'))
+        pars = pars[list(mk('bar')[0].parameter_labels)]
+        noise = {}
+        for kind in {('items' if d.endswith('_items') else 'bar') for d in decoders}:
+            t1 = time.time()
+            m, par_df = mk(kind)
+            rf = ResidualFitter(model=m, data=data, paradigm=par_df, parameters=pars)
+            noise[kind] = rf.fit(max_n_iterations=resid_max_iter, progressbar=False, method='gauss')
+            print(f'  residual fit ({kind} paradigm) {time.time() - t1:.0f} s', flush=True)
         for dec in decoders:
             out = out_root / dec / f'sub-{subject:02d}'
             if (out / f'readout_ses-{session}_run-{run}_roi-{roi}.tsv').exists():
                 continue
             out.mkdir(parents=True, exist_ok=True)
             t1 = time.time()
-            sf = StimulusFitter(model=mk(), data=data, omega=omega, parameters=pars, dof=dof)
-            mask = (paradigm > 0) if dec == 'outline' else None
+            kind = 'items' if dec.endswith('_items') else 'bar'
+            omega, dof = noise[kind]
+            sf = StimulusFitter(model=mk(kind)[0], data=data, omega=omega, parameters=pars, dof=dof)
+            mask = (pars_of[kind] > 0) if dec.startswith('outline') else None
             fit = sf.fit(l2_norm=l2_norm, learning_rate=learning_rate, max_n_iterations=max_iter, min_n_iterations=min_iter,
                          progressbar=False, mask=mask)
             decoded = np.asarray(fit.values if hasattr(fit, 'values') else fit, dtype=np.float32).reshape(T, resolution, resolution)
@@ -192,7 +207,8 @@ def main(subject, session, run, rois, bids, source, decoders, joint_tag, max_vox
                                                                        n_voxels=len(sel))
             np.savez_compressed(out / f'decoded_ses-{session}_run-{run}_roi-{roi}.npz', decoded=decoded.astype(np.float16),
                                 paradigm=paradigm.astype(np.uint8), grid=grid, hp_location=np.array(str(hp)),
-                                voxel_index=np.asarray(sel), dof=np.float32(dof if dof is not None else np.nan))
+                                voxel_index=np.asarray(sel), dof=np.float32(dof if dof is not None else np.nan),
+                                **({'paradigm_items': pars_of['items'].astype(np.float16)} if kind == 'items' else {}))
             ro.to_csv(out / f'readout_ses-{session}_run-{run}_roi-{roi}.tsv', sep='\t', index=False)
             hp_row = ro[ro.is_hp].iloc[0]
             print(f'  {dec}: {time.time() - t1:.0f} s; drive_bar HP {hp_row.drive_bar:.3f}, LP mean '
@@ -208,7 +224,7 @@ if __name__ == '__main__':
     ap.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
     ap.add_argument('--prf-source', choices=list(SOURCES), default='canonical')
     ap.add_argument('--joint-tag', default='final2')
-    ap.add_argument('--decoders', nargs='+', choices=['free', 'outline'], default=['free', 'outline'])
+    ap.add_argument('--decoders', nargs='+', choices=['free', 'outline', 'free_items', 'outline_items'], default=['free', 'outline'])
     ap.add_argument('--max-voxels', type=int, default=2000)
     ap.add_argument('--max-bold-sd', type=float, default=20.)
     ap.add_argument('--l2-norm', type=float, default=1.0)
