@@ -29,6 +29,7 @@
 #   WARM_ROOT="<path> ..." starts m00/m0 from earlier fits; GD_ITER, GD_MIN_ITER, SIGMA_STARTS, LBFGS_ROUNDS tune the search
 #   ROI_LIST="V1 V2" restricts the ROIs (with PER_SUBJECT=1); OUTPUT_ROOT=<path> writes elsewhere (tests)
 #   HRF_TABLE=<tsv> one HRF per subject x ROI (build_roi_hrf_table.py; root gets a _roihrf suffix)
+#   FROZEN_PRF=1 with CV_SCHEME=run3 and BASE_ROOT=<all-runs root>: pRFs frozen at the all-runs fit, m7 + MODELS refitted per fold (_frozenprf)
 #   RELIABLE_ONLY=1 keeps voxels with cross-run reliability > 0 (root gets a _reliable suffix), needs BASE_ROOT
 # Task index -> (subject, ROI): idx0 = task-1; subject = idx0/11 + 1; roi = ROIS[idx0%11].
 
@@ -42,7 +43,7 @@ BASE_ROOT="${BASE_ROOT:-}"
 FAMILY="${FAMILY:-dog}"
 HP_ROTATION="${HP_ROTATION:-0}"
 MODELS="${MODELS:-}"
-TAG="${CV_SCHEME}${BOUNDED:+_bounded}${POLISH:+_polish}${MAX_BOLD_SD:+_maxsd$MAX_BOLD_SD}_${LOSS}_${FAMILY}_hprot${HP_ROTATION}${RELIABLE_ONLY:+_reliable}${HRF_TABLE:+_roihrf}"
+TAG="${CV_SCHEME}${FROZEN_PRF:+_frozenprf}${BOUNDED:+_bounded}${POLISH:+_polish}${MAX_BOLD_SD:+_maxsd$MAX_BOLD_SD}_${LOSS}_${FAMILY}_hprot${HP_ROTATION}${RELIABLE_ONLY:+_reliable}${HRF_TABLE:+_roihrf}"
 ROIS=(${ROI_LIST:-V1 V2 V3 V3AB hV4 LO TO VO IPS SPL1 FEF})
 if [[ -n "${PER_SUBJECT:-}" ]]; then
     subject=$SLURM_ARRAY_TASK_ID
@@ -73,7 +74,7 @@ echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
     --cv-scheme "$CV_SCHEME" ${POLISH:+--polish} ${BOUNDED:+--bounded} \
     ${MAX_BOLD_SD:+--max-bold-sd "$MAX_BOLD_SD"} --loss "$LOSS" \
     ${BASE_ROOT:+--base-root $BASE_ROOT} --family "$FAMILY" --hp-rotation "$HP_ROTATION" \
-    ${MODELS:+--models $MODELS} ${RELIABLE_ONLY:+--reliable-only} \
+    ${MODELS:+--models $MODELS} ${RELIABLE_ONLY:+--reliable-only} ${FROZEN_PRF:+--frozen-prf} \
     ${WARM_ROOT:+--warm-root $WARM_ROOT} ${GD_ITER:+--gd-iterations $GD_ITER} \
     ${GD_MIN_ITER:+--gd-min-iterations $GD_MIN_ITER} ${SIGMA_STARTS:+--sigma-starts $SIGMA_STARTS} \
     ${LBFGS_ROUNDS:+--lbfgs-rounds $LBFGS_ROUNDS} ${OUTPUT_ROOT:+--output-root $OUTPUT_ROOT} \

@@ -68,6 +68,11 @@ the DN neural baseline (w_b), the surround baseline (w_d) or both, with one shap
 from three other θ; the joint model also starts from both one-weight fits. A Gauss-Newton Hessian (JᵀJ) of the
 SSE over the shared terms is stored (``hessian_corr``) to show whether w_b and w_d trade off.
 
+``--frozen-prf`` (with a CV scheme and an all-runs ``--base-root``) is the cheap held-out test for models that
+differ only in shared terms: per-voxel pRFs and m00-m5 are taken from the all-runs fit (same in every fold, so
+their leak into the held-out runs is the same for all models), m7_full and the requested models are refitted per
+fold. Root gets a _frozenprf suffix.
+
 ``--reliable-only`` keeps the selected voxels with model-free cross-run reliability > 0 (mean over
 the ``prf_cv_reliability`` folds). The m00, m0, m1 and m3b fits come from ``--base-root``, restricted
 to those voxels, so m4 onward refit the shared terms on them. Root gets a _reliable suffix.
@@ -493,9 +498,11 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
          output_root=None, polish=False, bounded=False, max_bold_sd=None,
          loss='sse', base_roots=(), family='dog', hp_rotation=0, reliable_only=False,
          warm_roots=(), gd_min_iterations=1000, sigma_starts=SIGMA_STARTS, lbfgs_rounds=LBFGS_ROUNDS,
-         hrf_table=None):
+         hrf_table=None, frozen_prf=False):
     if cv_scheme not in SCHEMES:
         raise ValueError(f'cv_scheme must be in {SCHEMES}')
+    if frozen_prf and (cv_scheme == 'full' or not base_roots):
+        raise ValueError('--frozen-prf needs a CV scheme and --base-root (a full-scheme root)')
     if hp_rotation and not base_roots:
         raise ValueError('--hp-rotation needs --base-root for the tied models')
     if polish and loss != 'sse':
@@ -516,7 +523,8 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
             + ('' if family == 'dog' else f'_{family}')
             + (f'_hprot{hp_rotation}' if hp_rotation else '')
             + ('_reliable' if reliable_only else '')
-            + ('_roihrf' if hrf_table else '')))
+            + ('_roihrf' if hrf_table else '')
+            + ('_frozenprf' if frozen_prf else '')))
     polish_root = root.parent / f'{root.name}_polished'
     hrf_tab = load_hrf_table(hrf_table)
     models = models or [m for m in LADDER if m not in TARGET_SPLIT]
@@ -636,6 +644,11 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
             if any(m in TARGET_SPLIT for m in models):
                 # The split is fitted on top of finished ladders: every ancestor comes from --base-root.
                 from_base = from_base + tuple(n for n in needed if n not in TARGET_SPLIT)
+            if frozen_prf:
+                # Per-voxel pRFs and the ladder below m7 come from the all-runs fit; m7 and the variants are
+                # refitted per fold (their shared terms only), so held-out prediction compares the shared
+                # gain-field terms with the pRFs identical in every model.
+                from_base = tuple(n for n in needed if n not in TARGET_SPLIT and n != 'm7_full')
             if cached is None and base_roots and name in from_base:
                 # First root holding this fit wins, so an overlay root goes first.
                 for base in base_roots:
@@ -654,6 +667,8 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                     cached = [None if p is None else p.loc[keep].reset_index(drop=True) for p in cached]
                 if any(p is not None and len(p) != voxel_ids.size for p in cached):
                     raise ValueError(f'{name} in {base}: voxel set differs')
+                if frozen_prf and len(cached) == 1:
+                    cached = cached * len(splits)
             if cached is not None:
                 print(f'== {name} [{stage}]: loaded existing fit')
                 store[name] = cached
@@ -783,6 +798,11 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                         if not dev <= 1e-4 * max(1.0, float(np.abs(p_par).max())):
                             raise AssertionError(f'{name} start differs from {parent}: {dev}')
                     cands = [(init, starts)]
+                    if frozen_prf and name == 'm7_full':
+                        # Also start from the all-runs m7 optimum.
+                        full = load('m7_full', Path(base_roots[0]))
+                        if full is not None:
+                            cands.append((full[0].reindex(columns=labels), (None,)))
                     if name in BASELINE_FIELD and parent == 'm7_full':
                         # Other HP/LP patterns of the new field, from the parent's σ's.
                         for th in THETA_STARTS:
@@ -935,6 +955,9 @@ if __name__ == '__main__':
     ap.add_argument('--hrf-table', default=None,
                     help='TSV of one HRF per subject x ROI (build_roi_hrf_table.py); root gets a _roihrf suffix. '
                          'Do not combine with --base-root fits made with another HRF.')
+    ap.add_argument('--frozen-prf', action='store_true',
+                    help='CV with the per-voxel pRFs (and m00-m5) of the all-runs --base-root; m7_full and the '
+                         'requested models are refitted per fold. Root gets a _frozenprf suffix.')
     a = ap.parse_args()
     starts = SIGMA_STARTS if a.sigma_starts is None else tuple(None if v == 'parent' else float(v) for v in a.sigma_starts)
     main(a.subject, a.bids_folder, a.roi, cv_scheme=a.cv_scheme,
@@ -944,4 +967,4 @@ if __name__ == '__main__':
          max_bold_sd=a.max_bold_sd, loss=a.loss, base_roots=a.base_root, family=a.family,
          hp_rotation=a.hp_rotation, reliable_only=a.reliable_only, warm_roots=a.warm_root,
          gd_min_iterations=a.gd_min_iterations, sigma_starts=starts, lbfgs_rounds=a.lbfgs_rounds,
-         hrf_table=a.hrf_table)
+         hrf_table=a.hrf_table, frozen_prf=a.frozen_prf)
