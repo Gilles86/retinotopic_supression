@@ -202,11 +202,25 @@ def main(bids, source, out_dir, jobs):
     print('Wrote', out_dir)
 
 
+def trim_examples(source, out_dir, keep):
+    """Keep only the shown runs (``keep``: 'sub-23_ses-2_run-3' ...) of the example-runs file, all ROIs."""
+    src = Path(out_dir) / f'decoding_example_runs_{source}_2026-11.npz'
+    with np.load(src) as z:
+        sel = {k: z[k] for k in z.files if any(k.startswith(p + '_roi-') for p in keep)}
+    out = Path(out_dir) / f'decoding_example_run_{source}_2026-11.npz'
+    np.savez_compressed(out, **sel)
+    print('Kept', sorted(sel), '->', out)
+
+
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
     ap.add_argument('--source', default='canonical')
     ap.add_argument('--out-dir', default='notes/data')
     ap.add_argument('-j', '--jobs', type=int, default=4)
+    ap.add_argument('--trim', nargs='+', default=None, help="only trim the example runs, e.g. 'sub-23_ses-2_run-3'")
     a = ap.parse_args()
-    main(a.bids_folder, a.source, a.out_dir, a.jobs)
+    if a.trim:
+        trim_examples(a.source, a.out_dir, a.trim)
+    else:
+        main(a.bids_folder, a.source, a.out_dir, a.jobs)
