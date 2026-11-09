@@ -4,8 +4,8 @@
 #SBATCH --partition=standard
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=16
-#SBATCH --mem=24G          # DoG final2 (job 8143173): peak RSS 14.7 GB
-#SBATCH --time=03:00:00    # DoG final2: 33 min - 2 h 05 on 16 CPUs
+#SBATCH --mem=32G          # peak RSS 14.7 GB (DoG final2, 8143173), 21 GB (Gaussian sub-03 fold 2)
+#SBATCH --time=03:00:00    # DoG final2: 33 min - 2 h 05; Gaussian canaries 36-50 min (16 CPUs)
 #
 # One HRF per subject x ROI fitted jointly with the pRFs (cv/fit_prf_cv_roi_hrf_joint.py), the "final2" recipe:
 # stage 2 and 3 with 3000 iterations each. One array task per (subject, fold): task id = 10*subject + fold.
