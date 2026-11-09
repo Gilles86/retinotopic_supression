@@ -36,13 +36,14 @@ def shared_row(pkl):
     return folds[0].iloc[0], info, len(d['voxel_ids'])
 
 
-def main(root, out):
+def main(root, out, m7_root=None):
     root = Path(root)
+    m7_root = Path(m7_root) if m7_root else root
     rows = []
     for pkl in sorted((root / MODEL).glob('sub-*/sub-*_roi-*_cv-fits.pkl')):
         subject, roi = re.match(r'sub-(\d+)_roi-(.+)_cv-fits\.pkl', pkl.name).groups()
         p, info, n_vox = shared_row(pkl)
-        m7, _, _ = shared_row(root / 'm7_full' / pkl.parent.name / pkl.name)
+        m7, _, _ = shared_row(m7_root / 'm7_full' / pkl.parent.name / pkl.name)
         g_hp, g_lp, delta = float(p['g_HP']), float(p['g_LP']), float(p[NEW])
         g_adj, g_opp = g_lp + delta / 3, g_lp - 2 * delta / 3
         rows.append(dict(
@@ -66,5 +67,6 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--root', required=True)
     ap.add_argument('--out', required=True)
+    ap.add_argument('--m7-root', default=None, help='Root holding m7_full (default: --root).')
     a = ap.parse_args()
-    main(a.root, a.out)
+    main(a.root, a.out, a.m7_root)
