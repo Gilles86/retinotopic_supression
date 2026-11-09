@@ -27,13 +27,13 @@ LEGEND = f"""
 **Figure 2. Gain-field model.** a, {COMMON} b, A schematic stretch of a run with illustrative trials: one bar sweep from left to right and four trials, with symbols above their onsets (target: diamond; distractor: dot; HP: red ring; pRF: teal circle). For three pRFs, the rows show the stimulus reaching the pRF (bar and items), the gain it sees, and the predicted BOLD response after the HRF, with and without gain. Rows share their scale across columns.
 """
 LEGEND_HP = f"""
-**Figure 2. Gain-field model.** a, {COMMON} b, A schematic stretch of a run for one pRF (teal) near a ring location, in a block with HP near it and in a block with HP at the opposite location. One bar sweep from left to right and four illustrative trials, the same in both blocks, so that only the sustained gain differs (in the experiment the distractor is also more frequent at HP). Symbols above the onsets show the screen (target: diamond; distractor: dot; HP: red ring). Rows show the stimulus reaching the pRF (bar and items), the gain it sees (red shading: the sustained loss of gain with HP near, present for the whole block), and the predicted BOLD response after the HRF, with and without gain; coloured arrows mark where each gain changes the prediction. The dotted line marks the peak response in the block with HP not near, in both blocks; with HP near, the response peaks lower (red arrow). With HP near, the item responses are lowered too: each item's own gain lifts its response (orange, blue arrows) and the sustained loss at HP pushes it back down (red arrows beside them). The size of the HP reduction is exaggerated for clarity. Rows share their scale across columns.
+**Figure 2. Gain-field model.** a, {COMMON} b, A schematic stretch of a run for one pRF (teal) near a ring location, in a block with HP near it and in a block with HP at the opposite location. One bar sweep from left to right and four illustrative trials, the same in both blocks, so that only the sustained gain differs (in the experiment the distractor is also more frequent at HP). Symbols above the onsets show the screen (target: diamond; distractor: dot; HP: red ring). Rows show the stimulus reaching the pRF (bar and items), the gain it sees (red shading: the sustained loss of gain with HP near, present for the whole block), and the predicted BOLD response after the HRF, with and without gain; coloured arrows mark where each gain changes the prediction. The dotted line marks the peak response in the block with HP not near, in both blocks; with HP near, the response peaks lower (red arrow). With HP near, the item responses are lowered too: each item's own gain lifts its response (orange, blue arrows from below) and the sustained loss at HP pushes it down (red arrows from above); they meet on the predicted response. The size of the HP reduction is exaggerated for clarity. Rows share their scale across columns.
 """
 LIM = 5.2
 RING = 4.
 POS = RING / np.sqrt(2) * np.array([[1, 1], [-1, 1], [-1, -1], [1, -1]])   # order of the event indicators
 HP_IX, T_IX = 3, 1                                                         # as in Figure 1a
-GAINS = dict(hp=-.75, lp=0., t=1.6, d=1.1)                                 # illustrative, relative to LP
+GAINS = dict(hp=-.75, lp=0., t=1.6, d=1.4)                                 # illustrative, relative to LP
 SIGMA = dict(sus=1.3, dyn=1.6)
 PRFS = {'pRF near HP': (2.1, -2.1, .9), 'pRF near LP': (-2.1, 2.1, .9), 'pRF near fixation': (.9, .3, .6)}
 DURATION = 58.   # long enough for the last response, undershoot included, to return to baseline
@@ -220,7 +220,7 @@ def top_row(fig, gs, prfs=None):
     maps = [('Model input', stimulus(), 'magma', 2.6, FG, False, 'Fixed pRF'),
             ('Sustained', -sus, 'Reds', .9, HP, False, 'Whole block, less at HP'),
             ('Target', tgt, 'Oranges', 1.8, TARGET, False, 'During search'),
-            ('Distractor', dis, 'Blues', 1.25, DISTRACTOR, False, 'During search')]   # its own scale, so the smaller distractor gain is still visible
+            ('Distractor', dis, 'Blues', 1.55, DISTRACTOR, False, 'During search')]   # its own scale, so the smaller distractor gain is still visible
     for j, (title, im, cmap, lim, col, signed, sub) in enumerate(maps, start=1):
         ax = fig.add_subplot(a[0, j])
         show(ax, im, cmap, lim, title, col, signed)
@@ -358,12 +358,14 @@ def main_hp(name='fig2_model_hp_blocks'):
             if abs(diff[i]) <= .02 * (p_hi - p_lo):
                 continue
             if k == 0:
-                # HP near: the item's own gain lifts the response (up to where it is with HP not near), and the
-                # sustained loss at HP pushes it back down, so the red arrow meets the orange or blue one.
+                # HP near: the item's own gain lifts the response from below, the sustained loss at HP pushes it down
+                # from above; the two arrows meet head to head on the predicted response.
                 far = sim['HP not near this pRF']['predicted']
-                r3.annotate('', xy=(t[i], far[i]), xytext=(t[i], d['without'][i]),
+                gap = .012 * (p_hi - p_lo)
+                r3.annotate('', xy=(t[i], d['predicted'][i] - gap), xytext=(t[i], d['without'][i]),
                             arrowprops=dict(arrowstyle='-|>', color=c, lw=1.1, mutation_scale=7, shrinkA=0, shrinkB=0), zorder=5)
-                r3.annotate('', xy=(t[i] + 1.3, d['predicted'][i] + .01 * (p_hi - p_lo)), xytext=(t[i] + 1.3, far[i] + .16 * (p_hi - p_lo)),
+                top_y = d['predicted'][i] + max(far[i] - d['predicted'][i], 0) + .16 * (p_hi - p_lo)
+                r3.annotate('', xy=(t[i], d['predicted'][i] + gap), xytext=(t[i], top_y),
                             arrowprops=dict(arrowstyle='-|>', color=HP, lw=1.1, mutation_scale=7, shrinkA=0, shrinkB=0), zorder=6)
             else:
                 r3.annotate('', xy=(t[i], d['predicted'][i]), xytext=(t[i], d['without'][i]),

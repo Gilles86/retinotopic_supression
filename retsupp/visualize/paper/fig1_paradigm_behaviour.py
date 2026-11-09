@@ -21,7 +21,7 @@ from retsupp.visualize.paper.paper_style import DISTRACTOR, DOUBLE, FG, HP, MUTE
 from retsupp.visualize.paper.plot_fig1 import APERTURE, RING, item_positions, panel_display
 
 LEGEND = """
-**Figure 1. Paradigm and behaviour.** a, Search display with the bar in its 3.17° aperture: 8 items on a ring at 4°, with target and distractor at the four diagonal positions; percentages are over all trials. b, Two trials to scale, with the bar position every 2 s below; the bar sweeps the aperture in four directions (rightward, leftward, downward, upward; 42 s each with 4.8 s rest, the sequence twice per run), and the HP location across blocks of runs (example order). c, Response time with the distractor at the HP location, at an LP location, or absent. d, Response time with the target at the HP or an LP location, on trials with a distractor. e, f, Response time when the target (e) or the distractor (f) appears at the same location as on the previous trial, or at another location; distractor repeats are compared within HP and within LP trials and averaged. c-f, n = 30, correct trials. Dots are subjects, triangles are subjects beyond the axis limits; large points and bars are the mean ± within-subject SEM (Cousineau-Morey). Wilcoxon signed-rank tests: ** p < .01, *** p < .001.
+**Figure 1. Paradigm and behaviour.** a, Search display with the bar in its 3.17° aperture: 8 items on a ring at 4°, with target and distractor at the four diagonal positions; percentages are over all trials. b, Two trials to scale, with the bar position every 2 s below; the bar sweeps the aperture in four directions (rightward, leftward, downward, upward; 42 s each with 4.8 s rest, the sequence twice per run), and the HP location across blocks of runs (example order). c, Response time with the distractor at the HP location, at an LP location, or absent. d, Response time with the target at the HP or an LP location, on trials with a distractor. e, f, Response time when the target (e) or the distractor (f) appears at the same location as on the previous trial, or at another location; distractor repeats are compared within HP and within LP trials and averaged. Icons below each condition: the four possible locations with HP ringed in red; filled, the item on this trial, hollow, on the previous trial. c-f, n = 30, correct trials. Dots are subjects, triangles are subjects beyond the axis limits; large points and bars are the mean ± within-subject SEM (Cousineau-Morey). Wilcoxon signed-rank tests: ** p < .01, *** p < .001.
 """
 
 
@@ -173,13 +173,38 @@ def repeats_raw(trial_table):
     return pd.DataFrame(rows)
 
 
+def cond_icons(ax, specs, y0=-.66, h=.5):
+    """Under each condition, a small display: the four diagonal locations, the HP one ringed in red, and the item(s).
+
+    specs: one list per x position of (location index, kind, filled) with kind 'target' or 'distractor'; a hollow
+    marker is the previous trial's item (repeat / switch panels).
+    """
+    pos = item_positions()
+    tf = ax.get_xaxis_transform()
+    for x, items in enumerate(specs):
+        ins = ax.inset_axes([x - .42, y0, .84, h], transform=tf)
+        ins.add_patch(Circle((0, 0), RING, fill=False, ec=MUTED, lw=.5))
+        for j in (1, 3, 5, 7):
+            ins.add_patch(Circle(pos[j], .95, facecolor='w', ec=MUTED, lw=.4))
+        ins.add_patch(Circle(pos[7], 1.45, fill=False, ec=HP, lw=.8, ls=(0, (2, 1.2))))
+        for j, kind, filled in items:
+            col, m = (TARGET, 'D') if kind == 'target' else (DISTRACTOR, 'o')
+            ins.plot(*pos[j], m, ms=3.4 if filled else 6.4, mfc=col if filled else 'none', mec=col, mew=.8, zorder=5 if filled else 6)
+        ins.plot(0, 0, '+', color=FG, ms=2.5, mew=.5)
+        ins.set_xlim(-6, 6)
+        ins.set_ylim(-6, 6)
+        ins.set_aspect('equal')
+        ins.set_axis_off()
+    ax.tick_params(axis='x', pad=30, length=0)
+
+
 def main(rt_table, bids, name='fig1_paradigm_behaviour', trial_table='notes/data/trialwise_af_trial_table.tsv.gz'):
     if not Path(rt_table).exists():
         build_rt(rt_table, bids)
     d = pd.read_csv(rt_table, sep='\t')
     rep = repeats_raw(trial_table)
     # Display and timeline on top; the four behaviour panels across the full width below, with room between.
-    fig = plt.figure(figsize=(DOUBLE, 4.8))
+    fig = plt.figure(figsize=(DOUBLE, 4.3))
     top = fig.add_gridspec(1, 2, width_ratios=[1, 1.62], left=.005, right=.995, top=.985, bottom=.47, wspace=.12)
     ax = fig.add_subplot(top[0])
     panel_display(ax, margin=7.4)
@@ -187,10 +212,11 @@ def main(rt_table, bids, name='fig1_paradigm_behaviour', trial_table='notes/data
     ax = fig.add_subplot(top[1])
     panel_timeline(fig, ax)
     letter(ax, 'b', x=0, y=.95)
-    low = fig.add_gridspec(1, 4, width_ratios=[3, 2, 2, 2], left=.08, right=.985, top=.27, bottom=.095, wspace=.32)
+    low = fig.add_gridspec(1, 4, width_ratios=[3, 2, 2, 2], left=.08, right=.985, top=.315, bottom=.175, wspace=.32)
     ylim = (770, 1020)
     ax = fig.add_subplot(low[0])
     rt_panel(ax, d[d.contrast == 'distractor'], ['HP', 'LP', 'Absent'], [HP, FG, MUTED], [('HP', 'LP'), ('LP', 'Absent')], ylim)
+    cond_icons(ax, [[(7, 'distractor', True)], [(3, 'distractor', True)], []])
     ax.set_xlabel('Distractor')
     ax.set_ylabel('Response time (ms)')
     letter(ax, 'c', x=-.2, y=1.55)
@@ -199,6 +225,7 @@ def main(rt_table, bids, name='fig1_paradigm_behaviour', trial_table='notes/data
     ax.text(.09, 1.5, 'Off scale', transform=ax.transAxes, fontsize=6, color=FG, va='center')
     ax = fig.add_subplot(low[1])
     rt_panel(ax, d[d.contrast == 'target'], ['HP', 'LP'], [HP, FG], [('HP', 'LP')], ylim)
+    cond_icons(ax, [[(7, 'target', True)], [(3, 'target', True)]])
     ax.set_xlabel('Target')
     ax.set_yticklabels([])
     letter(ax, 'd', x=-.15, y=1.55)
@@ -206,9 +233,17 @@ def main(rt_table, bids, name='fig1_paradigm_behaviour', trial_table='notes/data
                                                    ('distractor', DISTRACTOR, 'Distractor location', 'f'))):
         ax = fig.add_subplot(low[2 + k])
         rt_panel(ax, rep[rep.contrast == contrast], ['Repeat', 'Switch'], [col, FG], [('Repeat', 'Switch')], ylim)
+        cond_icons(ax, [[(3, contrast, False), (3, contrast, True)], [(1, contrast, False), (3, contrast, True)]])
         ax.set_xlabel(lab)
         ax.set_yticklabels([])
         letter(ax, let, x=-.15, y=1.55)
+        if k == 0:
+            # Key for the icons below: this trial's item filled, the previous trial's hollow.
+            for n, (filled, txt) in enumerate(((True, 'This trial'), (False, 'Previous trial'))):
+                xk = .1 + n * .45
+                ax.plot(xk, 1.55, 'D', ms=3.4 if filled else 5.5, mfc=TARGET if filled else 'none', mec=TARGET, mew=.8,
+                        transform=ax.transAxes, clip_on=False)
+                ax.text(xk + .07, 1.55, txt, transform=ax.transAxes, fontsize=6, color=FG, va='center')
     for a in fig.axes[-4:]:
         bb = a.get_window_extent()
         assert bb.height <= bb.width * 1.02, (a.get_xlabel(), bb.width, bb.height)   # subject-dot panels never taller than wide
