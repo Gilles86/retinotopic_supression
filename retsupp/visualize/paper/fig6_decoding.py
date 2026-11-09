@@ -59,10 +59,12 @@ Points and bars: median and bootstrapped 95% CI. Decoded vs shuffled: Wilcoxon s
 run's visual field rotated so that the HP location (red dashed circle; grey, the LP locations, drawn with the item
 footprint, radius {item_r}°) lies at 12 o'clock (90° steps, then 45° with bilinear interpolation); shown is the decoded
 intensity on the bar's pixels minus its average over the four rotations (in % of that average), averaged over runs,
-V1–V3 and subjects, smoothed (Gaussian, σ = 0.4°). The dotted diagonals bound the quadrant facing HP. d, The same as a
-function of direction from fixation, measured clockwise from the HP direction (bins of 22.5°), whole aperture; circles
-under the axis mark the item directions (red, HP; grey, LP); shaded red, the quadrant facing HP (the inset display shows
-it). Line and band: mean ± SEM over subjects. e, The pre-specified test: per subject and ROI, the mean decoded intensity
+V1–V3 and subjects, smoothed (Gaussian, σ = 0.4°). The dotted diagonals bound the quadrant facing HP. d, Decoded
+intensity on the bar's pixels per quadrant of the aperture, in % of the mean of the four quadrants, in the same rotated
+frame (icons: HP ringed in red at the top, the quadrant shaded): the quadrant facing HP, the two quadrants next to it
+(left and right pooled; they do not differ, two-sided Wilcoxon p = {q_lr:.2f}) and the opposite quadrant; per subject
+the mean over runs and V1–V3; dots are subjects, points and bars the mean and within-subject SEM (Cousineau-Morey).
+{quad}. e, The pre-specified test: per subject and ROI, the mean decoded intensity
 on the bar's pixels in the quadrant facing HP minus the mean over the three other quadrants, averaged over runs; dots are
 subjects, points and bars the median and bootstrapped 95% CI. Wilcoxon signed-rank test, one-sided (HP < other
 quadrants), Holm across the three ROIs; * p_Holm < .05. {tests}.{outline} f, The difference of e by eccentricity, in %
@@ -328,6 +330,86 @@ def panel_angle(ax, rm):
     offset_spines(ax)
 
 
+QUAD_ANGLE = {'upper_right': 45, 'upper_left': 135, 'lower_left': 225, 'lower_right': 315}
+QUAD_CLASSES = [('hp', 'HP'), ('adjacent', 'Next to HP'), ('opposite', 'Opposite')]
+
+
+def quadrant_effects(d, decoder=DECODER, rois=EARLY):
+    """Per subject: decoded intensity per quadrant (by position relative to HP) in % of the mean of the four, mean of
+    runs, then of ``rois``. Columns hp, left, right, opposite and adjacent (= mean of left and right)."""
+    d = d[(d.decoder == decoder) & d.roi.isin(rois)].copy()
+    rel = (d.quadrant.map(QUAD_ANGLE) - d.hp_location.map(QUAD_ANGLE)) % 360
+    d['pos'] = rel.map({0: 'hp', 90: 'left', 180: 'opposite', 270: 'right'})
+    r = d.groupby(['subject', 'roi', 'pos']).drive_bar.mean().unstack()
+    r = r.div(r.mean(1), axis=0) * 100 - 100
+    s = r.groupby('subject').mean()
+    s['adjacent'] = (s.left + s.right) / 2
+    return s
+
+
+def quadrant_stats(s):
+    out = dict(p_lr=stats.wilcoxon(s.left - s.right).pvalue,
+               p_adj=stats.wilcoxon(s.hp - s.adjacent, alternative='less').pvalue,
+               p_opp=stats.wilcoxon(s.hp - s.opposite, alternative='less').pvalue,
+               p_fried=stats.friedmanchisquare(s.hp, s.left, s.right, s.opposite).pvalue)
+    m, se = s.mean(), s.sem()
+    out['text'] = (f'HP {m.hp:+.2f} ± {se.hp:.2f}%, next to HP {m.adjacent:+.2f} ± {se.adjacent:.2f}%, opposite '
+                   f'{m.opposite:+.2f} ± {se.opposite:.2f}% (mean ± SEM); HP below next to HP, one-sided Wilcoxon '
+                   f'p = {out["p_adj"]:.3f} (**); HP below opposite, p = {out["p_opp"]:.2f}; Friedman test across the four '
+                   f'quadrants p = {out["p_fried"]:.2f}')
+    return out
+
+
+def panel_quadrants(ax, s, st):
+    """d: decoded intensity per quadrant relative to the mean of the four, in g's HP / next / opposite order and colours."""
+    import matplotlib.transforms as mtrans
+    from matplotlib.patches import Circle, Wedge
+    from retsupp.visualize.paper.paper_style import FG, HP, offset_spines
+    cls = [c for c, _ in QUAD_CLASSES]
+    v = s[cls]
+    norm = v.sub(v.mean(1), axis=0).add(v.values.mean(), axis=0)
+    k = len(cls)
+    rng = np.random.default_rng(3)
+    for i, c in enumerate(cls):
+        col = LOC_COLORS[c]
+        ax.scatter(i + rng.uniform(-.13, .13, len(v)), v[c], s=6, color=col, alpha=.4, lw=0, zorder=2)
+        se = norm[c].std(ddof=1) / np.sqrt(len(v)) * np.sqrt(k / (k - 1))
+        ax.errorbar(i + .27, v[c].mean(), yerr=se, fmt='o', ms=5, color=col, mec='w', mew=.7, lw=1.4, capsize=0, zorder=4)
+    lo, hi = -6, 5
+    ax.set_ylim(lo, hi)
+    if st['p_adj'] < .05:
+        y = 3.9
+        ax.plot([.27, .27, 1.27, 1.27], [y - .3, y, y, y - .3], color=FG, lw=.7)
+        ax.text(.77, y + .05, stars(st['p_adj']), ha='center', va='bottom', fontsize=7, color=FG)
+    ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
+    ax.set_xlim(-.45, 2.55)
+    ax.set_xticks(np.arange(3) + .1)
+    ax.set_xticklabels([])
+    ax.tick_params(axis='x', length=0)
+    ax.set_yticks([-5, 0, 5])
+    ax.set_yticklabels(['−5', '0', '5'])
+    ax.set_ylabel('Decoded intensity vs\nmean of quadrants (%)')
+    # Icons under each condition: HP ringed at the top, the quadrant(s) shaded.
+    tr = mtrans.blended_transform_factory(ax.transData, ax.transAxes)
+    wedges = {'hp': [(45, 135)], 'adjacent': [(135, 225), (-45, 45)], 'opposite': [(225, 315)]}
+    bb = ax.get_window_extent() if ax.figure else None
+    for i, (c, lab) in enumerate(QUAD_CLASSES):
+        ins = ax.inset_axes([i + .1 - .36, -.56, .72, .5], transform=tr)
+        for a0, a1 in wedges[c]:
+            ins.add_patch(Wedge((0, 0), APERTURE, a0, a1, facecolor=LOC_COLORS[c], alpha=.35, lw=0))
+        ins.add_patch(Circle((0, 0), APERTURE, fill=False, ec='.55', lw=.5))
+        for j, a in enumerate(ITEM_ANGLES):
+            q = ITEM_ECC * np.array([np.cos(np.deg2rad(a)), np.sin(np.deg2rad(a))])
+            ins.add_patch(Circle(q, ITEM_R, facecolor='w', ec=HP if j == 0 else '.6', lw=.9 if j == 0 else .5))
+        ins.set_xlim(-5, 5)
+        ins.set_ylim(-5, 5)
+        ins.set_aspect('equal')
+        ins.set_axis_off()
+        ax.text(i + .1, -.6, lab, transform=tr, ha='center', va='top', fontsize=6,
+                color=HP if c == 'hp' else '.3')
+    offset_spines(ax)
+
+
 def panel_test(ax, e, t, rois=ROIS, decoder=DECODER):
     from retsupp.visualize.paper.paper_style import HP, offset_spines
     lo, hi = -.0132, .008
@@ -545,9 +627,12 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     cb.outline.set_linewidth(.4)
     cb.ax.text(-.06, .5, 'Less', transform=cb.ax.transAxes, ha='right', va='center', fontsize=6, color='#2166AC')
     cb.ax.text(1.06, .5, 'More', transform=cb.ax.transAxes, ha='left', va='center', fontsize=6, color='#B2182B')
-    ax = fig.add_axes([2.2 / W, (2.1 + DY) / H, 1.75 / W, 1.0 / H])
-    panel_angle(ax, rm)
-    letter(ax, 'd', x=-.3, y=1.04)
+    qe = quadrant_effects(d, decoder)
+    qst = quadrant_stats(qe)
+    ax = fig.add_axes([2.35 / W, (2.32 + DY) / H, 1.45 / W, .9 / H])
+    panel_quadrants(ax, qe, qst)
+    area_tag(ax, x=1.0, y=1.0, ha='right')
+    letter(ax, 'd', x=-.5, y=1.04)
     ax = fig.add_axes([5.55 / W, (1.98 + DY) / H, 1.6 / W, 1.15 / H])
     panel_test(ax, e, t, rois, decoder)
     letter(ax, 'e', x=-.42, y=1.04)
@@ -586,7 +671,9 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
                                   bands=band_txt, friedman=fried, outer_inner=oi, fovea=fovea, ex_sub=sub, ex_r=ex_r,
                                   ex_rank=ex_rank, n_runs=len(qf), r_med=qf.r.median(), ex_run=run.replace('_', ' '),
                                   ap=APERTURE, item_r=ITEM_R, item_in=ITEM_ECC - ITEM_R, bar=bar_txt, bar_base=bar_base,
-                                  w0=BAR_WINDOW[0], w1=BAR_WINDOW[1], source=source_note))
+                                  w0=BAR_WINDOW[0], w1=BAR_WINDOW[1], source=source_note,
+                                  q_lr=qst['p_lr'], quad=qst['text']))
+    print('quadrants', qst['text'], 'left vs right', round(qst['p_lr'], 3))
     print('quality', quality)
     print('tests', tests)
     print('outline', outline)

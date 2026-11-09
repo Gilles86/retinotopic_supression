@@ -15,10 +15,12 @@ Points and bars: median and bootstrapped 95% CI. Decoded vs shuffled: Wilcoxon s
 run's visual field rotated so that the HP location (red dashed circle; grey, the LP locations, drawn with the item
 footprint, radius 0.75°) lies at 12 o'clock (90° steps, then 45° with bilinear interpolation); shown is the decoded
 intensity on the bar's pixels minus its average over the four rotations (in % of that average), averaged over runs,
-V1–V3 and subjects, smoothed (Gaussian, σ = 0.4°). The dotted diagonals bound the quadrant facing HP. d, The same as a
-function of direction from fixation, measured clockwise from the HP direction (bins of 22.5°), whole aperture; circles
-under the axis mark the item directions (red, HP; grey, LP); shaded red, the quadrant facing HP (the inset display shows
-it). Line and band: mean ± SEM over subjects. e, The pre-specified test: per subject and ROI, the mean decoded intensity
+V1–V3 and subjects, smoothed (Gaussian, σ = 0.4°). The dotted diagonals bound the quadrant facing HP. d, Decoded
+intensity on the bar's pixels per quadrant of the aperture, in % of the mean of the four quadrants, in the same rotated
+frame (icons: HP ringed in red at the top, the quadrant shaded): the quadrant facing HP, the two quadrants next to it
+(left and right pooled; they do not differ, two-sided Wilcoxon p = 0.24) and the opposite quadrant; per subject
+the mean over runs and V1–V3; dots are subjects, points and bars the mean and within-subject SEM (Cousineau-Morey).
+HP -0.89 ± 0.38%, next to HP +0.50 ± 0.18%, opposite -0.12 ± 0.24% (mean ± SEM); HP below next to HP, one-sided Wilcoxon p = 0.008 (**); HP below opposite, p = 0.17; Friedman test across the four quadrants p = 0.10. e, The pre-specified test: per subject and ROI, the mean decoded intensity
 on the bar's pixels in the quadrant facing HP minus the mean over the three other quadrants, averaged over runs; dots are
 subjects, points and bars the median and bootstrapped 95% CI. Wilcoxon signed-rank test, one-sided (HP < other
 quadrants), Holm across the three ROIs; * p_Holm < .05. V1 median -0.0002, 50% of subjects below 0, p = 0.202, p_Holm = 0.202; V2 median -0.0014, 73% of subjects below 0, p = 0.015, p_Holm = 0.044; V3 median -0.0006, 67% of subjects below 0, p = 0.022, p_Holm = 0.045. The decoder with the bar outline given (only the bar's pixels decoded) gives the same result: V1 p_Holm = 0.232, V2 p_Holm = 0.037, V3 p_Holm = 0.038. f, The difference of e by eccentricity, in %
