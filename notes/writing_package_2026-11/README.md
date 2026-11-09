@@ -1,146 +1,151 @@
-# retsupp paper: writing package (2026-11-06)
+# retsupp paper: writing package (updated 2026-11-09)
 
-For the writing agent. Read this file first, then `key_numbers.md`, then the figure legends in
-`figures/` in this folder: one PNG per figure with its legend (`.md`) beside it, plus Table 1 and the
-parameter table. These are a snapshot of 2026-11-06; the live versions are in
-`/Users/gdehol/git/retsupp/notes/figures/paper_2026-11/`. All figures as one PDF:
-`all_figures_2026-11.pdf` in this folder (local only, not in git). Background: `notes/paper_plan_2026-11.md` (plan and rules),
-`notes/results_overview_2026-11.md` (every result with a grade), `notes/fitting_lessons_2026-11.md`
-(methods details). Where those older notes disagree with this package, this package wins.
+For the writing agent and the user. Read in this order:
 
-**Everything with a gain number is provisional.** The final rerun (plan Phase C) on the final HRF and
-voxel selection has not happened yet. Write the text with the numbers given here, mark every gain
-number `[PROVISIONAL]`, and leave `[PENDING: ...]` placeholders where a result does not exist yet.
-Behavioural numbers are final.
+1. this file (story, outline, figure list with claims, key numbers and status);
+2. `claims_and_caveats.md` (what the data support, what they do not, open questions): **the guardrail**;
+3. `key_numbers.md` (every number, with source file and status; the only place to take numbers from);
+4. the figure legends in `figures/` (one PNG + legend `.md` per figure, copied 2026-11-09 from
+   `/Users/gdehol/git/retsupp/notes/figures/paper_2026-11/`, which holds the live versions).
+
+The legends are the ground truth. Where older notes (`notes/results_overview_2026-11.md`,
+`notes/paper_plan_2026-11.md`, the 2026-11-05 prompts) disagree with this package, this package wins.
+`all_figures_2026-11.pdf` in this folder is a **stale** snapshot of 2026-11-06 in the old figure order; do not use it.
+
+**Status labels used below.**
+- **final**: inputs and analysis fixed; numbers can go in the text.
+- **provisional**: gain-field numbers from the current fits. The final DoG rerun with one HRF per subject × ROI
+  (cluster job 8196318) will recompute every gain number. Write them as `[PROVISIONAL]`.
+- **prototype**: computed on the earlier October 2026 fits; will be redone on the final fits.
+- **exploratory**: not part of the planned analyses; supplement or text at most, no claims.
 
 ## The story in one paragraph
 
-Thirty participants searched eight bars for the one with a different orientation (the target) and
-reported whether it contained a grey dot (two buttons: dot, no dot), while a colour-singleton distractor
-appeared more often at one location (high probability, HP). Behaviour shows the learned suppression
-clearly: responses are 28 ms faster when the distractor is at HP than at another location, in all 30
-participants. During the same 7T fMRI runs a bar swept the visual field, so each voxel's population
-receptive field (pRF) could be mapped. We model each voxel's response as its pRF reading the display
-through a gain field: transient gain at the target and at the distractor during search, and sustained
-gain at the four item locations across a block, allowed to differ between HP and the other locations.
-The target draws strong gain that grows along the visual hierarchy; the distractor draws less. The key
-test, dS = sustained gain at HP minus at the other locations, is negative: visual cortex gives slightly
-less gain to the location where the distractor is likely. The effect is small, and with n = 30 and gain
-fields several degrees wide it cannot be resolved per participant, so it does not relate to individual
-differences in behaviour. Trial by trial, gain does relate to behaviour: target gain drops when the target
-repeats its location, and the gain on a given trial predicts that trial's response time, with opposite
-signs in early visual and parietal cortex.
+Thirty participants searched a ring of eight bars for the one with a different orientation (the target) and
+reported whether it carried a dot, while a colour-defined distractor appeared more often at one location (the
+high-probability, HP, location). Responses were 28 ms faster when the distractor was at HP, in all 30
+participants, and slower when the target was there. During the same 7T runs a bar swept the visual field inside a
+3.17° aperture, so each voxel's population receptive field (pRF) could be mapped and the search display could be
+read through it. Measured without a model, voxels whose pRF sits at an item location respond more to the target and
+the distractor than to a neutral item, and in early visual cortex (V1–V3) they respond least when the item is at the
+HP location, less next to HP than opposite it, for every item type: the same spatial pattern Richter, van Moorselaar
+& Theeuwes (eLife 2025) reported at 3T, here with pRF-defined voxels at 7T. A gain-field model, in which each pRF reads
+the display through transient gain at the target and the distractor and a sustained gain at the four item locations,
+gives strong target gain that rises along the hierarchy, weaker distractor gain, and slightly less sustained gain at HP
+than at the other locations (dS < 0, estimated alone) in most areas. A model with no gain terms points the same way:
+the bar, decoded from held-out runs, is decoded at lower intensity in the quadrant facing HP than in its neighbouring
+quadrants (pooled over V1–V3), although no single area survives correction. The effects are small relative to
+between-subject variance and the gain fields are several degrees wide, so they cannot be resolved per participant;
+within participants, trial by trial, target gain is lower when the target repeats its location, and the target,
+distractor and global gain on a trial predict that trial's response time.
 
 ## Framing decisions already made (follow them)
 
-1. **Model.** DoG pRFs are the main model, chosen for interpretability (a gain scales the drive
-   directly; under divisive normalisation part of it is divided back out) and fixed in the plan before
-   the key test. DN pRFs are the robustness check in the supplement, reported whatever they show. Say
-   openly that DN fits the pRFs slightly better (held-out R² .216 vs .210) and that dS is weaker there.
-   Gaussian pRFs may be added to the same supplement.
-2. **Power framing (user, 2026-11-06).** State explicitly that with n = 30 and gain fields this wide
-   (FWHM of several degrees, often wider than the 4° ring), condition differences are hard to detect:
-   dS is tiny relative to between-subject variance and per-subject dS is too unreliable for
-   brain-behaviour correlations across subjects. That is why the behavioural analyses use trial-to-trial
-   fluctuations within subjects.
-3. **Null results** go in the text, not the main figures. Report them with the test and the caveat
-   about power (e.g. dS vs behavioural HP benefit across subjects: ρ = −.17, p = .37).
-4. **Within-subject cross-validation** cannot test dS (a simulation with our effect size fails it too);
-   present it as underpowered, not as evidence against dS. Leave-one-subject-out (LOSO) is the
-   model-comparison metric.
-5. **Conditional vs joint estimates.** Joint = all gains fitted together (m7_full). Conditional = one
-   term estimated alone on top of m4 (target, distractor and sustained gain already fitted), a
-   one-step linear estimate; it is also the effect size used in LOSO. dS agrees between the two; dD does
-   not (conditional negative, joint not different from 0), so dD is not a robust result.
-6. **Scope.** Gain-field models only. pRF-shift analyses are archived; do not mention or cite them.
+1. **Model.** DoG pRFs with one HRF per subject × ROI are the main model, fixed before the key test. DN and Gaussian
+   pRFs are robustness checks in the supplement, reported whatever they show. DN fits the pRFs slightly better.
+2. **Measured before modelled.** Figs. 2 and 3 are measured (pRF fits, item-location responses); the model comes in
+   Fig. 4. The model-free item-location result (Fig. 3) and the gain-free decoding (Fig. 6) carry the HP claim
+   together with dS; none carries it alone.
+3. **Power framing (user, 2026-11-06).** With n = 30 and gain fields this wide (sustained FWHM ≈ 5°, wider than the
+   spacing of neighbouring items), condition differences are hard to detect; per-subject dS is too unreliable for
+   brain–behaviour correlations across subjects. That is why behaviour is related to gain within subjects, trial by
+   trial (Fig. 7).
+4. **Null results** go in the text, with the test and the power caveat, not in main figures.
+5. **Estimated alone vs jointly.** "Estimated alone" (conditional) = one term added on top of the item model with
+   target, distractor and sustained gain; the headline effect size for dS and the one used in LOSO. "Joint" = all
+   terms fitted together (m7_full), reported as a check.
+6. **Within-subject cross-validation** cannot test dS (a planted effect of our size fails it too); say so, do not
+   present it as evidence against dS. Leave-one-subject-out (LOSO) is the model-comparison metric.
+7. **Scope.** Gain-field models only. pRF-shift analyses are archived: do not mention or cite them.
 
 ## Words
 
-- Never "singleton" for the distractor: both target and distractor are singletons. Say "target" and
-  "distractor".
-- Do not label single model terms "top-down", "bottom-up" or "selection history". The three-way split
-  of Awh, Belopolsky & Theeuwes (2012) can structure the introduction and discussion, mapped onto
-  contrasts: target vs distractor gain (goal relevance, both being singletons) and HP vs LP
-  (selection history, carried by dS). The sustained gain shared by all four locations is a no-control
-  term, not history.
-- Never call the R² mixture model "FDR-corrected".
-- HP = high-probability distractor location; LP = the three other locations. Spell out once.
+- Never "singleton": both target and distractor are singletons. Say "target" and "distractor".
+- No "top-down", "bottom-up" or "selection history" as labels for model terms. The Awh, Belopolsky & Theeuwes
+  (2012) split may structure the introduction and discussion, mapped onto contrasts: target vs distractor gain;
+  HP vs LP (dS). The sustained gain shared by all four locations is a no-control term, not history.
+- HP = high-probability distractor location; LP = the three other locations. "Next to HP" = the two neighbouring
+  locations (90° away); "opposite" = the diagonally opposite one. Spell out once.
 - Gains are fractional changes in drive at the field centre (+0.30 = 30% more drive).
+- Never call the R² mixture model "FDR-corrected". Voxel selection is cross-run reliability.
 
-## Proposed outline
+## Outline (new order, 2026-11-09)
 
-**Introduction.** Learned distractor suppression in behaviour; open question of where and how it is
-implemented in visual cortex; gain vs other accounts; pRF mapping during search lets one model the
-spatial gain profile per voxel population; the three sources of gain (target, distractor, history) as
-contrasts. End with what we did and found.
+**Introduction.** Learned distractor suppression in behaviour; where and how it is implemented in visual cortex
+(Richter et al. 2025 as the closest precedent: lower early-visual responses at HP and next to it); gain as a
+mechanism; pRF mapping during search lets one model the spatial gain profile of each voxel population; target,
+distractor and HP vs LP as contrasts. End with what we did and found.
 
 **Results**
-1. Learned suppression in behaviour (Fig. 1). HP benefit 28 ms (30/30); target at HP slower by 28 ms.
-2. pRFs and model fits (Fig. 2). Retinotopy, contralaterality, size vs eccentricity, held-out R², responses to the
-   search display falling off with distance from the nearest item. DN/Gaussian and HRF choices: supplement.
-3. Responses at the item locations, without a model (Fig. 3). More response to the target and the distractor than to
-   a neutral item. In early areas a gradient over location types, the same for every item type: least response at
-   HP, less next to HP than opposite it (next − opposite −14%, p = .029; HP − opposite −19%, p = .011; HP − next −5%,
-   n.s.; DCT basis alike); HP vs all LP −8% (p = .042). Dorsal and occipitotemporal: no reliable location effect.
-4. A gain-field model of pRFs during search (Fig. 4, Table 1). Nested ladder of models; items as
-   stimuli; LOSO per step (Table 1).
-5. The gain fields (Fig. 5). Target gain everywhere beyond V1; distractor gain weaker, mainly dorsal and hV4/VO
-   (Fig. 5a; gain against pRF size in the supplement, its slope may partly reflect a trade-off with item weight and
-   field size; field sizes: supplement). Less sustained gain at the likely distractor location (Fig. 5c, b): dS
-   conditional and joint; per ROI; LOSO 77% (per ROI, figS_loso_per_roi); `[PENDING: HP-rotation null, the pre-specified
-   primary test]`. Location as in Fig. 1c, d (Fig. 5d): less gain for a distractor at HP (dD, estimated alone) in
-   V3AB, IPS, hV4, VO, not robust in the joint fit; target gain HP − LP (estimated alone) not reliable after correction
-   (smallest q = .07), and null in the joint fit.
-6. Converging evidence without gain terms (Fig. 6, decoding; pRFs with an HRF per subject × ROI, no gain terms,
-   held-out runs). The bar can be decoded from every area (median frame-wise r .52/.47/.40 in V1/V2/V3, .12–.29 in
-   the higher areas, all far above shuffled frames). Decoded intensity is lower in the quadrant facing HP: per ROI
-   (one-sided Wilcoxon, Benjamini-Hochberg across the nine ROIs) V2, V3, V3AB, VO and TO p = .013–.043 but none
-   survives correction (q = .076–.077; V1 q = .41); pooled over V1–V3 the HP quadrant is below its
-   neighbours (p = .015) and below the other quadrants over the whole aperture (p = .033); the effect is spread from
-   1° to the aperture edge, not larger near the items; with the stimulus held identical (each frame minus its mean over
-   HP locations), the half of a bar in the HP quadrant is decoded weaker than its other half, for vertical (−1.6%,
-   p = .031) and horizontal bars (−1.8%, p = .001) (supplement). The bar-outline decoder gives the
-   same (q = .090 for V2, V3, V3AB and TO). The measured bar-pass response (supplement) points the
-   same way but its test depends on the baseline (p = .017 without, n.s. with).
-   Canonical-HRF pRFs (supplement): V2 .044, V3 .045.
-7. Trial history in the gains, and gain and behaviour trial by trial (Fig. 7). History (Fig. 7a, as Fig. 1e, f;
-   the location effects of Fig. 1c, d are Fig. 5d): repeats lower target gain in V3AB, IPS, hV4, VO; distractor gain
-   repeat − switch not reliable after correction. Per-trial gain predicts response time, sign flips between early
-   visual and parietal cortex; distractor gain averaged over HP and LP trials (Fig. 7b).
-   `[PENDING: D4, gain at HP split by what HP holds on the trial]`.
+1. Learned suppression in behaviour (Fig. 1).
+2. pRFs mapped during search (Fig. 2).
+3. Responses at the item locations, without a model (Fig. 3).
+4. A gain-field model of pRFs during search (Fig. 4, Table 1).
+5. The gain fields: target, distractor, and less sustained gain at HP (Fig. 5).
+6. Converging evidence without gain terms: decoding the bar (Fig. 6).
+7. Gain and behaviour: history and trial-by-trial response times (Fig. 7).
 
-**Discussion.** Small but consistent proactive suppression as reduced sustained gain at HP; the
-target-vs-distractor contrast as goal relevance; why individual differences cannot be resolved (power
-framing above); dependence on the pRF model (DoG vs DN); HP lies outside the bar-mapped aperture
-(3.17°) so only pRFs reaching the ring carry the effect; limits: provisional fits, wide fields,
-trial-wise analyses on earlier fits.
+**Discussion.** Small, consistent lower response/gain at HP in early visual cortex; relation to Richter et al. 2025
+(same pattern; our decoded bar is a different measure); target vs distractor gain; why individual differences
+cannot be resolved; dependence on the pRF model (DoG vs DN); HP lies outside the bar aperture (3.17°), so only pRFs
+reaching the ring carry the gain effect; limits: provisional fits, wide fields, trial-wise analyses on earlier fits,
+HP-rotation null pending.
 
-**Methods.** Use `notes/fitting_lessons_2026-11.md` and the figure legends; constants in the repo
-`CLAUDE.md` (TR 1.6 s, 258 volumes, ring at 4°, item size 1.5°, bar aperture 3.17°, 2 sessions × 6
-runs, sub-20 ses-1 and sub-24 ses-2 have 5 runs).
+**Methods.** `notes/fitting_lessons_2026-11.md`, the legends, and the repo `CLAUDE.md` (TR 1.6 s, 258 volumes, ring
+at 4°, item size 1.5°, bar aperture 3.17°, 2 sessions × 6 runs; sub-20 ses-1 and sub-24 ses-2 have 5 runs; sub-01
+and sub-02 have a different block order).
 
-## Figures (PNG and legend for each in `figures/`)
+## Figures
 
-Order since 2026-11-09: measured results (pRF fits, item locations) before the model.
+| Figure | File (in `figures/`) | Claim it supports | Key numbers | Status |
+|---|---|---|---|---|
+| 1 Paradigm and behaviour | `fig1_paradigm_behaviour` | Learned suppression of the HP location; a target at HP is slowed; location repeats speed responses | HP benefit 27.8 ms (30/30, p < .001); target at HP +28.4 ms (26/30); target repeat −38 ms, distractor repeat −15 ms | final |
+| 2 pRF fits | `fig2_prf_fits` | pRFs are well mapped during search; retinotopic, contralateral, size grows with eccentricity (flat in V1); the search display drives voxels by distance to the nearest item | Held-out R² gained over Gaussian + canonical HRF: DoG +.0035, per-ROI HRF +.011, both +.017 | final apart from d (d uses the median-of-voxels HRF until the jointly fitted HRF is in) |
+| 3 Responses at the item locations | `fig3_item_locations` | More response to target and distractor than to a neutral item; in early areas HP < next to HP < opposite, same for every item type | Early: next − opposite −14% (p = .029), HP − opposite −19% (p = .011), HP − next −5% (p = .16); location × item F(4,116) = 1.01, p = .41 | final apart from layout |
+| 4 Gain-field model | `fig4_model_hp_blocks` | Illustration of the model; no data | none | final |
+| Table 1 Ladder | `table1_ladder` | Which terms predict new subjects (LOSO) | T 90%, S 90%, dS 77% (DoG) | provisional; the "Items 100%" row is wrong as stated (see caveats) |
+| 5 Gain fields | `fig5_gain_fields` | Target gain beyond V1, rising up the hierarchy; weaker distractor gain (dorsal, hV4, VO); sustained field ≈ 5° FWHM; less sustained gain at HP (dS < 0, estimated alone, 7 of 9 ROIs); less transient gain for a distractor at HP (4 ROIs), target HP − LP not reliable, the two not different | dS pooled −.009, 80% < 0, p < .001; dD in V3AB, IPS, hV4, VO q < .05 | provisional |
+| 6 Decoding | `fig6_decoding` | The bar is decodable from all nine areas; decoded at lower intensity in the quadrant facing HP than next to it (V1–V3 pooled) | r .51/.47/.40 in V1/V2/V3; HP −0.85% vs next +0.46%, p = .015; no ROI q < .05 (smallest .076) | final |
+| 7 Gains and behaviour | `fig7_behaviour` | Less target gain on target repeats (V3AB, IPS, hV4, VO); per-trial target, distractor and global gain predict RT | Target repeat − switch −.34 to −.40, q ≤ .025 | prototype (October fits) |
+| Table S Parameters | `table_parameters_2026-11.md` | All gain terms per ROI, DoG and DN, joint and estimated alone | | provisional |
 
-| Figure | File | Status |
+**Supplementary figures** (all in `figures/`):
+
+| Figure | Supports | Status |
 |---|---|---|
-| 1 Paradigm and behaviour | `fig1_paradigm_behaviour.pdf` (response times; e, f repeat vs switch) | final |
-| 2 pRF fits | `fig2_prf_fits.pdf` | provisional (d: HRF choice) |
-| 3 Responses at the item locations (model-free; d, e by location type: HP, next to HP, opposite) | `fig3_item_locations.pdf` | final apart from layout |
-| 4 Gain-field model | `fig4_model_hp_blocks.pdf` (chosen 2026-11-06) | final |
-| 5 Gain fields (model parameters; d, distractor and target HP − LP as Fig. 1c, d) | `fig5_gain_fields.pdf` | provisional |
-| 6 Decoding | `fig6_decoding.pdf` | final inputs |
-| 7 Trial history in the gains; behaviour trial by trial | `fig7_behaviour.pdf` (a history, as Fig. 1e, f; b trial by trial) | prototype on earlier fits (Oct 2026) |
-| Table 1 Ladder | `table1_ladder.md` | provisional |
-| Table S Parameters | `table_parameters_2026-11.md` | provisional |
-| Supplement | `figS_gain_vs_prf_size.pdf` (was Fig. 5a), `figS_field_size.pdf`, `figS_cv_power.pdf`, `figS_pooled_dS_dD.pdf`, `figS_gainfield_size.pdf`, `figS_loso_per_roi.pdf` (was Fig. 5b), `figS_gain_fields_dn.pdf` (Fig. 5 with DN pRFs) | provisional |
-| Supplement (decoding) | `figS_decoding_canonical.pdf`, `figS_decoding_dn.pdf`, `figS_decoded_bars_rotated.pdf`, `figS_decoded_bars_per_roi.pdf`, `figS_decoding_all_rois.pdf`, `figS_decoding_all_rois_examples.pdf`, `figS_bar_crossing_response.pdf` | final |
+| `figS_decoding_canonical` | Fig. 6 with canonical-HRF pRFs (V1–V3): same result, V2 and V3 q = .034 (BH over V1–V3) | final |
+| `figS_decoding_dn` | Fig. 6 with DN pRFs: bar decodable everywhere; HP-quadrant effect weaker (HP < next p = .057) | final |
+| `figS_decoding_prf_models` | Quadrant contrasts across pRF models; next vs opposite not reliable in any (p = .13–.43) | final |
+| `figS_decoded_bars_rotated` | Same bar, HP-quadrant half weaker for vertical (−1.6%, p = .031) and horizontal bars (−1.8%, p = .001) | final |
+| `figS_decoded_bars_per_roi` | The same per ROI; only V3 survives BH (−2.7%, q = .011) | final |
+| `figS_decoding_all_rois`, `figS_decoding_all_rois_examples` | The bar decoded from each area, group and example subjects | final |
+| `figS_bar_crossing_response` | Measured response when the bar crosses a pRF near an item: lower at HP (p = .017), but n.s. with a pre-crossing baseline (p = .16) | final; baseline-dependent |
+| `figS_loso_per_roi` | LOSO per ROI and term | provisional (earlier fits) |
+| `figS_gain_vs_prf_size` | Target (+.24/doubling) and distractor (+.06) gain rise with pRF size | provisional |
+| `figS_field_size`, `figS_gainfield_size` | Field widths; many transient fits at a bound | provisional |
+| `figS_pooled_dS_dD` | dS and dD pooled over ROIs, estimated alone and jointly | provisional |
+| `figS_cv_power` | Within-subject CV cannot detect a dS of our size | provisional |
+| `figS_gain_fields_dn` | Fig. 5 with DN pRFs: dS estimated alone negative in every ROI, pooled −.014, p = .001 | provisional (canonical-HRF DN fits) |
+| `figS_dn_gain_locus` | Where the HP effect acts in a DN pRF (input gain vs baselines); b, c pending | exploratory |
+| `figS_dn_params_by_hp.png` | DN pRF parameters fitted per HP condition (PNG rendered from the PDF; **no legend yet**; stats in `notes/data/dn_by_hp_stats_2026-11.tsv`); mostly null | exploratory |
+| `fig_event_responses_2x3_deconv` | Earlier HP vs LP version of Fig. 3 per item type (place undecided; superseded in the main text by Fig. 3d, e) | final apart from layout |
 
-## Open items the text must leave room for
+Not in the package (in the live folder but not listed in its README): `fig_hp_gain_heatmap`, `fig_hp_heatmap`,
+`fig_hp_items`. Treat them as working figures.
 
-- HP-rotation null for dS (primary test; plan B/C3).
-- Final HRF (per subject × ROI test running) and voxel selection; then the Phase C rerun of all fits.
-- D2: target gain at HP vs LP (fit running, DoG).
-- D4: trial-wise gain at HP split by what HP holds (fit running).
-- Reliability of per-subject dS across sessions (would justify the power framing with a number).
+## Open items the text must leave room for (`[PENDING: ...]`)
+
+Running on the cluster (2026-11-09):
+- Final DoG rerun with one HRF per subject × ROI (job 8196318): recomputes every number in Fig. 5, Table 1, the
+  parameter table, the provisional supplements and, after it, Fig. 7.
+- Split models: next to HP vs opposite as separate sustained terms; target gain at HP vs LP (the dT term).
+- One shared width for sustained and transient fields (m7_full_sigtied).
+- DN fields on the neural and surround baselines (jobs 8203960, 8206646, 8206793, recovery 8206356/8206625).
+- DoG centre/surround tilt.
+- Gaussian and DN robustness with jointly fitted per-ROI HRFs (ladders and decoding).
+- Decoder simulation with an HP-only gain field (can the decoder see a gain of our size?).
+
+Not yet run:
+- HP-rotation null for dS, the pre-specified primary test (`notes/primary_test_2026-11.md`).
+- Trial-wise gain at HP split by what HP holds (plan D4).
+- Reliability of per-subject dS across sessions (would put a number on the power framing).
