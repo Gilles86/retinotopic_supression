@@ -151,6 +151,66 @@ def collect_condition(bids, source, out_dir, jobs=4, decoder='free'):
     print('Wrote', out, 'frames per bin:', np.array([cnt[s] for s in subs]).sum(0))
 
 
+ALL_ROIS = ['V1', 'V2', 'V3', 'V3AB', 'IPS', 'hV4', 'VO', 'LO', 'TO']
+SEG_QUAD = {'hp': (1, 1), 'next_ul': (-1, 1), 'next_lr': (1, -1), 'opposite': (-1, -1)}
+
+
+def _segments(dec, diff, bar, X, Y):
+    """Difference on the bar's pixels per quadrant, in % of the mean decoded intensity on the bar."""
+    bm = dec[bar].mean()
+    out = {}
+    for qn, (sx, sy) in SEG_QUAD.items():
+        mk = bar & (np.sign(X) == sx) & (np.sign(Y) == sy)
+        if mk.sum() >= 10:
+            out[qn] = 100 * diff[mk].mean() / bm
+    return out
+
+
+def collect_condition_per_roi(bids, source, out_dir, jobs=4, decoder='outline'):
+    """Per subject × ROI: the pooled (vertical + reflected horizontal) difference images in % of the bar's mean for
+    the bins with |centre| < 2°, and a table of quadrant-segment differences per orientation (vertical, horizontal,
+    pooled)."""
+    root = Path(bids) / 'derivatives' / 'decoded_final_2026-11' / source / decoder
+    tasks, keys = [], []
+    for d in sorted(root.glob('sub-*')):
+        for roi in ALL_ROIS:
+            fs = sorted(d.glob(f'decoded_ses-*_run-*_roi-{roi}.npz'))
+            if fs:
+                tasks.append(fs)
+                keys.append((int(d.name.split('-')[1]), roi))
+    print(len(tasks), 'subject x ROI', flush=True)
+    grid = np.load(tasks[0][0])['grid']
+    X, Y = grid[:, 0].reshape(50, 50), grid[:, 1].reshape(50, 50)
+    inside = np.hypot(X, Y) <= APERTURE
+    centres = (EDGES[:-1] + EDGES[1:]) / 2
+    show = [b for b in range(N_BINS) if abs(centres[b]) < 2.]
+    subs = sorted({k[0] for k in keys})
+    imgs = np.full((len(subs), len(ALL_ROIS), len(show), 50, 50), np.nan, np.float32)
+    rows = []
+    with Pool(jobs) as pool:
+        for (sub, roi), (sub2, s_, n_, nhp) in zip(keys, pool.imap(one_subject_roi, tasks)):
+            with np.errstate(invalid='ignore'):
+                m = (s_ / n_[:, :, None, None]).reshape(2, N_BINS, 3, 50, 50)
+            pooled = (m[0] + np.swapaxes(m[1], -1, -2)) / 2
+            for b in range(N_BINS):
+                for oname, mm in (('vertical', m[0, b]), ('horizontal', m[1, b]), ('pooled', pooled[b])):
+                    bar = (mm[2] > .5) & inside
+                    if bar.sum() < 10:
+                        continue
+                    for qn, v in _segments(mm[0], mm[1], bar, X, Y).items():
+                        rows.append(dict(subject=sub, roi=roi, orientation=oname, bin=b, centre=centres[b], quadrant=qn,
+                                         diff_pct=v, n_hp=nhp))
+                if b in show:
+                    bar = (pooled[b, 2] > .5) & inside
+                    imgs[subs.index(sub), ALL_ROIS.index(roi), show.index(b)] = np.where(
+                        inside, 100 * pooled[b, 1] / pooled[b, 0][bar].mean(), np.nan)
+    tag = f'{source}_{decoder}'
+    pd.DataFrame(rows).to_csv(Path(out_dir) / f'decoded_bars_segments_{tag}_2026-11.tsv', sep='\t', index=False)
+    np.savez_compressed(Path(out_dir) / f'decoded_bars_per_roi_{tag}_2026-11.npz', img=imgs.astype(np.float16),
+                        subjects=np.array(subs), rois=np.array(ALL_ROIS), centres=centres[show], grid=grid)
+    print('Wrote per-ROI images and segment table', flush=True)
+
+
 def half_contrast(mean, grid):
     """Per subject, orientation and bin: decoded intensity on the bar's pixels in the half nearer HP minus the half
     farther away, in % of the bar's mean."""
@@ -453,7 +513,8 @@ signed-rank test against 0, uncorrected; stars on the image: * p < .05, ** p < .
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('step', choices=['collect', 'collect_condition', 'plot', 'plot_condition'])
+    ap.add_argument('step', choices=['collect', 'collect_condition', 'collect_per_roi', 'plot', 'plot_condition',
+                                     'plot_per_roi'])
     ap.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
     ap.add_argument('--source', default='jointhrf')
     ap.add_argument('--out-dir', default='notes/data')
@@ -461,7 +522,11 @@ if __name__ == '__main__':
     ap.add_argument('--decoder', default='outline', choices=['free', 'outline'], help='outline (main figure) or free')
     ap.add_argument('--name', default='figS_decoded_bars_rotated')
     a = ap.parse_args()
-    if a.step == 'collect_condition':
+    if a.step == 'collect_per_roi':
+        collect_condition_per_roi(a.bids_folder, a.source, a.out_dir, a.jobs, a.decoder)
+    elif a.step == 'plot_per_roi':
+        plot_per_roi(a.source, a.decoder)
+    elif a.step == 'collect_condition':
         collect_condition(a.bids_folder, a.source, a.out_dir, a.jobs, a.decoder)
     elif a.step == 'plot_condition':
         plot_condition(a.source, a.name, a.decoder)
