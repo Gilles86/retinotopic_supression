@@ -28,7 +28,8 @@ ROIS = ['V1', 'V2', 'V3', 'V3AB', 'IPS', 'hV4', 'VO', 'LO', 'TO']
 LOC = {1.0: 0, 3.0: 1, 5.0: 2, 7.0: 3}   # events' location codes -> ring channel (upper right, upper left, lower left, lower right)
 
 
-def main(subject, rois, bids, out_dir, subdir='location_timeseries', distance_bins=None, nearest_item_bins=None):
+def main(subject, rois, bids, out_dir, subdir='location_timeseries', distance_bins=None, nearest_item_bins=None,
+         ladder_roots=None, hrf_table=None):
     from braincoder.hrf import SPMHRFModel
     from retsupp.modeling.fit_af_prf_cv_v2 import build_data_and_paradigm, build_model, get_ring_positions
     from retsupp.modeling.fit_cv_ladder_nested import bar_paradigm, sign_pattern_of
@@ -39,6 +40,12 @@ def main(subject, rois, bids, out_dir, subdir='location_timeseries', distance_bi
     par_bar = bar_paradigm(sub, meta, 50, 5.0)
     ring = get_ring_positions()
     hrf = SPMHRFModel(tr=sub.get_tr(session=1, run=1), delay=4.5, dispersion=0.75)
+    if ladder_roots:      # the final fits: their pRFs and their per-ROI HRF for the bar prediction
+        import retsupp.visualize.paper.fig3_example_voxels as fev
+        fev.ROOTS = list(ladder_roots)
+    if hrf_table:
+        from retsupp.modeling.roi_hrf import hrf_model as roi_hrf_model, load_table
+        table = load_table(hrf_table)
     rel_all = pd.concat([pd.read_csv(f, sep='\t') for f in sorted(
         (deriv / 'prf_cv_roi_reliability' / f'sub-{subject:02d}').glob('*_reliability.tsv.gz'))])
     rel_all = rel_all.groupby('voxel_index').reliability.mean()
@@ -74,6 +81,8 @@ def main(subject, rois, bids, out_dir, subdir='location_timeseries', distance_bi
             continue
         ids = np.asarray(fit['voxel_ids'])
         p = fit['fit_pars_per_fold'][0]
+        if hrf_table:
+            hrf = roi_hrf_model(sub, roi, table)
         model = build_model(grid_coords=grid, paradigm=par, condition_indicator=ci, dynamic_indicator=di, target_indicator=ti,
                             ring_positions=ring, hrf_model=hrf, sign_pattern=sign_pattern_of('m0_prf'), item_scale='free')
         bar = np.asarray(model.predict(paradigm=par_bar, parameters=p.reindex(columns=list(model.parameter_labels))))
@@ -147,5 +156,9 @@ if __name__ == '__main__':
                     help='Bin edges (deg) of pRF-centre distance from the nearest of the eight items; one search-onset event.')
     ap.add_argument('--distance-bins', type=float, nargs='+', default=None,
                     help='Bin edges (deg) of pRF-centre distance from each item location; writes one series per bin.')
+    ap.add_argument('--ladder-root', nargs='+', default=None,
+                    help='ladder roots for the m0/m7 fits (first hit wins); default the earlier canonical-HRF fits')
+    ap.add_argument('--hrf-table', default=None, help='one HRF per subject x ROI for the bar prediction (with --ladder-root)')
     a = ap.parse_args()
-    main(a.subject, a.rois, a.bids_folder, a.out_dir, a.subdir, a.distance_bins, a.nearest_item_bins)
+    main(a.subject, a.rois, a.bids_folder, a.out_dir, a.subdir, a.distance_bins, a.nearest_item_bins, a.ladder_root,
+         a.hrf_table)

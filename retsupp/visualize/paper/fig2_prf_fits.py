@@ -41,15 +41,15 @@ voxels with R² ≥ .1 inside the bar aperture; dots are subjects, lines medians
 (σ) against eccentricity for six ROIs: per subject, the median σ of voxels with R² ≥ .1 inside the bar aperture in 0.5°
 eccentricity bins (bins with ≥ 5 voxels); lines and bands, mean ± SEM across subjects (bins with ≥ 10 subjects). d, Held-out
 R² gained per ROI over a Gaussian pRF with the canonical HRF by a difference-of-Gaussians pRF (teal), by one HRF per subject
-× ROI on top of the DoG pRF (grey), and by both together, the model used for the gain fits (black): three folds of runs,
+× ROI on top of the DoG pRF (grey; the HRF's delay and dispersion fitted jointly with all pRFs of the ROI, the HRF
+used in the gain fits), and by both together, the pRF model used for the gain fits (black): three folds of runs,
 voxels with cross-run reliability > 0 in the training runs, median over voxels, mean over folds; points and bars, median
 over subjects (n = 30) and bootstrapped 95% CI. e, Deconvolved response to the onset of the search display (nideconv,
 Fourier basis), after subtracting each voxel's predicted response to the bar: voxels with cross-run reliability > 0, binned
 by the distance of the pRF centre from the nearest of the eight items (0.5° bins, ≥ 5 voxels; colour), pooled per pathway
 weighted by voxel count, each subject's pre-onset mean (−4 to 0 s) subtracted; lines, mean over subjects (n = 30). Icon:
 the eight items with pRFs stepping from an item towards fixation, coloured as the lines. Pathways: early, V1–V3; dorsal,
-V3AB and IPS; occipitotemporal, hV4, VO, LO and TO. Provisional: d uses the per-ROI HRF from the median of the voxels' own
-HRF fits until the jointly fitted HRF is in.
+V3AB and IPS; occipitotemporal, hV4, VO, LO and TO.
 """
 
 
@@ -354,7 +354,6 @@ def main(cv_table, hrf_table, name='fig2_prf_fits'):
     ax.text(0, 1.2, 'Held-out R² gained over a Gaussian pRF\nwith the canonical HRF', transform=ax.transAxes, fontsize=6.5,
             color=FG, va='center', linespacing=1.2)
     letter(ax, 'd', x=-.22, y=1.12)
-    fig.text(.99, .995, 'Provisional: current inputs', fontsize=5.5, color=MUTED, ha='right', va='top')
     low = fig.add_gridspec(1, 1, left=.075, right=.9, top=0.17, bottom=0.055)
     first = panel_distance_tc(fig, low[0])
     if first is not None:
@@ -370,6 +369,8 @@ def main(cv_table, hrf_table, name='fig2_prf_fits'):
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--cv-table', default='notes/data/prf_cv_roi_summary.tsv')
-    ap.add_argument('--hrf-table', default='notes/data/hrf_comparison_2026-11.tsv')
+    ap.add_argument('--hrf-table', default='notes/data/hrf_comparison_jointhrf_final2_2026-11.tsv',
+                    help='held-out R² of the DoG pRF with the per-ROI HRF (model 14); the joint-HRF fits by default')
+    ap.add_argument('--name', default='fig2_prf_fits_final2')
     a = ap.parse_args()
-    main(a.cv_table, a.hrf_table)
+    main(a.cv_table, a.hrf_table, a.name)

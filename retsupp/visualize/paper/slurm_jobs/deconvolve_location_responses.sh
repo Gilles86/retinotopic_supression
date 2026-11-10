@@ -21,5 +21,5 @@ exec >"$HOME/logs/deconv_sub-${subject}_${SLURM_JOB_ID}.txt" 2>&1
 cd "$CODE_DIR"
 export PYTHONPATH="$CODE_DIR:$HOME/pylibs/nideconv" PYTHONUNBUFFERED=1 OMP_NUM_THREADS=1
 "$HOME/data/conda/envs/retsupp_cuda/bin/python" -m retsupp.visualize.paper.deconvolve_location_responses \
-    --folder "$D/$IN" --subject "$subject" --out "$D/$OUTD/sub-$(printf %02d $subject)_2026-11.tsv"
+    --folder "$D/$IN" --subject "$subject" --out "$D/$OUTD/sub-$(printf %02d $subject)_2026-11.tsv" ${EXTRA_ARGS:-}
 echo "Finished $(date)"
