@@ -51,6 +51,6 @@ cd "${REPO:-$HOME/git/retsupp}"
     -m retsupp.modeling.fit_trialwise_af_gains "$subject" \
     --bids-folder /shares/zne.uzh/gdehol/ds-retsupp $ROI_ARGS $EXTRA \
     ${LADDER_ROOT:+--ladder-root $LADDER_ROOT} ${HRF_TABLE:+--hrf-table $HRF_TABLE} \
-    ${VOXELS:+--voxels $VOXELS} 
+    ${VOXELS:+--voxels $VOXELS} ${POOL_GROUPS:+--groups}
 
 echo "Finished: $(date)"
