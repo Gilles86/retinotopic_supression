@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=trialwise_af
-#SBATCH --account=zne.uzh
+#SBATCH --account=hare.econ.uzh
 #SBATCH --partition=lowprio
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=4
@@ -14,6 +14,7 @@
 #   HP_NEUTRAL=1 sbatch --partition=standard --array=1-30 retsupp/modeling/slurm_jobs/fit_trialwise_af_gains.sh
 #   ROIS="V1 V3" sbatch --array=5 retsupp/modeling/slurm_jobs/fit_trialwise_af_gains.sh
 #
+# LADDER_ROOT=<ladder root> HRF_TABLE=<tsv>: gains on top of the ladder's m7_full fits (final DoG inputs).
 # Output: derivatives/af_trialwise_gains/sub-XX/
 
 set -eo pipefail
@@ -46,6 +47,7 @@ fi
 cd "${REPO:-$HOME/git/retsupp}"
 "$HOME/data/conda/envs/retsupp_cuda/bin/python" -u \
     -m retsupp.modeling.fit_trialwise_af_gains "$subject" \
-    --bids-folder /shares/zne.uzh/gdehol/ds-retsupp $ROI_ARGS $EXTRA
+    --bids-folder /shares/zne.uzh/gdehol/ds-retsupp $ROI_ARGS $EXTRA \
+    ${LADDER_ROOT:+--ladder-root $LADDER_ROOT} ${HRF_TABLE:+--hrf-table $HRF_TABLE}
 
 echo "Finished: $(date)"
