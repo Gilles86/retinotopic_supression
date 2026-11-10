@@ -1,0 +1,11 @@
+**Figure. The response at a pRF's item location depends on what appears there and on whether it is the HP location.**
+Voxels with cross-run reliability > 0 and a pRF centre within 2° of one of the four item locations (all nine ROIs, no
+fit-quality criterion, no gain-field model). a, What is measured. b-d, Response after each search onset when the target
+(b), the distractor (c) or a neutral item (d) appears at the voxel's location, with that location being the HP location
+(red) or an LP location (dark). The response to the bar (the pRF prediction for the bar alone) is removed. Exact onsets,
+jittered against the 1.6 s TR, binned at 0.4 s; averaged over trials and voxels per subject, ROIs pooled weighted by
+voxel count; one baseline per subject for all classes (−4 to 0 s). Lines and bands: mean ± SEM across subjects (n = 30);
+grey strip, the search display (1.5 s); grey column, the window used in e. Trials follow each other every few seconds, so
+epochs also contain neighbouring trials. e, Mean response in the window 3.2-6.4 s: points and bars, mean and
+95% within-subject CI (Cousineau-Morey); lines join the HP and LP values of each item. Wilcoxon signed-rank tests HP vs
+LP per item: target -0.026% (HP − LP; 57% of subjects lower at HP), p = 0.12; distractor -0.049% (HP − LP; 77% of subjects lower at HP), p = 0.0032; neutral item -0.018% (HP − LP; 70% of subjects lower at HP), p = 0.092. f, Response to the bar at the HP location relative to the LP locations, from a joint model of the same voxels' mean BOLD (bar not removed) with two bar regressors (m0's prediction for the bar alone in runs where the location is HP, and where it is LP), the six item events and run intercepts; difference of the two betas relative to the LP beta, pooled over locations weighted by voxel count × SD of the bar regressor², per subject (dots; triangles, beyond ±25%), all ROIs and per pathway; mean and 95% CI (t); Wilcoxon signed-rank against 0: All -3.0% [-5.4, -0.5], 60% of subjects below 0, p = 0.064; Early -3.1% [-5.7, -0.4], 67% of subjects below 0, p = 0.073; Dorsal -0.1% [-6.5, +6.3], 46% of subjects below 0, p = 0.85; Occipitotemporal -1.8% [-5.5, +1.9], 60% of subjects below 0, p = 0.22. Item responses in b-e from the deconvolution with the bar response removed; the joint model gives the same item responses to within 0.002% signal.

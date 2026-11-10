@@ -38,7 +38,7 @@ def save(fig, name, legend):
     _save(fig, name + SUFFIX, legend)
 TERMS = [('T', 'Target gain', TARGET), ('D', 'Distractor gain', DISTRACTOR), ('dS', 'Sustained gain, HP − LP', HP),
          ('dD', 'Distractor gain, HP − LP', '#5E3C99')]
-FAM = {'dog': 'DoG', 'dn': 'DN'}
+FAM = {'dog': 'DoG', 'dn': 'DN', 'gauss': 'Gaussian'}
 LEGEND = """
 **Figure 5. The gain fields: gain at the target and the distractor, and less sustained gain at the high-probability (HP) location.** Gain-field model fits with DoG pRFs (n = 30); a gain is the fractional change in drive at the centre of a field (+0.30: 30% more). a, c, d: dots are subjects (triangles, beyond the axis), points and bars the median and bootstrapped 95% CI; stars, Wilcoxon signed-rank test against 0, Benjamini-Hochberg across the nine ROIs, * q < .05, ** q < .01, *** q < .001 (exact p and q per ROI in the parameter table). a, Gain at the target (orange) and at the distractor (blue, averaged over its locations) while the search display is on, all terms fitted jointly. The gain against pRF size is in a supplementary figure. b, The sustained gain field over the search display, drawn to scale (red shading): one Gaussian per item (white discs, 4° eccentricity, neighbouring items {spacing:.1f}° apart; grey circle, the 3.17° aperture of the bar stimulus), with less gain at the HP than at the LP locations (the HP − LP difference exaggerated for display). Red dashed circle around the HP item: the full width at half maximum (FWHM = 2.355 σ) of the fitted sustained field, the median over all subjects and ROIs ({fwhm:.1f}°); thin grey circles, the median per ROI. Below: FWHM per subject and ROI of the sustained field (red) and of the transient field shared by the target and distractor gain (grey), side by side (log axis; dots, subjects; points and bars, median and bootstrapped 95% CI; open triangles at the axis edge, fits at a bound of σ, 0.5° or 8°, i.e. FWHM 1.2° or 18.8°); dotted line, the spacing of neighbouring items. Sustained: {fw_bound:.0f}% of all fits at a bound (per ROI {fw_bound_roi}); median FWHM [interquartile range over subjects] {fw_iqr}. Transient: often at a bound (per ROI {tr_bound_roi}; IPS mostly at the upper bound), so its width is poorly constrained and trades off with the transient gain amplitude; median FWHM [IQR] {tr_iqr}. The sustained width is the well-determined one.{width_note}{overlap_note} c, dS = g_HP − g_LP, the sustained gain at the HP location minus that at the low-probability (LP) locations, each term estimated alone on the item model with sustained gain (conditional estimate). d, The gain analogue of Fig. 1c, d: dD = g_HP_dyn − g_LP_dyn, the gain the distractor draws at the HP location minus at an LP location (blue), next to dT, the target gain at the HP location minus at an LP location (orange), each estimated alone as in c; the display icons are those of Fig. 1 (HP ringed in red; the item at HP minus at an LP location). {d_findings} {loso_ref} DN pRFs, Bayes factors and all other terms are in the parameter table. Provisional: current inputs.
 """
@@ -674,7 +674,8 @@ def main(gain_table, conditional_table, power_table, slope_table, sigma_table, n
     from retsupp.visualize.paper.hierarchy_regression import roi_size
     global GAIN_TABLE
     GAIN_TABLE = gain_table
-    js = {f: joint(gain_table, f) for f in FAM}
+    fams = pd.read_csv(gain_table, sep='\t', usecols=['family']).family.unique()
+    js = {f: joint(gain_table, f) for f in FAM if f in fams}
     cond = conditional(conditional_table)
     t = summarise(js, cond)
     # dT estimated alone: its own table, or (dt_table == 'cond') the dT column of the conditional table
@@ -683,13 +684,13 @@ def main(gain_table, conditional_table, power_table, slope_table, sigma_table, n
     write_table(t, js)
     d = js[family]
     fw, fw_roi, fw_bound = sustained_fwhm(js, family)
-    dn = family == 'dn'
+    dn = family != 'dog'   # the robustness versions (DN, Gaussian pRFs)
     if dn:
-        # DN terms estimated alone: each subject's minimum of the exact ΔSSE curve ('own'), ROIs with ≥ 20 voxels.
-        # No DN target split (dT) yet, so no target series in d.
+        # Terms estimated alone: each subject's minimum of the exact ΔSSE curve ('own'), ROIs with ≥ 20 voxels.
         c = pd.read_csv(dn_conditional_table, sep='\t')
-        c = c[(c.family == 'dn') & (c.nvox >= 20) & c.roi.isin(ROI_ORDER)]
+        c = c[(c.family == family) & (c.nvox >= 20) & c.roi.isin(ROI_ORDER)]
         cond = c.pivot_table(index=['subject', 'roi'], columns='mech', values='own').reset_index()
+        dt = cond[['subject', 'roi', 'dT']].dropna() if 'dT' in cond else None
     sl = pd.read_csv(slope_table, sep='\t')
     sl = sl[sl.rois == 'all nine'].set_index('parameter')
     size = roi_size(sigma_table)
@@ -704,7 +705,10 @@ def main(gain_table, conditional_table, power_table, slope_table, sigma_table, n
     # Row 1: a (target and distractor gain, wide) | b (the sustained field to scale).
     d_rois = t[(t.model == FAM[family]) & (t.term == 'D') & (t.q < .05)].roi.tolist()
     d_where = ' in ' + ', '.join(d_rois) if d_rois else ' nowhere reliably'
-    row(fig, Y(.16), 'a', [('Gain at the ', FG), ('target', TARGET), (' in every area' if dn else ' beyond V1', FG),
+    t_rois = t[(t.model == FAM[family]) & (t.term == 'T') & (t.q < .05)].roi.tolist()
+    t_where = (' in every area' if len(t_rois) == 9 else ' beyond V1' if set(t_rois) == set(ROI_ORDER) - {'V1'}
+               else f' in {len(t_rois)} of 9 areas')
+    row(fig, Y(.16), 'a', [('Gain at the ', FG), ('target', TARGET), (t_where, FG),
                             (', at the ', FG), ('distractor', DISTRACTOR), (d_where, FG)], [],
         x_let=.02, x_title=.2)
     ax = at(LX, Y(1.82), 3.7, 1.18)
@@ -749,21 +753,39 @@ def main(gain_table, conditional_table, power_table, slope_table, sigma_table, n
     dot_panel(ax, [(cond, 'dS', HP, None)], (-.14, .08) if dn else (-.12, .06), 'Gain, HP − LP')
     ax.set_yticks([-.1, 0, .05])
     title_d = ([('Transient gain at HP: less for the ', FG), ('distractor', DISTRACTOR)] if not FINAL else
+               [('Transient gain, HP − LP: ', FG), ('distractor', DISTRACTOR), (' and ', FG), ('target', TARGET)] if dn else
                [('Transient gain at HP: slightly less for ', FG), ('distractor', DISTRACTOR), (' and ', FG),
                 ('target', TARGET)])
     keys_d = [(icons('location', 'distractor'), DISTRACTOR, 'Each trial')] + \
-        ([] if dn else [(icons('location', 'target'), TARGET, '')])
+        ([] if (dn and dt is None) else [(icons('location', 'target'), TARGET, '')])
     row(fig, Y(y2), 'd', title_d, keys_d, x_let=RX - .5, x_title=RX - .32, key_y=Y(y2 + .27))
     fig.text((RX + PW) / W, Y(y2 + .27) / H, 'As Fig. 1c, d', fontsize=6, color='.45', ha='right', va='center')
     ax = at(RX, Y(y2 + .62 + 1.0), PW, 1.0)
-    series_d = [(cond, 'dD', DISTRACTOR, None)] + ([] if dn else [(dt, 'dT', TARGET, None)])
+    series_d = [(cond, 'dD', DISTRACTOR, None)] + ([] if dt is None else [(dt, 'dT', TARGET, None)])
     dot_panel(ax, series_d, (-.3, .25) if dn else (-.35, .3), 'Gain, HP − LP')
     ax.set_yticks([-.2, 0, .2])
     fig.text(.995, .005, ('' if FINAL else 'DN pRFs, earlier fits (canonical HRF)') if dn else ('' if FINAL else PROVISIONAL),
              fontsize=6, color=MUTED, ha='right',
              va='bottom')
     if dn:
-        save(fig, name, LEGEND_DN.format(fwhm=fw, fw_bound=100 * fw_bound, **fwhm_text(d), **dn_numbers(d, js['dog'], cond)))
+        leg = LEGEND_DN
+        if FINAL:
+            lab = {'dn': 'divisive-normalization (DN) pRFs', 'gauss': 'Gaussian pRFs'}[family]
+            short = FAM[family]
+            leg = (leg.replace('divisive-normalization (DN) pRFs', lab)
+                   .replace('fitted on DN pRFs (earlier fits, canonical HRF; the final DN fits with per-ROI HRFs are pending)',
+                            f'fitted on {short} pRFs with their own HRF per subject × ROI, fitted jointly with the pRFs (final fits, voxels reliable across runs)')
+                   .replace('(for DN, each', '(each').replace('; there is no DN target split by HP yet, so d has no target series', '; orange in d, the target term dT, estimated alone')
+                   .replace('pooled over ROIs, per-subject median −0.014, p = .001', '{pooled_ds}')
+                   .replace('Joint DN fit', f'Joint {short} fit').replace(' Provisional.', ''))
+            v = cond.groupby('subject').dS.median().dropna()
+            pooled_ds = (f'pooled over ROIs, per-subject median {v.median():+.3f}, {(v < 0).mean() * 100:.0f}% of subjects < 0, '
+                         f'p = {stats.wilcoxon(v).pvalue:.2g}').replace('-', '−')
+            if dt is not None:
+                w = dt.groupby('subject').dT.median().dropna()
+                pooled_ds += ''
+            leg = leg.replace('{pooled_ds}', pooled_ds)
+        save(fig, name, leg.format(fwhm=fw, fw_bound=100 * fw_bound, **fwhm_text(d), **dn_numbers(d, js['dog'], cond)))
         return
     save(fig, name, LEGEND.format(spacing=4 * np.sqrt(2), fwhm=fw, fw_bound=100 * fw_bound,
                                   fw_roi='; '.join(f'{r} {v:.1f}°' for r, v in fw_roi.items()), **fwhm_text(d),
@@ -806,7 +828,9 @@ if __name__ == '__main__':
                     help='per-subject slopes on log pRF size, from hierarchy_regression.py')
     ap.add_argument('--sigma-table', default='notes/data/fig1_prf_sigma.tsv')
     ap.add_argument('--name', default=None, help='default fig5_gain_fields, or figS_gain_fields_dn for --family dn')
-    ap.add_argument('--family', default='dog', choices=['dog', 'dn'])
+    ap.add_argument('--family', default='dog', choices=['dog', 'dn', 'gauss'])
+    ap.add_argument('--robust-alone-table', default='notes/data/conditional_exact_dog_dn_2026-11.tsv',
+                    help='exact own estimates (family, subject, roi, mech, own, nvox) for --family dn/gauss')
     ap.add_argument('--dt-table', default='notes/data/conditional_dT_dog_2026-11.tsv',
                     help='target gain HP − LP, estimated alone')
     ap.add_argument('--suffix', default='', help='appended to every output name')
@@ -818,4 +842,5 @@ if __name__ == '__main__':
         import retsupp.visualize.paper.fig45_common as _fc
         _fc.LOSO_TABLE = a.loso_table
     main(a.gain_table, a.conditional_table, a.power_table, a.slope_table, a.sigma_table,
-         a.name or ('figS_gain_fields_dn' if a.family == 'dn' else 'fig5_gain_fields'), a.dt_table, a.family)
+         a.name or ('fig5_gain_fields' if a.family == 'dog' else f'figS_gain_fields_{a.family}'), a.dt_table, a.family,
+         a.robust_alone_table)
