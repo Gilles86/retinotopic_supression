@@ -54,6 +54,18 @@ for _, _rois in ROI_GROUPS:
     _x += GAP7 - 1
 XMAX = max(XP.values())
 PALE = .35
+UNITS = list(ROI_ORDER)   # x-axis units: the nine ROIs, or the three ROI groups with --groups
+GROUP_UNITS = ['early', 'dorsal', 'occipitotemporal']
+GROUP_LABELS = {'early': 'Early\n(V1–V3)', 'dorsal': 'Dorsal\n(V3AB, IPS)',
+                'occipitotemporal': 'Occipitotemporal\n(hV4, LO, TO, VO)'}
+
+
+def use_groups():
+    """Switch the x axis to the three ROI groups (gains pooled over each group's ROIs)."""
+    global UNITS, XP, XMAX
+    UNITS = list(GROUP_UNITS)
+    XP = {g: float(i) for i, g in enumerate(UNITS)}
+    XMAX = len(UNITS) - 1.
 
 
 def estimate(ax, x, m, lo, hi, color, solid):
@@ -72,10 +84,13 @@ def zero_line(ax):
 def roi_axis7(ax, labels=True, fontsize=6.5, pad_pt=2, group_names=None):
     """ROI ticks at XP with the pathway names under them (as paper_style.roi_axis)."""
     import matplotlib.transforms as mtrans
-    ax.set_xticks([XP[r] for r in ROI_ORDER])
+    ax.set_xticks([XP[r] for r in UNITS])
     ax.set_xlim(-.6, XMAX + .6)
     if not labels:
         ax.set_xticklabels([])
+        return
+    if UNITS == GROUP_UNITS:
+        ax.set_xticklabels([GROUP_LABELS[g] for g in UNITS], fontsize=fontsize)
         return
     ax.set_xticklabels(ROI_ORDER, fontsize=fontsize)
     fig = ax.figure
@@ -94,10 +109,10 @@ def roi_axis7(ax, labels=True, fontsize=6.5, pad_pt=2, group_names=None):
 
 def panel_bayes(ax, bayes, terms, ylim, ylabel):
     """Posterior mean and 95% HDI per ROI and term; solid when the HDI excludes 0."""
-    d = bayes[bayes.roi.isin(ROI_ORDER)]
+    d = bayes[bayes.roi.isin(UNITS)]
     off = np.linspace(-.22, .22, len(terms)) if len(terms) > 1 else [0]
     for o, (term, col) in zip(off, terms):
-        r = d[d.term == term].set_index('roi').loc[ROI_ORDER]
+        r = d[d.term == term].set_index('roi').loc[UNITS]
         for roi, row in r.iterrows():
             estimate(ax, XP[roi] + o, row['mean'], row.hdi_lo, row.hdi_hi, col, row.hdi_lo > 0 or row.hdi_hi < 0)
             ax.text(XP[roi] + o, ylim[1] + .02 * (ylim[1] - ylim[0]), pd_stars(row), ha='center', va='bottom', fontsize=8.5,
@@ -209,7 +224,7 @@ def icons(contrast, kind):
 
 def series_stats(df, col):
     rows = []
-    for roi in ROI_ORDER:
+    for roi in UNITS:
         v = df[df.roi == roi][col].dropna().to_numpy()
         m, a, b = median_ci(v)
         rows.append(dict(roi=roi, n=len(v), median=m, lo=a, hi=b, p=stats.wilcoxon(v).pvalue))
@@ -227,7 +242,7 @@ def panel_pair(ax, series, ylim, ylabel, xlabels=True, roi_fs=6.5, group_names=N
     for k, (name, df, col, color) in enumerate(series):
         st = series_stats(df, col)
         out[name] = st
-        for i, roi in enumerate(ROI_ORDER):
+        for i, roi in enumerate(UNITS):
             r = st.iloc[i]
             estimate(ax, XP[roi] + off[k], r['median'], r.lo, r.hi, color, r.q < .05)
             ax.text(XP[roi] + off[k], hi + .02 * (hi - lo), stars(r.q), ha='center', va='bottom', fontsize=8.5, color=color,
@@ -243,7 +258,7 @@ def panel_pair(ax, series, ylim, ylabel, xlabels=True, roi_fs=6.5, group_names=N
 
 def stats_table(results):
     lines = ['', '**Per-ROI statistics (a).** Median [bootstrapped 95% CI], Wilcoxon signed-rank p against 0, '
-             'Benjamini-Hochberg q across the nine ROIs within each series; n = 30 subjects per ROI unless given otherwise.', '']
+             f'Benjamini-Hochberg q across the {len(UNITS)} {"ROI groups" if UNITS == GROUP_UNITS else "ROIs"} within each series.', '']
     for name, st in results.items():
         lines += [f'*{name}*', '', '| ROI | n | Median [95% CI] | p | q |', '|---|---|---|---|---|']
         lines += [f'| {r.roi} | {r.n} | {r["median"]:+.3f} [{r.lo:+.3f}, {r.hi:+.3f}] | {r.p:.3g} | {r.q:.3g} |'.replace('-', '−')
@@ -284,8 +299,10 @@ def repeat_from_bins(bins_table):
     return t[['subject', 'roi', 'd']], dd
 
 
-def main(repeat_table, bayes_table, name='fig7_behaviour', bins_table=None):
+def main(repeat_table, bayes_table, name='fig7_behaviour', bins_table=None, groups=False, voxels_note=None):
     global STAMP, LEGEND
+    if groups:
+        use_groups()
     bayes = pd.read_csv(bayes_table, sep='\t')
     if bins_table:
         t_rep, d_rep = repeat_from_bins(bins_table)
@@ -296,6 +313,19 @@ def main(repeat_table, bayes_table, name='fig7_behaviour', bins_table=None):
                                 '(the difference taken within HP and within LP and averaged')
         LEGEND = LEGEND.replace(' Both panels use the earlier attention-field fits (October 2026) and will be redone on the final fits.',
                                 ' Both panels use the same fits: trial-wise and bin-wise gains estimated on top of each subject\'s final joint gain-field fit (m7, DoG pRFs, one HRF per subject × ROI).')
+        # The findings of the October fits are no longer stated; the values are in the table below.
+        LEGEND = LEGEND.replace(' Less target gain on repeats in V3AB, IPS, hV4 and VO; the distractor gain does not differ after correction.', '')
+        LEGEND = LEGEND.replace('; per trial type and their difference in the text and table (the HP − LP difference is not reliable: only IPS, uncorrected)',
+                                '; per trial type and their difference in the text and table')
+        LEGEND = LEGEND.replace('the per-trial target gain', 'the per-trial target gain')
+        if voxels_note:
+            LEGEND = LEGEND.rstrip() + ' ' + voxels_note
+        if groups:
+            LEGEND = LEGEND.replace('Benjamini-Hochberg across the nine ROIs within each series', 'Benjamini-Hochberg across the three ROI groups within each series')
+            LEGEND = LEGEND.replace(' per ROI on the per-trial', ' per ROI group on the per-trial')
+            LEGEND = LEGEND.rstrip() + (' ROI groups: early (V1, V2, V3), dorsal (V3AB, IPS), occipitotemporal (hV4, LO, TO, VO); '
+                                        'one set of gains per group, estimated as a shared deviation from each ROI\'s own fitted gains '
+                                        '(the regressors of all the group\'s voxels in one fit).')
     else:
         rep = pd.read_csv(repeat_table, sep='\t')
         t_rep = rep[rep.model == 'targetRepeat'].assign(d=lambda d: d.g_T_dyn_repeat - d.g_T_dyn_switch)
@@ -304,7 +334,7 @@ def main(repeat_table, bayes_table, name='fig7_behaviour', bins_table=None):
         d_rep = rep[rep.model == 'repeat'].assign(d=lambda d: ((d.g_HP_dyn_repeat - d.g_HP_dyn) + (d.g_LP_dyn_repeat - d.g_LP_dyn)) / 2)
     results = {}
     W, x0 = DOUBLE, .75
-    pw = W - .95
+    pw = W - .95 if not groups else 3.2   # three groups: a narrower axis, the same spacing scale
     gap = .27                      # heading to axes: room for the stars
     ah, ch, below = .9, 1.0, .56
     H = .26 + .2 + gap + ah + below + .2 + gap + ch + .4
@@ -326,7 +356,7 @@ def main(repeat_table, bayes_table, name='fig7_behaviour', bins_table=None):
     row(fig, Y(yc + .1), 'b', [('Trial by trial: gain on a trial predicts its response time', FG)],
         [([lambda a: draw_source(a, 'target')], TARGET, 'Target gain'),
          ([lambda a: draw_source(a, 'distractor')], DISTRACTOR, 'Distractor gain'),
-         ([lambda a: draw_source(a, 'global')], FG, 'Global gain: the sign flips')])
+         ([lambda a: draw_source(a, 'global')], FG, 'Global gain' if bins_table else 'Global gain: the sign flips')])
     ax = ax_in(fig, x0, Y(yc + .2 + gap + ch), pw, ch)
     panel_bayes(ax, bayes, [('T', TARGET), ('D_avg', DISTRACTOR), ('G', FG)], (-.07, .125), 'Log RT per\nunit gain (z)')
     ax.set_yticks([0, .1])
@@ -349,5 +379,8 @@ if __name__ == '__main__':
                     help='Bin-wise trial-wise gains (analyze_trialwise_af_gains collect, *_bins.tsv) on the final fits; '
                          'replaces --repeat-table so both panels use the same fits')
     ap.add_argument('--name', default='fig7_behaviour')
+    ap.add_argument('--groups', action='store_true',
+                    help='Three ROI groups (early, dorsal, occipitotemporal; gains pooled per group) instead of nine ROIs')
+    ap.add_argument('--voxels-note', default=None, help='Sentence on the voxel set, appended to the legend')
     a = ap.parse_args()
-    main(a.repeat_table, a.bayes_table, a.name, a.bins_table)
+    main(a.repeat_table, a.bayes_table, a.name, a.bins_table, a.groups, a.voxels_note)
