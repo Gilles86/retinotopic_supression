@@ -300,8 +300,9 @@ def main(subject, bids_folder, rois, output_subdir='af_fixed_group_mechanisms',
          mechanisms=None, sessions=None, hrf_table=None, run_parity=None):
     global BASE_ROOT, FAMILY, H, MECHANISMS, HRF_TABLE
     HRF_TABLE = load_hrf_table(hrf_table)
-    if mechanisms:
-        MECHANISMS = {m: MECHANISMS[m] for m in mechanisms}
+    # The m8 terms (kappa, dnw, dnratio) are family-specific and run only when listed.
+    mechanisms = mechanisms or [m for m in MECHANISMS if m not in MECH_MODEL]
+    MECHANISMS = {m: MECHANISMS[m] for m in mechanisms}
     BASE_ROOT, FAMILY, H = base_root or BASE_ROOT, family, step or H
     sub = Subject(subject, bids_folder=Path(bids_folder))
     out_dir = Path(bids_folder) / 'derivatives' / output_subdir / f'sub-{subject:02d}'
@@ -353,7 +354,7 @@ if __name__ == '__main__':
     ap.add_argument('--exact', action='store_true',
                     help='Save ΔSSE on a grid of δ from the actual predictions')
     ap.add_argument('--mechanisms', nargs='+', default=None, choices=list(MECHANISMS),
-                    help='Only these mechanisms (default all)')
+                    help='Only these mechanisms (default all but the m8 terms kappa, dnw, dnratio)')
     ap.add_argument('--hrf-table', default=None,
                     help='TSV of one HRF per subject x ROI (build_roi_hrf_table.py); must match the fits used')
     args = ap.parse_args()
