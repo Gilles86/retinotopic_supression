@@ -24,10 +24,10 @@ from retsupp.visualize.paper.fig7_behaviour import draw_source, icons
 from retsupp.visualize.paper.paper_style import DISTRACTOR, DOUBLE, FG, TARGET, offset_spines, save
 
 GROUPS = {'early': ['V1', 'V2', 'V3'], 'dorsal': ['V3AB', 'IPS'], 'occipitotemporal': ['hV4', 'LO', 'TO', 'VO']}
-UNITS = ['early', 'dorsal', 'occipitotemporal', 'all']
+UNITS = ['all', 'early', 'dorsal', 'occipitotemporal']
 UNIT_LABELS = {'early': 'Early\n(V1–V3)', 'dorsal': 'Dorsal\n(V3AB, IPS)',
-               'occipitotemporal': 'Occipito-\ntemporal', 'all': 'All\nareas'}
-UNIT_X = {'early': 0., 'dorsal': 1., 'occipitotemporal': 2., 'all': 3.3}
+               'occipitotemporal': 'Occipito-\ntemporal', 'all': 'All nine\nareas'}
+UNIT_X = {'all': 0., 'early': 1.35, 'dorsal': 2.35, 'occipitotemporal': 3.35}
 PALE = .4
 
 
@@ -48,28 +48,25 @@ def panel(ax, summary, series, scale, ylim, ylabel, width=.44):
             x0 = UNIT_X[u] + o
             areas = [a for aa in GROUPS.values() for a in aa] if u == 'all' else GROUPS[u]
             am = [s.loc[('area', a), 'mean'] * scale for a in areas if ('area', a) in s.index]
-            if u != 'all':
-                dx = np.linspace(-.035, .035, len(am)) if len(am) > 1 else [0.]
-                ax.scatter(x0 + np.asarray(dx) - .075, am, s=7, facecolor='none', edgecolor=col, lw=.6, alpha=.75,
-                           zorder=3)
             r = s.loc[('overall', 'all')] if u == 'all' else s.loc[('group', u)]
             m, a, b = r['mean'] * scale, r.hdi_lo * scale, r.hdi_hi * scale
             assert lo <= a and b <= hi, (q, u, a, b, ylim)
             pdir = max(r.p_gt0, r.p_lt0)
             solid = pdir > .975          # the same criterion as the stars
-            xm = x0 + (.0 if u == 'all' else .03)
-            ax.plot([xm, xm], [a, b], color=col, lw=1.5 if solid else 1.1, alpha=1 if solid else PALE,
+            xm = x0
+            big = u == 'all'             # the headline estimate: larger marks
+            ax.plot([xm, xm], [a, b], color=col, lw=(2.0 if big else 1.3) if solid else 1.1, alpha=1 if solid else PALE,
                     solid_capstyle='butt', zorder=4)
-            ax.plot(xm, m, 'D' if u == 'all' else 'o', ms=(5.2 if u == 'all' else 4.4), color=col, mec='w', mew=.6,
+            ax.plot(xm, m, 'o', ms=(6 if big else 4.4), color=col, mec='w', mew=.6,
                     alpha=1 if solid else PALE + .15, zorder=5)
             ax.text(xm, hi, pd_stars(pdir), ha='center', va='bottom', fontsize=8, color=col, clip_on=False)
             rows.append(dict(question=q, variant=v, unit=u, mean=m, hdi_lo=a, hdi_hi=b, p_gt0=r.p_gt0, p_lt0=r.p_lt0))
     ax.axhline(0, color='.8', lw=.6, zorder=0)
-    ax.axvline((UNIT_X['occipitotemporal'] + UNIT_X['all']) / 2 + .05, color='.88', lw=.6, zorder=0)
+    ax.axvline((UNIT_X['all'] + UNIT_X['early']) / 2, color='.85', lw=.6, zorder=0)
     ax.set_xticks([UNIT_X[u] for u in UNITS])
     ax.set_xticklabels([UNIT_LABELS[u] for u in UNITS], fontsize=6.5)
     ax.tick_params(axis='x', length=0)
-    ax.set_xlim(-.45, UNIT_X['all'] + .4)
+    ax.set_xlim(-.45, UNIT_X['occipitotemporal'] + .4)
     ax.set_ylim(lo, hi)
     ax.set_ylabel(ylabel)
     offset_spines(ax)
@@ -112,12 +109,10 @@ def sig_key(fig, x, y, W, H):
     ax.plot([1.18, 1.18], [-.8, .8], color=FG, lw=1.1, alpha=PALE, solid_capstyle='butt')
     ax.plot(1.18, 0, 'o', ms=4.4, color=FG, mec='w', mew=.6, alpha=PALE + .15)
     ax.text(1.26, 0, 'P(sign) ≤ .975', fontsize=6, color='.45', va='center')
-    ax.scatter([1.98], [0], s=7, facecolor='none', edgecolor=FG, lw=.6)
-    ax.text(2.04, 0, 'Single areas', fontsize=6, color='.45', va='center')
 
 
 LEGEND = """
-**Figure 7. The gain fields fluctuate with trial history and with response time.** Trial-by-trial modulation of the gain fields, estimated on top of each subject's final joint gain-field fit (m7: DoG pRFs, one HRF per subject × area, each area's signal voxels). Per subject and area, the target, distractor and global gains of every trial were written as a gain plus modulators (z-scored log RT; target at the previous target's location, distractor at the previous distractor's location; target at the previous distractor's location), all centred within gain, and estimated directly on the BOLD time series of all the area's voxels (weighted least squares on the linear phasic term, other parameters fixed). The uncertainty of every subject × area estimate is its leave-one-run-out jackknife SE (12 runs; it agrees with the odd-versus-even-run difference, and includes noise shared across voxels, which a split over voxels misses by a factor of about six). Hierarchical Bayesian model per effect: estimate ~ Normal(θ, √(SE² + τ²)), θ = group mean + area deviation + subject deviation, the three group means (early V1–V3; dorsal V3AB, IPS; occipitotemporal hV4, LO, TO, VO) as fixed effects with Normal(0, 2·SD) priors, HalfNormal SDs (PyMC with nutpie, 4 × 2000 draws; {conv}). Large points and bars: posterior mean and 95% HDI of each group's mean, and (diamonds) of the mean over the nine areas; solid when the posterior probability of the sign shown exceeds .975, pale otherwise; small hollow points: the nine areas' posterior means. Stars give the posterior probability of the sign shown: * > .975, ** > .995, *** > .9995. n = 30 subjects (247 subject × area estimates; pairs with fewer than 10 signal voxels are left out). a, History: the gain at the target on target-repeat trials and at the distractor on distractor-repeat trials, relative to the area's typical gain (the median over subjects of |g_T| and of |(g_HP + g_LP)/2| in the m7 fits; the median of the absolute value because the signed median is close to 0 in some areas), × 100%. Repeating the target's location lowers the target gain by {T_all} on average (posterior mean and 95% HDI; P = {T_all_p}); per group early {T_early}, dorsal {T_dorsal}, occipitotemporal {T_ot}. Repeating the distractor's location does not change the distractor gain credibly ({D_all}, P = {D_all_p}). b, Response time: change in each gain per SD of log RT (z within run and trial type; positive: higher gain on slower trials). On slower trials the distractor gain ({Drt_all}, P = {Drt_all_p}) and the global gain over the whole display ({Grt_all}, P = {Grt_all_p}) are lower; the target gain does not change credibly ({Trt_all}, P = {Trt_all_p}). Robustness (table below): a Student-t likelihood gives the same conclusions; without the SE weighting (all subject × area estimates equally weighted) the target-repeat effect remains (P = {T_nose_p}) but the RT effects of panel b do not (distractor P = {Drt_nose_p}, global P = {Grt_nose_p}); in absolute gain units the target-repeat effect is {T_abs} (P = {T_abs_p}). Check with the gains pooled over each group's areas in one fit (absolute units, random-effects meta-analysis over subjects with the jackknife SEs, mean ± SE): target repeat {chk_T}; distractor repeat {chk_D}; distractor gain per SD log RT {chk_Drt}; global gain per SD log RT {chk_Grt}.
+**Figure 7. The gain fields fluctuate with trial history and with response time.** Trial-by-trial modulation of the gain fields, estimated on top of each subject's final joint gain-field fit (m7: DoG pRFs, one HRF per subject × area, each area's signal voxels). Per subject and area, the target, distractor and global gains of every trial were written as a gain plus modulators (z-scored log RT; target at the previous target's location, distractor at the previous distractor's location; target at the previous distractor's location), all centred within gain, and estimated directly on the BOLD time series of all the area's voxels (weighted least squares on the linear phasic term, other parameters fixed). The uncertainty of every subject × area estimate is its leave-one-run-out jackknife SE (12 runs; it agrees with the odd-versus-even-run difference, and includes noise shared across voxels, which a split over voxels misses by a factor of about six). Hierarchical Bayesian model per effect: estimate ~ Normal(θ, √(SE² + τ²)), θ = group mean + area deviation + subject deviation, the three group means (early V1–V3; dorsal V3AB, IPS; occipitotemporal hV4, LO, TO, VO) as fixed effects with Normal(0, 2·SD) priors, HalfNormal SDs (PyMC with nutpie, 4 × 2000 draws; {conv}). Points and bars: posterior mean and 95% HDI of the mean over all nine areas (left, larger) and of each group's mean; solid when the posterior probability of the sign shown exceeds .975, pale otherwise. Per-area estimates are in the table below. Stars give the posterior probability of the sign shown: * > .975, ** > .995, *** > .9995. n = 30 subjects (247 subject × area estimates; pairs with fewer than 10 signal voxels are left out). a, History: the gain at the target on target-repeat trials and at the distractor on distractor-repeat trials, relative to the area's typical gain (the median over subjects of |g_T| and of |(g_HP + g_LP)/2| in the m7 fits; the median of the absolute value because the signed median is close to 0 in some areas), × 100%. Repeating the target's location lowers the target gain by {T_all} on average (posterior mean and 95% HDI; P = {T_all_p}); per group early {T_early}, dorsal {T_dorsal}, occipitotemporal {T_ot}. Repeating the distractor's location does not change the distractor gain credibly ({D_all}, P = {D_all_p}). b, Response time: change in each gain per SD of log RT (z within run and trial type; positive: higher gain on slower trials). On slower trials the distractor gain ({Drt_all}, P = {Drt_all_p}) and the global gain over the whole display ({Grt_all}, P = {Grt_all_p}) are lower; the target gain does not change credibly ({Trt_all}, P = {Trt_all_p}). Robustness (table below): a Student-t likelihood gives the same conclusions; without the SE weighting (all subject × area estimates equally weighted) the target-repeat effect remains (P = {T_nose_p}) but the RT effects of panel b do not (distractor P = {Drt_nose_p}, global P = {Grt_nose_p}); in absolute gain units the target-repeat effect is {T_abs} (P = {T_abs_p}). Check with the gains pooled over each group's areas in one fit (absolute units, random-effects meta-analysis over subjects with the jackknife SEs, mean ± SE): target repeat {chk_T}; distractor repeat {chk_D}; distractor gain per SD log RT {chk_Drt}; global gain per SD log RT {chk_Grt}.
 """
 
 
@@ -178,7 +173,7 @@ def main(meta, name, param):
                       (icons('history', 'distractor'), DISTRACTOR, 'Distractor gain')], W, H)
     ax = fig.add_axes([xa / W, y0 / H, pw / W, ph / H])
     ra = panel(ax, summary, [('T_target_repeat', 'rel', TARGET), ('D_dist_repeat', 'rel', DISTRACTOR)], 100,
-               (-105, 70), 'Gain change on repeats\n(% of typical gain)')
+               (-105, 70), 'Gain on repeat trials\n(% change)')
     ax.set_yticks([-100, -50, 0, 50])
     # b
     heading(fig, xb, yh, 'b', [('On slower trials the ', FG), ('distractor', DISTRACTOR), (' and global gains are lower', FG)],
@@ -188,9 +183,10 @@ def main(meta, name, param):
                       ([lambda a: draw_source(a, 'global')], FG, 'Global gain')], W, H)
     axb = fig.add_axes([xb / W, y0 / H, pw / W, ph / H])
     rb = panel(axb, summary, [('T_rt', 'abs', TARGET), ('D_rt', 'abs', DISTRACTOR), ('G_rt', 'abs', FG)], 1,
-               (-.085, .065), 'Gain change\nper SD of log RT', width=.5)
+               (-.085, .065), 'Gain change per SD\nslower response', width=.5)
     axb.set_yticks([-.08, -.04, 0, .04])
-    axb.text(UNIT_X['all'] + .38, .06, 'Higher on\nslow trials', ha='right', va='top', fontsize=5.8, color='.45')
+    axb.text(UNIT_X['occipitotemporal'] + .38, .06, 'Higher on\nslow trials', ha='right', va='top', fontsize=5.8, color='.45')
+    ax.text(UNIT_X['occipitotemporal'] + .38, 66, 'Higher on\nrepeats', ha='right', va='top', fontsize=5.8, color='.45')
     sig_key(fig, xa - .3, ys, W, H)
     for a in (ax, axb):
         bb = a.get_window_extent()
@@ -236,6 +232,14 @@ def main(meta, name, param):
                 cells.append(f'{fmt(r, sc, un)}, P = {pdir(r)}')
             ul = UNIT_LABELS[u].replace('-\n', '').replace('\n', ' ')
             tab.append(f'| {lab} | {ul} | ' + ' | '.join(cells) + ' |')
+    tab += ['', '**Per-area posterior means** (primary model; mean [95% HDI], P of the sign shown).', '',
+            '| Effect | ' + ' | '.join(a for aa in GROUPS.values() for a in aa) + ' |', '|---|' + '---|' * 9]
+    for q, (lab, v, sc, un) in names.items():
+        cells = []
+        for ar in [a for aa in GROUPS.values() for a in aa]:
+            r = s.loc[(q, v, 'area', ar)]
+            cells.append(f'{fmt(r, sc, un)}, P = {pdir(r)}')
+        tab.append(f'| {lab} | ' + ' | '.join(cells) + ' |')
     save(fig, name, legend.strip() + '\n' + '\n'.join(tab))
     print(pd.concat([ra, rb]).round(4).to_string(index=False))
 
