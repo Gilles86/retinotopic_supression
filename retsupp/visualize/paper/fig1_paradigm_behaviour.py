@@ -54,7 +54,7 @@ def panel_timeline(fig, ax):
         col, tc = (FG, 'w') if name == 'Search' else ('#ECEFF2', FG) if name in ('Interval', '') else ('#D5DAE0', FG)
         ax.add_patch(plt.Rectangle((x0 + onset * scale, y), dur * scale - .003, h, facecolor=col, lw=0))
         if name:
-            ax.text(x0 + (onset + dur / 2) * scale, y + h / 2, name, ha='center', va='center', fontsize=5.8, color=tc)
+            ax.text(x0 + (onset + dur / 2) * scale, y + h / 2, name, ha='center', va='center', fontsize=6, color=tc)
         if k < 3:
             ax.text(x0 + (onset + dur / 2) * scale, y + h + .015, f'{dur:g} s', ha='center', va='bottom', fontsize=6, color=FG)
         if k == 3:
@@ -146,7 +146,7 @@ def rt_panel(ax, d, conds, colors, pairs, ylim):
         i, j = conds.index(a), conds.index(b)
         y = hi + (.2 + n * .13) * span
         ax.plot([i, j], [y, y], color=FG, lw=.7, clip_on=False)
-        ax.text((i + j) / 2, y + .01 * span, f'{diff.mean():+.0f} ms {stars(stats.wilcoxon(diff).pvalue)}'.replace('-', '−'),
+        ax.text((i + j) / 2, y + .01 * span, f'{diff.median():+.0f} ms {stars(stats.wilcoxon(diff).pvalue)}'.replace('-', '−'),
                 ha='center', va='bottom', fontsize=6.5, color=FG, clip_on=False)
     ax.set_xticks(range(k))
     ax.set_xticklabels(conds)
@@ -154,6 +154,36 @@ def rt_panel(ax, d, conds, colors, pairs, ylim):
     ax.set_ylim(lo, hi)
     ax.set_yticks([800, 900, 1000])
     offset_spines(ax)
+
+
+DIFF_LIM = (-105, 105)   # ms, shared by every difference strip so the scales compare across panels
+
+
+def diff_strip(ax, diff, color, label, faster_negative=True, ticklabels=True, seed=0):
+    """Within-subject differences as one horizontal strip: subject dots, the median and its bootstrapped 95% CI, zero
+    line; the label above at the left, the count of subjects on the median's side above at the right."""
+    from retsupp.visualize.paper.fig45_common import median_ci
+    v = np.asarray(diff, dtype=float)
+    m, lo, hi = median_ci(v)
+    rng = np.random.default_rng(seed)
+    yy = rng.uniform(-.32, .32, len(v))
+    ax.axvline(0, color='.75', lw=.6, zorder=0)
+    ax.scatter(np.clip(v, *DIFF_LIM), yy, s=7, color=color, alpha=.4, lw=0, zorder=2, clip_on=False)
+    ax.plot([lo, hi], [0, 0], color=FG, lw=1.4, solid_capstyle='butt', zorder=3)
+    ax.plot(m, 0, 'D', ms=4.2, color=color, mec=FG, mew=.8, zorder=4)
+    n_side = int((np.sign(v) == np.sign(m)).sum())
+    word = ('faster' if m < 0 else 'slower') if faster_negative else ('lower' if m < 0 else 'higher')
+    ax.text(0, 1.18, label, transform=ax.transAxes, fontsize=6, color=FG, ha='left', va='bottom')
+    ax.text(1, 1.18, f'{n_side}/{len(v)} {word}', transform=ax.transAxes, fontsize=6, color=FG, ha='right', va='bottom')
+    ax.set_xlim(*DIFF_LIM)
+    ax.set_ylim(-.5, .5)
+    ax.set_yticks([])
+    ax.spines['left'].set_visible(False)
+    ax.set_xticks([-100, 0, 100])
+    if not ticklabels:
+        ax.set_xticklabels([])
+    ax.spines['bottom'].set_position(('outward', 2))
+    return dict(label=label, median=m, lo=lo, hi=hi, n_side=n_side, n=len(v))
 
 
 def repeats_raw(trial_table):
@@ -202,23 +232,31 @@ def cond_icons(ax, specs, y0=-.66, h=.5, hp=True):
     ax.tick_params(axis='x', pad=30, length=0)
 
 
-def main(rt_table, bids, name='fig1_paradigm_behaviour', trial_table='notes/data/trialwise_af_trial_table.tsv.gz'):
+def main(rt_table, bids, name='fig1_paradigm_behaviour', trial_table='notes/data/trialwise_af_trial_table.tsv.gz',
+         strips=False):
+    """strips: below c-f, the within-subject differences (subject dots, median and bootstrapped 95% CI)."""
     if not Path(rt_table).exists():
         build_rt(rt_table, bids)
     d = pd.read_csv(rt_table, sep='\t')
     rep = repeats_raw(trial_table)
     # Display and timeline on top; the four behaviour panels across the full width below, with room between.
-    fig = plt.figure(figsize=(DOUBLE, 4.0))
-    top = fig.add_gridspec(1, 2, width_ratios=[1, 1.62], left=.005, right=.995, top=.985, bottom=.535, wspace=.12)
+    # With strips the figure grows by EXTRA inches at the bottom; everything above keeps its size in inches.
+    H0, EXTRA = 4.0, (1.2 if strips else 0.)
+    H = H0 + EXTRA
+    fy = lambda f: (f * H0 + EXTRA) / H          # a vertical position of the 4-inch layout in the taller figure
+    fig = plt.figure(figsize=(DOUBLE, H))
+    top = fig.add_gridspec(1, 2, width_ratios=[1, 1.62], left=.005, right=.995, top=fy(.985), bottom=fy(.535), wspace=.12)
     ax = fig.add_subplot(top[0])
     panel_display(ax, margin=7.4)
     letter(ax, 'a', x=.05, y=.97)
     ax = fig.add_subplot(top[1])
     panel_timeline(fig, ax)
     letter(ax, 'b', x=0, y=.95)
-    low = fig.add_gridspec(1, 4, width_ratios=[3, 2, 2, 2], left=.08, right=.985, top=.36, bottom=.185, wspace=.32)
+    low = fig.add_gridspec(1, 4, width_ratios=[3, 2, 2, 2], left=.08, right=.985, top=fy(.36), bottom=fy(.185), wspace=.32)
     ylim = (770, 1020)
+    rt_axes = []
     ax = fig.add_subplot(low[0])
+    rt_axes.append(ax)
     rt_panel(ax, d[d.contrast == 'distractor'], ['HP', 'LP', 'Absent'], [HP, FG, MUTED], [('HP', 'LP'), ('LP', 'Absent')], ylim)
     cond_icons(ax, [[(7, 'distractor', True)], [(3, 'distractor', True)], []])
     ax.set_xlabel('Distractor')
@@ -228,6 +266,7 @@ def main(rt_table, bids, name='fig1_paradigm_behaviour', trial_table='notes/data
     ax.scatter([.05], [1.5], s=10, marker='v', color=MUTED, lw=0, transform=ax.transAxes, clip_on=False)
     ax.text(.09, 1.5, 'Off scale', transform=ax.transAxes, fontsize=6, color=FG, va='center')
     ax = fig.add_subplot(low[1])
+    rt_axes.append(ax)
     rt_panel(ax, d[d.contrast == 'target'], ['HP', 'LP'], [HP, FG], [('HP', 'LP')], ylim)
     cond_icons(ax, [[(7, 'target', True)], [(3, 'target', True)]])
     ax.set_xlabel('Target')
@@ -236,6 +275,7 @@ def main(rt_table, bids, name='fig1_paradigm_behaviour', trial_table='notes/data
     for k, (contrast, col, lab, let) in enumerate((('target', TARGET, 'Target location', 'e'),
                                                    ('distractor', DISTRACTOR, 'Distractor location', 'f'))):
         ax = fig.add_subplot(low[2 + k])
+        rt_axes.append(ax)
         rt_panel(ax, rep[rep.contrast == contrast], ['Repeat', 'Switch'], [col, FG], [('Repeat', 'Switch')], ylim)
         cond_icons(ax, [[(3, contrast, False), (3, contrast, True)], [(1, contrast, False), (3, contrast, True)]], hp=False)
         ax.set_xlabel(lab)
@@ -248,15 +288,41 @@ def main(rt_table, bids, name='fig1_paradigm_behaviour', trial_table='notes/data
                 ax.plot(xk, 1.55, 'D', ms=3.4 if filled else 5.5, mfc=TARGET if filled else 'none', mec=TARGET, mew=.8,
                         transform=ax.transAxes, clip_on=False)
                 ax.text(xk + .07, 1.55, txt, transform=ax.transAxes, fontsize=6, color=FG, va='center')
-    for a in fig.axes[-4:]:
+    for a in rt_axes:
         bb = a.get_window_extent()
         assert bb.height <= bb.width * 1.02, (a.get_xlabel(), bb.width, bb.height)   # subject-dot panels never taller than wide
-    save(fig, name, LEGEND)
+    legend = LEGEND
+    if strips:
+        w = lambda x: x.pivot(index='subject', columns='condition', values='rt')
+        D, T = w(d[d.contrast == 'distractor']), w(d[d.contrast == 'target'])
+        RT, RD = w(rep[rep.contrast == 'target']), w(rep[rep.contrast == 'distractor'])
+        # One strip per bracket, under its panel; every strip the same physical width (the narrow panels') and x scale.
+        sw, sh = rt_axes[1].get_position().width, .17 / H
+        rows = [[('HP − LP', D.HP - D.LP, HP), ('LP − absent', D.LP - D.Absent, FG)], [('HP − LP', T.HP - T.LP, HP)],
+                [('Repeat − switch', RT.Repeat - RT.Switch, TARGET)], [('Repeat − switch', RD.Repeat - RD.Switch, DISTRACTOR)]]
+        out = []
+        for a, specs in zip(rt_axes, rows):
+            x0 = a.get_position().x0
+            for n, (lab, v, col) in enumerate(specs):
+                y0 = (.82 - n * .42) / H
+                s_ax = fig.add_axes([x0, y0, sw, sh])
+                out.append(diff_strip(s_ax, v, col, lab, ticklabels=n == len(specs) - 1, seed=n))
+                if n == len(specs) - 1:
+                    s_ax.set_xlabel('Difference (ms)', fontsize=7, labelpad=1)
+        fig.text(.008, .9 / H, 'Within\nsubject', fontsize=6.5, color='.45', ha='left', va='center')
+        legend = LEGEND.replace(
+            'Dots are subjects, triangles are subjects beyond the axis limits; large points and bars are the mean ± within-subject SEM (Cousineau-Morey). Wilcoxon signed-rank tests: ** p < .01, *** p < .001.',
+            'Upper rows: dots are subjects, triangles are subjects beyond the axis limits; large points and bars are the mean ± within-subject SEM (Cousineau-Morey); the brackets give the median within-subject difference and the Wilcoxon signed-rank test (** p < .01, *** p < .001). Lower rows: the within-subject differences of the brackets above (one dot per subject; diamond and bar, the median and its bootstrapped 95% CI, 5000 resamples), with the number of subjects on the side of the median; every strip has the same scale.')
+        for r in out:
+            print(f"{r['label']}: median {r['median']:+.1f} ms [{r['lo']:+.1f}, {r['hi']:+.1f}], {r['n_side']}/{r['n']}")
+    save(fig, name, legend)
 
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--rt-table', default='notes/data/behaviour_rt_2026-11.tsv')
     ap.add_argument('--bids-folder', default='/data/ds-retsupp')
+    ap.add_argument('--name', default='fig1_paradigm_behaviour')
+    ap.add_argument('--strips', action='store_true', help='within-subject difference strips under c-f')
     a = ap.parse_args()
-    main(a.rt_table, a.bids_folder)
+    main(a.rt_table, a.bids_folder, a.name, strips=a.strips)

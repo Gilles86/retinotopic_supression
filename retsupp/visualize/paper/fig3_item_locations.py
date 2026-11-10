@@ -239,8 +239,8 @@ def icon(fig, x0, y0, w):
     ax.plot(xs, ys, color=PRF_TEAL, lw=1.1)
     ax.add_patch(FancyArrowPatch(prf + np.array([1.1, .5]), (7.7, 2.6), arrowstyle='-|>', mutation_scale=5, color=FG, lw=.6,
                                  connectionstyle='arc3,rad=-.3', shrinkA=1, shrinkB=2, zorder=6))
-    ax.text(9.8, -1.5, 'Time', fontsize=5.5, color='.4', ha='center', va='top')
-    ax.text(2.8, -4.6, 'pRF within 2°\nof an item', fontsize=5.5, color=PRF_TEAL, ha='center', va='top', linespacing=1.)
+    ax.text(9.8, -1.5, 'Time', fontsize=6, color='.4', ha='center', va='top')
+    ax.text(2.8, -4.6, 'pRF within 2°\nof an item', fontsize=6, color=PRF_TEAL, ha='center', va='top', linespacing=1.)
     ax.set_xlim(*xr)
     ax.set_ylim(*yr)
     ax.set_aspect('equal')

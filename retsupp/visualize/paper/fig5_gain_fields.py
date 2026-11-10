@@ -30,6 +30,7 @@ FWHM = 2 * np.sqrt(2 * np.log(2))
 GAIN_TABLE = None
 SUFFIX = ''      # --suffix: every output gets it (new names; the earlier files stay)
 FINAL = False    # --final: final fits; findings in the legends computed from the data, no provisional stamps
+WIDTHS_SUPP = False   # --widths-supplement: b is the to-scale sketch only; the FWHM plot goes to figS_field_widths
 
 
 def save(fig, name, legend):
@@ -279,10 +280,10 @@ def panel_sketch(ax, fwhm, lo_hi, g_lp=1., g_hp=.2, hp_ix=3, ecc=4., aperture=3.
     ax.add_patch(Circle(hp, fwhm / 2, fill=False, ec=HP, lw=1., ls=(0, (2.5, 1.5)), zorder=3))
     if label:
         ax.text(hp[0] - .4, hp[1] - fwhm / 2 - .3, f'Fitted FWHM {fwhm:.1f}°', color=HP, fontsize=6, ha='center', va='top')
-    ax.text(hp[0], hp[1], 'HP', color=HP, fontsize=5.5, ha='center', va='center', fontweight='bold', zorder=4)
+    ax.text(hp[0], hp[1], 'HP', color=HP, fontsize=6, ha='center', va='center', fontweight='bold', zorder=4)
     for i, p in enumerate(ring):
         if i != hp_ix:
-            ax.text(p[0], p[1], 'LP', color='.4', fontsize=5.5, ha='center', va='center', zorder=4)
+            ax.text(p[0], p[1], 'LP', color='.4', fontsize=6, ha='center', va='center', zorder=4)
     # Distance between neighbouring items, along the top edge.
     a, b = ring[1], ring[0]
     y = a[1] + 1.25
@@ -375,7 +376,7 @@ def fwhm_text(d):
 TRANSIENT = '#6B7785'   # the transient field (shared by the target and distractor gain): neutral grey
 
 
-def fwhm_strip(ax, d, pars=(('sigma_AF', HP),), keep=None, weight=None):
+def fwhm_strip(ax, d, pars=(('sigma_AF', HP),), keep=None, weight=None, bound_counts=False, fs=6):
     """FWHM of the fitted fields per subject and ROI (log axis): faint dots, median and bootstrapped 95% CI; fits at a σ
     bound (0.5° or 8°) as open triangles at the axis edge; dotted line, the spacing of neighbouring items. pars: one or two
     (column, colour), side by side per ROI.
@@ -402,10 +403,15 @@ def fwhm_strip(ax, d, pars=(('sigma_AF', HP),), keep=None, weight=None):
             xx = x + np.random.default_rng(10 * k + i).uniform(-jit, jit, len(f))
             ax.scatter(xx[~bound], f[~bound], s=3, color=col, alpha=.3, lw=0, zorder=1)
             low, high = bound & (sg < .51), bound & (sg > 7.9)
-            for sel, yv, mk in ((low, lo, 'v'), (high, hi, '^')):
-                if sel.any():           # an empty scatter with open markers still draws one at the figure origin
-                    ax.scatter(xx[sel], np.full(sel.sum(), yv), s=8, marker=mk, facecolor='none', edgecolor=col, lw=.5,
-                               alpha=.7, clip_on=False, zorder=2)
+            if bound_counts:      # fits at a σ bound as a count per area, above (upper bound) and below (lower bound)
+                for sel, yv, va in ((high, hi * 1.1, 'bottom'), (low, lo / 1.16, 'top')):
+                    if sel.any():
+                        ax.text(x, yv, str(int(sel.sum())), color=col, fontsize=fs, ha='center', va=va, clip_on=False)
+            else:
+                for sel, yv, mk in ((low, lo, 'v'), (high, hi, '^')):
+                    if sel.any():           # an empty scatter with open markers still draws one at the figure origin
+                        ax.scatter(xx[sel], np.full(sel.sum(), yv), s=8, marker=mk, facecolor='none', edgecolor=col, lw=.5,
+                                   alpha=.7, clip_on=False, zorder=2)
             if not len(f):
                 continue
             m, a, b = median_ci(f)
@@ -417,11 +423,13 @@ def fwhm_strip(ax, d, pars=(('sigma_AF', HP),), keep=None, weight=None):
     sp = 4 * np.sqrt(2)
     ax.hlines(sp, -.6, XMAX + .6, color='.55', lw=.6, ls=':', zorder=0)
     ax.set_yticks([2, 5, 10, 20])
-    ax.set_yticklabels(['2', '5', '10', '20'], fontsize=6)
+    ax.set_yticklabels(['2', '5', '10', '20'], fontsize=fs)
     ax.yaxis.set_minor_locator(plt.NullLocator())
-    ax.set_ylabel('FWHM (°)', fontsize=6.5)
+    ax.set_ylabel('FWHM (°)', fontsize=fs + .5)
     offset_spines(ax)
-    roi_axis7(ax, fontsize=6)
+    if bound_counts:      # room under the axis for the lower-bound counts
+        ax.tick_params(axis='x', pad=12)
+    roi_axis7(ax, fontsize=fs)
 
 
 def bare_roi_axis(ax, right_pad=ICON_PAD):
@@ -668,6 +676,36 @@ def header(fig, y, text, x0=.012, x1=.99):
     fig.add_artist(plt.Line2D([x0, x1], [y - .006] * 2, color=MUTED, lw=.6, transform=fig.transFigure))
 
 
+WIDTHS_LEGEND = """
+**Figure S. Width of the gain fields.** Full width at half maximum (FWHM = 2.355 σ) per subject and area of the sustained field (red) and of the transient field shared by the target and the distractor gain (grey), from the joint gain-field fits with DoG pRFs (m7, final fits; n = 30; log axis). Dots are subjects; points and bars, the median and its bootstrapped 95% CI over all fits, including those at a bound. Numbers above and below a series: fits at the upper (σ = 8°, FWHM 18.8°) or lower (σ = 0.5°, FWHM 1.2°) bound of σ, not drawn as dots. Dotted line: the spacing of neighbouring items ({spacing:.1f}°). Sustained: {fw_bound:.0f}% of all fits at a bound (per area {fw_bound_roi}); median FWHM [interquartile range over subjects] {fw_iqr}. Transient: often at a bound (per area {tr_bound_roi}; IPS mostly at the upper bound), so its width is poorly constrained and trades off with the transient gain amplitude; median FWHM [IQR] {tr_iqr}. The sustained width is the well-determined one.{overlap_note}
+"""
+
+
+def widths_figure(d, fmt):
+    """figS_field_widths: the FWHM plot of Fig. 5b on its own, fits at a bound as counts per area."""
+    W, H = DOUBLE, 2.15
+    fig = plt.figure(figsize=(W, H))
+    ax = fig.add_axes([.75 / W, .66 / H, (W - 1.0) / W, 1.08 / H])
+    fwhm_strip(ax, d, (('sigma_AF', HP), ('sigma_dyn', TRANSIENT)), bound_counts=True, fs=7)
+    # Key, drawn with the panel's own marks.
+    y = (H - .12) / H
+    x = .75 / W
+    for col, lab in ((HP, 'Sustained'), (TRANSIENT, 'Transient (target, distractor)')):
+        fig.text(x, y, '●', color=col, fontsize=7, va='center', ha='left')
+        t = fig.text(x + .12 / W, y, lab, color=col, fontsize=7, va='center', ha='left')
+        fig.canvas.draw()
+        x = t.get_window_extent().x1 / fig.dpi / W + .25 / W
+    k = fig.add_axes([x, y - .02 / H, .22 / W, .04 / H])
+    k.plot([0, 1], [0, 0], color='.55', lw=.6, ls=':')
+    k.set_axis_off()
+    t = fig.text(x + .27 / W, y, f'Item spacing, {4 * np.sqrt(2):.1f}°', color='.45', fontsize=7, va='center', ha='left')
+    fig.canvas.draw()
+    x = t.get_window_extent().x1 / fig.dpi / W + .25 / W
+    fig.text(x, y, 'Numbers: fits at the σ bound (above, upper; below, lower)', color='.45', fontsize=7, va='center',
+             ha='left')
+    save(fig, 'figS_field_widths', WIDTHS_LEGEND.format(**fmt))
+
+
 def main(gain_table, conditional_table, power_table, slope_table, sigma_table, name='fig5_gain_fields',
          dt_table='notes/data/conditional_dT_dog_2026-11.tsv', family='dog',
          dn_conditional_table='notes/data/conditional_exact_dog_dn_2026-11.tsv'):
@@ -716,30 +754,46 @@ def main(gain_table, conditional_table, power_table, slope_table, sigma_table, n
     dot_panel(ax, [(d, 'T', TARGET, sm('T')), (d, 'D', DISTRACTOR, sm('D'))], (-.4, 1.6) if dn else (-.4, 1.2), 'Gain')
     ax.set_yticks([0, .5, 1, 1.5] if dn else [0, .5, 1])
     BX = 4.62                       # left edge of b
-    ax = at(BX + .05, Y(1.22), .94, .94)
-    panel_sketch(ax, fw, (fw_roi.min(), fw_roi.max()), roi_fwhm=fw_roi.values, label=False)
-    fig.text((BX - .25) / W, Y(.16) / H, 'b', fontsize=8, fontweight='bold', va='center', ha='left')
-    fig.text((BX - .07) / W, Y(.16) / H, 'Size of the gain fields', fontsize=7.5, color=FG, va='center', ha='left')
-    kx, kt, kb = BX + 1.12, Y(.36), Y(1.3)      # key column: x, top, bottom (inches; 1 data unit = 1 inch)
-    key = fig.add_axes([kx / W, kb / H, (7.07 - kx) / W, (kt - kb) / H])
-    key.set_xlim(0, 7.07 - kx)
-    key.set_ylim(kb - kt, 0)
-    key.set_axis_off()
-    from matplotlib.patches import Circle as _C
-    ys = -np.arange(6) * .155 - .07
-    key.add_patch(_C((.07, ys[0]), .05, fill=False, ec=HP, lw=1., ls=(0, (2.5, 1.5))))
-    key.text(.17, ys[0], f'FWHM, median {fw:.1f}°', fontsize=6, color=HP, va='center')
-    key.add_patch(_C((.07, ys[1]), .05, fill=False, ec='.35', lw=.4))
-    key.text(.17, ys[1], 'Median per ROI', fontsize=6, color='.35', va='center')
-    key.text(.0, ys[2], 'Sustained field, to scale', fontsize=6, color='.45', va='center')
-    for yy, col, lab in ((ys[3], HP, 'Sustained'), (ys[4], TRANSIENT, 'Transient (target, distractor)')):
-        key.errorbar(.07, yy, yerr=.045, fmt='o', ms=3.5, color=col, mec='w', mew=.5, lw=1.1, capsize=0)
-        key.text(.17, yy, lab, fontsize=6, color=col, va='center')
-    key.plot([.01, .13], [ys[5]] * 2, color='.55', lw=.6, ls=':')
-    key.text(.17, ys[5], f'Item spacing, {4 * np.sqrt(2):.1f}°', fontsize=6, color='.45', va='center')
-    ax = at(BX + .1, Y(2.07), 7.0 - BX - .1, .62)
-    fwhm_strip(ax, d, (('sigma_AF', HP), ('sigma_dyn', TRANSIENT)))
-    fig.text((BX - .25) / W, Y(.16) / H, '', fontsize=1)
+    if WIDTHS_SUPP:
+        # b: the sustained field to scale, larger; the FWHM plot is figS_field_widths.
+        ax = at(BX - .05, Y(2.05), 1.75, 1.75)
+        panel_sketch(ax, fw, (fw_roi.min(), fw_roi.max()), roi_fwhm=fw_roi.values, label=False)
+        fig.text((BX - .25) / W, Y(.16) / H, 'b', fontsize=8, fontweight='bold', va='center', ha='left')
+        fig.text((BX - .07) / W, Y(.16) / H, 'The sustained field, to scale', fontsize=7.5, color=FG, va='center', ha='left')
+        from matplotlib.patches import Circle as _C
+        kx, kt, kb = BX + 1.72, Y(.75), Y(1.75)
+        key = fig.add_axes([kx / W, kb / H, (7.07 - kx) / W, (kt - kb) / H])
+        key.set_xlim(0, 7.07 - kx)
+        key.set_ylim(kb - kt, 0)
+        key.set_axis_off()
+        key.add_patch(_C((.07, -.1), .05, fill=False, ec=HP, lw=1., ls=(0, (2.5, 1.5))))
+        key.text(.16, -.1, f'FWHM,\nmedian {fw:.1f}°', fontsize=6.5, color=HP, va='center')
+        key.add_patch(_C((.07, -.45), .05, fill=False, ec='.35', lw=.4))
+        key.text(.16, -.45, 'Median\nper area', fontsize=6.5, color='.35', va='center')
+    else:
+        ax = at(BX + .05, Y(1.22), .94, .94)
+        panel_sketch(ax, fw, (fw_roi.min(), fw_roi.max()), roi_fwhm=fw_roi.values, label=False)
+        fig.text((BX - .25) / W, Y(.16) / H, 'b', fontsize=8, fontweight='bold', va='center', ha='left')
+        fig.text((BX - .07) / W, Y(.16) / H, 'Size of the gain fields', fontsize=7.5, color=FG, va='center', ha='left')
+        kx, kt, kb = BX + 1.12, Y(.36), Y(1.3)      # key column: x, top, bottom (inches; 1 data unit = 1 inch)
+        key = fig.add_axes([kx / W, kb / H, (7.07 - kx) / W, (kt - kb) / H])
+        key.set_xlim(0, 7.07 - kx)
+        key.set_ylim(kb - kt, 0)
+        key.set_axis_off()
+        from matplotlib.patches import Circle as _C
+        ys = -np.arange(6) * .155 - .07
+        key.add_patch(_C((.07, ys[0]), .05, fill=False, ec=HP, lw=1., ls=(0, (2.5, 1.5))))
+        key.text(.17, ys[0], f'FWHM, median {fw:.1f}°', fontsize=6, color=HP, va='center')
+        key.add_patch(_C((.07, ys[1]), .05, fill=False, ec='.35', lw=.4))
+        key.text(.17, ys[1], 'Median per ROI', fontsize=6, color='.35', va='center')
+        key.text(.0, ys[2], 'Sustained field, to scale', fontsize=6, color='.45', va='center')
+        for yy, col, lab in ((ys[3], HP, 'Sustained'), (ys[4], TRANSIENT, 'Transient (target, distractor)')):
+            key.errorbar(.07, yy, yerr=.045, fmt='o', ms=3.5, color=col, mec='w', mew=.5, lw=1.1, capsize=0)
+            key.text(.17, yy, lab, fontsize=6, color=col, va='center')
+        key.plot([.01, .13], [ys[5]] * 2, color='.55', lw=.6, ls=':')
+        key.text(.17, ys[5], f'Item spacing, {4 * np.sqrt(2):.1f}°', fontsize=6, color='.45', va='center')
+        ax = at(BX + .1, Y(2.07), 7.0 - BX - .1, .62)
+        fwhm_strip(ax, d, (('sigma_AF', HP), ('sigma_dyn', TRANSIENT)))
 
     # Row 2: the gain at the HP location, c (sustained) | d (transient, distractor vs target; Fig. 1c, d); each with its
     # icon key under the title, so the two axes and titles line up.
@@ -787,9 +841,18 @@ def main(gain_table, conditional_table, power_table, slope_table, sigma_table, n
             leg = leg.replace('{pooled_ds}', pooled_ds)
         save(fig, name, leg.format(fwhm=fw, fw_bound=100 * fw_bound, **fwhm_text(d), **dn_numbers(d, js['dog'], cond)))
         return
-    save(fig, name, LEGEND.format(spacing=4 * np.sqrt(2), fwhm=fw, fw_bound=100 * fw_bound,
-                                  fw_roi='; '.join(f'{r} {v:.1f}°' for r, v in fw_roi.items()), **fwhm_text(d),
-                                  **legend_findings(cond, dt, js)))
+    fmt = dict(spacing=4 * np.sqrt(2), fwhm=fw, fw_bound=100 * fw_bound,
+               fw_roi='; '.join(f'{r} {v:.1f}°' for r, v in fw_roi.items()), **fwhm_text(d), **legend_findings(cond, dt, js))
+    if WIDTHS_SUPP:
+        i0 = LEGEND.index(' Below: FWHM per subject and ROI')
+        i1 = LEGEND.index('{width_note}{overlap_note}') + len('{width_note}{overlap_note}')
+        leg = (LEGEND[:i0] + ' The width of the sustained and the transient field per subject and area is in Supplementary '
+               'Fig. S (field widths).' + LEGEND[i1:]).replace('thin grey circles, the median per ROI',
+                                                                'thin grey circles, the median per area')
+        save(fig, name, leg.format(**fmt))
+        widths_figure(d, fmt)
+        return
+    save(fig, name, LEGEND.format(**fmt))
     loso_figure()
     hierarchy_figure(t, size, sl)
     print('FWHM median', fw, 'per ROI', fw_roi.round(2).to_dict(), 'at bound', fw_bound)
@@ -836,8 +899,10 @@ if __name__ == '__main__':
     ap.add_argument('--suffix', default='', help='appended to every output name')
     ap.add_argument('--final', action='store_true', help='final fits: findings computed in the legends, no provisional stamps')
     ap.add_argument('--loso-table', default=None, help='per-ROI LOSO table for figS_loso_per_roi (default fig45_common.LOSO_TABLE)')
+    ap.add_argument('--widths-supplement', action='store_true',
+                    help='b: the sustained field to scale only; the FWHM plot as figS_field_widths (fits at a bound counted)')
     a = ap.parse_args()
-    SUFFIX, FINAL = a.suffix, a.final
+    SUFFIX, FINAL, WIDTHS_SUPP = a.suffix, a.final, a.widths_supplement
     if a.loso_table:
         import retsupp.visualize.paper.fig45_common as _fc
         _fc.LOSO_TABLE = a.loso_table

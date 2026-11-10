@@ -23,7 +23,7 @@ import pandas as pd
 from retsupp.visualize.paper.fig7_behaviour import draw_source, icons
 from retsupp.visualize.paper.paper_style import DISTRACTOR, DOUBLE, FG, TARGET, offset_spines, save
 
-GROUPS = {'early': ['V1', 'V2', 'V3'], 'dorsal': ['V3AB', 'IPS'], 'occipitotemporal': ['hV4', 'LO', 'TO', 'VO']}
+GROUPS = {'early': ['V1', 'V2', 'V3'], 'dorsal': ['V3AB', 'IPS'], 'occipitotemporal': ['hV4', 'VO', 'LO', 'TO']}   # ROI_ORDER
 UNITS = ['all', 'early', 'dorsal', 'occipitotemporal']
 UNIT_LABELS = {'early': 'Early\n(V1–V3)', 'dorsal': 'Dorsal\n(V3AB, IPS)',
                'occipitotemporal': 'Occipito-\ntemporal', 'all': 'All nine\nareas'}
@@ -153,14 +153,21 @@ def pooled_check(param):
     return out
 
 
-def main(meta, name, param):
+def main(meta, name, param, compact=False):
+    """compact: narrower panels (5.9 in wide), shorter titles and keys; same content."""
     meta = Path(meta)
     summary = pd.read_csv(meta / 'summary.tsv', sep='\t')
     chk = pooled_check(param)
     diag = pd.read_csv(meta / 'diagnostics.tsv', sep='\t')
-    W = DOUBLE
-    pw, ph = 2.75, 1.45            # axes size (inches); wider than high
-    xa, xb = .7, .7 + pw + .6
+    if compact:
+        pw, ph = 2.2, 1.45
+        xa, xb = .72, .72 + pw + .72
+        W = xb + pw + .16
+    else:
+        W = DOUBLE
+        pw, ph = 2.75, 1.45            # axes size (inches); wider than high
+        xa, xb = .7, .7 + pw + .6
+    ik = .24 if compact else .27
     y0 = .42                      # axes bottom (room for the unit labels)
     yk = y0 + ph + .3             # key row (room for the stars between it and the axes)
     yh = yk + .28                 # heading row
@@ -169,24 +176,26 @@ def main(meta, name, param):
     fig = plt.figure(figsize=(W, H))
     # a
     heading(fig, xa, yh, 'a', [('Repeating the ', FG), ('target', TARGET), ('’s location lowers its gain', FG)], W, H)
-    key(fig, xa, yk, [(icons('history', 'target'), TARGET, 'Target gain'),
-                      (icons('history', 'distractor'), DISTRACTOR, 'Distractor gain')], W, H)
+    key(fig, xa, yk, [(icons('history', 'target'), TARGET, 'Target' if compact else 'Target gain'),
+                      (icons('history', 'distractor'), DISTRACTOR, 'Distractor' if compact else 'Distractor gain')], W, H,
+        icon=ik)
     ax = fig.add_axes([xa / W, y0 / H, pw / W, ph / H])
     ra = panel(ax, summary, [('T_target_repeat', 'rel', TARGET), ('D_dist_repeat', 'rel', DISTRACTOR)], 100,
                (-105, 70), 'Gain on repeat trials\n(% change)')
     ax.set_yticks([-100, -50, 0, 50])
     # b
-    heading(fig, xb, yh, 'b', [('On slower trials the ', FG), ('distractor', DISTRACTOR), (' and global gains are lower', FG)],
+    heading(fig, xb, yh, 'b', [('Lower ', FG), ('distractor', DISTRACTOR), (' and global gains on slower trials', FG)]
+            if compact else [('On slower trials the ', FG), ('distractor', DISTRACTOR), (' and global gains are lower', FG)],
             W, H)
     key(fig, xb, yk, [([lambda a: draw_source(a, 'target')], TARGET, 'Target'),
                       ([lambda a: draw_source(a, 'distractor')], DISTRACTOR, 'Distractor'),
-                      ([lambda a: draw_source(a, 'global')], FG, 'Global gain')], W, H)
+                      ([lambda a: draw_source(a, 'global')], FG, 'Global' if compact else 'Global gain')], W, H, icon=ik)
     axb = fig.add_axes([xb / W, y0 / H, pw / W, ph / H])
     rb = panel(axb, summary, [('T_rt', 'abs', TARGET), ('D_rt', 'abs', DISTRACTOR), ('G_rt', 'abs', FG)], 1,
                (-.085, .065), 'Gain change per SD\nslower response', width=.5)
     axb.set_yticks([-.08, -.04, 0, .04])
-    axb.text(UNIT_X['occipitotemporal'] + .38, .06, 'Higher on\nslow trials', ha='right', va='top', fontsize=5.8, color='.45')
-    ax.text(UNIT_X['occipitotemporal'] + .38, 66, 'Higher on\nrepeats', ha='right', va='top', fontsize=5.8, color='.45')
+    axb.text(UNIT_X['occipitotemporal'] + .38, .06, 'Higher on\nslow trials', ha='right', va='top', fontsize=6.5, color='.45')
+    ax.text(UNIT_X['occipitotemporal'] + .38, 66, 'Higher on\nrepeats', ha='right', va='top', fontsize=6.5, color='.45')
     sig_key(fig, xa - .3, ys, W, H)
     for a in (ax, axb):
         bb = a.get_window_extent()
@@ -250,5 +259,6 @@ if __name__ == '__main__':
     ap.add_argument('--name', default='fig7_compact')
     ap.add_argument('--param', default='notes/data/trialwise_signal_se_2026-11/trialwise_af_signal_se_2026-11_parametric.tsv',
                     help='Collected parametric table (for the pooled-group check in the legend)')
+    ap.add_argument('--compact', action='store_true', help='narrower panels, shorter titles and keys (same content)')
     a = ap.parse_args()
-    main(a.meta, a.name, a.param)
+    main(a.meta, a.name, a.param, a.compact)

@@ -485,7 +485,7 @@ def panel_test(ax, e, t, rois=ROIS, decoder=DECODER, t_o=None):
         x0 = roi_xs(rois)[-1] + .75
         for yy, mfc, lab in ((hi + .035 * (hi - lo), HP, 'Unconstrained'), (hi + .145 * (hi - lo), 'w', 'Outline given')):
             ax.plot(x0, yy, 'o', ms=3.5, color=HP, mfc=mfc, mec=HP, mew=.9, clip_on=False)
-            ax.text(x0 + .35, yy, lab, ha='left', va='center', fontsize=5.5, color=HP, clip_on=False)
+            ax.text(x0 + .35, yy, lab, ha='left', va='center', fontsize=6.5, color=HP, clip_on=False)
     if len(rois) > 3:
         ax.set_yticks([-.005, 0, .005])
         ax.set_yticklabels(['−.005', '0', '.005'])
@@ -558,7 +558,7 @@ def panel_ecc(ax, be, pb):
     # Beyond the aperture edge there is no bar to decode; the items start just outside it.
     ax.axvspan(APERTURE, ECC_MAX, facecolor='w', edgecolor='.6', hatch='////', lw=0, zorder=0)
     ax.text((APERTURE + ECC_MAX) / 2, (lo + hi) / 2, 'Aperture edge (items beyond, at 4°)', rotation=90, ha='center',
-            va='center', fontsize=5.5, color='.35', bbox=dict(boxstyle='square,pad=.15', fc='w', ec='none'))
+            va='center', fontsize=6, color='.35', bbox=dict(boxstyle='square,pad=.15', fc='w', ec='none'))
     ax.fill_between(x, m - se, m + se, color=HP, alpha=.2, lw=0)
     ax.plot(x, m, color=HP, lw=1.3)
     ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
@@ -680,7 +680,7 @@ def panel_bar_pass(ax, w, st):
     offset_spines(ax)
 
 
-def bar_insets(fig, source, xy, W, H, size=.7, gap=.1, vmax=3., bins=(2, 3, 4)):
+def bar_insets(fig, source, xy, W, H, size=.7, gap=.1, vmax=3., bins=(2, 3, 4), fs=6):
     """Three decoded-bar difference images beside c (decoder with the bar outline given), as a sweep: a bar on the far
     side, through the centre and through the quadrant facing HP; under each its label and, where significant, the
     segment difference. Returns their centre labels and segment statistics."""
@@ -710,7 +710,7 @@ def bar_insets(fig, source, xy, W, H, size=.7, gap=.1, vmax=3., bins=(2, 3, 4)):
             star = '***' if p < .001 else '**' if p < .01 else '*' if p < .05 else ''
             txt += f'\n{m:+.1f}%{star}'.replace('-', '−')
             segs.append((ks, m, se, p))
-        ax.text(.5, -.02, txt, transform=ax.transAxes, ha='center', va='top', fontsize=6, color='.3', linespacing=1.05)
+        ax.text(.5, -.02, txt, transform=ax.transAxes, ha='center', va='top', fontsize=fs, color='.3', linespacing=1.05)
         labs.append(f'{centres[b]:+.1f}°'.replace('-', '−').replace('+0.0', '0'))
     return labs, segs
 
@@ -871,7 +871,24 @@ def plot_bar_crossing(name='figS_bar_crossing_response', source_note=''):
 
 
 # ------------------------------------------------------------------------------------------------------------ figure
-def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, source_note='', frames_style='magma'):
+def test_figure(e, t, rois, decoder, t_out, d_text, name):
+    """The per-area HP − other quadrants test (Fig. 6d before v3) as a supplementary figure."""
+    import matplotlib.pyplot as plt
+    from retsupp.visualize.paper.paper_style import DOUBLE, save
+    W, H = DOUBLE * .75, 1.95
+    fig = plt.figure(figsize=(W, H))
+    ax = fig.add_axes([.75 / W, .5 / H, (W - 1.9) / W, 1.0 / H])
+    panel_test(ax, e, t, rois, decoder, t_out)
+    body = d_text.strip()
+    body = body[0].upper() + body[1:] if not body.startswith('d,') else body[3:].strip()
+    body = body[0].upper() + body[1:]
+    legend = ('**Figure S. Decoded intensity in the quadrant facing HP, per area (Fig. 6, per area).** Decoding as in Fig. 6. '
+              + body)
+    save(fig, name, legend)
+
+
+def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, source_note='', frames_style='magma', v3=False):
+    """v3: 180 mm wide; the per-area test (old d) goes to its own supplementary figure, the rest re-lettered a-e."""
     import matplotlib.pyplot as plt
     from retsupp.visualize.paper.paper_style import FG, HP, STIM, letter, save
     d = pd.read_csv(DATA / f'decoding_readout_{source}_2026-11.tsv', sep='\t')
@@ -910,7 +927,8 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     bp = load_bar_pass()
     bst = bar_pass_stats(bp)
 
-    W, H = 7.25, 6.3
+    from retsupp.visualize.paper.paper_style import DOUBLE
+    W, H = (DOUBLE, 6.3) if v3 else (7.25, 6.3)
     DY = .55                                      # rows 1-2 sit above the taller row 3
     fig = plt.figure(figsize=(W, H))
     # Row 1: a frames, b quality.
@@ -919,7 +937,9 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     fig.text(.2 / W, (5.62 + DY) / H, 'The bar stimulus can be decoded from held-out runs' +
              ('' if many else ' in ' + ', '.join(rois[:-1]) + f' and {rois[-1]}'), fontsize=7.5, color=STIM, va='center')
     fig.text(.02 / W, (5.62 + DY) / H, 'a', fontsize=8, fontweight='bold', va='center', ha='left')
-    if many:
+    if many and v3:
+        ax = fig.add_axes([4.9 / W, (4.08 + DY) / H, 2.08 / W, 1.2 / H])
+    elif many:
         ax = fig.add_axes([4.95 / W, (4.08 + DY) / H, 2.2 / W, 1.2 / H])
     else:
         ax = fig.add_axes([5.55 / W, (3.85 + DY) / H, 1.6 / W, 1.42 / H])
@@ -932,7 +952,10 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     ax = fig.add_axes([.1 / W, (1.78 + DY) / H, 1.36 / W, 1.36 / H])
     im = panel_map(ax, rm)
     ins_file = DATA / f'decoded_bars_condition_{source}_outline_2026-11.npz'
-    ins_lab = bar_insets(fig, source, (1.5, 2.2 + DY), W, H, gap=.06) if ins_file.exists() else None
+    if v3:     # without the per-area panel the insets get room: larger, labels at 7 pt
+        ins_lab = bar_insets(fig, source, (2.0, 1.98 + DY), W, H, size=1.12, gap=.5, fs=7) if ins_file.exists() else None
+    else:
+        ins_lab = bar_insets(fig, source, (1.5, 2.2 + DY), W, H, gap=.06) if ins_file.exists() else None
     fig.text(.02 / W, (3.4 + DY) / H, 'c', fontsize=8, fontweight='bold', va='center', ha='left')
     cax = fig.add_axes([.38 / W, (1.68 + DY) / H, .86 / W, .06 / H])
     cb = fig.colorbar(im, cax=cax, orientation='horizontal', ticks=[-3, 0, 3])
@@ -943,12 +966,13 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     cb.ax.text(1.06, .5, 'More', transform=cb.ax.transAxes, ha='left', va='center', fontsize=6, color='#B2182B')
     qe = quadrant_effects(d, decoder)
     qst = quadrant_stats(qe)
-    if many:
-        ax = fig.add_axes([4.35 / W, (2.05 + DY) / H, 2.15 / W, .95 / H])
-    else:
-        ax = fig.add_axes([3.4 / W, (2.0 + DY) / H, 2.2 / W, 1.1 / H])
-    panel_test(ax, e, t, rois, decoder, t_out)
-    letter(ax, 'd', x=-.2 if many else -.42, y=1.15)
+    if not v3:
+        if many:
+            ax = fig.add_axes([4.35 / W, (2.05 + DY) / H, 2.15 / W, .95 / H])
+        else:
+            ax = fig.add_axes([3.4 / W, (2.0 + DY) / H, 2.2 / W, 1.1 / H])
+        panel_test(ax, e, t, rois, decoder, t_out)
+        letter(ax, 'd', x=-.2 if many else -.42, y=1.15)
 
     # Row 3: e quadrants, f eccentricity.
     fig.text(.2 / W, 1.93 / H, 'Weaker than the quadrants next to it, and not driven by the items outside the aperture',
@@ -958,11 +982,11 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     ax = fig.add_axes([.7 / W, .72 / H, 1.25 / W, .9 / H])
     panel_quadrants(ax, qe, qst)
     area_tag(ax, x=1.0, y=1.0, ha='right')
-    fig.text(.02 / W, 1.93 / H, 'e', fontsize=8, fontweight='bold', va='center', ha='left')
-    ax = fig.add_axes([2.95 / W, .42 / H, 3.95 / W, 1.2 / H])
+    fig.text(.02 / W, 1.93 / H, 'd' if v3 else 'e', fontsize=8, fontweight='bold', va='center', ha='left')
+    ax = fig.add_axes([2.95 / W, .42 / H, (3.9 if v3 else 3.95) / W, 1.2 / H])
     panel_ecc(ax, be, pb)
     area_tag(ax, x=.02, y=.3)
-    letter(ax, 'f', x=-.17, y=1.02)
+    letter(ax, 'e' if v3 else 'f', x=-.17, y=1.02)
 
     nq = qs.groupby('roi').r.median()
     quality = '; '.join(f'{r} median r = {nq[r]:.2f} vs {qs[qs.roi == r].r_shuffle.median():.3f}, {fmt_p(pq[r])}'
@@ -1004,12 +1028,23 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     else:
         title = ('**Figure 6. The bar stimulus can be read out of visual cortex, and it is read out at lower intensity in '
                  'the quadrant facing the HP location.**')
-    save(fig, name, LEGEND.format(title=title, areas=areas, hrf=hrf, prf_model=prf_model, n=qs.subject.nunique(), quality=quality, tests=tests, outline=outline,
+    leg = LEGEND.format(title=title, areas=areas, hrf=hrf, prf_model=prf_model, n=qs.subject.nunique(), quality=quality, tests=tests, outline=outline,
                                   bands=band_txt, friedman=fried, outer_inner=oi, fovea=fovea, ex_sub=sub, ex_r=ex_r,
                                   ex_rank=ex_rank, n_runs=len(qf), r_med=qf.r.median(), ex_run=run.replace('_', ' '),
                                   ap=APERTURE, item_r=ITEM_R, insets=(INSET_TXT.format(ins_far=ins_lab[0][0], ins_mid=ins_lab[0][1], ins_hp=ins_lab[0][2], ins_seg='; '.join(f'{k} segment {m:+.2f} ± {se:.2f}%, two-sided Wilcoxon p = {p:.3f}' for k, m, se, p in ins_lab[1])) if ins_lab else ''), item_in=ITEM_ECC - ITEM_R, bar=bar_txt, bar_base=bar_base,
                                   w0=BAR_WINDOW[0], w1=BAR_WINDOW[1], source=source_note,
-                                  q_lr=qst['p_lr'], quad=qst['text']))
+                                  q_lr=qst['p_lr'], quad=qst['text'])
+    if v3:
+        i0 = leg.index(' d, Per subject and ROI, the mean decoded intensity')
+        i1 = leg.index(' e, Decoded')
+        d_text = leg[i0:i1]
+        leg = (leg[:i0] + ' Per area, the same contrast is in Supplementary Fig. S (decoded intensity at HP per area).'
+               + leg[i1:]).replace(' e, Decoded', ' d, Decoded').replace(
+            'f, The difference of d by eccentricity', 'e, The quadrant facing HP minus the three other quadrants, by eccentricity')
+        save(fig, name, leg)
+        test_figure(e, t, rois, decoder, t_out, d_text, name.replace('fig6_decoding', 'figS_decoding_hp_per_area'))
+    else:
+        save(fig, name, leg)
     print('quadrants', qst['text'], 'left vs right', round(qst['p_lr'], 3))
     print('quality', quality)
     print('tests', tests)
@@ -1032,6 +1067,7 @@ if __name__ == '__main__':
     ap.add_argument('--out', default=None)
     ap.add_argument('--name', default='fig6_decoding')
     ap.add_argument('--frames-style', default='magma', choices=['blue', 'magma'], help='decoded rows of a: magma on black or blue')
+    ap.add_argument('--v3', action='store_true', help='180 mm wide; the per-area test to a supplementary figure; a-e')
     a = ap.parse_args()
     if a.step == 'collect':
         collect(a.bids_folder, a.source, a.out)
@@ -1042,4 +1078,4 @@ if __name__ == '__main__':
     elif a.step == 'plot_bar_crossing':
         plot_bar_crossing(source_note='')
     else:
-        plot(a.name, a.source, a.rois, a.decoder, source_note=f'pRFs: {a.source} fold fits.', frames_style=a.frames_style)
+        plot(a.name, a.source, a.rois, a.decoder, source_note=f'pRFs: {a.source} fold fits.', frames_style=a.frames_style, v3=a.v3)
