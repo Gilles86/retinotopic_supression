@@ -273,7 +273,7 @@ def fit_roi_exact(sub, roi, data, out_path, overlay_root=None):
             err = np.abs(P_0 - P_ref).max()
             print(f'sub-{sub.subject_id:02d} {roi} {mech}: max |pred(δ=0) - pred({base})| = {err:.2e} '
                   f'(max |pred| {np.abs(P_ref).max():.2e})', flush=True)
-            assert err <= 1e-5 * max(np.abs(P_ref).max(), 1.0), f'{mech}: δ=0 does not reproduce {base}'
+            assert err <= 1e-4 + 1e-5 * np.abs(P_ref).max(), f'{mech}: δ=0 does not reproduce {base}'   # float32: ~2e-5
         grid = exact_grid(*EXACT_RANGE[mech])
         sse = []
         for delta in grid:
