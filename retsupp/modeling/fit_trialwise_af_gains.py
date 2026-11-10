@@ -498,6 +498,74 @@ def sse(g, XtX, Xtr, rtr):
     return rtr - 2 * g @ Xtr + g @ XtX @ g
 
 
+def run_normal_equations(regs, resid, w, run_id, n_runs):
+    """X'WX and X'Wr over all voxels, split by run (rows of the time axis): the per-run matrices sum to those of
+    ``normal_equations`` for all voxels. run_id: (T,) run index of every volume."""
+    K = len(regs)
+    starts = np.array([s for s, _ in regs])
+    ends = np.array([s + win.shape[0] for s, win in regs])
+    XtX = np.zeros((n_runs, K, K))
+    Xtr = np.zeros((n_runs, K))
+    for i, (si, wi) in enumerate(regs):
+        a = wi * w
+        Xtr[:, i] = np.bincount(run_id[si:si + len(wi)], (a * resid[si:si + len(wi)]).sum(1), minlength=n_runs)
+        for j in np.nonzero((starts < ends[i]) & (ends > si) & (np.arange(K) >= i))[0]:
+            sj, wj = regs[j]
+            lo, hi = max(si, sj), min(ends[i], ends[j])
+            v = np.bincount(run_id[lo:hi], (a[lo - si:hi - si] * wj[lo - sj:hi - sj]).sum(1), minlength=n_runs)
+            XtX[:, i, j] = v
+            XtX[:, j, i] = v
+    return XtX, Xtr
+
+
+MODS = ['mod_rt', 'mod_dist_repeat', 'mod_target_repeat', 'mod_target_at_prev_dist']
+
+
+def param_design(meta, trials, with_global):
+    """Design of the parametric model over the per-trial regressors: per kind a main gain and, centred within kind,
+    the trial modulators (columns without variance left out). Returns (Mp (K, P), names)."""
+    meta_m = meta.merge(trials[['trial_idx', *MODS]], on='trial_idx')
+    cols, names = [], []
+    for kind in sorted(meta_m['kind'].unique()):
+        if kind == 'G' and not with_global:
+            continue
+        sel = (meta_m['kind'] == kind).values
+        cols.append(sel.astype(float))
+        names.append((kind, 'main'))
+        for m in MODS:
+            v = meta_m[m].values * sel
+            v = np.where(sel, v - v[sel].mean(), 0.0)
+            if v[sel].std() > 1e-6:
+                cols.append(v)
+                names.append((kind, m.replace('mod_', '')))
+    return np.column_stack(cols), names
+
+
+def param_run_equations(meta, trials, g0, XtX_r, Xtr_r):
+    """Per run, the parametric model's normal equations (Mp'M_rMp, Mp'b_r) and Mp'M_r·g0 (for pooling ROIs as a
+    deviation from their canonical gains), for the designs without and with the global gain."""
+    out = {}
+    for wg in (False, True):
+        Mp, names = param_design(meta, trials, wg)
+        P = np.einsum('ki,rkl,lj->rij', Mp, XtX_r, Mp)
+        q = Xtr_r @ Mp
+        h = np.einsum('rkl,l->rk', XtX_r, g0) @ Mp
+        out[wg] = (names, P, q, h)
+    return out
+
+
+def param_uncertainty(names, P, q):
+    """From per-run parametric equations: the all-run estimate, its leave-one-run-out jackknife SE, and the estimates
+    on odd and on even runs (by position in the session order)."""
+    full = np.linalg.solve(P.sum(0), q.sum(0))
+    R = P.shape[0]
+    loo = np.array([np.linalg.solve(P.sum(0) - P[r], q.sum(0) - q[r]) for r in range(R)])
+    se = np.sqrt((R - 1) / R * ((loo - loo.mean(0)) ** 2).sum(0))
+    odd = np.linalg.solve(P[0::2].sum(0), q[0::2].sum(0))
+    even = np.linalg.solve(P[1::2].sum(0), q[1::2].sum(0))
+    return full, se, odd, even
+
+
 # ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
@@ -611,7 +679,14 @@ def roi_pieces(sub, roi, data, trials, u, seed=0, hp_neutral=False):
     g0 = meta['kind'].map({'T': g_T, 'D_HP': g_HP, 'D_LP': g_LP,
                            'G': 0.0, 'P': 0.0, 'H': 0.0}).values.astype(np.float64)
     eqs = normal_equations(regs, resid0, w, sets)
-    del resid0
+    run_id = np.full(Y.shape[0], -1)
+    for i, (_ses, _run, sl, _h) in enumerate(run_masks):
+        run_id[sl] = i
+    assert (run_id >= 0).all()
+    XtX_r, Xtr_r = run_normal_equations(regs, resid0, w, run_id, len(run_masks))
+    assert np.allclose(XtX_r.sum(0), eqs[0][0], rtol=1e-6, atol=1e-9 * np.abs(eqs[0][0]).max())
+    param_runs = param_run_equations(meta, trials, g0, XtX_r, Xtr_r)
+    del resid0, XtX_r, Xtr_r
 
     # Run-wise joint model: sustained HP/LP + phasic gains per run, on the residual from the model with ALL AF
     # gains zeroed. Kept as normal equations (X'WX, X'Wr) and the canonical value of every regressor.
@@ -647,10 +722,10 @@ def roi_pieces(sub, roi, data, trials, u, seed=0, hp_neutral=False):
         run_eqs[with_global] = (names, Xw @ X.T, Xw @ resid00.ravel(),
                                 np.array([canon[k] for _, _, k in names], dtype=np.float64))
         del X, Xw, dense
-    return dict(check=check, meta=meta, g0=g0, eqs=eqs, run_eqs=run_eqs, n_voxels=len(vox))
+    return dict(check=check, meta=meta, g0=g0, eqs=eqs, run_eqs=run_eqs, param_runs=param_runs, n_voxels=len(vox))
 
 
-def estimate(trials, meta, g0, eqs, run_eqs):
+def estimate(trials, meta, g0, eqs, run_eqs, param_runs=None):
     """Per-trial ridge (toward g0) with voxel split-half CV, RT-binned / inter-trial OLS, the parametric model and
     the run-wise joint model, all from the normal equations."""
     (M, b, c), (MA, bA, cA), (MB, bB, cB) = eqs
@@ -694,29 +769,24 @@ def estimate(trials, meta, g0, eqs, run_eqs):
                                      bin=bin_, g=val, n_trials=int(n[lab])))
 
     # ---- Parametric modulation: gain_k = g + Σ_m β_m · m_k ----
-    mods = ['mod_rt', 'mod_dist_repeat', 'mod_target_repeat',
-            'mod_target_at_prev_dist']
-    meta_m = meta.merge(trials[['trial_idx', *mods]], on='trial_idx')
+    # Also on the two voxel halves, and its uncertainty from the per-run equations: leave-one-run-out jackknife SE
+    # (all noise sources, also noise shared across voxels) and the estimates on odd and even runs.
     param_rows = []
     for with_global in (False, True):
-        cols, names = [], []
-        for kind in sorted(meta_m['kind'].unique()):
-            if kind == 'G' and not with_global:
-                continue
-            sel = (meta_m['kind'] == kind).values
-            cols.append(sel.astype(float))
-            names.append((kind, 'main'))
-            for m in mods:
-                v = meta_m[m].values * sel
-                v = np.where(sel, v - v[sel].mean(), 0.0)
-                if v[sel].std() > 1e-6:
-                    cols.append(v)
-                    names.append((kind, m.replace('mod_', '')))
-        Mp = np.column_stack(cols)
+        Mp, names = param_design(meta, trials, with_global)
         est = np.linalg.solve(Mp.T @ M @ Mp, Mp.T @ b)
-        for (kind, m), val in zip(names, est):
-            param_rows.append(dict(with_global=with_global, kind=kind,
-                                   modulator=m, g=val))
+        h1 = np.linalg.solve(Mp.T @ MA @ Mp, Mp.T @ bA)
+        h2 = np.linalg.solve(Mp.T @ MB @ Mp, Mp.T @ bB)
+        extra = {}
+        if param_runs is not None:
+            pn, P, q, _h = param_runs[with_global]
+            assert pn == names, (pn, names)
+            full, se, odd, even = param_uncertainty(pn, P, q)
+            assert np.allclose(full, est, rtol=1e-5, atol=1e-7 * max(1.0, np.abs(est).max())), np.abs(full - est).max()
+            extra = dict(se_jk=se, g_odd_runs=odd, g_even_runs=even)
+        for i, ((kind, m), val) in enumerate(zip(names, est)):
+            param_rows.append(dict(with_global=with_global, kind=kind, modulator=m, g=val,
+                                   g_vhalf1=h1[i], g_vhalf2=h2[i], **{k: v[i] for k, v in extra.items()}))
 
     # ---- Run-wise joint model ----
     run_rows = []
@@ -754,7 +824,7 @@ def save_estimates(sub, roi, out_dir, trials, check, trial_rows, cv_rows, bin_ro
 def fit_roi(sub, roi, data, trials, u, out_dir, seed=0, hp_neutral=False):
     pieces = roi_pieces(sub, roi, data, trials, u, seed=seed, hp_neutral=hp_neutral)
     save_estimates(sub, roi, out_dir, trials, pieces['check'],
-                   *estimate(trials, pieces['meta'], pieces['g0'], pieces['eqs'], pieces['run_eqs']))
+                   *estimate(trials, pieces['meta'], pieces['g0'], pieces['eqs'], pieces['run_eqs'], pieces['param_runs']))
     return pieces
 
 
@@ -784,11 +854,17 @@ def pool_pieces(pieces):
                 raise ValueError('ROIs disagree on the run-wise regressors')
             A, r = A + A_, r + (r_ - A_ @ c_)
         run_eqs[wg] = (names, A, r, np.zeros(len(names)))
-    return meta, np.zeros(len(meta)), eqs, run_eqs
+    param_runs = {}
+    for wg in (False, True):
+        names = pieces[0]['param_runs'][wg][0]
+        P = sum(p['param_runs'][wg][1] for p in pieces)
+        q = sum(p['param_runs'][wg][2] - p['param_runs'][wg][3] for p in pieces)
+        param_runs[wg] = (names, P, q, np.zeros_like(q))
+    return meta, np.zeros(len(meta)), eqs, run_eqs, param_runs
 
 
 def fit_group(sub, group, pieces, rois, out_dir, trials):
-    meta, g0, eqs, run_eqs = pool_pieces(pieces)
+    meta, g0, eqs, run_eqs, param_runs = pool_pieces(pieces)
     checks = pd.concat([p['check'] for p in pieces])
     nv = checks['n_voxels'].to_numpy()
     check = pd.DataFrame([dict(
@@ -799,7 +875,7 @@ def fit_group(sub, group, pieces, rois, out_dir, trials):
         pulse_rebuild_max_err=float(checks['pulse_rebuild_max_err'].max()),
         sustained_recon_rel_err=float(checks['sustained_recon_rel_err'].max()),
         gains='deviation from each ROI\'s canonical gains')])
-    save_estimates(sub, group, out_dir, trials, check, *estimate(trials, meta, g0, eqs, run_eqs))
+    save_estimates(sub, group, out_dir, trials, check, *estimate(trials, meta, g0, eqs, run_eqs, param_runs))
 
 
 def main(subject, bids_folder, rois, output_subdir='af_trialwise_gains', hp_neutral=False, ladder_roots=(),
