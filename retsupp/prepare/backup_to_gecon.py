@@ -26,6 +26,8 @@ import argparse
 import hashlib
 import os
 import subprocess
+import tempfile
+import time
 from pathlib import Path
 
 SRC = Path('/shares/zne.uzh/gdehol/ds-retsupp')
@@ -72,6 +74,22 @@ def smb(commands, env, check=True):
     return text
 
 
+INTERVAL = 1.0  # seconds between file operations on the share (its security checks blocked the account at ~6 parallel streams)
+
+
+def smb_session(commands, env, interval=None):
+    """One smbclient connection; commands are fed one per `interval` seconds. Returns the output."""
+    interval = INTERVAL if interval is None else interval
+    p = subprocess.Popen(['smbclient', '-N', '--use-kerberos=required', SHARE], stdin=subprocess.PIPE,
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
+    for c in commands:
+        p.stdin.write(c + '\n')
+        p.stdin.flush()
+        time.sleep(interval)
+    out, _ = p.communicate('quit\n')
+    return out
+
+
 def md5(path, chunk=1 << 22):
     h = hashlib.md5()
     with open(path, 'rb') as f:
@@ -102,7 +120,7 @@ def copy(unit, env, batch=50):
     with open(done_fn, 'a') as log, open(blocked_fn, 'a') as blog:
         for i in range(0, len(todo), batch):
             chunk = todo[i:i + batch]
-            text = smb([f'put "{p}" "{DEST}/{p.relative_to(SRC)}"' for p in chunk], env, check=False)
+            text = smb_session([f'put "{p}" "{DEST}/{p.relative_to(SRC)}"' for p in chunk], env)
             put_ok = {line.split(' as ')[0][len('putting file '):] for line in text.splitlines()
                       if line.startswith('putting file ')}
             refused = [p for p in chunk if str(p) not in put_ok]
@@ -194,14 +212,21 @@ def verify(unit, env):
     bad = 0
     with open(out, 'w') as f:
         f.write('path\tsize\tmd5_local\tmd5_remote\tok\n')
+        todo = [p for p in files if str(p.relative_to(SRC)) not in refused]
+        remote_sum = {}
+        tmp = Path(tempfile.mkdtemp(dir=os.environ.get('TMPDIR', '/scratch/gdehol')))
+        for i in range(0, len(todo), 20):
+            chunk = todo[i:i + 20]
+            smb_session([f'get "{DEST}/{p.relative_to(SRC)}" "{tmp}/{k}"' for k, p in enumerate(chunk)], env)
+            for k, p in enumerate(chunk):
+                t = tmp / str(k)
+                remote_sum[str(p.relative_to(SRC))] = md5(t) if t.exists() else 'missing'
+                t.unlink(missing_ok=True)
+        tmp.rmdir()
         for p in files:
             rel = str(p.relative_to(SRC))
             local = md5(p)
-            if rel in refused:
-                # in the tar: the tar member must equal the source, and the tar on the share must equal the local tar
-                remote = tar_members.get(rel, 'missing')
-            else:
-                remote = remote_md5(f'{DEST}/{rel}', env)
+            remote = tar_members.get(rel, 'missing') if rel in refused else remote_sum[rel]
             ok = remote == local
             bad += not ok
             f.write(f'{rel}\t{p.stat().st_size}\t{local}\t{remote}\t{ok}\n')
