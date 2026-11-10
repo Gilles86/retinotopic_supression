@@ -14,6 +14,6 @@ set -eo pipefail
 mkdir -p "$HOME/logs"
 exec >"$HOME/logs/backup_gecon_${VERIFY:+verify_}${SLURM_ARRAY_TASK_ID}_${SLURM_JOB_ID}.txt" 2>&1
 export KRB5CCNAME=/scratch/gdehol/krb5cc
-export TMPDIR=/scratch/gdehol/tmp/gecon_; mkdir -p ""
-cd "/retsupp_plan"
+export TMPDIR="/scratch/gdehol/tmp/gecon_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}"; mkdir -p "$TMPDIR"
+cd "$HOME/retsupp_plan"
 exec python3 -u -m retsupp.prepare.backup_to_gecon --index "$SLURM_ARRAY_TASK_ID" ${VERIFY:+--verify}
