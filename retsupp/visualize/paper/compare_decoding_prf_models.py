@@ -27,7 +27,8 @@ from scipy import stats
 from retsupp.visualize.paper.fig6_decoding import DATA, EARLY, band_effects, effects, quadrant_effects
 
 ALL_ROIS = ['V1', 'V2', 'V3', 'V3AB', 'IPS', 'hV4', 'VO', 'LO', 'TO']
-LABELS = {'dn_roihrf': 'DN, per-ROI HRF', 'dog_roihrf': 'DoG, per-ROI HRF', 'jointhrf': 'DoG, joint HRF (Fig. 6)'}
+LABELS = {'dn_roihrf': 'DN, per-ROI HRF', 'dog_roihrf': 'DoG, per-ROI HRF', 'jointhrf': 'DoG, joint HRF (Fig. 6)',
+          'gauss_jointhrf': 'Gaussian, joint HRF', 'dn_jointhrf': 'DN, joint HRF'}
 DECODERS = ['free', 'outline']
 BAND_KEYS = ['all', '0-1.5', '1.5-2.5', '2.5-ap']
 
@@ -151,15 +152,18 @@ def figure(per_sub, sources, name='figS_decoding_prf_models'):
                      transform=axes[1].transAxes, ha='right', fontsize=6.5)
     legend = ("**Figure S. Quadrant contrasts of the decoded bar with different pRF models.** Decoded intensity on the "
               "bar's pixels per quadrant relative to the run's HP location (HP, the two quadrants next to it pooled, "
-              "opposite), in % of the mean of the four, per subject the mean over runs and V1–V3. pRFs: divisive "
-              "normalization (DN) or difference of Gaussians (DoG) with the HRF fixed per subject and ROI (median "
-              "of the training-fold fits), and DoG with the HRF fitted jointly (Fig. 6). a, Unconstrained decoder; "
+              "opposite), in % of the mean of the four, per subject the mean over runs and V1–V3. pRFs: "
+              + ('; '.join(LABELS[s2] for s2 in sources) if all('jointhrf' in s2 for s2 in sources) else
+                 "divisive normalization (DN) or difference of Gaussians (DoG) with the HRF fixed per subject and ROI "
+                 "(median of the training-fold fits), and DoG with the HRF fitted jointly (Fig. 6)")
+              + (" (each with one HRF per subject × ROI fitted jointly with its pRFs)" if all('jointhrf' in s2 for s2 in sources) else "")
+              + ". a, Unconstrained decoder; "
               "b, bar outline given. Dots, subjects; points and bars, mean and within-subject SEM (Cousineau-Morey). "
               "p: next to HP vs opposite, two-sided Wilcoxon signed-rank test.")
     save(fig, name, legend)
 
 
-def main(sources, do_figure):
+def main(sources, do_figure, suffix=''):
     out = {k: [] for k in ('quality', 'hp', 'quadrants', 'bands')}
     per_sub = []
     for src in sources:
@@ -173,17 +177,18 @@ def main(sources, do_figure):
     pd.set_option('display.width', 220)
     for k, v in out.items():
         t = pd.concat(v)
-        t.to_csv(DATA / f'decoding_prf_models_{k}_2026-11.tsv', sep='\t', index=False)
+        t.to_csv(DATA / f'decoding_prf_models_{k}_2026-11{suffix}.tsv', sep='\t', index=False)
         print(f'\n== {k}')
         print(t.round(4).to_string(index=False))
     per_sub = pd.concat(per_sub)
     if do_figure:
-        figure(per_sub, sources)
+        figure(per_sub, sources, name='figS_decoding_prf_models' + suffix)
 
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--sources', nargs='+', default=['dn_roihrf', 'dog_roihrf', 'jointhrf'])
     ap.add_argument('--figure', action='store_true')
+    ap.add_argument('--suffix', default='', help='appended to the output table and figure names')
     a = ap.parse_args()
-    main(a.sources, a.figure)
+    main(a.sources, a.figure, a.suffix)

@@ -102,6 +102,9 @@ def all_stats(folder):
     return pw, dt, dd, hl, diff, res
 
 
+NONPOS = set()   # subject x group pairs left out of the relative (%) analysis: mean response <= 0
+
+
 def rel_stats(folder):
     """Location type relative to the run's HP location (``deconvolve_location_responses.py --relative``).
 
@@ -121,6 +124,10 @@ def rel_stats(folder):
                         'opposite': loc['opposite'] - m4}).reset_index()
 
     pk = p[p.t.between(*PEAK)].groupby(['subject', 'grp', 'cls']).r.mean().unstack().dropna()
+    # A percentage of a mean response that is not positive is undefined: such subject x group pairs are left out.
+    bad = pk.mean(1) <= 0
+    NONPOS.update(f'sub-{s:02d} {g}' for s, g in pk.index[bad])
+    pk = pk[~bad]
     pk = pk.div(pk.mean(1), axis=0) * 100
     cells = pk.stack().rename('r').reset_index()
     cells[['item', 'loc']] = cells.cls.str.split('_', expand=True)
@@ -448,6 +455,10 @@ def main(folder, name='fig3_item_locations', stats_only=False, dct_folder='notes
                            n_dor=int(rres.loc['Dorsal', 'n']), rel=rel_text(rres), rel_dct=rel_text(rres2), items=item_text(cells),
                            hplp=an, inter=inter, dct=short_stats(dt2, dd2, hl2, res2))
     legend = legend.replace('-0.', '−0.').replace('(-', '(−').replace(' -', ' −')
+    if NONPOS:
+        legend = legend.rstrip() + (' In the relative analyses (d, e and the location-type statistics), subject × pathway '
+                                    'pairs whose mean response over the twelve item × location cells is not positive are left '
+                                    'out, since a percentage of it is undefined: ' + ', '.join(sorted(NONPOS)) + '.')
     save(fig, name, legend)
 
 

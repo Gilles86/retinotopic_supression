@@ -47,9 +47,10 @@ def jzs_bf10(x, r=np.sqrt(2) / 2):
 LOSO_TABLE = 'notes/data/loso_per_roi_2026-11.tsv'
 
 
-def generalization(term, family='dog', table=LOSO_TABLE):
-    """Per ROI: % of subjects predicted better with the others' size of the term (+δ) than with -δ, and BH q."""
-    d = pd.read_csv(table, sep='\t')
+def generalization(term, family='dog', table=None):
+    """Per ROI: % of subjects predicted better with the others' size of the term (+δ) than with -δ, and BH q.
+    table: default the module's LOSO_TABLE at call time (a caller may set it)."""
+    d = pd.read_csv(table or LOSO_TABLE, sep='\t')
     d = d[(d.family == family) & (d.mech == term)]
     pct, ps = [], []
     for roi in ROI_ORDER:

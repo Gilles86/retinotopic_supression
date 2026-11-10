@@ -333,7 +333,7 @@ def distance_icon(fig, x0, y0, size, n_bins=8):
     return ins
 
 
-def main(cv_table, hrf_table, name='fig2_prf_fits'):
+def main(cv_table, hrf_table, name='fig2_prf_fits', nearest_dir=NEAREST_DIR):
     d, base = gain_r2(cv_table, hrf_table)
     fig = plt.figure(figsize=(DOUBLE, 7.1))
     top = fig.add_gridspec(1, 2, width_ratios=[.27, 1], left=.01, right=.99, top=0.965, bottom=0.665, wspace=.03)
@@ -355,7 +355,7 @@ def main(cv_table, hrf_table, name='fig2_prf_fits'):
             color=FG, va='center', linespacing=1.2)
     letter(ax, 'd', x=-.22, y=1.12)
     low = fig.add_gridspec(1, 1, left=.075, right=.9, top=0.17, bottom=0.055)
-    first = panel_distance_tc(fig, low[0])
+    first = panel_distance_tc(fig, low[0], nearest_dir)
     if first is not None:
         bb = first.get_position()
         size = .55
@@ -372,5 +372,7 @@ if __name__ == '__main__':
     ap.add_argument('--hrf-table', default='notes/data/hrf_comparison_jointhrf_final2_2026-11.tsv',
                     help='held-out R² of the DoG pRF with the per-ROI HRF (model 14); the joint-HRF fits by default')
     ap.add_argument('--name', default='fig2_prf_fits_final2')
+    ap.add_argument('--nearest-dir', default='notes/data/event_deconv_nearest_final2_2026-11',
+                    help='deconvolved search-onset responses by pRF distance from the nearest item (e)')
     a = ap.parse_args()
-    main(a.cv_table, a.hrf_table, a.name)
+    main(a.cv_table, a.hrf_table, a.name, a.nearest_dir)

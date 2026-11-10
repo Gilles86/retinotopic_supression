@@ -24,14 +24,23 @@ from scipy import stats
 from retsupp.visualize.paper.fig45_common import conditional, generalization_row, joint, jzs_bf10, median_ci
 from retsupp.visualize.paper.paper_style import (DISTRACTOR, DOUBLE, FG, HP, ICON_PAD, MUTED, OUT, PROVISIONAL, ROI_ORDER, ROI_X,
                                                  SINGLE, TARGET, letter, offset_spines, provisional, roi_axis, roi_icon,
-                                                 roi_positions, save)
+                                                 roi_positions, save as _save)
 
 FWHM = 2 * np.sqrt(2 * np.log(2))
+GAIN_TABLE = None
+SUFFIX = ''      # --suffix: every output gets it (new names; the earlier files stay)
+FINAL = False    # --final: final fits; findings in the legends computed from the data, no provisional stamps
+
+
+def save(fig, name, legend):
+    if FINAL:
+        legend = legend.replace(' Provisional: current inputs.', '').replace('Provisional: current inputs.', '')
+    _save(fig, name + SUFFIX, legend)
 TERMS = [('T', 'Target gain', TARGET), ('D', 'Distractor gain', DISTRACTOR), ('dS', 'Sustained gain, HP − LP', HP),
          ('dD', 'Distractor gain, HP − LP', '#5E3C99')]
 FAM = {'dog': 'DoG', 'dn': 'DN'}
 LEGEND = """
-**Figure 5. The gain fields: gain at the target and the distractor, and less sustained gain at the high-probability (HP) location.** Gain-field model fits with DoG pRFs (n = 30); a gain is the fractional change in drive at the centre of a field (+0.30: 30% more). a, c, d: dots are subjects (triangles, beyond the axis), points and bars the median and bootstrapped 95% CI; stars, Wilcoxon signed-rank test against 0, Benjamini-Hochberg across the nine ROIs, * q < .05, ** q < .01, *** q < .001 (exact p and q per ROI in the parameter table). a, Gain at the target (orange) and at the distractor (blue, averaged over its locations) while the search display is on, all terms fitted jointly. The gain against pRF size is in a supplementary figure. b, The sustained gain field over the search display, drawn to scale (red shading): one Gaussian per item (white discs, 4° eccentricity, neighbouring items {spacing:.1f}° apart; grey circle, the 3.17° aperture of the bar stimulus), with less gain at the HP than at the LP locations (the HP − LP difference exaggerated for display). Red dashed circle around the HP item: the full width at half maximum (FWHM = 2.355 σ) of the fitted sustained field, the median over all subjects and ROIs ({fwhm:.1f}°); thin grey circles, the median per ROI. Below: FWHM per subject and ROI of the sustained field (red) and of the transient field shared by the target and distractor gain (grey), side by side (log axis; dots, subjects; points and bars, median and bootstrapped 95% CI; open triangles at the axis edge, fits at a bound of σ, 0.5° or 8°, i.e. FWHM 1.2° or 18.8°); dotted line, the spacing of neighbouring items. Sustained: {fw_bound:.0f}% of all fits at a bound (per ROI {fw_bound_roi}); median FWHM [interquartile range over subjects] {fw_iqr}. Transient: often at a bound (per ROI {tr_bound_roi}; IPS mostly at the upper bound), so its width is poorly constrained and trades off with the transient gain amplitude; median FWHM [IQR] {tr_iqr}. The sustained width is the well-determined one. Widths of all fits; filtering on fit improvement pending on the final fits. The field reaches beyond the item and overlaps those of its neighbours. c, dS = g_HP − g_LP, the sustained gain at the HP location minus that at the low-probability (LP) locations, each term estimated alone on the item model with sustained gain (conditional estimate). d, The gain analogue of Fig. 1c, d: dD = g_HP_dyn − g_LP_dyn, the gain the distractor draws at the HP location minus at an LP location (blue), next to dT, the target gain at the HP location minus at an LP location (orange), each estimated alone as in c; the display icons are those of Fig. 1 (HP ringed in red; the item at HP minus at an LP location). Less gain for a distractor at HP in V3AB, IPS, hV4 and VO; the target gain shows no reliable HP − LP difference after correction (smallest q = .07, V3; a positive trend in IPS, q = .10), and none when fitted jointly with all other terms either (q ≥ .36). Compared directly (per subject dD − dT, Wilcoxon signed-rank, Benjamini-Hochberg across ROIs), the distractor and target HP − LP terms do not differ reliably in any ROI (V3 +.053, p = .021, q = .094; IPS −.097, p = .012, q = .094; all others p ≥ .36, q = .855; pooled over ROIs per subject, median −.005, p = .89); the target series is shown for context. Stars per series (against 0), one row each. When dS and dD are fitted together with all other terms (supplementary figure and parameter table), no ROI survives correction: dD stays at −7 to −10% in V3AB, IPS, hV4 and VO (q ≈ .09–.15), dS is −4 to −5% in V1–V3 (q ≥ .07). The measured responses at the item locations (Fig. 3) show less response at HP for every item type, significant in the early areas, without a distractor-specific difference. Whether the terms predict new subjects (leave-one-subject-out) is in Table 1 and, per ROI, in the supplementary figure figS_loso_per_roi. DN pRFs, Bayes factors and all other terms are in the parameter table. Provisional: current inputs.
+**Figure 5. The gain fields: gain at the target and the distractor, and less sustained gain at the high-probability (HP) location.** Gain-field model fits with DoG pRFs (n = 30); a gain is the fractional change in drive at the centre of a field (+0.30: 30% more). a, c, d: dots are subjects (triangles, beyond the axis), points and bars the median and bootstrapped 95% CI; stars, Wilcoxon signed-rank test against 0, Benjamini-Hochberg across the nine ROIs, * q < .05, ** q < .01, *** q < .001 (exact p and q per ROI in the parameter table). a, Gain at the target (orange) and at the distractor (blue, averaged over its locations) while the search display is on, all terms fitted jointly. The gain against pRF size is in a supplementary figure. b, The sustained gain field over the search display, drawn to scale (red shading): one Gaussian per item (white discs, 4° eccentricity, neighbouring items {spacing:.1f}° apart; grey circle, the 3.17° aperture of the bar stimulus), with less gain at the HP than at the LP locations (the HP − LP difference exaggerated for display). Red dashed circle around the HP item: the full width at half maximum (FWHM = 2.355 σ) of the fitted sustained field, the median over all subjects and ROIs ({fwhm:.1f}°); thin grey circles, the median per ROI. Below: FWHM per subject and ROI of the sustained field (red) and of the transient field shared by the target and distractor gain (grey), side by side (log axis; dots, subjects; points and bars, median and bootstrapped 95% CI; open triangles at the axis edge, fits at a bound of σ, 0.5° or 8°, i.e. FWHM 1.2° or 18.8°); dotted line, the spacing of neighbouring items. Sustained: {fw_bound:.0f}% of all fits at a bound (per ROI {fw_bound_roi}); median FWHM [interquartile range over subjects] {fw_iqr}. Transient: often at a bound (per ROI {tr_bound_roi}; IPS mostly at the upper bound), so its width is poorly constrained and trades off with the transient gain amplitude; median FWHM [IQR] {tr_iqr}. The sustained width is the well-determined one.{width_note}{overlap_note} c, dS = g_HP − g_LP, the sustained gain at the HP location minus that at the low-probability (LP) locations, each term estimated alone on the item model with sustained gain (conditional estimate). d, The gain analogue of Fig. 1c, d: dD = g_HP_dyn − g_LP_dyn, the gain the distractor draws at the HP location minus at an LP location (blue), next to dT, the target gain at the HP location minus at an LP location (orange), each estimated alone as in c; the display icons are those of Fig. 1 (HP ringed in red; the item at HP minus at an LP location). {d_findings} {loso_ref} DN pRFs, Bayes factors and all other terms are in the parameter table. Provisional: current inputs.
 """
 LEGEND_LOSO = """
 **Figure S. Do the gain terms predict new subjects?** Leave-one-subject-out test per ROI and term: the term added with the size estimated from the other 29 subjects (+δ) vs the opposite size (−δ); numbers, the percentage of subjects predicted better with +δ (cell colour: red above 50%, blue below); bold: q < .05 (non-significant cells muted), one-sided Wilcoxon signed-rank test, Benjamini-Hochberg across the nine ROIs per term (q per cell below). The distractor gain is tested on top of the target term, whose size and field width are the subject's own fit ("with target"); added to the pRF model alone it predicts new subjects no better (52–67% per ROI, TO 8%). These tests use the earlier gain fits (canonical HRF, before the selection on cross-run reliability) and will be redone on the final fits. Provisional.
@@ -72,7 +81,7 @@ def summarise(js, cond):
 
 
 def write_table(t, js):
-    t.to_csv(OUT / 'table_parameters_2026-11.tsv', sep='\t', index=False)
+    t.to_csv(OUT / f'table_parameters_2026-11{SUFFIX}.tsv', sep='\t', index=False)
     fmt = lambda r: f"{r['median']:+.3f} [{r.ci_low:+.3f}, {r.ci_high:+.3f}]"
     lines = ['**Table S. Gain-field parameters per ROI (m7_full, n = 30).** Median [bootstrapped 95% CI], Wilcoxon p, BH q '
              'across 9 ROIs, JZS Bayes factor BF10 (r = .707), and for DoG the conditional median. Gains are the fractional '
@@ -97,7 +106,10 @@ def write_table(t, js):
                 m, lo, hi = (FWHM * x for x in median_ci(v))
                 cells += [f'{m:.1f} [{lo:.1f}, {hi:.1f}]', f'{((v < .51) | (v > 7.9)).mean() * 100:.0f}%']
         lines.append(f'| {roi} | ' + ' | '.join(cells) + ' |')
-    (OUT / 'table_parameters_2026-11.md').write_text('\n'.join(lines) + '\n')
+    text = '\n'.join(lines) + '\n'
+    if FINAL:
+        text = text.replace(' Provisional: current inputs.', '')
+    (OUT / f'table_parameters_2026-11{SUFFIX}.md').write_text(text)
 
 
 def panel_gain(ax, d, t, term, col, ylim, note, note_xy):
@@ -144,7 +156,8 @@ def size_figure(d):
     ax.set_title('Size of the fitted fields', fontsize=7, loc='left', color=FG, pad=6)
     for j, (lab, col) in enumerate((('Sustained field', HP), ('Transient field', DISTRACTOR))):
         ax.text(.98, .95 - j * .09, lab, transform=ax.transAxes, color=col, fontsize=6.5, ha='right', va='top')
-    provisional(ax, y=1.08)
+    if not FINAL:
+        provisional(ax, y=1.08)
     save(fig, 'figS_field_size', LEGEND_SIZE)
 
 
@@ -282,6 +295,52 @@ def panel_sketch(ax, fwhm, lo_hi, g_lp=1., g_hp=.2, hp_ix=3, ecc=4., aperture=3.
     ax.set_axis_off()
 
 
+
+
+def legend_findings(cond, dt, js):
+    """The findings of panels c, d in words with their numbers (final fits): per-ROI BH results and the pooled tests."""
+    def per_roi(df, term):
+        ps, meds = [], []
+        for r in ROI_ORDER:
+            v = df[df.roi == r][term].dropna()
+            ps.append(stats.wilcoxon(v).pvalue)
+            meds.append(v.median())
+        q = stats.false_discovery_control(ps)
+        sig = [f'{r} {m:+.3f} (q = {qq:.2g})' for r, m, qq in zip(ROI_ORDER, meds, q) if qq < .05]
+        return sig, min(zip(q, ROI_ORDER))
+
+    def pooled(df, term):
+        v = df.groupby('subject')[term].median().dropna()
+        m, a, b = median_ci(v)
+        p = stats.wilcoxon(v).pvalue
+        return f'per-subject median over ROIs {m:+.3f} [{a:+.3f}, {b:+.3f}], {(v < 0).mean() * 100:.0f}% of subjects < 0, p = {p:.2g}'
+
+    both = cond[['subject', 'roi', 'dD']].merge(dt, on=['subject', 'roi'])
+    both['dDmT'] = both.dD - both.dT
+    out = []
+    for df, term, lab in ((cond, 'dS', 'dS'), (cond, 'dD', 'The distractor term (dD)'), (dt, 'dT', 'The target term (dT)'),
+                          (both, 'dDmT', 'Their difference (dD − dT)')):
+        sig, (qmin, rmin) = per_roi(df, term)
+        where = ('reliable in ' + ', '.join(sig)) if sig else f'no ROI q < .05 (smallest q = {qmin:.2g}, {rmin})'
+        out.append(f'{lab}: {where}; {pooled(df, term)}')
+    jd = js['dog']
+    joint_txt = []
+    for term in ('dS', 'dD'):
+        sig, (qmin, rmin) = per_roi(jd, term)
+        joint_txt.append(f'{term} ' + (('q < .05 in ' + ', '.join(sig)) if sig else f'no ROI q < .05 (smallest {qmin:.2g}, {rmin})')
+                         + f'; {pooled(jd, term)}')
+    d_findings = ('Estimated alone (c, d): ' + '. '.join(out) + '. Fitted jointly with all other terms: '
+                  + '; '.join(joint_txt) + '. ' + 'The measured responses at the item locations (Fig. 3) are lower at '
+                  'HP for every item type, without an item-specific difference.') if FINAL else ''
+    d_findings = d_findings.replace('-0.', '−0.').replace('+0.', '+0.')
+    loso_ref = ('How much each term adds to out-of-subject prediction (leave-one-subject-out) is in the supplementary '
+                'table of model terms.') if FINAL else ''
+    return dict(d_findings=d_findings, loso_ref=loso_ref,
+                overlap_note=(' At half maximum the sustained field (median FWHM above) stays within the spacing of '
+                              'neighbouring items in most ROIs (early areas ≈ 5°, others ≈ 3°).') if FINAL else
+                ' The field reaches beyond the item and overlaps those of its neighbours.',
+                width_note='' if FINAL else ' Widths of all fits; filtering on fit improvement pending on the final fits.',
+                ds_text=out[0])
 
 
 def dn_numbers(dn, dog, cond):
@@ -577,7 +636,12 @@ def loso_figure():
     ax = fig.add_axes([.62 / W, .08 / H, (W - .75) / W, 1.5 / H])
     panel_loso_t(ax)
     fig.text(.05 / W, (H - .12) / H, 'Predicts new subjects (% of subjects)', fontsize=7.5, color=FG, va='center', ha='left')
-    save(fig, 'figS_loso_per_roi', LEGEND_LOSO + loso_table())
+    leg = LEGEND_LOSO
+    if FINAL:
+        leg = leg.replace(' These tests use the earlier gain fits (canonical HRF, before the selection on cross-run reliability) and will be redone on the final fits. Provisional.',
+                          ' Final DoG fits (one HRF per subject × ROI, voxels reliable across runs); signal voxels, those whose held-out response beats the model-free null.')
+        leg = leg.replace(' added to the pRF model alone it predicts new subjects no better (52–67% per ROI, TO 8%).', '.')
+    save(fig, 'figS_loso_per_roi', leg + loso_table())
 
 
 def hierarchy_figure(t, size, sl):
@@ -586,8 +650,17 @@ def hierarchy_figure(t, size, sl):
     panel_hierarchy(ax, t, size, sl)
     fmt_sl = lambda r: (f"{r.median_slope:+.2f} per doubling (95% CI [{r.ci_low:+.2f}, {r.ci_high:+.2f}], "
                         f"{r.pct_positive:.0f}% of subjects positive, p = {r.p:.2g}, q = {r.q:.2g})")
-    save(fig, 'figS_gain_vs_prf_size', LEGEND_HIERARCHY.format(t_slope=fmt_sl(sl.loc['Target gain']),
-                                                              d_slope=fmt_sl(sl.loc['Distractor gain'])))
+    leg = LEGEND_HIERARCHY.format(t_slope=fmt_sl(sl.loc['Target gain']), d_slope=fmt_sl(sl.loc['Distractor gain']))
+    if FINAL and GAIN_TABLE:
+        from scipy.stats import spearmanr
+        g = pd.read_csv(GAIN_TABLE, sep='\t')
+        g = g[(g.family == 'dog') & (g.model == 'm7_full') & g.roi.isin(ROI_ORDER)]
+        rho = {c: g.groupby('subject')[['g_T_dyn', c]].apply(lambda x: spearmanr(x.g_T_dyn, x[c]).statistic).dropna()
+               for c in ('item_scale', 'sigma_dyn')}
+        txt = lambda c: f'median ρ = {rho[c].median():+.2f}, p = {stats.wilcoxon(rho[c]).pvalue:.2g}'.replace('-', '−')
+        leg = leg.replace('within subjects, the target gain correlates with the fitted weight of the items relative to the bar (ρ = .25, p = .011) and negatively with the size of the gain field (ρ = −.22, p = .049)',
+                          f'within subjects (Spearman ρ over the nine ROIs, Wilcoxon across subjects), the target gain does not track the fitted weight of the items relative to the bar ({txt("item_scale")}) but falls with the width of the transient field ({txt("sigma_dyn")})')
+    save(fig, 'figS_gain_vs_prf_size', leg)
 
 
 def header(fig, y, text, x0=.012, x1=.99):
@@ -599,9 +672,13 @@ def main(gain_table, conditional_table, power_table, slope_table, sigma_table, n
          dt_table='notes/data/conditional_dT_dog_2026-11.tsv', family='dog',
          dn_conditional_table='notes/data/conditional_exact_dog_dn_2026-11.tsv'):
     from retsupp.visualize.paper.hierarchy_regression import roi_size
+    global GAIN_TABLE
+    GAIN_TABLE = gain_table
     js = {f: joint(gain_table, f) for f in FAM}
     cond = conditional(conditional_table)
     t = summarise(js, cond)
+    # dT estimated alone: its own table, or (dt_table == 'cond') the dT column of the conditional table
+    dt = cond[['subject', 'roi', 'dT']].dropna() if dt_table == 'cond' else pd.read_csv(dt_table, sep='\t')
     OUT.mkdir(parents=True, exist_ok=True)
     write_table(t, js)
     d = js[family]
@@ -625,8 +702,10 @@ def main(gain_table, conditional_table, power_table, slope_table, sigma_table, n
     LX, RX, PW = .55, 4.05, 2.95    # left and right columns of per-ROI panels
 
     # Row 1: a (target and distractor gain, wide) | b (the sustained field to scale).
+    d_rois = t[(t.model == FAM[family]) & (t.term == 'D') & (t.q < .05)].roi.tolist()
+    d_where = ' in ' + ', '.join(d_rois) if d_rois else ' nowhere reliably'
     row(fig, Y(.16), 'a', [('Gain at the ', FG), ('target', TARGET), (' in every area' if dn else ' beyond V1', FG),
-                            (', at the ', FG), ('distractor', DISTRACTOR), (' in V3AB, IPS, hV4, VO', FG)], [],
+                            (', at the ', FG), ('distractor', DISTRACTOR), (d_where, FG)], [],
         x_let=.02, x_title=.2)
     ax = at(LX, Y(1.82), 3.7, 1.18)
     sm = lambda term: t[(t.model == FAM[family]) & (t.term == term)].set_index('roi').loc[ROI_ORDER]
@@ -669,22 +748,26 @@ def main(gain_table, conditional_table, power_table, slope_table, sigma_table, n
     ax = at(LX, Y(y2 + .62 + 1.0), PW, 1.0)
     dot_panel(ax, [(cond, 'dS', HP, None)], (-.14, .08) if dn else (-.12, .06), 'Gain, HP − LP')
     ax.set_yticks([-.1, 0, .05])
-    title_d = [('Transient gain at HP: less for the ', FG), ('distractor', DISTRACTOR)]
+    title_d = ([('Transient gain at HP: less for the ', FG), ('distractor', DISTRACTOR)] if not FINAL else
+               [('Transient gain at HP: slightly less for ', FG), ('distractor', DISTRACTOR), (' and ', FG),
+                ('target', TARGET)])
     keys_d = [(icons('location', 'distractor'), DISTRACTOR, 'Each trial')] + \
         ([] if dn else [(icons('location', 'target'), TARGET, '')])
     row(fig, Y(y2), 'd', title_d, keys_d, x_let=RX - .5, x_title=RX - .32, key_y=Y(y2 + .27))
     fig.text((RX + PW) / W, Y(y2 + .27) / H, 'As Fig. 1c, d', fontsize=6, color='.45', ha='right', va='center')
     ax = at(RX, Y(y2 + .62 + 1.0), PW, 1.0)
-    series_d = [(cond, 'dD', DISTRACTOR, None)] + ([] if dn else [(pd.read_csv(dt_table, sep='\t'), 'dT', TARGET, None)])
+    series_d = [(cond, 'dD', DISTRACTOR, None)] + ([] if dn else [(dt, 'dT', TARGET, None)])
     dot_panel(ax, series_d, (-.3, .25) if dn else (-.35, .3), 'Gain, HP − LP')
     ax.set_yticks([-.2, 0, .2])
-    fig.text(.995, .005, 'DN pRFs, earlier fits (canonical HRF)' if dn else PROVISIONAL, fontsize=6, color=MUTED, ha='right',
+    fig.text(.995, .005, ('' if FINAL else 'DN pRFs, earlier fits (canonical HRF)') if dn else ('' if FINAL else PROVISIONAL),
+             fontsize=6, color=MUTED, ha='right',
              va='bottom')
     if dn:
         save(fig, name, LEGEND_DN.format(fwhm=fw, fw_bound=100 * fw_bound, **fwhm_text(d), **dn_numbers(d, js['dog'], cond)))
         return
     save(fig, name, LEGEND.format(spacing=4 * np.sqrt(2), fwhm=fw, fw_bound=100 * fw_bound,
-                                  fw_roi='; '.join(f'{r} {v:.1f}°' for r, v in fw_roi.items()), **fwhm_text(d)))
+                                  fw_roi='; '.join(f'{r} {v:.1f}°' for r, v in fw_roi.items()), **fwhm_text(d),
+                                  **legend_findings(cond, dt, js)))
     loso_figure()
     hierarchy_figure(t, size, sl)
     print('FWHM median', fw, 'per ROI', fw_roi.round(2).to_dict(), 'at bound', fw_bound)
@@ -707,6 +790,8 @@ def main(gain_table, conditional_table, power_table, slope_table, sigma_table, n
     panel_pooled(ax, cond, js, 'dD', DISTRACTOR, (-.3, .2))
     letter(ax, 'b', x=-.35, y=1.12)
     save(fig, 'figS_pooled_dS_dD', POOLED_LEGEND)
+    if FINAL:      # the power simulation ran on the earlier fits; not redrawn
+        return
     fig, ax = plt.subplots(figsize=(SINGLE, 2.2), gridspec_kw=dict(left=.17, right=.97, top=.92, bottom=.2))
     panel_power(ax, power_table)
     save(fig, 'figS_cv_power', POWER_LEGEND)
@@ -724,6 +809,13 @@ if __name__ == '__main__':
     ap.add_argument('--family', default='dog', choices=['dog', 'dn'])
     ap.add_argument('--dt-table', default='notes/data/conditional_dT_dog_2026-11.tsv',
                     help='target gain HP − LP, estimated alone')
+    ap.add_argument('--suffix', default='', help='appended to every output name')
+    ap.add_argument('--final', action='store_true', help='final fits: findings computed in the legends, no provisional stamps')
+    ap.add_argument('--loso-table', default=None, help='per-ROI LOSO table for figS_loso_per_roi (default fig45_common.LOSO_TABLE)')
     a = ap.parse_args()
+    SUFFIX, FINAL = a.suffix, a.final
+    if a.loso_table:
+        import retsupp.visualize.paper.fig45_common as _fc
+        _fc.LOSO_TABLE = a.loso_table
     main(a.gain_table, a.conditional_table, a.power_table, a.slope_table, a.sigma_table,
          a.name or ('figS_gain_fields_dn' if a.family == 'dn' else 'fig5_gain_fields'), a.dt_table, a.family)

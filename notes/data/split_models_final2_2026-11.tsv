@@ -1,0 +1,8 @@
+model	term	n_subjects	n_subject_roi	pooled_median	pct_neg	p	rois_q05
+m8_full_adjopp (LP gain split: next to HP vs opposite)	Sustained gain next to HP − opposite HP	30	252	6.56337942928002e-05	50.0	0.871207794174552	none
+m8_full_adjopp	Sustained gain HP − next to HP	30	252	-0.01242220153411229	60.0	0.09194962680339813	V3 -0.097 (q=0.038)
+m8_full_adjopp	Sustained gain HP − opposite	30	252	-0.031033795016507326	80.0	0.008705463260412216	hV4 -0.050 (q=0.018)
+m8_full_dT (target gain split: at HP vs LP)	Target gain HP − LP	30	232	-0.01857995241880414	50.0	0.46454504504799843	none
+m8_full_dT	Distractor gain HP − LP	30	232	0.0265877991914749	46.666666666666664	0.2710056286305189	none
+m8_full_dT	dD − dT	30	232	0.0042921795975417315	46.666666666666664	0.7151329666376114	none
+m7_full_sigtied (one width for sustained and transient fields)	Sustained gain HP − LP	30	239	-0.018633877858519547	76.66666666666667	0.054921628907322884	none
