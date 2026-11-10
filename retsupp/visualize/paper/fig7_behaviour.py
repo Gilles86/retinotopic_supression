@@ -271,13 +271,37 @@ def sig_key(fig, y):
     ax.text(2.43, 0, 'Not significant', fontsize=6, color='.45', va='center')
 
 
-def main(repeat_table, bayes_table, name='fig7_behaviour'):
+def repeat_from_bins(bins_table):
+    """Repeat − switch gains from the bin-wise trial-wise fits on the final m7 fits (scheme tprime: target gain on
+    target-repeat vs other trials; scheme dprime: distractor gain on repeat vs switch trials, within HP and within LP,
+    averaged). Same fits as panel b."""
+    b = pd.read_csv(bins_table, sep='\t')
+    b = b[~b.with_global.astype(str).str.lower().eq('true')]
+    w = b.pivot_table(index=['subject', 'roi', 'scheme', 'kind'], columns='bin', values='g').reset_index()
+    t = w[(w.scheme == 'tprime') & (w.kind == 'T')].assign(d=lambda d: d['repeat'] - d['other'])
+    dd = w[(w.scheme == 'dprime') & w.kind.isin(['D_HP', 'D_LP'])].assign(d=lambda d: d['repeat'] - d['switch'])
+    dd = dd.groupby(['subject', 'roi'], as_index=False).d.mean()
+    return t[['subject', 'roi', 'd']], dd
+
+
+def main(repeat_table, bayes_table, name='fig7_behaviour', bins_table=None):
+    global STAMP, LEGEND
     bayes = pd.read_csv(bayes_table, sep='\t')
-    rep = pd.read_csv(repeat_table, sep='\t')
-    t_rep = rep[rep.model == 'targetRepeat'].assign(d=lambda d: d.g_T_dyn_repeat - d.g_T_dyn_switch)
-    # The repeat model has separate distractor gains on repeat and on switch trials (g_HP_dyn, g_LP_dyn are the switch
-    # gains); repeat − switch is taken within HP and within LP trials and averaged, as for the response times (Fig. 1f).
-    d_rep = rep[rep.model == 'repeat'].assign(d=lambda d: ((d.g_HP_dyn_repeat - d.g_HP_dyn) + (d.g_LP_dyn_repeat - d.g_LP_dyn)) / 2)
+    if bins_table:
+        t_rep, d_rep = repeat_from_bins(bins_table)
+        STAMP = ''
+        LEGEND = LEGEND.replace('target gain on target-repeat minus target-switch trials (fits with the target gain split by repeat)',
+                                'target gain on target-repeat minus other trials')
+        LEGEND = LEGEND.replace('(fits with separate distractor gains on repeat and switch trials, the difference taken within HP and within LP and averaged',
+                                '(the difference taken within HP and within LP and averaged')
+        LEGEND = LEGEND.replace(' Both panels use the earlier attention-field fits (October 2026) and will be redone on the final fits.',
+                                ' Both panels use the same fits: trial-wise and bin-wise gains estimated on top of each subject\'s final joint gain-field fit (m7, DoG pRFs, one HRF per subject × ROI).')
+    else:
+        rep = pd.read_csv(repeat_table, sep='\t')
+        t_rep = rep[rep.model == 'targetRepeat'].assign(d=lambda d: d.g_T_dyn_repeat - d.g_T_dyn_switch)
+        # The repeat model has separate distractor gains on repeat and on switch trials (g_HP_dyn, g_LP_dyn are the
+        # switch gains); repeat − switch within HP and within LP trials, averaged, as for the response times (Fig. 1f).
+        d_rep = rep[rep.model == 'repeat'].assign(d=lambda d: ((d.g_HP_dyn_repeat - d.g_HP_dyn) + (d.g_LP_dyn_repeat - d.g_LP_dyn)) / 2)
     results = {}
     W, x0 = DOUBLE, .75
     pw = W - .95
@@ -321,6 +345,9 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--repeat-table', default='notes/data/repeat_af_fits_params.tsv')
     ap.add_argument('--bayes-table', default='notes/data/trialwise_rt_bayes_summary_davg_2026-11.tsv')
+    ap.add_argument('--bins-table', default=None,
+                    help='Bin-wise trial-wise gains (analyze_trialwise_af_gains collect, *_bins.tsv) on the final fits; '
+                         'replaces --repeat-table so both panels use the same fits')
     ap.add_argument('--name', default='fig7_behaviour')
     a = ap.parse_args()
-    main(a.repeat_table, a.bayes_table, a.name)
+    main(a.repeat_table, a.bayes_table, a.name, a.bins_table)
