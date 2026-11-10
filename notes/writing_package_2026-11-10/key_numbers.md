@@ -26,7 +26,7 @@ Unchanged from the 2026-11-09 package (behaviour does not depend on any fit). Co
 
 Without the two pilots (sub-01, sub-02): −26.6 ms (p = 7.5 × 10⁻⁹); target at HP +27.3 ms (p = 1.5 × 10⁻⁶).
 Design: 8 items on a ring at 4°, target and distractor only at the four diagonal positions; no distractor on 20% of
-trials; bar aperture 3.17°. `[TODO: distractor-at-HP probability; printed in Fig. 1a but not in its legend]`.
+trials; bar aperture 3.17°. Distractor at HP on 50% of all trials (62.5% of distractor-present trials), at each LP location 10%, no distractor 20% (as printed in Fig. 1a; source `retsupp/visualize/paper/plot_fig1.py`).
 
 ## Fig. 2 pRF fits (F; `fig2_prf_fits_final2.md`)
 
