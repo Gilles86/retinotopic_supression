@@ -1,0 +1,43 @@
+readout	source	group	contrast	n	mean	median	sem	pct_pos	p
+item_response_pct	m7	Early	hp_next	30	-4.8513	-6.7967	3.4858	36.667	0.038418
+item_response_pct	m7	Early	next_opp	30	-0.85122	-0.7062	0.79137	40	0.40449
+item_response_pct	m7	Early	hp_opp	30	-5.7026	-7.7627	3.5667	30	0.034537
+item_response_pct	m7	All areas	hp_next	30	-3.8149	-4.4877	2.7871	33.333	0.010598
+item_response_pct	m7	All areas	next_opp	30	-0.36638	-0.2259	0.6109	43.333	0.50276
+item_response_pct	m7	All areas	hp_opp	30	-4.1813	-5.9435	2.7797	33.333	0.01546
+item_response_pct	dogk	Early	hp_next	30	-4.3208	-5.8484	3.3515	30	0.038418
+item_response_pct	dogk	Early	next_opp	30	-0.18981	0.058382	0.71612	50	0.9193
+item_response_pct	dogk	Early	hp_opp	30	-4.5106	-6.4797	3.3643	30	0.032721
+item_response_pct	dogk	All areas	hp_next	30	-3.4215	-5.2971	2.6931	33.333	0.01546
+item_response_pct	dogk	All areas	next_opp	30	0.018957	0.34687	0.56449	53.333	1
+item_response_pct	dogk	All areas	hp_opp	30	-3.4026	-5.7696	2.6603	33.333	0.02085
+item_response_pct	dogk0	Early	hp_next	30	-5.9004	-6.2965	4.3619	36.667	0.10484
+item_response_pct	dogk0	Early	next_opp	30	-0.42864	-0.5027	0.85259	46.667	0.83939
+item_response_pct	dogk0	Early	hp_opp	30	-6.3291	-6.6413	4.3857	36.667	0.10943
+item_response_pct	dogk0	All areas	hp_next	30	-4.2436	-3.3129	3.2694	33.333	0.052263
+item_response_pct	dogk0	All areas	next_opp	30	-0.25199	0.0684	0.63325	50	0.9354
+item_response_pct	dogk0	All areas	hp_opp	30	-4.4956	-3.3741	3.2487	36.667	0.1004
+item_response_pct	data	Early	hp_next	30	-6.0619	-6.4078	3.5587	33.333	0.13474
+item_response_pct	data	Early	next_opp	30	-12.954	-11.02	5.8177	36.667	0.047259
+item_response_pct	data	Early	hp_opp	30	-19.016	-20.748	6.6043	33.333	0.011303
+item_response_pct	data	All areas	hp_next	30	-6.3748	-10.42	2.7358	33.333	0.029326
+item_response_pct	data	All areas	next_opp	30	-6.8375	-9.628	4.5282	33.333	0.11908
+item_response_pct	data	All areas	hp_opp	30	-13.212	-18.583	5.2313	23.333	0.027741
+item_response_pct	kappa_effect	Early	hp_next	30	1.5796	0.51167	2.2328	56.667	0.45216
+item_response_pct	kappa_effect	Early	next_opp	30	0.23883	0.13445	0.44923	56.667	0.48985
+item_response_pct	kappa_effect	Early	hp_opp	30	1.8185	0.37672	2.4964	53.333	0.56986
+item_response_pct	kappa_effect	All areas	hp_next	30	0.82205	0.98948	1.5034	70	0.27101
+item_response_pct	kappa_effect	All areas	next_opp	30	0.27095	0.35989	0.33385	63.333	0.20541
+item_response_pct	kappa_effect	All areas	hp_opp	30	1.093	0.84495	1.7166	63.333	0.26212
+bar_drive_pct_V1-V3	m7	Early	hp_next	30	-0.90899	-0.88903	0.47924	30	0.047259
+bar_drive_pct_V1-V3	m7	Early	next_opp	30	-0.1484	-0.52201	0.33167	40	0.11908
+bar_drive_pct_V1-V3	m7	Early	hp_opp	30	-1.0574	-1.2009	0.58933	36.667	0.069893
+bar_drive_pct_V1-V3	dogk	Early	hp_next	30	-0.83823	-0.85261	0.46838	26.667	0.04971
+bar_drive_pct_V1-V3	dogk	Early	next_opp	30	-0.081213	-0.47174	0.33273	36.667	0.22065
+bar_drive_pct_V1-V3	dogk	Early	hp_opp	30	-0.91945	-1.2099	0.57599	36.667	0.12935
+bar_drive_pct_V1-V3	dogk0	Early	hp_next	30	-1.0331	-0.80566	0.50227	33.333	0.063556
+bar_drive_pct_V1-V3	dogk0	Early	next_opp	30	-0.13264	-0.5324	0.34805	40	0.24495
+bar_drive_pct_V1-V3	dogk0	Early	hp_opp	30	-1.1658	-1.0929	0.6195	36.667	0.10943
+bar_drive_pct_V1-V3	kappa_effect	Early	hp_next	30	0.1949	0.019834	0.22333	53.333	0.80783
+bar_drive_pct_V1-V3	kappa_effect	Early	next_opp	30	0.051424	0.02018	0.091672	56.667	0.3818
+bar_drive_pct_V1-V3	kappa_effect	Early	hp_opp	30	0.24632	0.017095	0.30036	53.333	0.70003
