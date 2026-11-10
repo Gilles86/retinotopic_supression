@@ -29,7 +29,7 @@ import bambi as bmb
 import numpy as np
 import pandas as pd
 
-ROIS = ['V1', 'V2', 'V3', 'V3AB', 'hV4', 'LO', 'TO', 'VO', 'IPS', 'SPL1', 'FEF', 'early', 'dorsal', 'occipitotemporal']
+ROIS = ['V1', 'V2', 'V3', 'V3AB', 'hV4', 'LO', 'TO', 'VO', 'IPS', 'SPL1', 'FEF', 'early', 'dorsal', 'occipitotemporal', 'pooled']
 TRIALS_PER_RUN = 60
 SLOPES = ['T', 'D_HP', 'D_LP', 'G', 'log_trial']
 # --hp-split: the gain at HP split by what HP holds on the trial (target, distractor, neutral item).
@@ -54,6 +54,25 @@ def prepare(t: pd.DataFrame) -> pd.DataFrame:
     lt = np.log(t['run_rank'] * TRIALS_PER_RUN + t['trial_idx'] + 1)
     t['log_trial'] = (lt - lt.mean()) / lt.std()
     return t
+
+
+GROUPS = ['early', 'dorsal', 'occipitotemporal']
+GAINS = ['T', 'D', 'G']
+
+
+def pool_groups(allt: pd.DataFrame) -> pd.DataFrame:
+    """roi 'pooled': per trial, the mean of the three ROI groups' z-scored gains (the groups a subject has), z-scored
+    again within (subject, session, run, trial type) like the per-ROI gains."""
+    g = allt[allt['roi'].isin(GROUPS)]
+    keys = ['subject', 'session', 'run', 'trial_idx']
+    gains = g.groupby(keys)[GAINS].mean()
+    rest = g.drop(columns=GAINS + ['roi']).drop_duplicates(keys).set_index(keys)
+    t = rest.join(gains).reset_index()
+    for c in GAINS:
+        grp = t.groupby(['subject', 'session', 'run', 'trial_type'])[c]
+        sd = grp.transform('std')
+        t[c] = ((t[c] - grp.transform('mean')) / sd.where(sd > 0)).fillna(0.0)
+    return t.assign(roi='pooled')
 
 
 def build(t: pd.DataFrame, slopes=SLOPES, noncentered: bool = True):
@@ -121,6 +140,8 @@ def main():
     out = Path(a.out_dir)
     out.mkdir(parents=True, exist_ok=True)
     allt = pd.read_csv(a.trials, sep='\t')
+    if a.roi == 'pooled':
+        allt = pool_groups(allt)
     t = allt[(allt['roi'] == a.roi)
              & ~allt['subject'].isin(a.exclude_subjects)]
     if a.exclude_no_distractor:

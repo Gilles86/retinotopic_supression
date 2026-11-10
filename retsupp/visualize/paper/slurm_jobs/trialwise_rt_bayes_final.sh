@@ -14,7 +14,7 @@
 # Env: TRIALS (trial table), OUT_DIR, CODE_DIR (dir containing trialwise_rt_bayes.py).
 
 set -eo pipefail
-ROIS=(V1 V2 V3 V3AB hV4 LO TO VO IPS SPL1 FEF early dorsal occipitotemporal)
+ROIS=(V1 V2 V3 V3AB hV4 LO TO VO IPS SPL1 FEF early dorsal occipitotemporal pooled)
 roi="${ROIS[$(( SLURM_ARRAY_TASK_ID - 1 ))]}"
 TRIALS="${TRIALS:-$HOME/retsupp_bayes/trialwise_af_trial_table.tsv.gz}"
 OUT_DIR="${OUT_DIR:-$HOME/retsupp_bayes/out}"
