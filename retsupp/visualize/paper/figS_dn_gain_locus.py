@@ -298,8 +298,8 @@ p < .05 BH over ROIs.
 """
 
 
-def main(name='figS_dn_gain_locus'):
-    full, cv = load('dn_basefield_full_2026-11.tsv'), load('dn_basefield_cv_2026-11.tsv')
+def main(name='figS_dn_gain_locus', cv_table='dn_basefield_cv_2026-11.tsv'):
+    full, cv = load('dn_basefield_full_2026-11.tsv'), load(cv_table)
     rec, sim = load('dn_basefield_recovery_2026-11.tsv'), load('dn_field_signatures_2026-11.tsv')
     dec = load('decoding_prf_models_quadrants_2026-11.tsv')
     by_hp = load('dn_by_hp_stats_2026-11.tsv')
@@ -370,5 +370,6 @@ def main(name='figS_dn_gain_locus'):
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--name', default='figS_dn_gain_locus')
+    ap.add_argument('--cv-table', default='dn_basefield_cv_2026-11.tsv', help='held-out table in notes/data')
     a = ap.parse_args()
-    main(a.name)
+    main(a.name, a.cv_table)

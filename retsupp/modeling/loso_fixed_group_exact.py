@@ -66,6 +66,10 @@ def loso(d):
     d['dr2_flip'] = [-float(CubicSpline(g, c)(-x)) / sst * 1e5 if g.min() <= -x <= g.max() else np.nan
                      for g, c, x, sst in zip(d.grid, d.curve, d.delta, d.sst)]
     d['dr2_sign'] = (d.dr2 - d.dr2_flip) / 2
+    # Against the low end of the grid instead of δ = 0: for 'items' (δ = −1 is item_scale 0, no items) this scores the
+    # others' item weight against no items at all, rather than against items at bar strength.
+    d['dr2_vs_low'] = [-float(CubicSpline(g, c)(x) - CubicSpline(g, c)(g.min())) / sst * 1e5
+                       for g, c, x, sst in zip(d.grid, d.curve, d.delta, d.sst)]
     return d
 
 
@@ -85,6 +89,10 @@ def main(bids_folder, folders, mechanisms=None, out=None):
         print(folder, f'({d.subject.nunique()} subjects, {len(d) // len(MECH)} subject x ROI)')
         for m in MECH:
             am = a[a.mech == m]
+            if m == 'items':
+                xv = am.pivot(index='subject', columns='roi', values='dr2_vs_low').median(axis=1).dropna()
+                print(f'  items vs no items {(xv > 0).mean() * 100:4.0f}%  p={wilcoxon(xv).pvalue:.4f}  '
+                      f'median ΔR² {xv.median():+.2f}e-5')
             x = am.pivot(index='subject', columns='roi', values='dr2').median(axis=1).dropna()
             print(f'  {m:6s}{(x > 0).mean() * 100:4.0f}%  p={wilcoxon(x).pvalue:.4f}  '
                   f'median ΔR² {x.median():+.2f}e-5  n={len(x)}  median δ {am.delta.median():+.3f}  '
