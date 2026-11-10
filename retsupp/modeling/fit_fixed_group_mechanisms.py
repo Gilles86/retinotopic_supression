@@ -21,7 +21,14 @@ S          m0_prf       g_HP = g_LP (location blind)            m3_S
 dS         m4_TDS       g_HP                                    (base)
 dD         m4_TDS       g_HP_dyn                                (base)
 dT         m4_TDS       g_T_HP_dyn (target at HP; starts at g_T_dyn)  (base)
+kappa      m7_full      κ, DoG centre/surround tilt (dogk)      (base)
+dnw        m7_full      w_b = w_d = δ, DN baseline field at HP  (base)
+dnratio    m7_full      w_b = +δ, w_d = −δ (b/d ratio) at HP    (base)
 =========  ===========  ======================================  ==========
+
+kappa (``--family dog``) uses ``DoGCentreSurroundField``, dnw / dnratio (``--family dn``) ``DNBaselineField`` with
+θ = 0 (field only at HP, as dS perturbs g_HP alone) and σ_AF the subject's own; the new terms start at 0, where
+both reproduce m7_full (checked on every call, max |Δpred| printed and asserted).
 
 X is a central difference with step ``H``; ``lin_err`` compares the
 forward and backward differences.
@@ -57,7 +64,9 @@ from retsupp.modeling.fit_af_prf_cv_v2 import (
     build_data_and_paradigm,
     get_ring_positions,
 )
-from retsupp.modeling.fit_cv_ladder_nested import TIE_PARTNER, sign_pattern_of
+from retsupp.modeling.fit_cv_ladder_nested import GAINS, LADDER, TIE_PARTNER, sign_pattern_of
+from retsupp.modeling.dn_baseline_field import DNBaselineField
+from retsupp.modeling.dog_centre_surround_field import DoGCentreSurroundField
 from retsupp.modeling.target_split import TargetSplitDN, TargetSplitDoG
 from retsupp.utils.data import Subject
 
@@ -79,11 +88,20 @@ MECHANISMS = {
     # Distractor gain on top of the target term (m3b_TD vs m1_T). σ_dyn stays the subject's own from m1_T, since the
     # distractor shares it with the target and changing it would change the target term of the base.
     'DonT': ('m1_T', ['g_HP_dyn', 'g_LP_dyn'], None),
+    # Terms of the m8 models on top of the final m7_full; their own model class (MECH_MODEL), new terms at 0.
+    'kappa': ('m7_full', ['kappa'], None),
+    'dnw': ('m7_full', ['w_b', 'w_d'], None),
+    'dnratio': ('m7_full', ['w_b', 'w_d'], None),
 }
+# Mechanisms with their own model class (the others use build_full_model), and the family it needs.
+MECH_MODEL = {'kappa': 'dog', 'dnw': 'dn', 'dnratio': 'dn'}
+# Direction of the perturbation per parameter (default +1 each).
+PERTURB_SIGN = {'dnratio': [1.0, -1.0]}
 # Lower and upper δ of the --exact grid. items stops at item_scale = 0.
 EXACT_RANGE = {'items': (-1., .5), 'T': (-1.5, 1.5), 'D': (-1.5, 1.5),
                'S': (-.4, .4), 'dS': (-.8, .8), 'dD': (-1.5, 1.5),
-               'dT': (-1.5, 1.5), 'DonT': (-1.5, 1.5)}
+               'dT': (-1.5, 1.5), 'DonT': (-1.5, 1.5),
+               'kappa': (-2., 2.), 'dnw': (-3., 3.), 'dnratio': (-1., 1.)}
 N_GRID = 25
 
 
@@ -140,32 +158,60 @@ def build_full_model(sub, data, roi):
         sign_pattern=sign_pattern_of('m7_full'), item_scale_mode='free')
 
 
+def mech_model(sub, data, roi, mech):
+    """The model a mechanism is evaluated with: its own m8 class, else the target-split class."""
+    if mech not in MECH_MODEL:
+        return build_full_model(sub, data, roi)
+    if MECH_MODEL[mech] != FAMILY:
+        raise ValueError(f'{mech} needs --family {MECH_MODEL[mech]}')
+    _bold, paradigm, ci, di, ti, grid_coords, _run_meta = data
+    kw = dict(grid_coordinates=grid_coords, paradigm=paradigm, condition_indicator=ci, dynamic_indicator=di,
+              target_indicator=ti, ring_positions=get_ring_positions(),
+              hrf_model=roi_hrf_model(sub, roi, HRF_TABLE), sign_pattern=sign_pattern_of('m7_full'),
+              item_scale_mode='free')
+    if FAMILY == 'dog':
+        return DoGCentreSurroundField(**kw)
+    return DNBaselineField(targets=('b', 'd'), **kw)
+
+
+def perturbed(pars, mech, delta):
+    p = pars.copy()
+    perturb = MECHANISMS[mech][1]
+    for name, sgn in zip(perturb, PERTURB_SIGN.get(mech, [1.0] * len(perturb))):
+        p[name] += sgn * delta
+    return p
+
+
 def base_parameters(sub, model, roi, base, width, overlay_root):
     """A mechanism's base fit, with its width taken from the other subjects."""
     fit = load_fit(sub.bids_folder, base, sub.subject_id, roi, overlay_root)
-    pars = fit['fit_pars_per_fold'][0].reindex(columns=list(model.parameter_labels))
+    labels = list(model.parameter_labels)
+    pars = fit['fit_pars_per_fold'][0].reindex(columns=labels)
     if pars['item_scale'].isna().all():
         pars['item_scale'] = 1.0           # m00: items at bar strength
+    # A gain the base ties (or zeroes) starts at its partner; a free one (m7_full) keeps its fitted value.
+    pattern = dict(zip(GAINS, LADDER[base][:5]))
     for g, partner in TIE_PARTNER.items():
-        pars[g] = pars[partner]
+        if pattern[g] != 'free':
+            pars[g] = pars[partner]
     width_val, n_width = np.nan, 0
     if width is not None:
         width_val, n_width = loso_width(sub.bids_folder, *width,
                                         sub.subject_id, roi, overlay_root)
         pars[width[0]] = width_val
-    pars['sigma_T_dyn'] = pars['sigma_dyn']
-    pars['g_T_HP_dyn'] = pars['g_T_dyn']
+    if 'sigma_T_dyn' in labels:
+        pars['sigma_T_dyn'] = pars['sigma_dyn']
+    if 'g_T_HP_dyn' in labels:
+        pars['g_T_HP_dyn'] = pars['g_T_dyn']
+    for new in ('kappa', 'w_b', 'w_d', 'theta_bd'):   # m8 terms at the value that reproduces m7 (θ = 0: HP only)
+        if new in labels:
+            pars[new] = 0.0
     assert not pars.isna().any().any(), pars.columns[pars.isna().any()]
     return fit, pars.astype(np.float32), width_val, n_width
 
 
 def fit_roi(sub, roi, data, out_path, overlay_root=None, sessions=None, run_parity=None):
     bold, paradigm, _ci, _di, _ti, _grid, run_meta = data
-    model = build_full_model(sub, data, roi)
-
-    def pred(p):
-        return np.asarray(model.predict(paradigm=paradigm, parameters=p),
-                          dtype=np.float64)
 
     # Sufficient statistics only over the runs of the requested sessions (the fits stay as they are).
     used = [rm for rm in run_meta if (sessions is None or rm.session in sessions)
@@ -174,14 +220,16 @@ def fit_roi(sub, roi, data, out_path, overlay_root=None, sessions=None, run_pari
              for hp in sorted({rm.hp for rm in used})}
     out = []
     for mech, (base, perturb, width) in MECHANISMS.items():
+        model = mech_model(sub, data, roi, mech)
+
+        def pred(p):
+            return np.asarray(model.predict(paradigm=paradigm, parameters=p), dtype=np.float64)
+
         fit, pars, width_val, n_width = base_parameters(sub, model, roi, base, width, overlay_root)
         Y = bold[:, fit['voxel_ids']].astype(np.float64)
 
         P0 = pred(pars)
-        up, dn = pars.copy(), pars.copy()
-        for p in perturb:
-            up[p] += H
-            dn[p] -= H
+        up, dn = perturbed(pars, mech, H), perturbed(pars, mech, -H)
         fwd = (pred(up) - P0) / H
         bwd = (P0 - pred(dn)) / H
         X = .5 * (fwd + bwd)
@@ -209,19 +257,27 @@ def fit_roi(sub, roi, data, out_path, overlay_root=None, sessions=None, run_pari
 def fit_roi_exact(sub, roi, data, out_path, overlay_root=None):
     """Each voxel's ΔSSE(δ) from the actual predictions, per mechanism."""
     bold, paradigm, _ci, _di, _ti, _grid, run_meta = data
-    model = build_full_model(sub, data, roi)
+    ref_model = build_full_model(sub, data, roi)
     conds = [np.concatenate([np.arange(rm.start, rm.stop) for rm in run_meta if rm.hp == hp])
              for hp in sorted({rm.hp for rm in run_meta})]
     saved = {}
     for mech, (base, perturb, width) in MECHANISMS.items():
+        model = mech_model(sub, data, roi, mech)
         fit, pars, width_val, n_width = base_parameters(sub, model, roi, base, width, overlay_root)
         Y = bold[:, fit['voxel_ids']].astype(np.float64)
+        if mech in MECH_MODEL:
+            # At δ = 0 the m8 model must predict exactly what the parent does.
+            _f, ref_pars, _w, _n = base_parameters(sub, ref_model, roi, base, width, overlay_root)
+            P_ref = np.asarray(ref_model.predict(paradigm=paradigm, parameters=ref_pars), dtype=np.float64)
+            P_0 = np.asarray(model.predict(paradigm=paradigm, parameters=pars), dtype=np.float64)
+            err = np.abs(P_0 - P_ref).max()
+            print(f'sub-{sub.subject_id:02d} {roi} {mech}: max |pred(δ=0) - pred({base})| = {err:.2e} '
+                  f'(max |pred| {np.abs(P_ref).max():.2e})', flush=True)
+            assert err <= 1e-5 * max(np.abs(P_ref).max(), 1.0), f'{mech}: δ=0 does not reproduce {base}'
         grid = exact_grid(*EXACT_RANGE[mech])
         sse = []
         for delta in grid:
-            p = pars.copy()
-            for name in perturb:
-                p[name] += delta
+            p = perturbed(pars, mech, delta)
             P = np.asarray(model.predict(paradigm=paradigm, parameters=p), dtype=np.float64)
             assert np.isfinite(P).all(), f'{mech} δ={delta}: non-finite prediction'
             sse.append(((Y - P) ** 2).sum(0))
@@ -252,8 +308,13 @@ def main(subject, bids_folder, rois, output_subdir='af_fixed_group_mechanisms',
     tail = 'curves.npz' if exact else 'stats.tsv.gz'
     todo = {roi: out_dir / f'sub-{subject:02d}_roi-{roi}_{tail}' for roi in rois}
     todo = {roi: p for roi, p in todo.items() if not p.exists()}
+    bases = {m[0] for m in MECHANISMS.values()}
+    for roi in [r for r in todo if not all(fit_path(bids_folder, b, subject, r, overlay_root).exists()
+                                           for b in bases)]:
+        print(f'sub-{subject:02d} {roi}: base fit missing (no reliable voxels?), skipped')
+        del todo[roi]
     if not todo:
-        print('All outputs exist, nothing to do')
+        print('All outputs exist (or have no base fit), nothing to do')
         return
     (bold, paradigm, ci, di, ti, grid_coords, _masker,
      run_meta) = build_data_and_paradigm(sub, resolution=50, grid_radius=5.0,

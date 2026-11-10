@@ -8,6 +8,10 @@ per-subject value is the median over ROIs.
 Usage::
 
     python -m retsupp.modeling.loso_fixed_group_exact af_fixed_group_exact_dog af_fixed_group_exact_dn
+    python -m retsupp.modeling.loso_fixed_group_exact <folder> --mechanisms kappa --out notes/data/<name>.tsv
+
+``--mechanisms`` replaces the default list (e.g. the m8 terms kappa, dnw, dnratio); ``--out`` writes one row per
+subject × ROI × mechanism (own, at_edge, nvox, delta, dr2, dr2_sign) for all folders.
 """
 from __future__ import annotations
 
@@ -65,15 +69,19 @@ def loso(d):
     return d
 
 
-def main(bids_folder, folders):
+def main(bids_folder, folders, mechanisms=None, out=None):
+    global MECH
+    MECH = list(mechanisms or MECH)
     deriv = f'{bids_folder}/derivatives'
     null = pd.read_csv(f'{deriv}/af_prf_cv_ladder_nested/cv_ladder_per_voxel.tsv', sep='\t',
                        usecols=['subject', 'roi', 'voxel_id', 'cv_r2_null'])
     null = null.groupby(['subject', 'roi', 'voxel_id']).cv_r2_null.mean().reset_index()
     null = null[null.cv_r2_null > 0].groupby(['subject', 'roi']).voxel_id.apply(set).to_dict()
+    tables = []
     for folder in folders:
         d = load(deriv, folder, null)
         a = loso(d)
+        tables.append(a.drop(columns=['grid', 'curve']).assign(folder=folder))
         print(folder, f'({d.subject.nunique()} subjects, {len(d) // len(MECH)} subject x ROI)')
         for m in MECH:
             am = a[a.mech == m]
@@ -81,11 +89,16 @@ def main(bids_folder, folders):
             print(f'  {m:6s}{(x > 0).mean() * 100:4.0f}%  p={wilcoxon(x).pvalue:.4f}  '
                   f'median ΔR² {x.median():+.2f}e-5  n={len(x)}  median δ {am.delta.median():+.3f}  '
                   f'own at grid edge {d[d.mech == m].at_edge.mean() * 100:.0f}%')
+    if out:
+        pd.concat(tables).to_csv(out, sep='\t', index=False)
+        print('Wrote', out)
 
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('folders', nargs='+')
     ap.add_argument('--bids-folder', default='/data/ds-retsupp')
+    ap.add_argument('--mechanisms', nargs='+', default=None, help=f'Instead of the default {MECH}')
+    ap.add_argument('--out', default=None, help='TSV of the per subject x ROI x mechanism LOSO values')
     args = ap.parse_args()
-    main(args.bids_folder, args.folders)
+    main(args.bids_folder, args.folders, args.mechanisms, args.out)
