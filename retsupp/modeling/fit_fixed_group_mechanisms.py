@@ -151,7 +151,11 @@ def build_full_model(sub, data, roi):
             condition_indicator=ci, dynamic_indicator=di, target_indicator=ti,
             ring_positions=get_ring_positions(), hrf_model=hrf_model,
             sign_pattern=sign_pattern_of('m7_full'), item_scale_mode='free')
-    return TargetSplitDoG(
+    cls = TargetSplitDoG
+    if FAMILY == 'gauss':   # the DoG class with the surround amplitude fixed at 0 (as the Gaussian ladder)
+        from retsupp.modeling.gauss_attention_field import gaussian
+        cls = gaussian(TargetSplitDoG)
+    return cls(
         grid_coordinates=grid_coords, paradigm=paradigm,
         condition_indicator=ci, dynamic_indicator=di, target_indicator=ti,
         ring_positions=get_ring_positions(), hrf_model=hrf_model,
@@ -339,7 +343,8 @@ if __name__ == '__main__':
     ap.add_argument('--overlay-root', default=None,
                     help='Derivatives folder whose finished subject x ROI fits replace BASE_ROOT')
     ap.add_argument('--base-root', default=None, help='Fits to use instead of BASE_ROOT')
-    ap.add_argument('--family', choices=['dog', 'dn'], default='dog')
+    ap.add_argument('--family', choices=['dog', 'dn', 'gauss'], default='dog',
+                    help='gauss: the Gaussian ladder fits (DoG classes with the surround amplitude fixed at 0)')
     ap.add_argument('--step', type=float, default=None,
                     help='Central-difference step; DN is less linear in the gains')
     ap.add_argument('--hp-rotation', type=int, choices=[0, 1, 2, 3], default=0,
