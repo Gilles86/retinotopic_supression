@@ -786,7 +786,10 @@ def estimate(trials, meta, g0, eqs, run_eqs, param_runs=None):
             pn, P, q, _h = param_runs[with_global]
             assert pn == names, (pn, names)
             full, se, odd, even = param_uncertainty(pn, P, q)
-            assert np.allclose(full, est, rtol=1e-5, atol=1e-7 * max(1.0, np.abs(est).max())), np.abs(full - est).max()
+            # Same estimate up to float32 rounding of the regressors (per-run sums in another order): far below its SE.
+            dev = float((np.abs(full - est) / se).max())
+            print(f'parametric (with_global={with_global}): all-run vs per-run-sum estimate, max |diff|/SE {dev:.1e}')
+            assert dev < 1e-3, dev
             extra = dict(se_jk=se, g_odd_runs=odd, g_even_runs=even)
         for i, ((kind, m), val) in enumerate(zip(names, est)):
             param_rows.append(dict(with_global=with_global, kind=kind, modulator=m, g=val,
