@@ -101,7 +101,7 @@ PERTURB_SIGN = {'dnratio': [1.0, -1.0]}
 EXACT_RANGE = {'items': (-1., .5), 'T': (-1.5, 1.5), 'D': (-1.5, 1.5),
                'S': (-.4, .4), 'dS': (-.8, .8), 'dD': (-1.5, 1.5),
                'dT': (-1.5, 1.5), 'DonT': (-1.5, 1.5),
-               'kappa': (-2., 2.), 'dnw': (-3., 3.), 'dnratio': (-1., 1.)}
+               'kappa': (-1., 1.), 'dnw': (-1.5, 1.5), 'dnratio': (-.5, .5)}   # sub-03 canary: minima within ±0.15
 N_GRID = 25
 
 
