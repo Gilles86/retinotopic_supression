@@ -684,7 +684,11 @@ def roi_pieces(sub, roi, data, trials, u, seed=0, hp_neutral=False):
         run_id[sl] = i
     assert (run_id >= 0).all()
     XtX_r, Xtr_r = run_normal_equations(regs, resid0, w, run_id, len(run_masks))
-    assert np.allclose(XtX_r.sum(0), eqs[0][0], rtol=1e-6, atol=1e-9 * np.abs(eqs[0][0]).max())
+    scale = np.abs(eqs[0][0]).max()
+    err_M = np.abs(XtX_r.sum(0) - eqs[0][0]).max() / scale
+    err_b = np.abs(Xtr_r.sum(0) - eqs[0][1]).max() / np.abs(eqs[0][1]).max()
+    print(f'per-run normal equations vs all-run: max rel. error X\'WX {err_M:.2e}, X\'Wr {err_b:.2e}', flush=True)
+    assert err_M < 1e-6 and err_b < 1e-6, (err_M, err_b)
     param_runs = param_run_equations(meta, trials, g0, XtX_r, Xtr_r)
     del resid0, XtX_r, Xtr_r
 
