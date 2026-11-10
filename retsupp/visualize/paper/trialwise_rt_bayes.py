@@ -29,7 +29,7 @@ import bambi as bmb
 import numpy as np
 import pandas as pd
 
-ROIS = ['V1', 'V2', 'V3', 'V3AB', 'hV4', 'LO', 'TO', 'VO', 'IPS', 'SPL1', 'FEF']
+ROIS = ['V1', 'V2', 'V3', 'V3AB', 'hV4', 'LO', 'TO', 'VO', 'IPS', 'SPL1', 'FEF', 'early', 'dorsal', 'occipitotemporal']
 TRIALS_PER_RUN = 60
 SLOPES = ['T', 'D_HP', 'D_LP', 'G', 'log_trial']
 # --hp-split: the gain at HP split by what HP holds on the trial (target, distractor, neutral item).

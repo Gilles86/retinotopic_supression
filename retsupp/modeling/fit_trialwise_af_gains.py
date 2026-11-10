@@ -244,6 +244,102 @@ def build_model(paradigm, grid_coords, cond_ind, dyn_ind, tgt_ind, tr):
 
 LADDER_ROOTS = ()   # set by --ladder-root: use the gain-model ladder's m7_full fits instead of the October fits
 HRF_TABLE = None    # one HRF per subject x ROI (roi_hrf.load_table) for the ladder fits
+VOXELS = 'ladder'   # --voxels signal: the signal voxels of each ROI instead of the ladder fit's own voxels
+MAX_BOLD_SD = 20.0  # with --voxels signal, as in the final ladder fits
+SIGNAL_TABLE = 'af_prf_cv_ladder_nested/cv_ladder_per_voxel.tsv'
+JOINT_STEM = 'dog_final2_stage-3'   # DoG fold fits with the joint per-ROI HRF (the HRF table's source)
+GROUPS = {'early': ['V1', 'V2', 'V3'], 'dorsal': ['V3AB', 'IPS'],
+          'occipitotemporal': ['hV4', 'LO', 'TO', 'VO']}
+_CACHE = {}
+
+
+class NoFit(FileNotFoundError):
+    """This subject x ROI has nothing to fit (no base fit, or no voxels)."""
+
+
+def signal_voxels(sub, roi):
+    """Voxels whose held-out signal beats the model-free null (fold-mean cv_r2_null > 0), as in the LOSO tests."""
+    if 'signal' not in _CACHE:
+        t = pd.read_csv(Path(sub.bids_folder) / 'derivatives' / SIGNAL_TABLE, sep='\t',
+                        usecols=['subject', 'roi', 'voxel_id', 'cv_r2_null'])
+        t = t[t.subject == sub.subject_id].groupby(['roi', 'voxel_id']).cv_r2_null.mean()
+        _CACHE['signal'] = t[t > 0].reset_index()
+    t = _CACHE['signal']
+    return np.sort(t.loc[t.roi == roi, 'voxel_id'].to_numpy())
+
+
+def joint_prfs(sub):
+    """Per-voxel DoG pRFs of the joint per-ROI-HRF fold fits, mean over the folds (index = BOLD-mask voxel)."""
+    if 'joint' not in _CACHE:
+        d = Path(sub.bids_folder) / 'derivatives' / 'prf_cv_roi_jointhrf' / f'sub-{sub.subject_id:02d}'
+        folds = []
+        for f in sorted(d.glob(f'sub-{sub.subject_id:02d}_fold-*_{JOINT_STEM}_pars.pkl.gz')):
+            ids = pd.read_csv(str(f).replace('_pars.pkl.gz', '_cvr2.tsv.gz'), sep='\t').voxel_index.to_numpy()
+            p = pd.read_pickle(f).reset_index(drop=True)[['x', 'y', 'sd', 'srf_amplitude', 'srf_size']]
+            p.index = ids
+            folds.append(p)
+        if not folds:
+            raise FileNotFoundError(f'no {JOINT_STEM} fold fits in {d}')
+        _CACHE['joint'] = pd.concat(folds).groupby(level=0).mean().dropna()
+        print(f'Joint-HRF DoG pRFs: {len(_CACHE["joint"])} voxels, {len(folds)} folds', flush=True)
+    return _CACHE['joint']
+
+
+def extend_to_signal_voxels(sub, roi, model, pars, fit_ids, bold, paradigm):
+    """The signal voxels of the ROI with the m7_full gain-field terms.
+
+    A voxel in the m7_full fit keeps its fitted pRF; another takes x, y, sd and the surround of the joint-HRF fold
+    fits, and its baseline and amplitude by OLS on the m7_full prediction (linear in both). Voxels with BOLD SD above
+    MAX_BOLD_SD, without a fold fit, or whose fit has R² <= 0 or amplitude <= 0 are left out.
+    """
+    sig = signal_voxels(sub, roi)
+    sd = bold.std(0)
+    n_sig = len(sig)
+    sig = sig[sd[sig] <= MAX_BOLD_SD]
+    n_sd = n_sig - len(sig)
+    in_fit = np.isin(sig, fit_ids)
+    jp = joint_prfs(sub)
+    has_fold = np.isin(sig, jp.index)
+    keep = in_fit | has_fold
+    sig, in_fit = sig[keep], in_fit[keep]
+    by_id = pars.set_index(pd.Index(np.asarray(fit_ids)))
+    shared = pars.iloc[0]
+    new = pd.DataFrame([shared.to_numpy()] * len(sig), columns=pars.columns)
+    new.loc[in_fit, :] = by_id.loc[sig[in_fit]].to_numpy()
+    add = ~in_fit
+    for c in ('x', 'y', 'sd', 'srf_amplitude', 'srf_size'):
+        new.loc[add, c] = jp.loc[sig[add], c].to_numpy()
+    new.loc[add, 'baseline'] = 0.0
+    new.loc[add, 'amplitude'] = 1.0
+    new = new.astype(np.float32)
+    info = dict(n_signal=n_sig, n_drop_sd=n_sd, n_in_fit=int(in_fit.sum()), n_no_fold=int((~keep).sum()),
+                n_fit_not_signal=int((~np.isin(fit_ids, sig)).sum()))
+    if add.any():
+        p = np.asarray(model.predict(parameters=new.loc[add].reset_index(drop=True))).astype(np.float64)
+        y = bold[:, sig[add]].astype(np.float64)
+        pc, yc = p - p.mean(0), y - y.mean(0)
+        a = (pc * yc).sum(0) / np.maximum((pc ** 2).sum(0), 1e-12)
+        b = y.mean(0) - a * p.mean(0)
+        r2 = 1 - ((y - (b + a * p)) ** 2).sum(0) / ((yc ** 2).sum(0))
+        new.loc[add, 'amplitude'] = a.astype(np.float32)
+        new.loc[add, 'baseline'] = b.astype(np.float32)
+        # The model's prediction must be linear in baseline and amplitude.
+        chk = np.asarray(model.predict(parameters=new.loc[add].reset_index(drop=True))).astype(np.float64)
+        info['ab_linear_rel_err'] = float(np.abs(chk - (b + a * p)).max() / max(np.abs(chk).max(), 1e-12))
+        good = np.ones(len(sig), dtype=bool)
+        good[np.where(add)[0]] = (r2 > 0) & (a > 0)
+        info.update(n_added=int(add.sum()), n_added_bad=int((~good).sum()),
+                    r2_added_median=float(np.median(r2[(r2 > 0) & (a > 0)])) if ((r2 > 0) & (a > 0)).any() else np.nan)
+        if info['ab_linear_rel_err'] > 1e-3:
+            raise RuntimeError(f'Prediction not linear in baseline/amplitude: {info["ab_linear_rel_err"]:.2e}')
+        sig, new = sig[good], new.loc[good].reset_index(drop=True)
+    else:
+        info.update(n_added=0, n_added_bad=0, r2_added_median=np.nan, ab_linear_rel_err=0.0)
+    info['n_voxels_used'] = len(sig)
+    print(f'{roi}: signal voxels ' + ', '.join(f'{k} {v}' for k, v in info.items()), flush=True)
+    if len(sig) < 10:
+        raise NoFit(f'{roi}: only {len(sig)} usable signal voxels')
+    return sig, new, info
 
 
 def load_ladder_fit(sub, roi, data):
@@ -258,7 +354,7 @@ def load_ladder_fit(sub, roi, data):
         if pkl.exists():
             break
     else:
-        raise FileNotFoundError(f'm7_full sub-{sub.subject_id:02d} {roi} in {LADDER_ROOTS}')
+        raise NoFit(f'm7_full sub-{sub.subject_id:02d} {roi} in {LADDER_ROOTS}')
     with open(pkl, 'rb') as f:
         fit = pickle.load(f)
     print(f'm7_full from {pkl}', flush=True)
@@ -267,7 +363,11 @@ def load_ladder_fit(sub, roi, data):
                               hrf_model=roi_hrf_model(sub, roi, HRF_TABLE), sign_pattern=sign_pattern_of('m7_full'),
                               item_scale='free')
     pars = fit['fit_pars_per_fold'][0].reindex(columns=list(model.parameter_labels)).astype(np.float32).reset_index(drop=True)
-    af = dict(voxel_mask_indices=np.asarray(fit['voxel_ids']), r2=np.asarray(fit.get('r2_train', [np.nan]), dtype=float))
+    af = dict(voxel_mask_indices=np.asarray(fit['voxel_ids']), r2=np.asarray(fit.get('r2_train', [np.nan]), dtype=float),
+              voxel_info={})
+    if VOXELS == 'signal':
+        vox, pars, info = extend_to_signal_voxels(sub, roi, model, pars, af['voxel_mask_indices'], bold, paradigm)
+        af.update(voxel_mask_indices=vox, r2=np.array([np.nan]), voxel_info=info)
     return af, model, pars
 
 
@@ -401,7 +501,9 @@ def sse(g, XtX, Xtr, rtr):
 # ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
-def fit_roi(sub, roi, data, trials, u, out_dir, seed=0, hp_neutral=False):
+def roi_pieces(sub, roi, data, trials, u, seed=0, hp_neutral=False):
+    """Everything the estimates need from one ROI: the sanity checks, the per-trial regressors' meta and canonical
+    gains g0, the normal equations (all voxels and two voxel halves) and those of the run-wise joint model."""
     bold, paradigm, cond_ind, dyn_ind, grid, tgt_ind = data
     tr = sub.get_tr(1, 1)
     if LADDER_ROOTS:
@@ -489,11 +591,11 @@ def fit_roi(sub, roi, data, trials, u, out_dir, seed=0, hp_neutral=False):
         g_HP_dyn=g_HP, g_LP_dyn=g_LP, g_T_dyn=g_T, sigma_dyn=sigma_dyn,
         g_HP=g_HP_s, g_LP=g_LP_s, sigma_AF=sigma_af,
         sustained_recon_rel_err=float(sus_err),
+        **af.get('voxel_info', {}),
     )])
     print(check.T.to_string())
     if recon_err > 1e-2 or pulse_err > 1e-4:
-        check.to_csv(out_dir / f'sub-{sub.subject_id:02d}_roi-{roi}_check.tsv',
-                     sep='\t', index=False)
+        print(check.T.to_string())
         raise RuntimeError(
             f'Linear reconstruction does not match the model '
             f'(recon_err={recon_err:.2e}, pulse_err={pulse_err:.2e}).')
@@ -505,12 +607,54 @@ def fit_roi(sub, roi, data, trials, u, out_dir, seed=0, hp_neutral=False):
     half[rng.permutation(len(vox))[:len(vox) // 2]] = True
     sets = [np.ones(len(vox), dtype=bool), half, ~half]
 
-    trial_rows, cv_rows, bin_rows = [], [], []
     regs, meta = trial_regressors(trials, u, D, D_glob, kern, amp, hp_neutral)
     g0 = meta['kind'].map({'T': g_T, 'D_HP': g_HP, 'D_LP': g_LP,
                            'G': 0.0, 'P': 0.0, 'H': 0.0}).values.astype(np.float64)
-    (M, b, c), (MA, bA, cA), (MB, bB, cB) = normal_equations(
-        regs, resid0, w, sets)
+    eqs = normal_equations(regs, resid0, w, sets)
+    del resid0
+
+    # Run-wise joint model: sustained HP/LP + phasic gains per run, on the residual from the model with ALL AF
+    # gains zeroed. Kept as normal equations (X'WX, X'Wr) and the canonical value of every regressor.
+    resid00 = (Y - model.predict(parameters=pars0.assign(
+        g_HP=0.0, g_LP=0.0)).values).astype(np.float64)
+    meta_r = meta.merge(trials[['trial_idx', 'session', 'run']], on='trial_idx')
+    canon = {'S_HP': g_HP_s, 'S_LP': g_LP_s, 'T': g_T, 'D_HP': g_HP, 'D_LP': g_LP, 'G': 0.0}
+    run_eqs = {}
+    for with_global in (False, True):
+        names, dense = [], []
+        for ses, run, sl, h in run_masks:
+            for kind, x in (('S_HP', sus_hp), ('S_LP', sus_lp)):
+                xr = np.zeros_like(Y)
+                xr[sl] = x[sl]
+                dense.append(convolve_cols(xr, kern, amp))
+                names.append((ses, run, kind))
+            for kind in ('T', 'D_HP', 'D_LP', 'G'):
+                if kind == 'G' and not with_global:
+                    continue
+                idx = np.nonzero(((meta_r['session'] == ses)
+                                  & (meta_r['run'] == run)
+                                  & (meta_r['kind'] == kind)).values)[0]
+                if len(idx) == 0:
+                    continue
+                xr = np.zeros_like(Y)
+                for i in idx:
+                    st, win = regs[i]
+                    xr[st:st + len(win)] += win
+                dense.append(xr)
+                names.append((ses, run, kind))
+        X = np.stack(dense).reshape(len(dense), -1)
+        Xw = X * np.tile(w, Y.shape[0])
+        run_eqs[with_global] = (names, Xw @ X.T, Xw @ resid00.ravel(),
+                                np.array([canon[k] for _, _, k in names], dtype=np.float64))
+        del X, Xw, dense
+    return dict(check=check, meta=meta, g0=g0, eqs=eqs, run_eqs=run_eqs, n_voxels=len(vox))
+
+
+def estimate(trials, meta, g0, eqs, run_eqs):
+    """Per-trial ridge (toward g0) with voxel split-half CV, RT-binned / inter-trial OLS, the parametric model and
+    the run-wise joint model, all from the normal equations."""
+    (M, b, c), (MA, bA, cA), (MB, bB, cB) = eqs
+    trial_rows, cv_rows, bin_rows = [], [], []
 
     # ---- per-trial ridge ----
     sse_A0, sse_B0 = sse(g0, MB, bB, cB), sse(g0, MA, bA, cA)
@@ -574,41 +718,18 @@ def fit_roi(sub, roi, data, trials, u, out_dir, seed=0, hp_neutral=False):
             param_rows.append(dict(with_global=with_global, kind=kind,
                                    modulator=m, g=val))
 
-    # ---- Run-wise joint model: sustained HP/LP + phasic gains per run ----
-    resid00 = (Y - model.predict(parameters=pars0.assign(
-        g_HP=0.0, g_LP=0.0)).values).astype(np.float64)
-    meta_r = meta.merge(trials[['trial_idx', 'session', 'run']], on='trial_idx')
+    # ---- Run-wise joint model ----
     run_rows = []
     for with_global in (False, True):
-        names, dense = [], []
-        for ses, run, sl, h in run_masks:
-            for kind, x in (('S_HP', sus_hp), ('S_LP', sus_lp)):
-                xr = np.zeros_like(Y)
-                xr[sl] = x[sl]
-                dense.append(convolve_cols(xr, kern, amp))
-                names.append((ses, run, kind))
-            for kind in ('T', 'D_HP', 'D_LP', 'G'):
-                if kind == 'G' and not with_global:
-                    continue
-                idx = np.nonzero(((meta_r['session'] == ses)
-                                  & (meta_r['run'] == run)
-                                  & (meta_r['kind'] == kind)).values)[0]
-                if len(idx) == 0:
-                    continue
-                xr = np.zeros_like(Y)
-                for i in idx:
-                    st, win = regs[i]
-                    xr[st:st + len(win)] += win
-                dense.append(xr)
-                names.append((ses, run, kind))
-        X = np.stack(dense).reshape(len(dense), -1)
-        Xw = X * np.tile(w, Y.shape[0])
-        est = np.linalg.solve(Xw @ X.T, Xw @ resid00.ravel())
-        del X, Xw, dense
+        names, A, r, _canon = run_eqs[with_global]
+        est = np.linalg.solve(A, r)
         for (ses, run, kind), val in zip(names, est):
             run_rows.append(dict(with_global=with_global, session=ses,
                                  run=run, kind=kind, g=val))
+    return trial_rows, cv_rows, bin_rows, param_rows, run_rows
 
+
+def save_estimates(sub, roi, out_dir, trials, check, trial_rows, cv_rows, bin_rows, param_rows, run_rows):
     stem = f'sub-{sub.subject_id:02d}_roi-{roi}'
     per_trial = (pd.concat(trial_rows)
                  .pivot_table(index=['alpha', 'trial_idx'],
@@ -628,9 +749,65 @@ def fit_roi(sub, roi, data, trials, u, out_dir, seed=0, hp_neutral=False):
     print(f'Saved {out_dir}/{stem}_*.tsv')
 
 
+
+
+def fit_roi(sub, roi, data, trials, u, out_dir, seed=0, hp_neutral=False):
+    pieces = roi_pieces(sub, roi, data, trials, u, seed=seed, hp_neutral=hp_neutral)
+    save_estimates(sub, roi, out_dir, trials, pieces['check'],
+                   *estimate(trials, pieces['meta'], pieces['g0'], pieces['eqs'], pieces['run_eqs']))
+    return pieces
+
+
+def pool_pieces(pieces):
+    """One set of gains for several ROIs: a shared deviation δ from each ROI's canonical gains.
+
+    Per ROI the residual becomes r' = r − X·g0, so X'Wr' = X'Wr − X'WX·g0 and r'Wr' = r'Wr − 2·g0'X'Wr + g0'X'WX·g0;
+    the normal equations are then summed over the ROIs and the prior is δ = 0. The run-wise joint model is pooled
+    the same way around each ROI's canonical sustained and phasic gains.
+    """
+    meta = pieces[0]['meta']
+    for p in pieces[1:]:
+        if not p['meta'][['trial_idx', 'kind']].equals(meta[['trial_idx', 'kind']]):
+            raise ValueError('ROIs disagree on the per-trial regressors')
+    eqs = None
+    for p in pieces:
+        g0 = p['g0']
+        t = [(M, b - M @ g0, c - 2 * g0 @ b + g0 @ M @ g0) for M, b, c in p['eqs']]
+        eqs = t if eqs is None else [tuple(x + y for x, y in zip(e, f)) for e, f in zip(eqs, t)]
+    run_eqs = {}
+    for wg in (False, True):
+        names = pieces[0]['run_eqs'][wg][0]
+        A, r = 0.0, 0.0
+        for p in pieces:
+            n_, A_, r_, c_ = p['run_eqs'][wg]
+            if n_ != names:
+                raise ValueError('ROIs disagree on the run-wise regressors')
+            A, r = A + A_, r + (r_ - A_ @ c_)
+        run_eqs[wg] = (names, A, r, np.zeros(len(names)))
+    return meta, np.zeros(len(meta)), eqs, run_eqs
+
+
+def fit_group(sub, group, pieces, rois, out_dir, trials):
+    meta, g0, eqs, run_eqs = pool_pieces(pieces)
+    checks = pd.concat([p['check'] for p in pieces])
+    nv = checks['n_voxels'].to_numpy()
+    check = pd.DataFrame([dict(
+        subject=sub.subject_id, roi=group, rois=' '.join(rois), n_rois=len(rois), n_voxels=int(nv.sum()),
+        n_trials=len(trials), r2_recomputed=float(np.average(checks['r2_recomputed'], weights=nv)),
+        r2_no_phasic=float(np.average(checks['r2_no_phasic'], weights=nv)),
+        phasic_recon_rel_err=float(checks['phasic_recon_rel_err'].max()),
+        pulse_rebuild_max_err=float(checks['pulse_rebuild_max_err'].max()),
+        sustained_recon_rel_err=float(checks['sustained_recon_rel_err'].max()),
+        gains='deviation from each ROI\'s canonical gains')])
+    save_estimates(sub, group, out_dir, trials, check, *estimate(trials, meta, g0, eqs, run_eqs))
+
+
 def main(subject, bids_folder, rois, output_subdir='af_trialwise_gains', hp_neutral=False, ladder_roots=(),
-         hrf_table=None):
-    global LADDER_ROOTS, HRF_TABLE
+         hrf_table=None, voxels='ladder', groups=False):
+    global LADDER_ROOTS, HRF_TABLE, VOXELS
+    VOXELS = voxels
+    if voxels == 'signal' and not ladder_roots:
+        raise ValueError('--voxels signal needs --ladder-root')
     from retsupp.modeling.roi_hrf import load_table
     LADDER_ROOTS = tuple(Path(bids_folder) / 'derivatives' / r if not str(r).startswith('/') else Path(r) for r in ladder_roots)
     HRF_TABLE = load_table(hrf_table)
@@ -658,17 +835,27 @@ def main(subject, bids_folder, rois, output_subdir='af_trialwise_gains', hp_neut
     print(trials['bin_rt2'].value_counts().to_string())
 
     data = (bold, paradigm, cond_ind, dyn_ind, grid, tgt_ind)
-    missing = []
+    missing, pieces = [], {}
     for roi in rois:
         print(f'\n===== sub-{subject:02d} {roi} =====')
         try:
-            fit_roi(sub, roi, data, trials, u, out_dir, hp_neutral=hp_neutral)
-        except FileNotFoundError as e:
+            p = fit_roi(sub, roi, data, trials, u, out_dir, hp_neutral=hp_neutral)
+        except NoFit as e:
             # e.g. no m7_full fit: the ladder leaves out subject x ROI pairs without reliable voxels
             print(f'skipped {roi}: {e}')
             missing.append(roi)
+            continue
+        if groups:
+            pieces[roi] = p
     if missing:
-        print(f'ROIs without a base fit: {missing}')
+        print(f'ROIs without a fit: {missing}')
+    for group in (GROUPS if groups else {}):
+        have = [r for r in GROUPS[group] if r in pieces]
+        print(f'\n===== sub-{subject:02d} {group}: {have} =====')
+        if not have:
+            print(f'skipped {group}: none of its ROIs')
+            continue
+        fit_group(sub, group, [pieces[r] for r in have], have, out_dir, trials)
 
 
 if __name__ == '__main__':
@@ -683,6 +870,12 @@ if __name__ == '__main__':
                         help='Use the m7_full fits of the gain-model ladder in these roots (first hit wins) '
                              'instead of the October fits.')
     parser.add_argument('--hrf-table', default=None, help='One HRF per subject x ROI (with --ladder-root)')
+    parser.add_argument('--voxels', choices=['ladder', 'signal'], default='ladder',
+                        help='signal (with --ladder-root): the signal voxels of each ROI (held-out null cvR² > 0, '
+                             'BOLD SD <= 20), pRFs of voxels outside the m7_full fit from the joint-HRF DoG fold fits.')
+    parser.add_argument('--groups', action='store_true',
+                        help='Also one set of gains per ROI group (early, dorsal, occipitotemporal): a shared '
+                             'deviation from each ROI\'s canonical gains.')
     args = parser.parse_args()
     main(args.subject, args.bids_folder, args.rois, args.output_subdir, args.hp_neutral, args.ladder_root,
-         args.hrf_table)
+         args.hrf_table, args.voxels, args.groups)

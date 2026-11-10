@@ -15,6 +15,8 @@
 #   ROIS="V1 V3" sbatch --array=5 retsupp/modeling/slurm_jobs/fit_trialwise_af_gains.sh
 #
 # LADDER_ROOT=<ladder root> HRF_TABLE=<tsv>: gains on top of the ladder's m7_full fits (final DoG inputs).
+# VOXELS=signal: each ROI's signal voxels instead of the ladder fit's voxels; POOL_GROUPS=1 adds early / dorsal /
+# occipitotemporal gains (shared deviations from each ROI's canonical gains). REPO=<clone> picks the code.
 # Output: derivatives/af_trialwise_gains/sub-XX/
 
 set -eo pipefail
@@ -48,6 +50,7 @@ cd "${REPO:-$HOME/git/retsupp}"
 "$HOME/data/conda/envs/retsupp_cuda/bin/python" -u \
     -m retsupp.modeling.fit_trialwise_af_gains "$subject" \
     --bids-folder /shares/zne.uzh/gdehol/ds-retsupp $ROI_ARGS $EXTRA \
-    ${LADDER_ROOT:+--ladder-root $LADDER_ROOT} ${HRF_TABLE:+--hrf-table $HRF_TABLE}
+    ${LADDER_ROOT:+--ladder-root $LADDER_ROOT} ${HRF_TABLE:+--hrf-table $HRF_TABLE} \
+    ${VOXELS:+--voxels $VOXELS} 
 
 echo "Finished: $(date)"
