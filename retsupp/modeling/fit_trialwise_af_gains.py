@@ -387,7 +387,10 @@ def normal_equations(regs, resid, w, voxel_sets):
 
 
 def ridge(XtX, Xtr, g0, alpha):
-    lam = alpha * np.diag(XtX)
+    d = np.diag(XtX)
+    # A regressor with no signal in this voxel set (all-zero row) gets a small penalty, so its gain stays at g0
+    # instead of making the system singular; regressors with signal are unchanged.
+    lam = alpha * np.where(d > 0, d, 1e-6 * d[d > 0].mean())
     return np.linalg.solve(XtX + np.diag(lam), Xtr + lam * g0)
 
 
@@ -655,9 +658,17 @@ def main(subject, bids_folder, rois, output_subdir='af_trialwise_gains', hp_neut
     print(trials['bin_rt2'].value_counts().to_string())
 
     data = (bold, paradigm, cond_ind, dyn_ind, grid, tgt_ind)
+    missing = []
     for roi in rois:
         print(f'\n===== sub-{subject:02d} {roi} =====')
-        fit_roi(sub, roi, data, trials, u, out_dir, hp_neutral=hp_neutral)
+        try:
+            fit_roi(sub, roi, data, trials, u, out_dir, hp_neutral=hp_neutral)
+        except FileNotFoundError as e:
+            # e.g. no m7_full fit: the ladder leaves out subject x ROI pairs without reliable voxels
+            print(f'skipped {roi}: {e}')
+            missing.append(roi)
+    if missing:
+        print(f'ROIs without a base fit: {missing}')
 
 
 if __name__ == '__main__':
