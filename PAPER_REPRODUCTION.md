@@ -1,0 +1,57 @@
+# Reproducing the retsupp paper
+
+Paper result → code map for the n = 28 manuscript (writing package `notes/writing_package_2026-11-12/`; sub-01 and
+sub-02 are left out). Every number in that package's `key_numbers.md` names its source table; this file names the
+code. Code and notes that the paper does not need were moved to `archive/paper_cleanup_2026-11-12/` (see its README).
+
+Data: BIDS dataset `ds-retsupp` (cluster `/shares/zne.uzh/gdehol/ds-retsupp`, local `/data/ds-retsupp`). Data access
+goes through `retsupp/utils/data.py` (`Subject`). Cluster scripts: account `hare.econ.uzh`, submit as
+`VAR=x sbatch ...` (no `--export` lists). Environments: `retsupp_cuda` (cluster), `retsupp` (local),
+`bauer` (Bayesian RT models), `pycortex2` (cortical renders).
+
+## Pipeline, in order
+
+| Stage | Code | SLURM |
+|---|---|---|
+| DICOM → BIDS | `retsupp/prepare/convert_raw_mri_data.py` (+ `fix_sub_01_ses-2_mp2rage.ipynb`, sub-24 T1w fix: `retsupp/notebooks/fix_t1w_sub24.py`) | — |
+| NORDIC denoising | `retsupp/nordic/run_nordic.m` | `retsupp/nordic/submit_nordic_job.sh` |
+| fMRIPrep 25.2.3 | `retsupp/cluster_preproc/fmriprep.sh` | same |
+| Confound cleaning, mean time series | `retsupp/preprocess/clean.py`, `mean_ts.py` | `retsupp/preprocess/preprocess_subject.slurm` |
+| Visual areas (neuropythy) | `retsupp/neuropythy/register_retinotopy.py` | `retsupp/neuropythy/slurm_jobs/register_retinotopy.sh` |
+| pRF fits (DoG, Gaussian, DN) with a joint HRF per subject × area, CV folds | `retsupp/modeling/cv/fit_prf_cv_roi_hrf_joint.py` | `retsupp/modeling/cv/slurm_jobs/fit_prf_cv_roi_hrf_joint.sh` |
+| HRF table per subject × area | `retsupp/modeling/cv/build_roi_hrf_table.py`, `retsupp/modeling/roi_hrf.py` | — |
+| Reliable voxels (cross-run reliability) | `retsupp/modeling/cv/prf_cv_reliability.py` | `retsupp/modeling/cv/slurm_jobs/prf_cv_reliability.sh` |
+| Gain-field model ladder (m00 … m7, m8 variants; DoG / Gaussian / DN) | `retsupp/modeling/fit_cv_ladder_nested.py` (models in `fit_af_prf_cv_v2.py`, `gauss_attention_field.py`, `dn_attention_field.py`, `dog_centre_surround_field.py`, `dn_baseline_field.py`) | `retsupp/modeling/slurm_jobs/fit_cv_ladder_nested.sh` |
+| Gain parameters per fit | `retsupp/visualize/paper/collect_gain_parameters.py` | — |
+| Terms estimated alone and leave-one-subject-out | `retsupp/modeling/fit_fixed_group_mechanisms.py`, `loso_fixed_group_exact.py`, `loso_fixed_group_compare.py` | `retsupp/modeling/slurm_jobs/fit_fixed_group_mechanisms.sh` |
+| Trial-wise gains (BOLD-level modulators, jackknife SEs) | `retsupp/modeling/fit_trialwise_af_gains.py`, `retsupp/visualize/paper/analyze_trialwise_af_gains.py` | `retsupp/modeling/slurm_jobs/fit_trialwise_af_gains.sh` |
+| Hierarchical meta-analysis of the trial-wise effects | `retsupp/visualize/paper/trialwise_meta_bayes.py` | local |
+| Decoding (bar stimulus, held-out runs) | `retsupp/decode/decode_final.py`, `retsupp/visualize/paper/fig6_collect.py`, `group_decoded_frames.py` | `retsupp/decode/slurm_jobs/decode_final.sh` |
+| Decoder simulation | `retsupp/decode/simulate_decode.py`, `collect_simulate_decode.py` | `retsupp/decode/slurm_jobs/simulate_decode.sh` |
+| Item-location responses (Fig. 3) | `retsupp/visualize/paper/export_location_timeseries.py`, `deconvolve_location_responses.py`, `deconvolve_bar_items.py` | `retsupp/visualize/paper/slurm_jobs/export_location_timeseries.sh`, `deconvolve_location_responses.sh` |
+| Model predictions through the Fig. 3 pipeline | `retsupp/visualize/paper/predict_location_timeseries_kappa.py`, `predict_location_timeseries_terms.py` | `retsupp/visualize/paper/slurm_jobs/predict_location_timeseries_*.sh` |
+| Leaving out sub-01, sub-02 | `retsupp/visualize/paper/run_excluding.py` (`--exclude 1 2 -- <figure module>`), `sensitivity_excl_subjects.py`, `n28_extra_numbers.py` | — |
+| Backup to the department share | `retsupp/prepare/backup_to_gecon.py` | `retsupp/prepare/slurm_jobs_backup_to_gecon.sh` |
+
+## Figures and tables (package `figures/`)
+
+All figure scripts are in `retsupp/visualize/paper/` and use `paper_style.py`. The `_n28` versions were rendered with
+`python -m retsupp.visualize.paper.run_excluding --exclude 1 2 -- retsupp.visualize.paper.<script> ...`; scripts with
+an `--exclude-subjects` option take `--exclude-subjects 1 2` directly.
+
+| Figure | Script |
+|---|---|
+| Fig. 1 paradigm and behaviour (`fig1_paradigm_behaviour_v4_n28`), `figS_priming_rt_v4_n28` | `fig1_paradigm_behaviour_v4.py --exclude-subjects 1 2 --suffix _n28` (trials from `retsupp/visualize/vss2026/plot_rt_talk.py`) |
+| Fig. 2 pRF fits | `fig2_prf_fits.py` (flat maps rendered by `retsupp/visualize/pycortex/render_fig3_flat.py` into `notes/figures/fig1_r2low/`) |
+| Fig. 3 item locations, `tableS_item_locations_n28` | `fig3_item_locations.py` |
+| Fig. 4 model | `fig4_model.py` |
+| Fig. 5 gain fields, `table_parameters_2026-11_n28`, `figS_field_widths`, `figS_gain_fields_dn`, `figS_gain_fields_gauss`, `figS_gain_vs_prf_size`, `figS_loso_per_roi`, `figS_pooled_dS_dD`, `tableS_loso` | `fig5_gain_fields.py` (LOSO tables: `fig3_collect_loso.py`, `table1_ladder.py`; hierarchy: `hierarchy_regression.py`) |
+| Fig. 6 decoding, `figS_bar_crossing_response`, `figS_decoding_all_rois(_examples)`, `figS_decoding_canonical`, `figS_decoding_hp_per_area` | `fig6_decoding.py` |
+| `figS_decoding_prf_models` | `compare_decoding_prf_models.py` |
+| `figS_decoded_bars_per_roi`, `figS_decoded_bars_rotated` | `figS_decoded_bars.py` |
+| `figS_decode_simulation` | `figS_decode_simulation.py` |
+| Fig. 7 gains and behaviour | `fig7_compact.py --compact` (input: `trialwise_meta_bayes.py` output) |
+| `figS_dn_gain_locus`, `figS_dn_params_by_hp` | `figS_dn_gain_locus.py`, `figS_dn_params_by_hp.py` |
+| `figS_dog_kappa` | `figS_dog_kappa.py --exclude-subjects 1 2` |
+| `tableS_sensitivity_n30` | `sensitivity_excl_subjects.py` |
+| Richter et al. comparison, discussion checks | `richter_followup.py`, `discussion_checks.py`, `kappa_neighbour_summary.py` |
