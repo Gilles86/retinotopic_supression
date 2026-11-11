@@ -379,7 +379,7 @@ only three of the four locations, in blocks of 2, 3 and 1 runs, the same order i
 and are left out of all analyses, on paradigm grounds; **n = 28** (sub-03–sub-30). The n = 30 results are in
 Supplementary Table `tableS_sensitivity_n30.md`: no result changes sign; the effects at the HP location get stronger
 without the pilots, the weakest distractor-gain and global-gain statements weaker. Of the 28: age known for 27 (one
-missing), mean 23.4 years, SD 3.6, range 18–33; 20 female, 8 male (self-reported sex). Handedness not recorded. Before
+missing), mean 23.4 years, SD 3.6, range 18–33; 20 female, 8 male (self-reported sex). 26 right-handed, 2 left-handed (self-reported; source: the lab's participant sheet, BIDS `participants.tsv`). Before
 the MRI sessions every participant did a behavioural pretest session; 15 people did the pretest without continuing to
 the MRI sessions (reasons not recorded). Six further MRI sessions were started but not completed or not included
 [authors: confirm the number and reasons]. Subject × area pairs without enough voxels drop out per figure, as listed
