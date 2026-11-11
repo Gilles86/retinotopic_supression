@@ -28,7 +28,9 @@ from PIL import Image
 
 from retsupp.visualize.paper.paper_style import (DOUBLE, FG, MUTED, ROI_COLORS, ROI_GROUPS, ROI_ORDER, ROI_X, letter, offset_spines,
                                                  provisional, roi_axis, save)
-from retsupp.visualize.paper.plot_fig1 import COVER_TSV, SIGMA_TSV, contralateral
+from retsupp.visualize.paper.plot_fig1 import COVER_FINAL_TSV, COVER_TSV, SIGMA_FINAL_TSV, SIGMA_TSV, contralateral
+
+TABLES = {'cover': COVER_TSV, 'sigma': SIGMA_TSV}   # --final-prfs: the final joint-HRF fold fits
 
 MAP_DIR = Path('notes/figures/fig1_r2low')
 LEGEND = """
@@ -149,7 +151,7 @@ def panel_maps(fig, gs, subject=23, view='flat'):
 
 
 def panel_contra(ax):
-    d = pd.read_csv(COVER_TSV, sep='\t')
+    d = pd.read_csv(TABLES['cover'], sep='\t')
     for i, roi in enumerate(ROI_ORDER):
         p = contralateral(d[d.roi == roi]).values
         rng = np.random.default_rng(i)
@@ -238,7 +240,7 @@ def panel_distance(ax, folder=DIST_DIR, cls='neutral_lp'):
 
 def panel_size(ax, rois=('V1', 'V2', 'V3', 'V3AB', 'hV4', 'LO')):
     """pRF size against eccentricity per ROI: mean ± SEM across subjects of each subject's voxel-weighted mean."""
-    d = pd.read_csv(SIGMA_TSV, sep='\t')
+    d = pd.read_csv(TABLES['sigma'], sep='\t')
     d = d[d.n >= 5]
     ends = []
     for roi in rois:
@@ -250,7 +252,7 @@ def panel_size(ax, rois=('V1', 'V2', 'V3', 'V3AB', 'hV4', 'LO')):
         ends.append([m.values[-1], m.index[-1], roi])
     ends.sort()
     for i in range(1, len(ends)):  # keep end labels at least 0.12 deg apart
-        ends[i][0] = max(ends[i][0], ends[i - 1][0] + .12)
+        ends[i][0] = max(ends[i][0], ends[i - 1][0] + .15)
     for y, x, roi in ends:
         ax.text(x + .07, y, roi, color=ROI_COLORS[roi], fontsize=6, va='center')
     ax.set_xlim(0, 3.6)
@@ -333,7 +335,19 @@ def distance_icon(fig, x0, y0, size, n_bins=8):
     return ins
 
 
-def main(cv_table, hrf_table, name='fig2_prf_fits', nearest_dir=NEAREST_DIR):
+FINAL_PRF_NOTE = (' b, c: pRFs of the final fits (DoG with one HRF per subject × ROI fitted jointly, mean over the three '
+                  'fold fits), voxels with held-out R² ≥ .1 (mean over folds) inside the bar aperture; the maps in a show the mean fit '
+                  'over all runs (DoG with a flexible HRF per voxel).')
+
+
+def main(cv_table, hrf_table, name='fig2_prf_fits', nearest_dir=NEAREST_DIR, final_prfs=False):
+    global LEGEND
+    if final_prfs:
+        TABLES.update(cover=COVER_FINAL_TSV, sigma=SIGMA_FINAL_TSV)
+        LEGEND = LEGEND.rstrip() + FINAL_PRF_NOTE + '\n'
+    else:
+        LEGEND = LEGEND.rstrip() + (' b, c: pRFs of the mean fit over all runs (DoG with a flexible HRF per voxel, '
+                                    'model 4), voxels with R² ≥ .1 inside the bar aperture.') + '\n'
     d, base = gain_r2(cv_table, hrf_table)
     fig = plt.figure(figsize=(DOUBLE, 7.1))
     top = fig.add_gridspec(1, 2, width_ratios=[.27, 1], left=.01, right=.99, top=0.965, bottom=0.665, wspace=.03)
@@ -372,7 +386,8 @@ if __name__ == '__main__':
     ap.add_argument('--hrf-table', default='notes/data/hrf_comparison_jointhrf_final2_2026-11.tsv',
                     help='held-out R² of the DoG pRF with the per-ROI HRF (model 14); the joint-HRF fits by default')
     ap.add_argument('--name', default='fig2_prf_fits_final2')
+    ap.add_argument('--final-prfs', action='store_true', help='b, c from the final joint-HRF fold fits (collect-final tables)')
     ap.add_argument('--nearest-dir', default='notes/data/event_deconv_nearest_final2_2026-11',
                     help='deconvolved search-onset responses by pRF distance from the nearest item (e)')
     a = ap.parse_args()
-    main(a.cv_table, a.hrf_table, a.name, a.nearest_dir)
+    main(a.cv_table, a.hrf_table, a.name, a.nearest_dir, a.final_prfs)

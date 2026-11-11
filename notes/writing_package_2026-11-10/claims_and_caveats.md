@@ -74,6 +74,17 @@ Methods and a supplementary table, described neutrally; no main-text sentence le
 - **Neighbour suppression or enhancement in the gain fields.** The split model finds next to HP = opposite (p = .87).
   The measured item responses (Fig. 3) show next < opposite in early areas; the decoded bar shows next ≥ opposite
   (n.s.). Do not claim either direction for the neighbours from the model; present Fig. 3 as measured.
+- **The neighbour decrease is not a centre/surround effect of the field at HP** (2026-11-11;
+  `notes/data/kappa_neighbour_2026-11.tsv`, `retsupp/visualize/paper/kappa_neighbour_summary.py`). The fitted DoG
+  centre/surround tilt (κ < 0: slightly more of the HP effect on the suppressive surround), run through the Fig. 3
+  pipeline on noise-free model predictions, changes next − opposite by +0.24% (median +0.13%, 57% of subjects > 0,
+  p = .49; all areas +0.27%, p = .21) and the decoded bar drive by +0.05% (p = .38); neither the joint fit (m7_full,
+  −0.85%, p = .40) nor the κ model reproduces the measured −13.0%. Discussion sentence: "A sustained HP field that
+  suppresses the pRF surround slightly more than its centre (the fitted tilt) predicts, if anything, a small relative
+  increase next to HP (+0.2% of the mean response in early visual cortex, n.s.), opposite in sign and about fifty times
+  smaller than the measured decrease (−13%); the lower response next to HP is therefore not a centre/surround effect
+  of the gain field at HP." Why small: the sustained field (σ ≈ 2.1° in these fits) has fallen to ≈ 3% at the
+  neighbouring item 5.66° away, early-area surrounds are ≈ 1.35° (17% of the centre amplitude), and κ is ≈ −0.06.
 - **A field wider than the item spacing.** That was the earlier fits (4.8°); the final sustained field is 3.3°.
 - **Single-area decoding effects after correction**: no area survives BH across nine (smallest q = .076).
 - **DN-baseline or normalization accounts.** The data cannot place the HP effect on the DN baselines rather than on the

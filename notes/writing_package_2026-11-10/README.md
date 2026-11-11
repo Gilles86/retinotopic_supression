@@ -1,13 +1,15 @@
-# retsupp paper: writing package (2026-11-10, final fits)
+# retsupp paper: writing package (2026-11-11, final fits; revision pass on manuscript v2)
 
 This package replaces the 2026-11-09 package (`/Users/gdehol/git/retsupp/notes/writing_package_2026-11/`), which was
 never implemented. Hand this folder to the writing agent; it is self-contained. Read in this order:
 
-1. this file (storyline, decisions, words, outline, figure list with status);
+1. this file (storyline, decisions, words, outline, figure list with status); start with `prompt_writing_agent_2026-11-11.md`;
 2. `claims_and_caveats.md`: **the guardrail** (what the data support, what they do not, caveats);
 3. `key_numbers.md`: the only place to take numbers from, each with its source file;
-4. `figures/`: one PDF + PNG + legend `.md` per figure (copied 2026-11-10 from
-   `/Users/gdehol/git/retsupp/notes/figures/paper_2026-11/`); `all_figures_2026-11-10.pdf` has them all in order.
+4. `figures/`: one PDF + PNG + legend `.md` per figure (current versions, from
+   `/Users/gdehol/git/retsupp/notes/figures/paper_2026-11/`); `all_figures_2026-11-11.pdf` has them all in order;
+5. `writing_followup_2026-11-10.md`: answers to the follow-up list on manuscript v2 (CIs, task and acquisition facts,
+   figure changes).
 
 Where older notes disagree with this package, this package wins.
 
@@ -87,20 +89,20 @@ distractor gain along the hierarchy; trial-by-trial history effects; why individ
 (small effects, out-of-subject prediction of the HP term not reliable); dependence on the pRF model; HP outside the bar
 aperture.
 
-**Methods.** `notes/fitting_lessons_2026-11.md`, the legends, and the repo `CLAUDE.md` (TR 1.6 s, 258 volumes, ring at 4°,
+**Methods.** The "Methods facts" section at the end of `key_numbers.md` (participants, task, acquisition, preprocessing, decoder, software, global gain; with the open items), `writing_followup_2026-11-10.md`, the legends, and the repo `CLAUDE.md` (TR 1.6 s, 258 volumes, ring at 4°,
 item size 1.5°, bar aperture 3.17°, 2 sessions × 6 runs; sub-20 ses-1 and sub-24 ses-2 have 5 runs).
 
 ## Figures
 
 | Figure | File (in `figures/`) | Message | Status |
 |---|---|---|---|
-| 1 Paradigm and behaviour | `fig1_paradigm_behaviour` | Learned suppression of HP; target at HP slowed; repeats speed responses | FINAL |
-| 2 pRF fits | `fig2_prf_fits_final2` | pRFs map the display; DoG and the joint per-area HRF improve held-out fits; drive falls off with distance from the nearest item | FINAL |
-| 3 Item locations | `fig3_item_locations_final2` | More response to target and distractor; in early areas least at HP, less next to HP than opposite, for every item | FINAL |
+| 1 Paradigm and behaviour | `fig1_paradigm_behaviour_v3` (with within-subject difference strips) | Learned suppression of HP; target at HP slowed; repeats speed responses | FINAL |
+| 2 pRF fits | `fig2_prf_fits_v4` | pRFs map the display; DoG and the joint per-area HRF improve held-out fits; drive falls off with distance from the nearest item | FINAL |
+| 3 Item locations | `fig3_item_locations_v3` (+ `tableS_item_locations.md`) | More response to target and distractor; in early areas least at HP, less next to HP than opposite, for every item | FINAL |
 | 4 Model | `fig4_model_hp_blocks` | Illustration of the gain-field model; no data | FINAL |
-| 5 Gain fields | `fig5_gain_fields_final2` | Target gain beyond V1; distractor gain in V3AB, hV4, TO; sustained gain lower at HP; transient gain at HP slightly lower for both items | FINAL |
-| 6 Decoding | `fig6_decoding` | Bar decodable everywhere; read out weaker in the quadrant facing HP | FINAL |
-| 7 Gains and behaviour | `fig7_compact_v2` | Target gain drops on target repeats; distractor and global gain lower on slow trials | FINAL |
+| 5 Gain fields | `fig5_gain_fields_v3` (widths in `figS_field_widths_v3`) | Target gain beyond V1; distractor gain in V3AB, hV4, TO; sustained gain lower at HP; transient gain at HP slightly lower for both items | FINAL |
+| 6 Decoding | `fig6_decoding_v3` (old d → `figS_decoding_hp_per_area_v3`; old e, f → d, e) | Bar decodable everywhere; read out weaker in the quadrant facing HP | FINAL |
+| 7 Gains and behaviour | `fig7_compact_v3` | Target gain drops on target repeats; distractor and global gain lower on slow trials | FINAL |
 | Table S Parameters | `table_parameters_2026-11_final2` | All gain terms per area, DoG and DN, joint and estimated alone | FINAL |
 | Table S Out-of-subject prediction | `tableS_loso_final2` | What each term adds to out-of-subject prediction (supplement only) | FINAL |
 
@@ -109,7 +111,10 @@ item size 1.5°, bar aperture 3.17°, 2 sessions × 6 runs; sub-20 ses-1 and sub
 | Figure | Supports | Status |
 |---|---|---|
 | `figS_pooled_dS_dD_final2` | dS and dD per subject, pooled over areas, alone and joint | FINAL |
-| `figS_field_size_final2` | Field widths per area | FINAL |
+| `figS_field_widths_v3` | Field widths (FWHM) per area, fits at a bound counted (was Fig. 5b) | FINAL |
+| `figS_decoding_hp_per_area_v3` | HP quadrant − other three per area (was Fig. 6d) | FINAL |
+| `tableS_item_locations.md` | Fig. 3 statistics per item type, per pathway, HP vs all LP, DCT basis | FINAL |
+| `figS_field_size_final2` | Field size per area (earlier layout) | superseded by `figS_field_widths_v3`; not in the zip |
 | `figS_gain_vs_prf_size_final2` | Target gain rises with pRF size | FINAL |
 | `figS_loso_per_roi_final2` | Out-of-subject prediction per area and term | FINAL |
 | `figS_decoding_prf_models_final2` | Decoding quadrant contrasts with DoG, Gaussian and DN pRFs (joint HRF) | FINAL (R) |
@@ -124,6 +129,10 @@ item size 1.5°, bar aperture 3.17°, 2 sessions × 6 runs; sub-20 ses-1 and sub
 | `figS_dn_params_by_hp` | DN pRF parameters per HP condition (legend added) | FINAL (X) |
 | `fig_event_responses_2x3_deconv` | Earlier HP vs LP version of Fig. 3 (earlier pRFs) | superseded by Fig. 3; optional |
 
+Superseded versions stay on disk in `figures/` but are left out of the zip: `fig1_paradigm_behaviour`,
+`fig2_prf_fits_final2`, `fig2_prf_fits_v3`, `fig3_item_locations_final2`, `fig5_gain_fields_final2`, `fig6_decoding`,
+`fig7_compact_v2`, `figS_field_size_final2`.
+
 Retired: the October-fit `fig7_behaviour` and `fig7_behaviour_final2` (RT regressed on per-trial gains); `table1_ladder`
 as a main table; `figS_cv_power` (earlier fits).
 
@@ -135,7 +144,25 @@ as a main table; `figS_cv_power` (earlier fits).
 - **Drop:** field-width filter, per-condition DN fits beyond the existing supplement, new model variants, the
   HP-rotation null for dS unless the user wants it.
 
-## CHANGES since the 2026-11-09 package
+## CHANGES 2026-11-11 (revision pass on manuscript v2)
+
+- **Figures v3** (follow-up part B): Fig. 1 with within-subject difference strips (median, 95% CI, counts); Fig. 3 with
+  a short legend, details in `tableS_item_locations.md`; Fig. 5b only the to-scale field, widths to `figS_field_widths_v3`;
+  Fig. 6 old d to `figS_decoding_hp_per_area_v3`, re-lettered (old e → d, old f → e), larger inset text; Fig. 7 narrower;
+  all main figures 180 mm, text ≥ 6 pt.
+- **Fig. 2 v4:** panels b, c from the final pRFs (joint-HRF DoG fold fits; held-out R² ≥ .1); the earlier versions used
+  the model-4 mean fits.
+- **Behaviour as medians** with bootstrapped 95% CIs (they match the Wilcoxon tests and the figure); CIs added for
+  Fig. 2d and Fig. 3b, c; Fig. 3 dorsal n = 28 (b, c) vs 27 (d, e) explained.
+- **Methods facts** added to `key_numbers.md`: participants (aggregate demographics), task, acquisition,
+  preprocessing, decoder, software versions, the global gain. Open: ethics body/number and payment (authors), the
+  sidecar "3D"/multiband and `syn-sdc` checks, braincoder commit per fit.
+- **κ and the neighbour pattern:** the fitted centre/surround tilt predicts +0.2% next to HP (n.s.), opposite in sign
+  and ~50× smaller than the measured −13% (`notes/data/kappa_neighbour_2026-11.tsv`); Discussion sentence in
+  `claims_and_caveats.md`.
+- `writing_followup_2026-11-10.md` (answers to the follow-up list) is part of the package.
+
+## CHANGES 2026-11-10 (since the 2026-11-09 package)
 
 - **All gain numbers are on the final fits** (joint per-area HRF, reliable voxels); no `[PROVISIONAL]` tokens remain.
 - **Narrative:** LOSO moved to Methods + supplementary table (user decision). On the final fits dS no longer improves

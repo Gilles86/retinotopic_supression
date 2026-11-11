@@ -11,47 +11,65 @@ rows use the same recipe with Gaussian or DN pRFs, each with its own jointly fit
 
 Status: **F** final · **R** robustness (supplement) · **X** exploratory (supplement or text at most, no claim).
 
-## Fig. 1 Behaviour (F; `notes/data/behaviour_rt_2026-11.tsv`, legend `fig1_paradigm_behaviour.md`)
+## Fig. 1 Behaviour (F; `notes/data/behaviour_rt_2026-11.tsv`, legend `fig1_paradigm_behaviour_v3.md`)
 
 Unchanged from the 2026-11-09 package (behaviour does not depend on any fit). Correct trials, 21,480 in total.
 
-| Effect | Value | Subjects in that direction | p |
-|---|---|---|---|
-| Distractor at HP vs LP (HP benefit) | 877 vs 905 ms, −27.8 ms (median 26.1) | 30/30 | 1.9 × 10⁻⁹ |
-| Distractor at LP vs absent (capture cost) | 905 vs 862 ms, +43.0 ms | 28/30 | 2.6 × 10⁻⁸ |
-| Distractor at HP vs absent | 877 vs 862 ms, +15.2 ms | 21/30 | .001 |
-| Target at HP vs LP (distractor trials) | 908 vs 880 ms, +28.4 ms | 26/30 | 3.9 × 10⁻⁷ |
-| Target repeats its location (repeat − switch) | median −38 ms | 28/30 | < .001 |
-| Distractor repeats (repeat − switch, within HP and LP, averaged) | median −15 ms | 21/30 | .003 |
+Effects are the **median** of the within-subject differences (the statistic the Wilcoxon test and the figure brackets
+use) with a bootstrapped 95% CI (10 000 resamples over subjects; `notes/data/followup_A1_behaviour_ci_2026-11-10.tsv`);
+condition means and the mean difference in brackets. The difference strips under Fig. 1c–f (v3) use 5 000 resamples, so
+their CIs can differ in the first decimal.
+
+| Effect | Median difference [95% CI] | Condition means (mean difference) | Subjects in that direction | p |
+|---|---|---|---|---|
+| Distractor at HP vs LP (HP benefit) | −26.1 ms [−34.4, −20.9] | 877 vs 905 ms (−27.8) | 30/30 | 1.9 × 10⁻⁹ |
+| Distractor at LP vs absent (capture cost) | +43.7 ms [+33.7, +54.2] | 905 vs 862 ms (+43.0) | 28/30 | 2.6 × 10⁻⁸ |
+| Distractor at HP vs absent | +15.8 ms [+2.1, +23.2] | 877 vs 862 ms (+15.2) | 21/30 | .0012 |
+| Target at HP vs LP (distractor trials) | +26.8 ms [+19.9, +37.5] | 908 vs 880 ms (+28.4) | 26/30 | 3.9 × 10⁻⁷ |
+| Target repeats its location (repeat − switch) | −38.4 ms [−46.9, −28.4] | (−36.6) | 28/30 | < .001 |
+| Distractor repeats (repeat − switch, within HP and LP, averaged) | −15.1 ms [−27.4, −6.2] | (−17.2) | 21/30 | .0035 |
 
 Without the two pilots (sub-01, sub-02): −26.6 ms (p = 7.5 × 10⁻⁹); target at HP +27.3 ms (p = 1.5 × 10⁻⁶).
 Design: 8 items on a ring at 4°, target and distractor only at the four diagonal positions; no distractor on 20% of
 trials; bar aperture 3.17°. Distractor at HP on 50% of all trials (62.5% of distractor-present trials), at each LP location 10%, no distractor 20% (as printed in Fig. 1a; source `retsupp/visualize/paper/plot_fig1.py`).
 
-## Fig. 2 pRF fits (F; `fig2_prf_fits_final2.md`)
+## Fig. 2 pRF fits (F; `fig2_prf_fits_v4.md`)
 
 - d, held-out R² gained per subject (median over the nine areas; three folds of runs, reliable voxels) over a Gaussian
   pRF with the canonical HRF (`notes/data/prf_cv_roi_summary.tsv` + `notes/data/hrf_comparison_jointhrf_final2_2026-11.tsv`):
-  DoG pRF +.0035 (30/30, p = 1.9 × 10⁻⁹); the jointly fitted HRF per subject × area on top of the DoG +.0107 (29/30,
-  p = 1.3 × 10⁻⁸); both +.0189 (30/30, p = 1.9 × 10⁻⁹). (Changed from the 09 package, which used a median-of-voxels HRF:
+  DoG pRF +.0035 [+.0024, +.0049] (30/30, p = 1.9 × 10⁻⁹); the jointly fitted HRF per subject × area on top of the DoG
+  +.0107 [+.0075, +.0212] (29/30, p = 1.3 × 10⁻⁸); both +.0189 [+.0150, +.0244] (30/30, p = 1.9 × 10⁻⁹). Median over
+  subjects [bootstrapped 95% CI] (`notes/data/followup_A1_fig2_fig3_ci_2026-11-10.tsv`). (Changed from the 09 package, which used a median-of-voxels HRF:
   +.011 and +.017.)
 - e, search-display response by distance of the pRF centre from the nearest item: from the final pRFs
   (`notes/data/event_deconv_nearest_final2_2026-11/`); qualitative, no test.
-- V1 pRF size flat with eccentricity (≈ .55–.6°), likely a resolution floor of the paradigm; V2 .60 → .75°, V3 .61 → .91°.
-- Example subject: sub-23. Contralateral share per area (b): `[TODO: compute from the Fig. 2b table]`.
+- c, pRF size against eccentricity (final pRFs, `notes/data/fig1_prf_sigma_final2.tsv`; mean over subjects of each subject's median σ per
+  0.5° bin): V1 nearly flat (.56–.66°), likely a resolution floor of the paradigm; V2 .60 → .80°; V3 .63 → .97°.
+- Example subject: sub-23 (maps in a: mean fit over all runs, DoG with a flexible HRF per voxel).
+- b, contralateral share of pRF centres, from the final pRFs (joint-HRF DoG fold fits, mean over folds; voxels with
+  held-out R² ≥ .1 inside the bar aperture; `notes/data/fig1_prf_coverage_final2.tsv`, summary
+  `notes/data/contralateral_final2_2026-11-11.tsv`), median [IQR] over subjects (n): V1 95.9% [92.2–97.5] (30),
+  V2 94.2% [89.7–97.1] (30), V3 95.4% [93.4–97.3] (30), V3AB 94.6% [90.0–100] (29), IPS 89.7% [85.8–97.2] (29),
+  hV4 96.0% [90.6–98.3] (30), VO 100% [100–100] (26), LO 96.9% [93.4–98.4] (30), TO 100% [96.6–100] (30); chance 50%.
+  n < 30: no pRF centre passing the criterion. (The model-4 mean fits gave 94–100%; `notes/data/followup_A3_contralateral_2026-11-10.tsv`.)
 
 **R, pRF models with jointly fitted HRF** (`notes/data/prf_jointhrf_summary_final2_2026-11.tsv`; held-out R², reliable
 voxels, median over the nine areas per subject, median over subjects): Gaussian .178, DoG .182, DN .191. DN > DoG by
 .0063 (27/30, p = 1.2 × 10⁻⁶); DoG > Gaussian by .0033 (28/30, p = 1.9 × 10⁻⁸); joint HRF over canonical HRF (DoG)
 +.0114 (26/30, p = 1.6 × 10⁻⁷).
 
-## Fig. 3 Responses at the item locations (F; `fig3_item_locations_final2.md`)
+## Fig. 3 Responses at the item locations (F; `fig3_item_locations_v3.md`; per item type, per pathway, HP vs all LP and DCT statistics also in `tableS_item_locations.md`)
 
 Voxels with a final pRF centre within 2° of an item (`notes/data/event_deconv*_final2_2026-11/`); the bar's predicted
 response removed with the final pRFs and HRF; window 3.2–6.4 s.
 
-- Target − neutral (b): early +0.12%, dorsal +0.26%, occipitotemporal +0.23% signal, all p < .001 (BH over pathways).
-- Distractor − neutral at LP (c): early +0.07%, dorsal +0.15%, occipitotemporal +0.15% signal, all p < .001.
+- Target − neutral (b), mean over subjects [bootstrapped 95% CI], % signal: early +0.125 [+0.102, +0.148] (n = 30),
+  dorsal +0.258 [+0.203, +0.317] (n = 28), occipitotemporal +0.229 [+0.193, +0.269] (n = 30); all p ≤ 3.9 × 10⁻⁵ (BH over
+  pathways) (`notes/data/followup_A1_fig2_fig3_ci_2026-11-10.tsv`).
+- Distractor − neutral at LP (c): early +0.072 [+0.042, +0.102], dorsal +0.147 [+0.093, +0.207], occipitotemporal
+  +0.150 [+0.107, +0.195]; all p ≤ 3.9 × 10⁻⁵.
+- Dorsal n: 28 in b, c (two subjects lack dorsal voxels at some item location); 27 in d, e (sub-30 also left out of the
+  relative analyses because its mean dorsal response is not positive).
 - Location type, early areas (e, items pooled, % of the subject's mean response): HP − next −6.1 ± 3.6% (p = .135);
   next − opposite −13.0 ± 5.8% (p = .047); HP − opposite −19.0% (p = .011); next left − next right +0.6% (p = .63).
   ANOVA location type F(2, 58) = 6.28, p = .003; location type × item F(4, 116) = 0.82, p = .514.
@@ -67,7 +85,7 @@ response removed with the final pRFs and HRF; window 3.2–6.4 s.
   −10.2% (p = .011) / −7.7%; all others p ≥ .10: same direction, item types do not differ.
 - Nearly identical to the 09 package (earlier fits): next − opposite −14.0% (p = .029), HP − opposite −19.0% (p = .011).
 
-## Fig. 5 The gain fields (F; `fig5_gain_fields_final2.md`, parameter table `table_parameters_2026-11_final2.md`)
+## Fig. 5 The gain fields (F; `fig5_gain_fields_v3.md`, parameter table `table_parameters_2026-11_final2.md`)
 
 Sources: joint fits `notes/data/gain_field_parameters_final2_2026-11.tsv` (m7_full = all terms fitted together);
 estimated alone (each term added alone to its base model, the subject's own estimate, all voxels):
@@ -86,7 +104,7 @@ estimated alone (each term added alone to its base model, the subject's own esti
   subjects the target gain falls with the width of the transient field (median Spearman ρ −.64, p = 3 × 10⁻⁶) and does
   not track the item weight (ρ +.07, p = .34).
 
-**b, field widths (FWHM)**: sustained median 3.3° over all subjects and areas (14% of fits at a σ bound); per area
+**Field widths (FWHM; supplementary `figS_field_widths_v3`, was Fig. 5b; Fig. 5b is now only the to-scale sustained field)**: sustained median 3.3° over all subjects and areas (14% of fits at a σ bound); per area
 early ≈ 5.0–5.3°, higher areas 2.5–3.4° (TO 2.5°, VO 2.6°, hV4 2.9°, IPS 3.1°, LO 3.2°, V3AB 3.4°). Neighbouring items
 are 5.7° apart. Transient field: often at a bound, poorly constrained. (Changed: the 09 package had 4.8°.)
 
@@ -160,18 +178,18 @@ q < .05 in V1–TO; median δ −0.009. Held-out runs (run3, pRFs frozen): worse
 - Recovery: at our effect size a b or d effect is read as input gain in 72% of simulations.
 - Conclusion: the data cannot place the HP effect on the DN baselines rather than on the input gain.
 
-## Fig. 6 Decoding (F; `fig6_decoding.md`; pRFs = final DoG joint-HRF fold fits)
+## Fig. 6 Decoding (F; `fig6_decoding_v3.md`; pRFs = final DoG joint-HRF fold fits)
 
 Unchanged from the 09 package (it already used the final joint-HRF pRFs).
 - Frame-wise r, decoded vs true (median over subjects; shuffled ≈ 0, all p < 10⁻³ one-sided): V1 .51, V2 .47, V3 .40,
   V3AB .29, IPS .12, hV4 .28, VO .16, LO .25, TO .19. n per area: V1–V3 30, V3AB 25, IPS 19, hV4 29, VO 11, LO 29, TO 27.
 - Example run: sub-03 ses-1 run-4, V1, r = .62 (rank 1 of 2653); median run r = .30.
-- d, HP quadrant − other three, one-sided, BH over nine areas: V2 p = .013, V3 .027, VO .034, TO .031, V3AB .043, all
+- Supplementary `figS_decoding_hp_per_area_v3` (was Fig. 6d), HP quadrant − other three, one-sided, BH over nine areas: V2 p = .013, V3 .027, VO .034, TO .031, V3AB .043, all
   q = .076–.077; V1 p = .32; none q < .05.
-- e, V1–V3 pooled, % of the four-quadrant mean (mean ± within-subject SEM): HP −0.85 ± 0.38%, next to HP +0.46 ± 0.18%,
+- d (was e), V1–V3 pooled, % of the four-quadrant mean (mean ± within-subject SEM): HP −0.85 ± 0.38%, next to HP +0.46 ± 0.18%,
   opposite −0.08 ± 0.22%. HP < next one-sided p = .015; HP < opposite p = .13; Friedman p = .06; left vs right p = .22.
   Next vs opposite (two-sided) p = .16.
-- f, by eccentricity (V1–V3): 0–1.5° −0.6% (p = .10); 1.5–2.5° −1.4% (p = .029); 2.5°+ −1.3% (p = .040); whole aperture
+- e (was f), by eccentricity (V1–V3): 0–1.5° −0.6% (p = .10); 1.5–2.5° −1.4% (p = .029); 2.5°+ −1.3% (p = .040); whole aperture
   −1.1 ± 0.5% (p = .033); bands do not differ (Friedman p = .53).
 - c, insets (outline decoder): bar segment in the quadrant facing HP −1.16 ± 0.42% (p = .008); next to HP +1.13 ± 0.33%
   (p = .002).
@@ -190,7 +208,7 @@ the neighbours *below* opposite (−0.24%), unlike the data (next +0.46%, opposi
 Gaussian −0.85 vs +0.46% (p = .036); DN −0.65 vs +0.36% (p = .10; outline decoder p = .011). Next vs opposite never
 reliable (p = .13–.49). Decoding quality V1 r: DoG .51, Gaussian .49, DN .45.
 
-## Fig. 7 Gains and behaviour (F; `fig7_compact_v2.md`; data `notes/data/trialwise_meta_bayes_2026-11/`)
+## Fig. 7 Gains and behaviour (F; `fig7_compact_v3.md`; data `notes/data/trialwise_meta_bayes_2026-11/`)
 
 Per subject × area, the trial-wise gains modulated by trial history and by z(log RT), estimated directly on the BOLD
 (final m7 fits, each area's signal voxels), each estimate with a leave-one-run-out jackknife SE; hierarchical
@@ -244,3 +262,71 @@ DoG alone values come from the linear sufficient statistics (`conditional_estima
 exact-curve DoG values agree. Figures: `figS_gain_fields_gauss_final2`, `figS_gain_fields_dn_final2`.
 
 Not run with Gaussian or DN pRFs: Fig. 3 (voxel selection by pRF centre) and Fig. 7 (trial-wise gains).
+
+## Methods facts (from `writing_followup_2026-11-10.md`, part A; sources as given there)
+
+**Participants.** n = 30 (sub-01–sub-30), all completed both MRI sessions; no participant excluded from any analysis
+(subject × area pairs without enough voxels drop out per figure, as listed above). Age known for 29 (one missing):
+mean 23.4 years, SD 3.5, range 18–33. 22 female, 8 male (self-reported sex). Handedness not recorded. Before the MRI
+sessions every participant did a behavioural pretest session; 15 people did the pretest without continuing to the MRI
+sessions (reasons not recorded). Six further MRI sessions were started but not completed or not included; the dataset
+contains the 30 participants who completed both MRI sessions [authors: confirm the number and reasons]. Two pilots
+(sub-01, sub-02) had a different HP run order (below). Source: the lab's subject sheet, aggregated; per-subject values
+in the BIDS `participants.tsv` (not part of this package). **Ethics approval (body, number) and payment: to be supplied
+by the authors (VU team)** [the sheet shows only varying amounts and course credit].
+
+**Task** (`experiment/session.py`, `trial.py`, `stimuli.py`; per-run `*_expsettings.yml`; A4):
+- Response: report whether the target (the item with the odd orientation) carries a small grey dot (radius 0.1°);
+  keys `b` = dot, `y` = no dot (scanner button box; which fingers is not in the code). First press only, during the
+  1.5 s search display; RT from search onset. On each trial two of the four diagonal and two of the four cardinal items
+  carry a dot. (`experiment/instructions.yml` and `experiment/README.md` name other keys, from the behavioural-lab
+  version; use `b`/`y`.)
+- Timing: fixation 1.0 s, search 1.5 s, feedback 1.0 s (a red "x" after an error or no response; nothing after a
+  correct response), interval 1.3, 2.9 or 4.5 s (20 each per run, shuffled); 60 trials per run; 14.3 s blank at the end.
+- Trial list per run (fixed counts, shuffled): distractor at HP 30 (50%), at each LP location 6 (10%), absent 12 (20%);
+  target 15 times at each diagonal location, never at the distractor's location. (The settings field
+  `likely_distractor_probability: 0.67` is unused; do not cite it.)
+- HP blocks (sub-03–30): four blocks of three runs, each diagonal location HP once; blocks 1–2 in session 1, 3–4 in
+  session 2; within a session HP moves to the opposite location, between sessions to the other diagonal; eight orders
+  in rotation. sub-20 session 1 and sub-24 session 2 have five runs (one block of two). Pilots sub-01, sub-02: 2, 3 and
+  1 runs at three locations per session.
+- Display: mid-grey background; eight bars 1.5° × 0.375° on a ring at 4°; one item has the odd colour (distractor), one
+  the odd orientation (target, always the common colour); colours orange and green, assigned at random per trial, as is
+  the target orientation; display shifted 1.1° down. Fixation: white disc 0.25° with a black cross and a grey centre
+  dot. Screen 70.9 cm at 196 cm, 1920 × 1080 (≈ 20.5° wide).
+- Bar: checkerboard in a circular aperture of radius 3.17°, width 0.79°, contrast reversing at 8 Hz, 0.168°/s (42.4 s
+  per sweep); rightward, leftward, downward, upward with 4.8 s rests, twice per run; independent of the trials.
+
+**Acquisition and preprocessing** (A5):
+- Philips Ingenia 7T, SENSE-Head-7T coil; gradient-echo EPI, TR 1.6 s, TE 24 ms, flip angle 66°, 1.68 × 1.68 × 1.7 mm,
+  multiband 3, in-plane SENSE 2.4, partial Fourier 0.80, 258 volumes per run; magnitude and phase saved. Field maps:
+  one phase-difference map per session half (TE 4.5/5.5 ms). Anatomy: MP2RAGE 0.70 × 0.70 × 0.85 mm; T1w for fMRIPrep
+  = UNI × INV2/max(INV2), N4-corrected.
+- NORDIC (`NIFTI_NORDIC`, magnitude + phase, temporal_phase 1, phase_filter_width 10).
+- fMRIPrep 25.2.3, output spaces T1w and fsnative, 4 dummy scans; analyses volumetric in T1w space; fsnative only for
+  the neuropythy atlas.
+- Cleaning: motion-outlier frames interpolated, then nilearn `clean_img(standardize='psc')` with DVARS, FD, 10 aCompCor,
+  6 motion parameters + derivatives, non-steady-state and cosine regressors; percent signal change of each voxel's run
+  mean.
+- **To check before writing (open):** the BOLD sidecars come from a template and say `MRAcquisitionType: 3D` with
+  multiband 3 (check the exam card); fMRIPrep ran with `--force syn-sdc` although field maps exist (check the fMRIPrep
+  reports for the correction applied).
+
+**Decoder and software** (A6):
+- Decoder (`retsupp/decode/decode_final.py`): Bayesian inversion of the fitted pRF encoding model in braincoder; noise
+  model `ResidualFitter` on training-run residuals (multivariate t, covariance ρ·ττᵀ + (1 − ρ)·diag(τ²) + σ²·WWᵀ; van
+  Bergen et al. 2015); `StimulusFitter` finds the MAP stimulus image, every pixel of every frame free, Gaussian (L2)
+  prior, L2 = 1.0; bar-only paradigm; pRFs from the fold that held the decoded run out; up to 200 voxels per area by
+  cross-run reliability, BOLD SD ≤ 20%. Cite braincoder: de Hollander, Renkert, Ruff & Knapen (2024), Zenodo,
+  doi:10.5281/zenodo.10778413.
+- Versions: TensorFlow 2.14.0, Keras 2.14.0, nilearn 0.13.0 (fits; the cleaning env no longer exists, its nilearn
+  version is not recoverable), nibabel 5.2.1, NumPy 1.26.4, SciPy 1.15.2, pandas 2.3.3, statsmodels 0.14.6 (Python
+  3.10); nideconv commit 46146f7 (Fourier basis, 13 regressors, −4 to 20 s); neuropythy 0.12.16; PyMC 5.28.3, nutpie
+  0.16.8, bambi 0.17.2, ArviZ 0.23.4; fMRIPrep 25.2.3; matplotlib 3.10.6, seaborn 0.13.2.
+- **Open:** braincoder was an editable checkout whose commit changed during the project (now f82f316); the commit each
+  final fit ran on is not recorded per fit.
+
+**Global gain (Fig. 7; A8).** Exists only in the trial-wise model (`retsupp/modeling/fit_trialwise_af_gains.py`,
+regressor G), not in the m7 fits (baseline value 0): a per-trial multiplier on the whole, spatially unweighted stimulus
+drive (bar plus all eight items, through each voxel's pRF, HRF and amplitude) during the 1.5 s search window. It absorbs
+non-spatial per-trial amplitude changes, so the target and distractor gains index the spatially specific part.
