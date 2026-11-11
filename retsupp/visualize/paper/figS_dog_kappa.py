@@ -14,6 +14,7 @@ Also prints the pooled κ (per subject, the mean over areas; median over subject
 from __future__ import annotations
 
 import argparse
+import re
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -114,7 +115,7 @@ def panel_schematic(ax):
     ax.plot([kx, kx + .8], [ky, ky], color=FG, lw=.8, ls=(0, (2, 1.5)))
     ax.text(kx + 1.0, ky, 'No field', fontsize=6, va='center', color=FG)
     ax.plot([kx, kx + .8], [ky - .16, ky - .16], color=FG, lw=1.4)
-    ax.text(kx + 1.0, ky - .16, 'With field, κ < 0', fontsize=6, va='center', color=FG)
+    ax.text(kx + 1.0, ky - .16, 'With field', fontsize=6, va='center', color=FG)
     ax.set_xlim(-5, 5)
     ax.set_ylim(-.82, 1.2)
     ax.set_xticks([-4, -2, 0, 2, 4])
@@ -124,7 +125,18 @@ def panel_schematic(ax):
     offset_spines(ax)
 
 
-def main(name, exclude):
+def loso_summary(path):
+    """Leave-one-subject-out test of κ (loso_fixed_group_exact): per subject the median over areas of ΔR² at the
+    other subjects' median κ, and of the sign-flip contrast."""
+    a = pd.read_csv(path, sep='\t')
+    a = a[a.mech == 'kappa']
+    x = a.pivot(index='subject', columns='roi', values='dr2').median(axis=1).dropna()
+    sg = a.pivot(index='subject', columns='roi', values='dr2_sign').median(axis=1).dropna()
+    return dict(n=len(x), better=(x > 0).mean() * 100, p=stats.wilcoxon(x).pvalue, med=x.median(),
+                sign=(sg > 0).mean() * 100, p_sign=stats.wilcoxon(sg).pvalue, delta=a.delta.median())
+
+
+def main(name, exclude, loso):
     full = pd.read_csv(FULL, sep='\t')
     full = full[(full.model == 'm8_full_dogk') & ~full.subject.isin(exclude)]
     run3 = pd.read_csv(RUN3, sep='\t')
@@ -135,6 +147,9 @@ def main(name, exclude):
     st_k, st_r = area_stats(full, 'kappa'), area_stats(run3, 'dcv_r2')
     pk, pr = pooled(full, 'kappa'), pooled(run3, 'dcv_r2')
     n_bound = int((full.kappa.abs() >= 1.999).sum())
+    L = loso_summary(loso)
+    loso_txt = re.sub(r'(?<=[\de ])-(?=\d)', '−', f"Leave-one-subject-out (each participant" + f""" scored at the median κ of the other participants, all voxels of the area, ΔR² on signal voxels): ΔR² higher in {L['better']:.0f}% of {L['n']} participants (Wilcoxon p = {L['p']:.2g}; median ΔR² {L['med'] * 1e-5:+.1e}, median δ {L['delta']:+.3f}), and the participants' data move the way the others' κ predicts in {L['sign']:.0f}% (sign-flip contrast, p = {L['p_sign']:.2g}). """)
+    run3_missing = sorted(set(full.subject) - set(run3.subject))
 
     W = DOUBLE
     fig = plt.figure(figsize=(W, 2.35))
@@ -166,9 +181,9 @@ def main(name, exclude):
                 f"{p['pct_neg']:.0f}% of {p['n']} subjects below 0, p = {p['p']:.2g}").replace('-', '−')
 
     legend = f"""
-**Supplementary Figure. A centre/surround split of the sustained field is consistent in direction but too small to help prediction.** a, Schematic of the variant (model m8_full_dogk): a one-dimensional cut through a DoG pRF at the HP location. The sustained gain field F (at the four item locations; drawn here at HP, with its FWHM) multiplies the pRF's centre (driving) pooling by 1 + (1 + κ)F and its surround (suppressive) pooling by 1 + (1 − κ)F, one κ per subject × area shared by all voxels. κ = 0 is the joint fit (m7) exactly; κ < 0 puts more of the field on the surround. Dashed: centre and surround without the field; solid: with a suppressive field at HP (illustrative values; κ = −0.6 exaggerated for display). b, κ per area from the full-data fits (n = {n_sub} participants; per area the subject × area pairs with a fit). c, Held-out ΔR² of the model with κ minus the joint fit without it, with the pRFs frozen and run-3 cross-validation (mean over the three folds), × 10⁻⁴. b, c: dots are participants (triangles: beyond the axis), diamonds and bars the median and its bootstrapped 95% CI (10 000 resamples); Wilcoxon signed-rank test against 0, Benjamini-Hochberg across the nine areas, * q < .05, ** q < .01, *** q < .001.
+**Supplementary Figure. A centre/surround split of the sustained field is consistent in direction but too small to help prediction.** a, Schematic of the variant (model m8_full_dogk): a one-dimensional cut through a DoG pRF at the HP location. The sustained gain field F (at the four item locations; drawn here at HP, with its FWHM) multiplies the pRF's centre (driving) pooling by 1 + (1 + κ)F and its surround (suppressive) pooling by 1 + (1 − κ)F, one κ per subject × area shared by all voxels. κ = 0 is the joint fit (m7) exactly; κ < 0 puts more of the field on the surround. Dashed: centre and surround without the field; solid: with a suppressive field at HP (illustrative values; κ = −0.6 exaggerated for display). b, κ per area from the full-data fits (n = {n_sub} participants; per area the subject × area pairs with a fit). c, Held-out ΔR² of the model with κ minus the joint fit without it, with the pRFs frozen and run-3 cross-validation (mean over the three folds), × 10⁻⁴ ({run3.subject.nunique()} participants; no run-3 fits for sub-{', sub-'.join(f'{x:02d}' for x in run3_missing)}). b, c: dots are participants (triangles: beyond the axis), diamonds and bars the median and its bootstrapped 95% CI (10 000 resamples); Wilcoxon signed-rank test against 0, Benjamini-Hochberg across the nine areas, * q < .05, ** q < .01, *** q < .001.
 
-κ is negative: pooled (per participant, the mean over areas) {prow(pk)}. Per area (median [95% CI]): {'; '.join(row(r) for _, r in st_k.iterrows())}. {n_bound} subject × area fits sit at the bound |κ| = 2. Adding κ makes held-out prediction worse: pooled ΔR² {prow(pr, 1e4, '{:+.2f}')} (× 10⁻⁴); per area {'; '.join(row(r, 1e4, '{:+.2f}') for _, r in st_r.iterrows())} (× 10⁻⁴). The tilt is consistent in direction (more of the HP effect on the suppressive surround) but too small to help prediction.
+κ is negative: pooled (per participant, the mean over areas) {prow(pk)}. Per area (median [95% CI]): {'; '.join(row(r) for _, r in st_k.iterrows())}. {n_bound} subject × area fits sit at the bound |κ| = 2. Adding κ makes held-out prediction worse: pooled ΔR² {prow(pr, 1e4, '{:+.2f}')} (× 10⁻⁴); per area {'; '.join(row(r, 1e4, '{:+.2f}') for _, r in st_r.iterrows())} (× 10⁻⁴). {loso_txt}The tilt is consistent in direction (more of the HP effect on the suppressive surround) but too small to help prediction: on held-out runs it lowers R² in every area, and across participants its gain is of the order of 10⁻⁷.
 """
     save(fig, name, legend)
     out = pd.concat([st_k.assign(quantity='kappa'), st_r.assign(quantity='dcv_r2_run3')])
@@ -182,5 +197,7 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--exclude-subjects', nargs='*', type=int, default=[])
     ap.add_argument('--name', default='figS_dog_kappa')
+    ap.add_argument('--loso', default='notes/data/loso_kappa_dnw_2026-11.tsv',
+                    help='LOSO table of kappa (n = 28: notes/data/loso_kappa_n28_2026-11-11.tsv)')
     a = ap.parse_args()
-    main(a.name, a.exclude_subjects)
+    main(a.name, a.exclude_subjects, a.loso)
