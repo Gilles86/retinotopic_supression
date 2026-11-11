@@ -1,0 +1,7 @@
+effect	F Value	Num DF	Den DF	Pr > F	item	n
+sb	4.8587	3	81	0.0036979	distractor	28
+dist_rel	27.467	2	54	5.9058e-09	distractor	28
+sb:dist_rel	0.27165	6	162	0.94953	distractor	28
+sb	5.0887	3	81	0.0028106	target	28
+target_rel	31.422	2	54	8.896e-10	target	28
+sb:target_rel	0.51874	6	162	0.79354	target	28

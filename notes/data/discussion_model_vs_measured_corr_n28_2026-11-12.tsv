@@ -1,0 +1,9 @@
+group	contrast	n	spearman_rho	spearman_p	pearson_r	pearson_p
+Early	hp_lp	28	0.19869	0.31079	0.2693	0.16581
+Early	hp_opp	28	0.19595	0.31764	0.18282	0.35176
+Early	next_opp	28	-0.14286	0.46833	-0.14927	0.44838
+Early	hp_next	28	0.15545	0.42961	0.25476	0.19077
+All areas	hp_lp	28	0.22113	0.25813	0.28767	0.1377
+All areas	hp_opp	28	0.32841	0.087965	0.20232	0.30183
+All areas	next_opp	28	0.026273	0.89443	-0.021742	0.91256
+All areas	hp_next	28	0.18993	0.33303	0.29046	0.13376
