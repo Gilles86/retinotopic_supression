@@ -22,7 +22,7 @@ exec >"$HOME/logs/terms_pred_sub-${subject}_${SLURM_JOB_ID}.txt" 2>&1
 echo "Host $(hostname)  sub-${subject}  started $(date)"
 export TMPDIR="/scratch/$USER/tmp/${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}"; mkdir -p "$TMPDIR"
 cd "$CODE_DIR"
-export CUDA_VISIBLE_DEVICES= PYTHONPATH="$CODE_DIR" PYTHONUNBUFFERED=1
+export CUDA_VISIBLE_DEVICES= PYTHONPATH="$CODE_DIR:$HOME/pylibs/nideconv" PYTHONUNBUFFERED=1   # nideconv is not in retsupp_cuda
 PY="$HOME/data/conda/envs/retsupp_cuda/bin/python"
 "$PY" -m retsupp.visualize.paper.predict_location_timeseries_terms "$subject" \
     --ladder-root "$D/af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf" \

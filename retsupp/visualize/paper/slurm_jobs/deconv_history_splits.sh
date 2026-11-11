@@ -21,7 +21,7 @@ exec >"$HOME/logs/deconv_hist_sub-${subject}_${SLURM_JOB_ID}.txt" 2>&1
 echo "Host $(hostname)  sub-${subject}  started $(date)"
 export TMPDIR="/scratch/$USER/tmp/${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}"; mkdir -p "$TMPDIR"
 cd "$CODE_DIR"
-export PYTHONPATH="$CODE_DIR" PYTHONUNBUFFERED=1 OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-4}"
+export PYTHONPATH="$CODE_DIR:$HOME/pylibs/nideconv" PYTHONUNBUFFERED=1 OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-4}"   # nideconv is not in retsupp_cuda
 for split in ses1 ses2 block1 block2 s1b1 s1b2 s2b1 s2b2; do
     out="$P/event_deconv_relative_final2_split_2026-11-11_$split"
     mkdir -p "$out"
