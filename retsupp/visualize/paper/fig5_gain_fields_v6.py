@@ -16,6 +16,11 @@ Run through ``run_excluding`` for n = 28::
 
     python -m retsupp.visualize.paper.run_excluding --exclude 1 2 -- retsupp.visualize.paper.fig5_gain_fields_v6 \\
         --suffix _n28
+
+``--layout v7`` (= ``--compact``) is the compact two-row version. ``--layout v8`` puts panel a in one row of six maps over
+the full width (sustained block left, transient block right, colour keys under each block, one shared key for the target
+and distractor fields) and draws the sustained HP gain as median g_LP + the median dS ESTIMATED ALONE (the value panel c
+plots), so the HP - LP printed on each map equals panel c; parameters go to ``..._2026-11-12_v8.tsv``.
 """
 from __future__ import annotations
 
@@ -43,8 +48,11 @@ TR_SIGMA = TR_FWHM / FWHM
 TGT, DIS = 'opp', 'left'          # target opposite HP; distractor at the LP location next to HP (its gain is the average)
 
 
-def map_parameters(gain_table, exclude=(1, 2)):
-    """Per area, the median over participants of each participant's joint-fit parameter (DoG, m7_full)."""
+def map_parameters(gain_table, exclude=(1, 2), cond=None):
+    """Per area, the median over participants of each participant's joint-fit parameter (DoG, m7_full).
+
+    cond: the estimated-alone table (subject, roi, dS, ...). If given, the HP gain drawn is median g_LP + the median dS
+    estimated alone (what panel c plots) instead of + the median joint dS."""
     d = joint(gain_table, 'dog')
     d = d[~d.subject.isin(exclude)]
     rows = []
@@ -54,7 +62,13 @@ def map_parameters(gain_table, exclude=(1, 2)):
                          T=x['T'].median(), D=x.D.median(), g_HP_dyn=x.g_HP_dyn.median(),
                          g_LP_dyn=x.g_LP_dyn.median(), dD=x.dD.median(), sigma_AF=x.sigma_AF.median()))
     p = pd.DataFrame(rows).set_index('roi')
-    p['g_HP_map'] = p.g_LP + p.dS          # the HP gain drawn: HP - LP on the map = the joint dS
+    p['dS_map'] = p.dS                     # the HP - LP drawn on the map: the joint dS ...
+    if cond is not None:                   # ... or dS estimated alone, the per-area median of panel c
+        c = cond[~cond.subject.isin(exclude)].dropna(subset=['dS'])
+        p['dS_alone'] = c.groupby('roi').dS.median().reindex(p.index)
+        p['n_alone'] = c.groupby('roi').dS.size().reindex(p.index)
+        p['dS_map'] = p.dS_alone
+    p['g_HP_map'] = p.g_LP + p.dS_map
     p['fwhm_AF'] = FWHM * p.sigma_AF
     return p
 
@@ -137,6 +151,11 @@ ROWS_V7 = ("Bottom row, the transient fields of the target (orange, around the o
            "opposite HP) and of the distractor (blue, around the blue dot, drawn at an LP location next to HP) in one "
            "map; values, the target gain of panel b and the distractor gain averaged over its locations, as in panel b "
            "(the transient HP − LP difference is in panel d); both on one scale, so their colours compare directly.")
+ROWS_V8 = ("Right three maps, the transient fields of the target (orange, around the orange diamond, at an LP location, "
+           "here opposite HP) and of the distractor (blue, around the blue dot, drawn at an LP location next to HP) in "
+           "one map; values, the target gain of panel b and the distractor gain averaged over its locations, as in "
+           "panel b (the transient HP − LP difference is in panel d); both on one scale, so their colours compare "
+           "directly.")
 ROWS = [('Sustained field', 'lower at the HP location', HP),
         ('Target field', 'transient gain at the target', TARGET),
         ('Distractor field', 'smaller transient gain', DISTRACTOR)]
@@ -311,7 +330,100 @@ def panel_maps_v7(fig, p, x0, y_top, cw, gap, rgap, x_key):
     return y2 - .05, ranges, vmax
 
 
-def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_area_sustained=None, compact=False):
+def fmt3(v):
+    return f'{v:+.3f}'.replace('-', '−')
+
+
+def panel_maps_v8(fig, p, x0, y_top, cw, gap, bgap, under):
+    """Panel a in one row over the full width: three sustained maps (each area on its own scale, a colour bar under each
+    map), a gap, three maps with the target and distractor transient fields (one shared scale, one key under the block:
+    an orange and a blue bar on the same ticks). Returns the bottom y (inches), the sustained ranges and vmax."""
+    W, H = fig.get_size_inches()
+    g = np.linspace(-EXTENT, EXTENT, 361)
+    xx, yy = np.meshgrid(g, g)
+    maps = {a: fields(p.loc[a], xx, yy) for a in AREAS}
+    vmax = np.ceil(max(max(maps[a][1].max(), maps[a][2].max()) for a in AREAS) / .1) * .1
+    ranges = []
+    y = y_top - cw
+    xs = x0
+    xt = x0 + 3 * cw + 2 * gap + bgap
+    bar_h = .055
+    for c, a in enumerate(AREAS):
+        sus, tgt, dis = maps[a]
+        # sustained
+        xa = xs + c * (cw + gap)
+        ax = fig.add_axes([xa / W, y / H, cw / W, cw / H])
+        lo_a = np.floor(sus.min() / .01) * .01
+        hi_a = max(np.ceil(sus.max() / .01) * .01, 0.)
+        hi_a = hi_a if hi_a > lo_a else lo_a + .01
+        norm = mpl.colors.Normalize(lo_a, hi_a)
+        ax.imshow(sus, extent=(-EXTENT, EXTENT, -EXTENT, EXTENT), origin='lower', cmap='magma', norm=norm,
+                  interpolation='bilinear')
+        if sus.min() < 0 < sus.max():
+            ax.contour(xx, yy, sus, levels=[0.], colors=[ZERO], linewidths=.8)
+        draw_display(ax)
+        ax.set_title(a, fontsize=7.5, pad=2, color=FG)
+        ax.text(.5, -.03, f'HP − LP {fmt3(p.loc[a, "dS_map"])}', transform=ax.transAxes, fontsize=6.5, ha='center',
+                va='top', color=FG)
+        bw = .56 * cw
+        cax = fig.add_axes([(xa + (cw - bw) / 2) / W, (y - .24 - bar_h) / H, bw / W, bar_h / H])
+        cb = fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap='magma'), cax=cax, orientation='horizontal')
+        cb.set_ticks([lo_a, hi_a])
+        cb.set_ticklabels([fmt(lo_a), '0' if hi_a == 0 else fmt(hi_a)])
+        cb.outline.set_linewidth(.4)
+        cb.ax.tick_params(labelsize=6, length=1.8, pad=1)
+        if c == 0:
+            cb.ax.text(-.07, .5, 'Gain', transform=cb.ax.transAxes, fontsize=6, ha='right', va='center', color='.35')
+        ranges.append(f'{a} {fmt(lo_a)} to {fmt(hi_a)}')
+        # transient: target and distractor in one map
+        xa = xt + c * (cw + gap)
+        ax = fig.add_axes([xa / W, y / H, cw / W, cw / H])
+        ax.imshow(transient_rgb(tgt, dis, vmax), extent=(-EXTENT, EXTENT, -EXTENT, EXTENT), origin='lower',
+                  interpolation='bilinear')
+        draw_display(ax, [('target', TGT), ('distractor', DIS)])
+        ax.set_title(a, fontsize=7.5, pad=2, color=FG)
+        tx, ty = RING[TGT]
+        ax.text(tx + 1.0, ty + .2, fmt(p.loc[a, 'T']), fontsize=6.5, ha='left', va='center', color=FG,
+                path_effects=STROKE, zorder=7)
+        dx, dy = RING[DIS]
+        ax.text(dx + .75, dy - .95, fmt(p.loc[a, 'D']), fontsize=6.5, ha='left', va='top', color=FG,
+                path_effects=STROKE, zorder=7)
+    # block headings: bold head, grey statement (target and distractor in their colours)
+    yh = y + cw + .29
+    for xb, head, col, parts in (
+            (xs, 'Sustained field', HP, [('lower at the HP location', '.4')]),
+            (xt, 'Transient fields', FG, [('target', TARGET), (' and ', '.4'), ('distractor', DISTRACTOR),
+                                          (', while a display is on', '.4')])):
+        t = fig.text(xb / W, yh / H, head, fontsize=7, weight='bold', color=col, va='center', ha='left')
+        fig.canvas.draw()
+        xe = t.get_window_extent().x1 / fig.dpi + .08
+        for txt, cc in parts:
+            t = fig.text(xe / W, yh / H, txt, fontsize=6.5, color=cc, va='center', ha='left')
+            fig.canvas.draw()
+            xe = t.get_window_extent().x1 / fig.dpi
+    # one key for the transient block: target (orange) over distractor (blue), touching, on the same ticks
+    bw = 1.5
+    xk = xt + (3 * cw + 2 * gap - bw) / 2
+    kh = .09                                  # each bar high enough for its 6 pt label
+    yk = y - .08 - kh                         # top bar; the second bar directly below it
+    for k, (col, lab) in enumerate(((TARGET, 'Target'), (DISTRACTOR, 'Distractor'))):
+        cm = mpl.colors.LinearSegmentedColormap.from_list('c', ['#ffffff', col])
+        cax = fig.add_axes([xk / W, (yk - k * kh) / H, bw / W, kh / H])
+        cb = fig.colorbar(mpl.cm.ScalarMappable(norm=mpl.colors.Normalize(0, vmax), cmap=cm), cax=cax,
+                          orientation='horizontal')
+        ticks = [0, vmax / 2, vmax]
+        cb.set_ticks(ticks if k == 1 else [])
+        if k == 1:
+            cb.set_ticklabels(['0', fmt(vmax / 2), fmt(vmax)])
+        cb.outline.set_linewidth(.4)
+        cb.ax.tick_params(labelsize=6, length=1.8, pad=1)
+        cb.ax.text(-.03, .5, lab, transform=cb.ax.transAxes, fontsize=6, ha='right', va='center', color=col)
+    fig.text((xk + bw + .07) / W, yk / H, 'Gain (one scale)', fontsize=6, color='.35', ha='left', va='center')
+    return y - under, ranges, vmax
+
+
+def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_area_sustained=None, compact=False,
+         layout=None):
     # the same inputs and options as fig5_gain_fields_n28 (final fits, b-d unchanged in content)
     F.FINAL, F.SUFFIX, F.WIDTHS_SUPP = True, suffix, True
     F.GAIN_TABLE = gain_table
@@ -321,7 +433,10 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
     dt = cond[['subject', 'roi', 'dT']].dropna()
     d = js['dog']
     n = d.subject.nunique()
-    p = map_parameters(gain_table)
+    layout = layout or ('v7' if compact else 'v6')
+    compact = layout in ('v7', 'v8')
+    v8 = layout == 'v8'
+    p = map_parameters(gain_table, cond=cond if v8 else None)
 
     from retsupp.visualize.paper.fig7_behaviour import icons, row
     from retsupp.visualize.paper.paper_style import stimulus_icon
@@ -342,6 +457,10 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
         x0 = .3
         bh = .82                         # panel b height
         H = .34 + .15 + 2 * cw + rgap + .05 + (.3 + bh + .44) + (.62 + .85 + .55) + .2
+    if v8:
+        cw, gap, bgap, under = 1.0, .1, .42, .44
+        x0 = (W - 6 * cw - 4 * gap - bgap) / 2
+        H = .58 + cw + under + (.3 + bh + .44) + (.62 + .85 + .55) + .2
     print('figure height (in):', round(H, 2))
     fig = plt.figure(figsize=(W, H))
     at = lambda x, y, w, h: fig.add_axes([x / W, y / H, w / W, h / H])
@@ -351,7 +470,12 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
     fig.text(.02 / W, Y(.14) / H, 'a', fontsize=8, fontweight='bold', va='center', ha='left')
     fig.text(.2 / W, Y(.14) / H, 'The fitted gain fields over the display (group medians)', fontsize=7.5, color=FG,
              va='center', ha='left')
-    if compact:
+    if v8:
+        y_bottom, ranges, vmax = panel_maps_v8(fig, p, x0, Y(.58), cw, gap, bgap, under)
+        scales = [f'sustained maps: each area on its own scale, colour bar under each map ({"; ".join(ranges)})',
+                  f'transient maps: target (orange) and distractor (blue) on one scale, 0 to {fmt(vmax)}, for both '
+                  'and all three areas (the two bars of the key share their ticks)']
+    elif compact:
         y_bottom, ranges, vmax = panel_maps_v7(fig, p, x0, Y(.34 + .15), cw, gap, rgap, x_key=x0 + 3 * cw + 2 * gap + .3)
         scales = [f'sustained row: each area on its own scale ({"; ".join(ranges)})',
                   f'transient row: target (orange) and distractor (blue) on one scale, 0 to {fmt(vmax)}, for both '
@@ -413,11 +537,18 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
     head, rest = old.strip().split('** ', 1)
     head = ('**Figure 5. The gain fields: gain at the target and the distractor, and less sustained gain at the '
             'high-probability (HP) location.**')
+    ds_txt = (lambda a: f"HP − LP = dS estimated alone {fmt3(p.loc[a, 'dS_map'])}, the median of panel c; joint-fit dS "
+              f"{fmt3(p.loc[a, 'dS'])}") if v8 else (lambda a: f"HP − LP = joint dS {fmt(p.loc[a, 'dS'])}")
+    f3 = (lambda v: f'{v:+.3f}'.replace('-', '−')) if v8 else fmt
     vals = '; '.join(
-        f"{a}: sustained gain at LP {fmt(p.loc[a, 'g_LP'])}, at HP {fmt(p.loc[a, 'g_HP_map'])} "
-        f"(HP − LP = joint dS {fmt(p.loc[a, 'dS'])}; median g_HP {fmt(p.loc[a, 'g_HP'])}), width σ "
+        f"{a}: sustained gain at LP {f3(p.loc[a, 'g_LP'])}, at HP {f3(p.loc[a, 'g_HP_map'])} "
+        f"({ds_txt(a)}; median g_HP {fmt(p.loc[a, 'g_HP'])}), width σ "
         f"{p.loc[a, 'sigma_AF']:.2f}° (FWHM {p.loc[a, 'fwhm_AF']:.1f}°); target gain {fmt(p.loc[a, 'T'])}; "
         f"distractor gain {fmt(p.loc[a, 'D'])}" for a in AREAS)
+    alone_sig = []
+    if v8:      # areas where dS estimated alone is reliable, the test of panel c (Wilcoxon, BH across the nine ROIs)
+        pv = [stats.wilcoxon(cond[cond.roi == r].dS.dropna()).pvalue for r in ROI_ORDER]
+        alone_sig = [r for r, q in zip(ROI_ORDER, stats.false_discovery_control(pv)) if q < .05 and r in AREAS]
     neg = [r for r in ROI_ORDER if p.loc[r, 'g_LP'] < 0 and p.loc[r, 'g_HP_map'] < 0]
     a_txt = (
         "a, The fitted parametric gain field over the search display, not data: for each area, the median over "
@@ -425,32 +556,46 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
         "model's field equations; value, the fractional change in gain on the stimulus drive (−0.10: 10% less). The "
         "display is rotated so that the HP location is at the top (red dashed ring); small circles, the eight item "
         "positions on the 4° ring (dotted; stronger: the four possible target and distractor locations); grey circle, "
-        "the 3.17° aperture of the mapping bar; +, fixation. Top row, the sustained field, present throughout the block: "
-        "a Gaussian field at each of the four possible locations, with the median gain at the low-probability (LP) "
-        "locations and, at HP, that gain plus the median HP − LP difference of the joint fit, so that the HP − LP "
-        "difference printed on each map is the joint dS of panel c's legend and the text (panel c shows dS estimated "
-        "alone, which is smaller); width, the area's median fitted width. The sustained gain is negative at all four "
-        f"locations in most areas ({len(neg)} of 9: {', '.join(neg)}). " + (ROWS_V7 if compact else ROWS_V6) + " "
+        "the 3.17° aperture of the mapping bar; +, fixation. "
+        + ("Left three maps, the sustained field, present throughout the block: a Gaussian field at each of the four "
+           "possible locations, with the median joint-fit gain at the low-probability (LP) locations and, at HP, that "
+           "gain plus the area's median HP − LP difference estimated alone (dS, the value panel c plots), so that the "
+           "HP − LP difference printed under each map equals panel c's estimate for that area (the joint-fit dS is "
+           "larger and is given below); width, the area's median fitted width. " if v8 else
+           "Top row, the sustained field, present throughout the block: "
+           "a Gaussian field at each of the four possible locations, with the median gain at the low-probability (LP) "
+           "locations and, at HP, that gain plus the median HP − LP difference of the joint fit, so that the HP − LP "
+           "difference printed on each map is the joint dS of panel c's legend and the text (panel c shows dS estimated "
+           "alone, which is smaller); width, the area's median fitted width. ")
+        + "The sustained gain is negative at all four "
+        f"locations in most areas ({len(neg)} of 9: {', '.join(neg)}). "
+        + (ROWS_V8 if v8 else ROWS_V7 if compact else ROWS_V6) + " "
         "The transient fields exist only while a search display is on; their fitted width is often at a bound of the "
         f"fit (0.5° or 8°), so it is set for display to the same FWHM of {TR_FWHM:.1f}° in every area and is not "
         "interpreted (field widths per subject: Supplementary Fig. S, field widths). Colour scales: "
         + '; '.join(scales)
         + (' (magma for the sustained field, teal line and tick at no change; the transient rows from white, no '
            'change, to the component colour)' if not compact else
+           ' (magma for the sustained field; the transient fields from white, no change, to orange, target, and '
+           'blue, distractor)' if v8 else
            ' (magma for the sustained field, teal line at no change; the transient fields from white, no change, to '
            'orange, target, and blue, distractor)')
         + '. Values used: ' + vals + '. V3, hV4 and TO are the areas where the sustained gain is reliably lower at HP '
-        'than at LP in the joint fit (q < .05; V1, V2 and the other areas are in the parameter table). The sum of the '
+        'than at LP in the joint fit (q < .05; V1, V2 and the other areas are in the parameter table)'
+        + ('; estimated alone, as drawn here, the difference is reliable in ' + ' and '.join(alone_sig)
+           + ' (panel c)' if v8 else '') + '. The sum of the '
         'three fields during a search display is in Supplementary Fig. S (gain field during search).')
     general, rest = rest.split(' b–d: ', 1)          # 'Gain-field model fits ... (+0.30: 30% more).' leads
     legend = head + ' ' + general.strip() + ' ' + a_txt + ' b–d: ' + rest
     legend = legend.replace('-0.', '−0.')
-    save(fig, ('fig5_gain_fields_v7' if compact else 'fig5_gain_fields_v6') + suffix, legend)
+    save(fig, f'fig5_gain_fields_{layout}' + suffix, legend)
     print('scales:', scales, 'per-area sustained:', per_area_sustained)
     print(p.loc[AREAS].round(4).to_string())
     if not compact:
         search_figure(p, n, suffix)
-    p.to_csv(f'notes/data/fig5_gain_field_map_parameters{suffix}_2026-11-12.tsv', sep='\t', float_format='%.5f')
+    (p if v8 else p.drop(columns='dS_map')).to_csv(
+        f'notes/data/fig5_gain_field_map_parameters{suffix}_2026-11-12{"_v8" if v8 else ""}.tsv', sep='\t',
+             float_format='%.5f')
     return p
 
 
@@ -537,6 +682,9 @@ if __name__ == '__main__':
     ap.add_argument('--sustained-scale', choices=['auto', 'shared', 'per-area'], default='auto')
     ap.add_argument('--compact', action='store_true', help='v7: panel a in two rows (sustained; target + distractor '
                     'transient fields in one map), smaller panels; writes fig5_gain_fields_v7')
+    ap.add_argument('--layout', choices=['v6', 'v7', 'v8'], default=None, help='v8: panel a as one row of six maps '
+                    'over the full width, keys under the blocks, sustained HP − LP = dS estimated alone (panel c); '
+                    'writes fig5_gain_fields_v8 and the parameter table with suffix _v8')
     a = ap.parse_args()
     main(a.gain_table, a.conditional_table, a.slope_table, a.sigma_table, a.suffix,
-         None if a.sustained_scale == 'auto' else a.sustained_scale == 'per-area', a.compact)
+         None if a.sustained_scale == 'auto' else a.sustained_scale == 'per-area', a.compact, a.layout)

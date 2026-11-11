@@ -1,5 +1,32 @@
 # Update 4 to writing package 2026-11-12 (n = 28): Fig. 5 restructured with the gain-field maps
 
+**Use `fig5_gain_fields_v8_n28` (preferred; 5.8 in tall at 180 mm). v7 (6.9 in) and v6 (9.1 in) are kept for
+reference.** v8 differs from v7 in two ways; panels b, c, d are unchanged.
+
+1. Layout of panel a: one row of six maps over the full width instead of two rows on the left two thirds. Left block,
+   the sustained field (V3, hV4, TO); right block, the transient target and distractor fields (V3, hV4, TO); area names
+   over each map. Colour keys under the blocks: a colour bar with its own range under each sustained map (V3 −0.04 to
+   0, hV4 −0.08 to 0, TO −0.38 to 0); one key for the transient block, an orange (target) bar on a blue (distractor)
+   bar sharing the ticks 0, +0.30, +0.60, so it reads as one scale for both.
+2. The sustained HP − LP difference drawn (and printed under each map) is now dS ESTIMATED ALONE, the per-area median
+   that panel c plots, instead of the joint-fit dS. LP gain is still the median joint-fit g_LP; HP = g_LP + dS alone.
+   Panel a's HP − LP therefore equals panel c per area. The printed label has three decimals, as in the text.
+
+| Area | g_LP | dS estimated alone (drawn, = panel c) | drawn at HP | joint dS (v6/v7 drew this) |
+|---|---|---|---|---|
+| V3 | −0.004 | −0.030 (n = 28) | −0.035 | −0.090 |
+| hV4 | −0.058 | −0.015 (n = 26) | −0.073 | −0.057 |
+| TO | −0.354 | −0.019 (n = 26) | −0.373 | −0.024 |
+
+Estimated alone, dS is reliable in V3 and TO (q < .05), not in hV4; the legend says so. All other values (widths,
+target and distractor gains) are as in v6/v7. Parameters: `notes/data/fig5_gain_field_map_parameters_n28_2026-11-12_v8.tsv`
+(columns `dS_alone`, `n_alone`, `dS_map`, `g_HP_map`). Made with `fig5_gain_fields_v6.py --layout v8`. The
+supplementary search figure (`figS_gain_field_map_search_n28`) is unchanged and still uses the joint dS; its legend
+says "Sustained field as in Fig. 5a", which is no longer exact with v8 (HP − LP there: V3 −0.09, hV4 −0.06, TO −0.02).
+`key_numbers.md`: one paragraph added under the Fig. 5a block.
+
+The text below describes v7 and v6.
+
 **Use `fig5_gain_fields_v7_n28` (preferred; 6.9 in tall at 180 mm). `fig5_gain_fields_v6_n28` (9.1 in) is kept for
 reference.** v7 has the same content and parameter rules as v6, made compact: panel a has two rows instead of three
 (the target and distractor transient fields share one map, at their own locations, each with its own number, on one
