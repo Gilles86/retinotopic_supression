@@ -159,6 +159,12 @@ Methods and a supplementary table, described neutrally; no main-text sentence le
   opposite. So "the benefit at HP" against all LP locations is partly a cost next to HP. Richter et al. report the
   benefit only at HP and no target cost.
 
+- **Model vs measured (2026-11-12).** The joint fit's predicted HP − LP lies inside the measured CI (gap p = .095), so
+  do not write that the model "explains only half"; write that it accounts for the reduced response at HP relative to
+  its neighbours but not for the next < opposite gradient (gap p = .040).
+- **Behaviour next to HP is not carry-over (2026-11-12).** The pattern (next slowest, opposite ≈ HP, graded target
+  cost) is present in session 1 block 1, before any location had been HP; no history interaction (p ≥ .79).
+
 ## 4. Relation to Richter, van Moorselaar & Theeuwes (eLife 2025)
 
 As in the 09 package; their design details are to verify against the paper (`⟦VERIFY⟧`). Their result: HP distractor

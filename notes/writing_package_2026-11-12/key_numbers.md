@@ -334,6 +334,21 @@ the sustained HP − LP term carries the predicted reduction (sustained only −
 −4.7 ± 4.6%); the distractor transient dD pulls it back slightly (+2.2 ± 2.1%); the target transient dT adds nothing
 (+0.8 ± 1.9%). No variant predicts the neighbour effect (+0.7 to +1.9%).
 
+## Discussion checks (2026-11-12; n = 28; `discussion_checks_2026-11-12.md` in this package, code `retsupp/visualize/paper/discussion_checks.py`, data `notes/data/discussion_*_n28_2026-11-12.tsv`)
+
+- Behaviour by HP history (medians of within-subject differences, bootstrapped 95% CI, Wilcoxon). All blocks: distractor
+  next − opposite +37.8 ms [+24.2, +45.5], p < .001; distractor HP − opposite −3.8 [−15.9, +3.7], p = .34; target
+  HP − next +20.6, p < .001; target HP − opposite +30.2, p < .001. Session 1 block 1 only (no location ever HP; ~77 HP,
+  30 next, 16 opposite, 33 absent correct trials per subject): +34.4 [+5.9, +53.2], p = .025; −4.3 [−43.6, +15.2],
+  p = .57; +19.5, p = .048; +31.9, p = .004. s1b1 − other blocks: −6.5 (p = .58), +8.7 (.83), −10.4 (.51), +1.5 (.92).
+  Relation × session-block rm-ANOVA: distractor F(6, 162) = 0.27, p = .95; target F = 0.52, p = .79.
+- Model (m7) vs measured item responses, early areas, % of the subject's mean (mean ± SEM; gap = measured − predicted,
+  paired Wilcoxon): HP − LP −11.7 ± 4.0 vs −5.4 ± 3.7, gap −6.3 ± 4.7, p = .095; HP − next −6.7 ± 3.7 vs −4.9 ± 3.7,
+  gap −1.8 ± 4.5, p = .70; HP − opposite −21.6 ± 6.8 vs −6.3 ± 3.8, gap −15.4 ± 7.1, p = .026; next − opposite
+  −14.9 ± 6.0 vs −1.3 ± 0.8, gap −13.6 ± 6.2, p = .040. Between-subject ρ(measured, predicted): .20 (p = .31), .16,
+  .20, −.14 (all n.s.). All areas: HP − LP gap −5.7 ± 3.6 (p = .081), HP − opposite gap p = .040, next − opposite gap
+  p = .081.
+
 ## Robustness: the gain fields with Gaussian and DN pRFs (R; joint fits from `gain_field_parameters_final2_2026-11.tsv`)
 
 Joint fit (m7_full), pooled per-subject median over areas:

@@ -35,12 +35,27 @@ authors** below.
    descriptive (`key_numbers.md`, Richter section; possibly a supplementary table). Decide whether the paper reports
    the per-session split (supplement, with the interaction test as the inference) and whether the Discussion adds a
    sentence that carry-over cannot be strictly excluded for the neighbour effect.
-2. **How much the model explains.** The joint gain-field fit reproduces about half of the measured HP − LP reduction
-   (early −5.4 vs −11.7%), carried by the sustained term, and none of next − opposite. Decide how Fig. 5 / the
-   Discussion phrase the link between the measured responses and the gain fields.
-3. **Behaviour next to HP.** A distractor next to HP is the slowest (+37.8 ms vs opposite); opposite HP is about as fast
-   as HP; the target cost is graded HP > next > opposite. Decide whether Fig. 1 / the Results report the three-way split
-   and how the Discussion compares it with Richter et al. (benefit only at HP, no target cost).
+2. **How much the model explains (checked 2026-11-12, `discussion_checks_2026-11-12.md` §2).** Early areas, per
+   subject measured − predicted (m7): HP − LP −11.7 vs −5.4%, gap −6.3 ± 4.7, p = .095 (the prediction lies inside the
+   measured 95% CI [−19.4, −3.9]); HP − next −6.7 vs −4.9%, gap p = .70; next − opposite −14.9 vs −1.3%, gap −13.6 ± 6.2,
+   p = .040 (hence also HP − opposite, gap p = .026). So the model accounts for the reduced response at HP relative to its
+   neighbours (carried by the sustained HP field) but not for the gradient over the LP locations (next < opposite).
+   Between-subject ρ(measured, predicted HP − LP) = .20, p = .31 (low power). Suggested wording: "The gain-field model
+   accounts for the reduced response at the HP location relative to its neighbours, carried by the sustained HP field,
+   but not for the lower response next to HP than opposite it, a gradient present in the measured responses and in
+   behaviour but outside what a single HP-centred field predicts." Decide whether to adopt it.
+3. **Behaviour next to HP (checked 2026-11-12, `discussion_checks_2026-11-12.md` §1).** A distractor next to HP is the
+   slowest (+37.8 ms vs opposite); opposite HP is about as fast as HP (−3.8 ms, n.s.); the target cost is graded
+   HP > next > opposite. This is not carry-over of earlier HP locations: in session 1 block 1, before any location had
+   been HP, next − opposite +34.4 ms (p = .025), HP − opposite −4.3 ms (n.s.), target HP − opposite +31.9 ms (p = .004);
+   relation × session-block interaction F(6, 162) = 0.27, p = .95 (distractor), 0.52, p = .79 (target). About 16
+   opposite-HP correct trials per subject in s1b1, so intervals are wide. Geometry is not the difference from Richter et
+   al. (their 8 items on a 5° ring, neighbour 7.1°, opposite 10°; ours 4°, 5.7°, 8°: the same layout relative to
+   eccentricity, ~21 mm V1 separation of neighbours in both); paradigm differences are: our checkerboard bar sweeps
+   through the display throughout (8 Hz), no placeholder cue and no omission trials, HP 62.5% vs ~57% of distractor
+   trials. Suggested wording: "Unlike Richter et al., a distractor next to the HP location slowed responses more than one
+   opposite it, and this was already the case before any location had been HP (first block)." Decide whether Fig. 1 /
+   Results report the three-way split.
 
 ## Storyline: seven figures, one question each
 
@@ -179,6 +194,10 @@ Dropped from the package: `fig_event_responses_2x3_deconv` (earlier HP vs LP ver
   HP-rotation null for dS unless the user wants it.
 
 ## CHANGES 2026-11-12 (n = 28: the two pilots left out)
+
+- **Added later the same day:** handedness (26 right, 2 left); discussion checks (`discussion_checks_2026-11-12.md`):
+  behaviour next to HP holds before any location had been HP; the model accounts for the HP dip relative to its
+  neighbours but not for next < opposite. Decisions 2 and 3 above updated with numbers and suggested wording.
 
 - **Richter et al. follow-up merged** (`richter_followup_2026-11-11.md`): behaviour by location relative to HP (B), target
   vs distractor at the item locations (D5), per-area location effect (D6), carry-over by session and block (A1–A4), and
