@@ -810,6 +810,11 @@ def main(gain_table, conditional_table, power_table, slope_table, sigma_table, n
                [('Transient gain, HP − LP: ', FG), ('distractor', DISTRACTOR), (' and ', FG), ('target', TARGET)] if dn else
                [('Transient gain at HP: slightly less for ', FG), ('distractor', DISTRACTOR), (' and ', FG),
                 ('target', TARGET)])
+    if FINAL and not dn and 'dD' in cond:
+        pd_ = stats.wilcoxon(cond.groupby('subject').dD.median().dropna()).pvalue
+        if pd_ >= .05:   # the distractor term alone is not reliable: say what holds (no difference from the target)
+            title_d = [('Transient gain at HP: slightly less, ', FG), ('target', TARGET), (' and ', FG),
+                       ('distractor', DISTRACTOR), (' alike', FG)]
     keys_d = [(icons('location', 'distractor'), DISTRACTOR, 'Each trial')] + \
         ([] if (dn and dt is None) else [(icons('location', 'target'), TARGET, '')])
     row(fig, Y(y2), 'd', title_d, keys_d, x_let=RX - .5, x_title=RX - .32, key_y=Y(y2 + .27))

@@ -1,0 +1,10 @@
+file	served	kind	subject_col	subjects
+notes/data/decoding_readout_dn_roihrf_2026-11.tsv	notes/data/decoding_readout_dn_roihrf_2026-11.tsv	csv	True	28
+notes/data/decoding_quality_dn_roihrf_2026-11.tsv	notes/data/decoding_quality_dn_roihrf_2026-11.tsv	csv	True	28
+notes/data/decoding_bands_dn_roihrf_2026-11.tsv.gz	notes/data/decoding_bands_dn_roihrf_2026-11.tsv.gz	csv	True	28
+notes/data/decoding_readout_dog_roihrf_2026-11.tsv	notes/data/decoding_readout_dog_roihrf_2026-11.tsv	csv	True	28
+notes/data/decoding_quality_dog_roihrf_2026-11.tsv	notes/data/decoding_quality_dog_roihrf_2026-11.tsv	csv	True	28
+notes/data/decoding_bands_dog_roihrf_2026-11.tsv.gz	notes/data/decoding_bands_dog_roihrf_2026-11.tsv.gz	csv	True	28
+notes/data/decoding_readout_jointhrf_2026-11.tsv	notes/data/decoding_readout_jointhrf_2026-11.tsv	csv	True	28
+notes/data/decoding_quality_jointhrf_2026-11.tsv	notes/data/decoding_quality_jointhrf_2026-11.tsv	csv	True	28
+notes/data/decoding_bands_jointhrf_2026-11.tsv.gz	notes/data/decoding_bands_jointhrf_2026-11.tsv.gz	csv	True	28

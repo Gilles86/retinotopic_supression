@@ -112,7 +112,7 @@ def sig_key(fig, x, y, W, H):
 
 
 LEGEND = """
-**Figure 7. The gain fields fluctuate with trial history and with response time.** Trial-by-trial modulation of the gain fields, estimated on top of each subject's final joint gain-field fit (m7: DoG pRFs, one HRF per subject × area, each area's signal voxels). Per subject and area, the target, distractor and global gains of every trial were written as a gain plus modulators (z-scored log RT; target at the previous target's location, distractor at the previous distractor's location; target at the previous distractor's location), all centred within gain, and estimated directly on the BOLD time series of all the area's voxels (weighted least squares on the linear phasic term, other parameters fixed). The uncertainty of every subject × area estimate is its leave-one-run-out jackknife SE (12 runs; it agrees with the odd-versus-even-run difference, and includes noise shared across voxels, which a split over voxels misses by a factor of about six). Hierarchical Bayesian model per effect: estimate ~ Normal(θ, √(SE² + τ²)), θ = group mean + area deviation + subject deviation, the three group means (early V1–V3; dorsal V3AB, IPS; occipitotemporal hV4, LO, TO, VO) as fixed effects with Normal(0, 2·SD) priors, HalfNormal SDs (PyMC with nutpie, 4 × 2000 draws; {conv}). Points and bars: posterior mean and 95% HDI of the mean over all nine areas (left, larger) and of each group's mean; solid when the posterior probability of the sign shown exceeds .975, pale otherwise. Per-area estimates are in the table below. Stars give the posterior probability of the sign shown: * > .975, ** > .995, *** > .9995. n = 30 subjects (247 subject × area estimates; pairs with fewer than 10 signal voxels are left out). a, History: the gain at the target on target-repeat trials and at the distractor on distractor-repeat trials, relative to the area's typical gain (the median over subjects of |g_T| and of |(g_HP + g_LP)/2| in the m7 fits; the median of the absolute value because the signed median is close to 0 in some areas), × 100%. Repeating the target's location lowers the target gain by {T_all} on average (posterior mean and 95% HDI; P = {T_all_p}); per group early {T_early}, dorsal {T_dorsal}, occipitotemporal {T_ot}. Repeating the distractor's location does not change the distractor gain credibly ({D_all}, P = {D_all_p}). b, Response time: change in each gain per SD of log RT (z within run and trial type; positive: higher gain on slower trials). On slower trials the distractor gain ({Drt_all}, P = {Drt_all_p}) and the global gain over the whole display ({Grt_all}, P = {Grt_all_p}) are lower; the target gain does not change credibly ({Trt_all}, P = {Trt_all_p}). Robustness (table below): a Student-t likelihood gives the same conclusions; without the SE weighting (all subject × area estimates equally weighted) the target-repeat effect remains (P = {T_nose_p}) but the RT effects of panel b do not (distractor P = {Drt_nose_p}, global P = {Grt_nose_p}); in absolute gain units the target-repeat effect is {T_abs} (P = {T_abs_p}). Check with the gains pooled over each group's areas in one fit (absolute units, random-effects meta-analysis over subjects with the jackknife SEs, mean ± SE): target repeat {chk_T}; distractor repeat {chk_D}; distractor gain per SD log RT {chk_Drt}; global gain per SD log RT {chk_Grt}.
+**Figure 7. The gain fields fluctuate with trial history and with response time.** Trial-by-trial modulation of the gain fields, estimated on top of each subject's final joint gain-field fit (m7: DoG pRFs, one HRF per subject × area, each area's signal voxels). Per subject and area, the target, distractor and global gains of every trial were written as a gain plus modulators (z-scored log RT; target at the previous target's location, distractor at the previous distractor's location; target at the previous distractor's location), all centred within gain, and estimated directly on the BOLD time series of all the area's voxels (weighted least squares on the linear phasic term, other parameters fixed). The uncertainty of every subject × area estimate is its leave-one-run-out jackknife SE (12 runs; it agrees with the odd-versus-even-run difference, and includes noise shared across voxels, which a split over voxels misses by a factor of about six). Hierarchical Bayesian model per effect: estimate ~ Normal(θ, √(SE² + τ²)), θ = group mean + area deviation + subject deviation, the three group means (early V1–V3; dorsal V3AB, IPS; occipitotemporal hV4, LO, TO, VO) as fixed effects with Normal(0, 2·SD) priors, HalfNormal SDs (PyMC with nutpie, 4 × 2000 draws; {conv}). Points and bars: posterior mean and 95% HDI of the mean over all nine areas (left, larger) and of each group's mean; solid when the posterior probability of the sign shown exceeds .975, pale otherwise. Per-area estimates are in the table below. Stars give the posterior probability of the sign shown: * > .975, ** > .995, *** > .9995. n = 30 subjects (247 subject × area estimates; pairs with fewer than 10 signal voxels are left out). a, History: the gain at the target on target-repeat trials and at the distractor on distractor-repeat trials, relative to the area's typical gain (the median over subjects of |g_T| and of |(g_HP + g_LP)/2| in the m7 fits; the median of the absolute value because the signed median is close to 0 in some areas), × 100%. Repeating the target's location lowers the target gain by {T_all} on average (posterior mean and 95% HDI; P = {T_all_p}); per group early {T_early}, dorsal {T_dorsal}, occipitotemporal {T_ot}. Repeating the distractor's location does not change the distractor gain credibly ({D_all}, P = {D_all_p}). b, Response time: change in each gain per SD of log RT (z within run and trial type; positive: higher gain on slower trials). {rt_sentence} Robustness (table below): a Student-t likelihood gives the same conclusions; without the SE weighting (all subject × area estimates equally weighted) {T_nose_phrase} but the RT effects of panel b do not (distractor P = {Drt_nose_p}, global P = {Grt_nose_p}); in absolute gain units the target-repeat effect is {T_abs} (P = {T_abs_p}). Check with the gains pooled over each group's areas in one fit (absolute units, random-effects meta-analysis over subjects with the jackknife SEs, mean ± SE): target repeat {chk_T}; distractor repeat {chk_D}; distractor gain per SD log RT {chk_Drt}; global gain per SD log RT {chk_Grt}.
 """
 
 
@@ -180,13 +180,23 @@ def main(meta, name, param, compact=False):
                       (icons('history', 'distractor'), DISTRACTOR, 'Distractor' if compact else 'Distractor gain')], W, H,
         icon=ik)
     ax = fig.add_axes([xa / W, y0 / H, pw / W, ph / H])
+    sa = summary[summary.question.isin(['T_target_repeat', 'D_dist_repeat']) & (summary.variant == 'rel')
+                 & summary.level.isin(['group', 'overall'])]
+    ylo = min(-105., np.floor(sa.hdi_lo.min() * 100 / 10) * 10 - 5)
+    yhi = max(70., np.ceil(sa.hdi_hi.max() * 100 / 10) * 10 + 5)
     ra = panel(ax, summary, [('T_target_repeat', 'rel', TARGET), ('D_dist_repeat', 'rel', DISTRACTOR)], 100,
-               (-105, 70), 'Gain on repeat trials\n(% change)')
+               (ylo, yhi), 'Gain on repeat trials\n(% change)')
     ax.set_yticks([-100, -50, 0, 50])
     # b
-    heading(fig, xb, yh, 'b', [('Lower ', FG), ('distractor', DISTRACTOR), (' and global gains on slower trials', FG)]
-            if compact else [('On slower trials the ', FG), ('distractor', DISTRACTOR), (' and global gains are lower', FG)],
-            W, H)
+    ov = summary[(summary.level == 'overall') & (summary.variant == 'abs')].set_index('question')
+    credible = {q: max(ov.loc[q, 'p_gt0'], ov.loc[q, 'p_lt0']) > .975 for q in ('D_rt', 'G_rt')}
+    if credible['G_rt']:
+        title_b = ([('Lower ', FG), ('distractor', DISTRACTOR), (' and global gains on slower trials', FG)] if compact else
+                   [('On slower trials the ', FG), ('distractor', DISTRACTOR), (' and global gains are lower', FG)])
+    else:
+        title_b = ([('Lower ', FG), ('distractor', DISTRACTOR), (' gain on slower trials', FG)] if compact else
+                   [('On slower trials the ', FG), ('distractor', DISTRACTOR), (' gain is lower', FG)])
+    heading(fig, xb, yh, 'b', title_b, W, H)
     key(fig, xb, yk, [([lambda a: draw_source(a, 'target')], TARGET, 'Target'),
                       ([lambda a: draw_source(a, 'distractor')], DISTRACTOR, 'Distractor'),
                       ([lambda a: draw_source(a, 'global')], FG, 'Global' if compact else 'Global gain')], W, H, icon=ik)
@@ -212,7 +222,21 @@ def main(meta, name, param, compact=False):
     conv = (f'{int(diag.divergences.sum())} divergences over all {len(diag)} fits, max R̂ {diag.rhat_max.max():.2f}, '
             f'min bulk ESS {int(diag.ess_bulk_min.min())}; 95% posterior predictive intervals cover '
             f'{diag.ppc_obs_coverage95.min() * 100:.0f}–{diag.ppc_obs_coverage95.max() * 100:.0f}% of the estimates and every area mean')
-    legend = LEGEND.format(
+    gp = max(g('G_rt', 'abs').p_gt0, g('G_rt', 'abs').p_lt0)
+    if gp > .975:
+        rt_sentence = ('On slower trials the distractor gain ({Drt_all}, P = {Drt_all_p}) and the global gain over the whole '
+                       'display ({Grt_all}, P = {Grt_all_p}) are lower; the target gain does not change credibly '
+                       '({Trt_all}, P = {Trt_all_p}).')
+    else:
+        rt_sentence = ('On slower trials the distractor gain is lower ({Drt_all}, P = {Drt_all_p}); the global gain over the '
+                       'whole display points the same way but not credibly ({Grt_all}, P = {Grt_all_p}), and the target gain '
+                       'does not change credibly ({Trt_all}, P = {Trt_all_p}).')
+    n_sub, n_obs = int(diag.n_subjects.max()), int(diag.n_obs.max())
+    tn = g('T_target_repeat', 'rel_nose')
+    T_nose_phrase = ('the target-repeat effect remains (P = {T_nose_p})' if max(tn.p_gt0, tn.p_lt0) > .975 else
+                     'the target-repeat effect keeps its direction but falls just short of the threshold (P = {T_nose_p}), and')
+    legend = LEGEND.replace('{T_nose_phrase} but the RT', '{T_nose_phrase} the RT' if T_nose_phrase.endswith(', and') else '{T_nose_phrase} but the RT').replace('{rt_sentence}', rt_sentence).replace('{T_nose_phrase}', T_nose_phrase).replace(
+        'n = 30 subjects (247 subject × area estimates', f'n = {n_sub} subjects ({n_obs} subject × area estimates').format(
         conv=conv,
         T_all=fmt(g('T_target_repeat', 'rel'), 100, '%'), T_all_p=pdir(g('T_target_repeat', 'rel')),
         T_early=fmt(g('T_target_repeat', 'rel', 'early'), 100, '%'),

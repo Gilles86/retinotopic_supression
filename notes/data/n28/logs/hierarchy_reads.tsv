@@ -1,0 +1,4 @@
+file	served	kind	subject_col	subjects
+notes/data/fig1_prf_sigma.tsv	notes/data/fig1_prf_sigma.tsv	csv	True	28
+notes/data/gain_field_parameters_final2_2026-11.tsv	notes/data/gain_field_parameters_final2_2026-11.tsv	csv	True	28
+notes/data/conditional_estimates_dog_final2_2026-11.tsv	notes/data/conditional_estimates_dog_final2_2026-11.tsv	csv	True	28

@@ -1,0 +1,4 @@
+file	served	kind	subject_col	subjects
+notes/data/trialwise_meta_bayes_2026-11/summary.tsv	notes/data/n28/trialwise_meta_bayes_2026-11/summary.tsv	csv	False	
+notes/data/trialwise_signal_se_2026-11/trialwise_af_signal_se_2026-11_parametric.tsv	notes/data/trialwise_signal_se_2026-11/trialwise_af_signal_se_2026-11_parametric.tsv	csv	True	28.0
+notes/data/trialwise_meta_bayes_2026-11/diagnostics.tsv	notes/data/n28/trialwise_meta_bayes_2026-11/diagnostics.tsv	csv	False	

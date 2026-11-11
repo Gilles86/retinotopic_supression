@@ -1,0 +1,3 @@
+file	served	kind	subject_keys_dropped	subject_col	subjects
+notes/data/decoded_bars_images_jointhrf_outline_b11_2026-11.npz	notes/data/n28/decoded_bars_images_jointhrf_outline_b11_2026-11.npz	npy	0.0		
+notes/data/decoded_bars_segments_jointhrf_outline_b11_2026-11.tsv	notes/data/n28/decoded_bars_segments_jointhrf_outline_b11_2026-11.tsv	csv		True	28.0

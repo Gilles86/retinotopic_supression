@@ -1,0 +1,4 @@
+file	served	kind	subject_col	subjects
+notes/data/decode_sim_2026-11.tsv	notes/data/decode_sim_2026-11.tsv	csv	True	28
+notes/data/decoding_readout_canonical_2026-11.tsv	notes/data/decoding_readout_canonical_2026-11.tsv	csv	True	28
+notes/data/decoding_readout_jointhrf_2026-11.tsv	notes/data/decoding_readout_jointhrf_2026-11.tsv	csv	True	28

@@ -360,7 +360,7 @@ def plot(source, name='figS_decoded_bars_rotated', decoder='free'):
                color='#B2182B')
     cb.ax.text(.5, -.04, 'Weaker', transform=cb.ax.transAxes, ha='center', va='top', fontsize=6, color='#2166AC')
     fig.text(.02 / W, (H - .2) / H, 'a', fontsize=8, fontweight='bold', va='center')
-    fig.text(.2 / W, (H - .2) / H, 'Decoded bars, HP location rotated to the upper right (V1–V3, mean of 30 subjects)',
+    fig.text(.2 / W, (H - .2) / H, f'Decoded bars, HP location rotated to the upper right (V1–V3, mean of {mean.shape[0]} subjects)',
              fontsize=7.5, color=STIM, va='center')
     # Row 3: near-HP half minus far half.
     ax = fig.add_axes([2.6 / W, .42 / H, 2.9 / W, 1.0 / H])
@@ -826,6 +826,7 @@ if __name__ == '__main__':
     ap.add_argument('--name', default='figS_decoded_bars_rotated')
     ap.add_argument('--n-bins', type=int, default=N_BINS, help='bar-position bins across the aperture')
     ap.add_argument('--exclude-subjects', nargs='*', type=int, default=[], help='collect_per_roi: subjects left out')
+    ap.add_argument('--per-roi-name', default='figS_decoded_bars_per_roi', help='plot_per_roi: figure name')
     a = ap.parse_args()
     if a.n_bins != N_BINS:                     # module-level so the forked workers see it
         N_BINS = a.n_bins
@@ -833,7 +834,7 @@ if __name__ == '__main__':
     if a.step == 'collect_per_roi':
         collect_condition_per_roi(a.bids_folder, a.source, a.out_dir, a.jobs, a.decoder, a.exclude_subjects)
     elif a.step == 'plot_per_roi':
-        plot_per_roi(a.source, a.decoder, a.n_bins)
+        plot_per_roi(a.source, a.decoder, a.n_bins, name=a.per_roi_name)
     elif a.step == 'plot_split':
         plot_split(a.source, a.decoder, a.n_bins, a.name)
     elif a.step == 'collect_condition':

@@ -27,6 +27,7 @@ from scipy import stats
 
 DATA = Path('notes/data')
 FIGS = Path('notes/figures/paper_2026-11')
+SUFFIX = ''
 QUAD_ANGLE = {'upper_right': 45, 'upper_left': 135, 'lower_left': 225, 'lower_right': 315}
 POS = {0: 'hp', 90: 'left', 180: 'opposite', 270: 'right'}
 ROIS = ['V1', 'V2', 'V3']
@@ -93,7 +94,7 @@ def main():
 
     tab = pd.concat([summarise(eff_dec, 'decoded_effect'), summarise(eff_tru, 'true_effect'),
                      summarise(diff, 'decoded_minus_true'), summarise(null_dec, 'null_decoded')])
-    out = DATA / 'decode_sim_summary_2026-11.tsv'
+    out = DATA / f'decode_sim_summary_2026-11{SUFFIX}.tsv'
     tab.to_csv(out, sep='\t', index=False, float_format='%.4g')
     pd.set_option('display.width', 250)
     show = ['kind', 'gain_amplitude', 'decoder', 'roi', 'n', 'hp_mean', 'hp_sem', 'adjacent_mean', 'adjacent_sem',
@@ -165,9 +166,14 @@ def figure(eff_dec, eff_tru, real):
     axes[1].set_ylabel('Change from null (%)')
     sns.despine(fig=fig, offset=4)
     FIGS.mkdir(parents=True, exist_ok=True)
-    fig.savefig(FIGS / 'figS_decode_simulation.pdf')
-    print(f'-> {FIGS / "figS_decode_simulation.pdf"}')
+    fig.savefig(FIGS / f'figS_decode_simulation{SUFFIX}.pdf')
+    fig.savefig(FIGS / f'figS_decode_simulation{SUFFIX}.png', dpi=200)
+    print(f'-> {FIGS / f"figS_decode_simulation{SUFFIX}.pdf"}')
 
 
 if __name__ == '__main__':
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--suffix', default='', help='appended to the summary table and figure names')
+    SUFFIX = ap.parse_args().suffix
     main()

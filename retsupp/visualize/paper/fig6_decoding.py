@@ -208,7 +208,7 @@ def panel_frames(fig, box, frames, W, H, style='blue'):
     cm = mcolors.LinearSegmentedColormap.from_list('stim', ['#FFFFFF', STIM])
     rows = [('Bar', frames['paradigm'].astype(float), 1.),
             (f'Best run\n{frames["ex_label"]}', frames['example'], np.nanpercentile(frames['example'], 99.7)),
-            ('Mean of 30\nsubjects (V1)', frames['group'], np.nanpercentile(frames['group'], 99.7))]
+            (f'Mean of {frames.get("n_group", 30)}\nsubjects (V1)', frames['group'], np.nanpercentile(frames['group'], 99.7))]
     axes = []
     for i, (lab, arr, vmax) in enumerate(rows):
         for k, t in enumerate(FRAMES):
@@ -918,6 +918,8 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     sub, run, roi = EXAMPLES[source]
     frames = dict(paradigm=fr['paradigm'], group=fr['group'][list(fr['rois']).index('V1'), list(fr['decoders']).index('free')].astype(float),
                   example=ex[f'{sub}_{run}_roi-{roi}'].astype(float))
+    if 'n_group' in fr.files:
+        frames['n_group'] = int(fr['n_group'])
     qf = q[q.decoder == 'free'].sort_values('r', ascending=False).reset_index(drop=True)
     hit = (qf.subject == int(sub[4:])) & (qf.session == int(run[4])) & (qf.run == int(run[-1])) & (qf.roi == roi)
     ex_r, ex_rank = qf[hit].r.iloc[0], int(np.flatnonzero(hit)[0]) + 1
@@ -1066,16 +1068,17 @@ if __name__ == '__main__':
     ap.add_argument('--decoder', default=DECODER)
     ap.add_argument('--out', default=None)
     ap.add_argument('--name', default='fig6_decoding')
+    ap.add_argument('--supp-suffix', default='', help='appended to the names of the plot_all_rois / _examples / bar_crossing figures')
     ap.add_argument('--frames-style', default='magma', choices=['blue', 'magma'], help='decoded rows of a: magma on black or blue')
     ap.add_argument('--v3', action='store_true', help='180 mm wide; the per-area test to a supplementary figure; a-e')
     a = ap.parse_args()
     if a.step == 'collect':
         collect(a.bids_folder, a.source, a.out)
     elif a.step == 'plot_all_rois_examples':
-        plot_all_rois_examples()
+        plot_all_rois_examples(name='figS_decoding_all_rois_examples' + a.supp_suffix)
     elif a.step == 'plot_all_rois':
-        plot_all_rois()
+        plot_all_rois(name='figS_decoding_all_rois' + a.supp_suffix)
     elif a.step == 'plot_bar_crossing':
-        plot_bar_crossing(source_note='')
+        plot_bar_crossing(name='figS_bar_crossing_response' + a.supp_suffix, source_note='')
     else:
         plot(a.name, a.source, a.rois, a.decoder, source_note=f'pRFs: {a.source} fold fits.', frames_style=a.frames_style, v3=a.v3)
