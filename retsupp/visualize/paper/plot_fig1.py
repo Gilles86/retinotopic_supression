@@ -50,6 +50,8 @@ ECC_BINS = np.arange(0, 3.51, .5)
 XY_BINS = np.linspace(-APERTURE, APERTURE, 41)
 DATA = Path('notes/data')
 SIGMA_TSV, R2_TSV, COVER_TSV = (DATA / f'fig1_prf_{x}.tsv' for x in ('sigma', 'r2', 'coverage'))
+# The same tables from the final pRFs (DoG, one HRF per subject x area fitted jointly; mean over the three fold fits).
+SIGMA_FINAL_TSV, R2_FINAL_TSV, COVER_FINAL_TSV = (DATA / f'fig1_prf_{x}_final2.tsv' for x in ('sigma', 'r2', 'coverage'))
 CV_TSV = DATA / 'prf_cv_roi_summary.tsv'
 
 
@@ -84,6 +86,62 @@ def collect(bids_folder):
     pd.concat(sigma).to_csv(SIGMA_TSV, sep='\t', index=False)
     pd.concat(r2s).to_csv(R2_TSV, sep='\t', index=False)
     pd.concat(cover).to_csv(COVER_TSV, sep='\t', index=False)
+
+
+def final_prfs(sub):
+    """Per-voxel x, y, sd of the final joint-HRF DoG fold fits (mean over folds) with the mean held-out R² as r2,
+    the ROI label of the fit and the hemisphere (BOLD-mask voxel index as the index)."""
+    from nilearn import maskers
+    d = sub.bids_folder / 'derivatives' / 'prf_cv_roi_jointhrf' / f'sub-{sub.subject_id:02d}'
+    folds = []
+    for f in sorted(d.glob(f'sub-{sub.subject_id:02d}_fold-*_dog_final2_stage-3_pars.pkl.gz')):
+        cv = pd.read_csv(str(f).replace('_pars.pkl.gz', '_cvr2.tsv.gz'), sep='\t')
+        p = pd.read_pickle(f).reset_index(drop=True)[['x', 'y', 'sd', 'amplitude']]
+        p['r2'] = cv.r2_test.to_numpy()
+        p['roi'] = cv.roi.to_numpy()
+        p.index = cv.voxel_index.to_numpy()
+        folds.append(p)
+    assert len(folds) == 3, (sub.subject_id, len(folds))
+    roi = folds[0].roi
+    d = pd.concat([f.drop(columns='roi') for f in folds]).groupby(level=0).mean()
+    d['roi'] = roi.reindex(d.index)
+    masker = maskers.NiftiMasker(mask_img=sub.get_bold_mask(session=1, run=sub.get_runs(1)[0])).fit()
+    hemi = pd.Series('', index=d.index, dtype=object)
+    for r in d.roi.unique():
+        for h in 'LR':
+            m = masker.transform(sub.get_retinotopic_roi(f'{r}_{h}', bold_space=True)).ravel() > 0
+            ids = d.index[(d.roi == r).to_numpy() & m[d.index]]
+            hemi.loc[ids] = h
+    d['hemi'] = hemi
+    return d[d.hemi != ''].reset_index(drop=True)
+
+
+def collect_final(bids_folder):
+    """As ``collect``, from the final pRFs (``final_prfs``); R² is the held-out R² (mean over the three folds)."""
+    from retsupp.utils.data import Subject, select_well_fit_voxels
+
+    sigma, r2s, cover = [], [], []
+    for s in range(1, 31):
+        sub = Subject(s, bids_folder)
+        d = final_prfs(sub)
+        d = d[d.roi.isin(ROIS)]
+        mapped, _ = select_well_fit_voxels(d, r2_threshold=-np.inf, aperture_radius=APERTURE)
+        clean, _ = select_well_fit_voxels(d, r2_threshold=POSITION_R2, aperture_radius=APERTURE)
+        print(f'sub-{s:02d}: {len(d)} voxels, {len(clean)} pass', flush=True)
+        clean = clean.assign(ecc=np.hypot(clean.x, clean.y))
+        for roi, g in clean.groupby('roi'):
+            b = pd.cut(g.ecc, ECC_BINS, include_lowest=True)
+            m = g.groupby(b, observed=True).sd.agg(['median', 'size']).reset_index()
+            sigma.append(pd.DataFrame(dict(subject=s, roi=roi, ecc=[i.mid for i in m.ecc], sd=m['median'], n=m['size'])))
+            for hemi, gh in g.groupby('hemi'):
+                h, _, _ = np.histogram2d(gh.x, gh.y, bins=[XY_BINS, XY_BINS])
+                ix, iy = np.nonzero(h)
+                cover.append(pd.DataFrame(dict(subject=s, roi=roi, hemi=hemi, ix=ix, iy=iy, n=h[ix, iy].astype(int))))
+        r2s.append(mapped.groupby('roi').agg(n_mapped=('r2', 'size'), median_r2=('r2', 'median'))
+                   .join(clean.groupby('roi').size().rename('n_signal')).fillna(0).reset_index().assign(subject=s))
+    pd.concat(sigma).to_csv(SIGMA_FINAL_TSV, sep='\t', index=False)
+    pd.concat(r2s).to_csv(R2_FINAL_TSV, sep='\t', index=False)
+    pd.concat(cover).to_csv(COVER_FINAL_TSV, sep='\t', index=False)
 
 
 def letter(ax, s, x=-.02, y=1.0):
@@ -446,7 +504,7 @@ def plot(subject, in_dir, out, view='occipital', view_name='Occipital'):
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('action', choices=['collect', 'plot'])
+    ap.add_argument('action', choices=['collect', 'collect-final', 'plot'])
     ap.add_argument('--bids-folder', default='/data/ds-retsupp')
     ap.add_argument('--subject', type=int, default=19)
     ap.add_argument('--in-dir', default='notes/figures/fig1_occipital')
@@ -456,5 +514,7 @@ if __name__ == '__main__':
     a = ap.parse_args()
     if a.action == 'collect':
         collect(a.bids_folder)
+    elif a.action == 'collect-final':
+        collect_final(a.bids_folder)
     else:
         plot(a.subject, a.in_dir, a.out, a.view, a.view_name)
