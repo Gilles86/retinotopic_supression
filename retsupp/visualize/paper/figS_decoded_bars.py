@@ -174,7 +174,7 @@ def _segments(dec, diff, bar, X, Y):
     return out
 
 
-def collect_condition_per_roi(bids, source, out_dir, jobs=4, decoder='outline'):
+def collect_condition_per_roi(bids, source, out_dir, jobs=4, decoder='outline', exclude=()):
     """All nine ROIs, reduced on the compute node (bins: the module's ``N_BINS``):
 
     * ``decoded_bars_segments_<source>_<decoder>_b<N>_2026-11.tsv``: per subject × ROI × orientation (vertical,
@@ -188,6 +188,8 @@ def collect_condition_per_roi(bids, source, out_dir, jobs=4, decoder='outline'):
     root = Path(bids) / 'derivatives' / 'decoded_final_2026-11' / source / decoder
     tasks, keys = [], []
     for d in sorted(root.glob('sub-*')):
+        if int(d.name.split('-')[1]) in set(exclude):
+            continue
         for roi in ALL_ROIS:
             fs = sorted(d.glob(f'decoded_ses-*_run-*_roi-{roi}.npz'))
             if fs:
@@ -823,12 +825,13 @@ if __name__ == '__main__':
     ap.add_argument('--decoder', default='outline', choices=['free', 'outline'], help='outline (main figure) or free')
     ap.add_argument('--name', default='figS_decoded_bars_rotated')
     ap.add_argument('--n-bins', type=int, default=N_BINS, help='bar-position bins across the aperture')
+    ap.add_argument('--exclude-subjects', nargs='*', type=int, default=[], help='collect_per_roi: subjects left out')
     a = ap.parse_args()
     if a.n_bins != N_BINS:                     # module-level so the forked workers see it
         N_BINS = a.n_bins
         EDGES = np.linspace(-APERTURE, APERTURE, N_BINS + 1)
     if a.step == 'collect_per_roi':
-        collect_condition_per_roi(a.bids_folder, a.source, a.out_dir, a.jobs, a.decoder)
+        collect_condition_per_roi(a.bids_folder, a.source, a.out_dir, a.jobs, a.decoder, a.exclude_subjects)
     elif a.step == 'plot_per_roi':
         plot_per_roi(a.source, a.decoder, a.n_bins)
     elif a.step == 'plot_split':
