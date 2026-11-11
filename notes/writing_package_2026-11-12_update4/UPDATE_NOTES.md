@@ -1,5 +1,13 @@
 # Update 4 to writing package 2026-11-12 (n = 28): Fig. 5 restructured with the gain-field maps
 
+**Use `fig5_gain_fields_v7_n28` (preferred; 6.9 in tall at 180 mm). `fig5_gain_fields_v6_n28` (9.1 in) is kept for
+reference.** v7 has the same content and parameter rules as v6, made compact: panel a has two rows instead of three
+(the target and distractor transient fields share one map, at their own locations, each with its own number, on one
+scale 0 to +0.60 so their strength compares directly; a two-part orange/blue key), smaller maps (1.05 in), row labels
+as short titles over each row, keys to the right of the maps, and lower panels b–d (b 0.82 in, c and d 0.85 in). Panel
+letters as in v6 (a maps; b, c, d the earlier a, c, d). The description of v6 below applies to v7, except that the
+target and distractor rows are one row.
+
 Apply on top of update 2 (and update 3). No new fits: every value is from the joint fits in
 `notes/data/gain_field_parameters_final2_2026-11.tsv` (m7_full, participants 3–30).
 
@@ -7,7 +15,8 @@ Apply on top of update 2 (and update 3). No new fits: every value is from the jo
 
 | File | Status | What |
 |---|---|---|
-| `figures/fig5_gain_fields_v6_n28.{pdf,png,md}` | replaces `fig5_gain_fields_n28` | New panel a: gain-field maps, 3 × 3 (rows sustained, target, distractor field; columns V3, hV4, TO). b, c, d: the earlier a, c, d, unchanged in content. The earlier to-scale panel b is removed (widths stay in `figS_field_widths_n28`). |
+| `figures/fig5_gain_fields_v7_n28.{pdf,png,md}` | replaces `fig5_gain_fields_n28` (preferred) | Compact version of v6, see above. |
+| `figures/fig5_gain_fields_v6_n28.{pdf,png,md}` | kept for reference | New panel a: gain-field maps, 3 × 3 (rows sustained, target, distractor field; columns V3, hV4, TO). b, c, d: the earlier a, c, d, unchanged in content. The earlier to-scale panel b is removed (widths stay in `figS_field_widths_n28`). |
 | `figures/figS_gain_field_map_search_n28.{pdf,png,md}` | new | The two search rows (sum of the three fields, distractor at HP vs at the LP location next to HP, target opposite HP), V3, hV4, TO, with "At the distractor, HP − LP" per area. |
 | `numbering_supplement_2026-11-12_update4.md` | replaces the A3 table of update 2 | New Fig. S4 after the field-widths figure; S4–S21 move to S5–S22 (the update-3 decoded map is now S21). |
 | `key_numbers.md` | replaces | Fig. 5 section: panel letters, a new block "a, the fitted gain-field maps" (per-area g_HP, g_LP, sustained width, joint dS, target and distractor gains used), "a, joint fit" renamed "b"; field-width line updated. Nothing else changed. |

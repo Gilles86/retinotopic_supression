@@ -129,6 +129,14 @@ def row_icon(fig, rect, row):
     ax.plot(0, 0, '+', color=FG, ms=2.5, mew=.5)
 
 
+ROWS_V6 = ("Middle row, the target's transient field alone (target, orange diamond, at an LP location, here opposite "
+           "HP); value, the target gain of panel b. Bottom row, the distractor's transient field alone (distractor, blue "
+           "dot, drawn at an LP location next to HP); value, the distractor gain averaged over its locations, as in "
+           "panel b (the transient HP − LP difference is in panel d).")
+ROWS_V7 = ("Bottom row, the transient fields of the target (orange, around the orange diamond, at an LP location, here "
+           "opposite HP) and of the distractor (blue, around the blue dot, drawn at an LP location next to HP) in one "
+           "map; values, the target gain of panel b and the distractor gain averaged over its locations, as in panel b "
+           "(the transient HP − LP difference is in panel d); both on one scale, so their colours compare directly.")
 ROWS = [('Sustained field', 'lower at the HP location', HP),
         ('Target field', 'transient gain at the target', TARGET),
         ('Distractor field', 'smaller transient gain', DISTRACTOR)]
@@ -223,7 +231,87 @@ def panel_maps(fig, p, x_lab, x0, y_top, cw, gap, rgap, per_area_sustained):
     return y, scales
 
 
-def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_area_sustained=None):
+def transient_rgb(tgt, dis, vmax):
+    """Target (orange) and distractor (blue) fields in one map, both on the same scale 0..vmax (white = no change)."""
+    def rgb(c):
+        return np.array(mpl.colors.to_rgb(c))
+    at = np.clip(tgt / vmax, 0, 1)[..., None]
+    ad = np.clip(dis / vmax, 0, 1)[..., None]
+    img = np.ones(tgt.shape + (3,))
+    img = img * (1 - at) + rgb(TARGET) * at
+    img = img * (1 - ad) + rgb(DISTRACTOR) * ad
+    return img
+
+
+def panel_maps_v7(fig, p, x0, y_top, cw, gap, rgap, x_key):
+    """Panel a, compact: row 1 the sustained field (each area on its own scale, range under the map); row 2 the target
+    and distractor transient fields in one map (one shared scale 0..vmax for both components and all areas)."""
+    W, H = fig.get_size_inches()
+    g = np.linspace(-EXTENT, EXTENT, 361)
+    xx, yy = np.meshgrid(g, g)
+    maps = {a: fields(p.loc[a], xx, yy) for a in AREAS}
+    vmax = np.ceil(max(max(maps[a][1].max(), maps[a][2].max()) for a in AREAS) / .1) * .1
+    ranges = []
+    y1 = y_top - cw
+    y2 = y1 - rgap - cw
+    for c, a in enumerate(AREAS):
+        sus, tgt, dis = maps[a]
+        xa = x0 + c * (cw + gap)
+        ax = fig.add_axes([xa / W, y1 / H, cw / W, cw / H])
+        lo_a = np.floor(sus.min() / .01) * .01
+        hi_a = max(np.ceil(sus.max() / .01) * .01, 0.)
+        hi_a = hi_a if hi_a > lo_a else lo_a + .01
+        ax.imshow(sus, extent=(-EXTENT, EXTENT, -EXTENT, EXTENT), origin='lower', cmap='magma',
+                  norm=mpl.colors.Normalize(lo_a, hi_a), interpolation='bilinear')
+        if sus.min() < 0 < sus.max():
+            ax.contour(xx, yy, sus, levels=[0.], colors=[ZERO], linewidths=.8)
+        draw_display(ax)
+        ax.set_title(a, fontsize=7.5, pad=2, color=FG)
+        ax.text(.5, -.03, f'HP − LP {fmt(p.loc[a, "dS"])}', transform=ax.transAxes, fontsize=6.5, ha='center',
+                va='top', color=FG)
+        ax.text(.5, -.135, f'range {fmt(lo_a)} to {fmt(hi_a)}', transform=ax.transAxes, fontsize=6, ha='center',
+                va='top', color='.45')
+        ranges.append(f'{a} {fmt(lo_a)} to {fmt(hi_a)}')
+        ax = fig.add_axes([xa / W, y2 / H, cw / W, cw / H])
+        ax.imshow(transient_rgb(tgt, dis, vmax), extent=(-EXTENT, EXTENT, -EXTENT, EXTENT), origin='lower',
+                  interpolation='bilinear')
+        draw_display(ax, [('target', TGT), ('distractor', DIS)])
+        tx, ty = RING[TGT]
+        ax.text(tx + 1.0, ty + .2, fmt(p.loc[a, 'T']), fontsize=6.5, ha='left', va='center', color=FG,
+                path_effects=STROKE, zorder=7)
+        dx, dy = RING[DIS]
+        ax.text(dx + .75, dy - .95, fmt(p.loc[a, 'D']), fontsize=6.5, ha='left', va='top', color=FG,
+                path_effects=STROKE, zorder=7)
+    # row labels: a small title over each row, left-aligned with the first map
+    for yy_, head, sub, col in ((y1 + cw + .2, 'Sustained field', 'lower at the HP location', HP),
+                                (y2 + cw + .1, 'Transient fields', 'target and distractor, while a display is on', FG)):
+        t = fig.text(x0 / W, yy_ / H, head, fontsize=7, weight='bold', color=col, va='center', ha='left')
+        fig.canvas.draw()
+        xe = t.get_window_extent().x1 / fig.dpi
+        fig.text((xe + .08) / W, yy_ / H, sub, fontsize=6.5, color='.4', va='center', ha='left')
+    # keys at the right
+    kx = x_key
+    cax = fig.add_axes([kx / W, (y1 + .15) / H, .07 / W, (cw - .3) / H])
+    cb = fig.colorbar(mpl.cm.ScalarMappable(norm=mpl.colors.Normalize(0, 1), cmap='magma'), cax=cax)
+    cb.set_ticks([0, 1])
+    cb.set_ticklabels(['Lower', 'Higher'])
+    cb.outline.set_linewidth(.4)
+    cb.ax.tick_params(labelsize=6, length=1.8, pad=1)
+    fig.text((kx - .02) / W, (y1 + cw - .02) / H, 'Gain (scale\nper area)', fontsize=6, color='.35', va='bottom',
+             ha='left', linespacing=1.)
+    for k, (col, lab) in enumerate(((TARGET, 'Target'), (DISTRACTOR, 'Distractor'))):
+        cm = mpl.colors.LinearSegmentedColormap.from_list('c', ['#ffffff', col])
+        cax = fig.add_axes([(kx + k * .42) / W, (y2 + .15) / H, .07 / W, (cw - .3) / H])
+        cb = fig.colorbar(mpl.cm.ScalarMappable(norm=mpl.colors.Normalize(0, vmax), cmap=cm), cax=cax)
+        cb.set_ticks([0, vmax])
+        cb.set_ticklabels(['0', fmt(vmax)] if k == 1 else ['', ''])   # one scale for both: labels on the right bar
+        cb.outline.set_linewidth(.4)
+        cb.ax.tick_params(labelsize=6, length=1.8, pad=1)
+        fig.text((kx + k * .42 + .035) / W, (y2 + cw - .1) / H, lab, fontsize=6, color=col, va='bottom', ha='center')
+    return y2 - .05, ranges, vmax
+
+
+def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_area_sustained=None, compact=False):
     # the same inputs and options as fig5_gain_fields_n28 (final fits, b-d unchanged in content)
     F.FINAL, F.SUFFIX, F.WIDTHS_SUPP = True, suffix, True
     F.GAIN_TABLE = gain_table
@@ -249,6 +337,11 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
     cw, gap, rgap = 1.2, .26, .18
     x_lab, x0 = .05, 1.6
     H = .32 + 3 * cw + 2 * rgap + .24 + .25 + 1.95 + 2.35
+    if compact:
+        cw, gap, rgap = 1.05, .22, .5
+        x0 = .3
+        bh = .82                         # panel b height
+        H = .34 + .15 + 2 * cw + rgap + .05 + (.3 + bh + .44) + (.62 + .85 + .55) + .2
     print('figure height (in):', round(H, 2))
     fig = plt.figure(figsize=(W, H))
     at = lambda x, y, w, h: fig.add_axes([x / W, y / H, w / W, h / H])
@@ -258,7 +351,13 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
     fig.text(.02 / W, Y(.14) / H, 'a', fontsize=8, fontweight='bold', va='center', ha='left')
     fig.text(.2 / W, Y(.14) / H, 'The fitted gain fields over the display (group medians)', fontsize=7.5, color=FG,
              va='center', ha='left')
-    y_bottom, scales = panel_maps(fig, p, x_lab, x0, Y(.34), cw, gap, rgap, per_area_sustained)
+    if compact:
+        y_bottom, ranges, vmax = panel_maps_v7(fig, p, x0, Y(.34 + .15), cw, gap, rgap, x_key=x0 + 3 * cw + 2 * gap + .3)
+        scales = [f'sustained row: each area on its own scale ({"; ".join(ranges)})',
+                  f'transient row: target (orange) and distractor (blue) on one scale, 0 to {fmt(vmax)}, for both '
+                  'and all three areas']
+    else:
+        y_bottom, scales = panel_maps(fig, p, x_lab, x0, Y(.34), cw, gap, rgap, per_area_sustained)
 
     # b: target and distractor gain per area (the earlier a)
     yb = y_bottom - .05
@@ -270,18 +369,21 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
     row(fig, yb, 'b', [('Gain at the ', FG), ('target', TARGET), (t_where, FG),
                        (', at the ', FG), ('distractor', DISTRACTOR), (d_where, FG)], [], x_let=.02, x_title=.2)
     LX, RX, PW = .55, 4.05, 2.95
-    ax = at(LX, yb - 1.66, 6.45, 1.18)
+    bh_ = bh if compact else 1.18
+    gb = .42 if compact else .48
+    ax = at(LX, yb - gb - bh_, 6.45, bh_)
     sm = lambda term: t[(t.model == 'DoG') & (t.term == term)].set_index('roi').loc[ROI_ORDER]
     F.dot_panel(ax, [(d, 'T', TARGET, sm('T')), (d, 'D', DISTRACTOR, sm('D'))], (-.4, 1.2), 'Gain')
     ax.set_yticks([0, .5, 1])
 
     # c, d: as before
-    y2 = H - (yb - 1.66 - .55)
+    y2 = H - (yb - gb - bh_ - .55)
+    ch = .85 if compact else 1.0
     hp_lp = [lambda a: (a.set_axis_off(), stimulus_icon(a, (0, 0, 1, 1), ('hp',))),
              lambda a: (a.set_axis_off(), stimulus_icon(a, (0, 0, 1, 1), ('lp',)))]
     row(fig, Y(y2), 'c', [('Sustained gain: less at ', FG), ('HP', HP)], [(hp_lp, HP, 'Whole block, at HP − at LP')],
         x_let=.02, x_title=.2, key_y=Y(y2 + .27))
-    ax = at(LX, Y(y2 + .62 + 1.0), PW, 1.0)
+    ax = at(LX, Y(y2 + .62 + ch), PW, ch)
     F.dot_panel(ax, [(cond, 'dS', HP, None)], (-.12, .06), 'Gain, HP − LP')
     ax.set_yticks([-.1, 0, .05])
     title_d = [('Transient gain at HP: slightly less for ', FG), ('distractor', DISTRACTOR), (' and ', FG),
@@ -292,7 +394,7 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
     keys_d = [(icons('location', 'distractor'), DISTRACTOR, 'Each trial'), (icons('location', 'target'), TARGET, '')]
     row(fig, Y(y2), 'd', title_d, keys_d, x_let=RX - .5, x_title=RX - .32, key_y=Y(y2 + .27))
     fig.text((RX + PW) / W, Y(y2 + .27) / H, 'As Fig. 1c, d', fontsize=6, color='.45', ha='right', va='center')
-    ax = at(RX, Y(y2 + .62 + 1.0), PW, 1.0)
+    ax = at(RX, Y(y2 + .62 + ch), PW, ch)
     F.dot_panel(ax, [(cond, 'dD', DISTRACTOR, None), (dt, 'dT', TARGET, None)], (-.35, .3), 'Gain, HP − LP')
     ax.set_yticks([-.2, 0, .2])
 
@@ -328,25 +430,26 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
         "locations and, at HP, that gain plus the median HP − LP difference of the joint fit, so that the HP − LP "
         "difference printed on each map is the joint dS of panel c's legend and the text (panel c shows dS estimated "
         "alone, which is smaller); width, the area's median fitted width. The sustained gain is negative at all four "
-        f"locations in most areas ({len(neg)} of 9: {', '.join(neg)}). Middle row, the target's transient field alone "
-        "(target, orange diamond, at an LP location, here opposite HP); value, the target gain of panel b. Bottom row, "
-        "the distractor's transient field alone (distractor, blue dot, drawn at an LP location next to HP); value, the "
-        "distractor gain averaged over its locations, as in panel b (the transient HP − LP difference is in panel d). "
+        f"locations in most areas ({len(neg)} of 9: {', '.join(neg)}). " + (ROWS_V7 if compact else ROWS_V6) + " "
         "The transient fields exist only while a search display is on; their fitted width is often at a bound of the "
         f"fit (0.5° or 8°), so it is set for display to the same FWHM of {TR_FWHM:.1f}° in every area and is not "
         "interpreted (field widths per subject: Supplementary Fig. S, field widths). Colour scales: "
-        + '; '.join(scales) + ' (magma for the sustained field, teal line and tick at no change; the transient rows '
-        'from white, no change, to the component colour). Values used: ' + vals + '. V3, hV4 and TO are the areas '
-        'where the sustained gain is reliably lower at HP than at LP in the joint fit (q < .05; V1, V2 and the other '
-        'areas are in the parameter table). The sum of the three fields during a search display is in Supplementary '
-        'Fig. S (gain field during search).')
+        + '; '.join(scales)
+        + (' (magma for the sustained field, teal line and tick at no change; the transient rows from white, no '
+           'change, to the component colour)' if not compact else
+           ' (magma for the sustained field, teal line at no change; the transient fields from white, no change, to '
+           'orange, target, and blue, distractor)')
+        + '. Values used: ' + vals + '. V3, hV4 and TO are the areas where the sustained gain is reliably lower at HP '
+        'than at LP in the joint fit (q < .05; V1, V2 and the other areas are in the parameter table). The sum of the '
+        'three fields during a search display is in Supplementary Fig. S (gain field during search).')
     general, rest = rest.split(' b–d: ', 1)          # 'Gain-field model fits ... (+0.30: 30% more).' leads
     legend = head + ' ' + general.strip() + ' ' + a_txt + ' b–d: ' + rest
     legend = legend.replace('-0.', '−0.')
-    save(fig, 'fig5_gain_fields_v6' + suffix, legend)
+    save(fig, ('fig5_gain_fields_v7' if compact else 'fig5_gain_fields_v6') + suffix, legend)
     print('scales:', scales, 'per-area sustained:', per_area_sustained)
     print(p.loc[AREAS].round(4).to_string())
-    search_figure(p, n, suffix)
+    if not compact:
+        search_figure(p, n, suffix)
     p.to_csv(f'notes/data/fig5_gain_field_map_parameters{suffix}_2026-11-12.tsv', sep='\t', float_format='%.5f')
     return p
 
@@ -432,6 +535,8 @@ if __name__ == '__main__':
     ap.add_argument('--sigma-table', default='notes/data/fig1_prf_sigma.tsv')
     ap.add_argument('--suffix', default='')
     ap.add_argument('--sustained-scale', choices=['auto', 'shared', 'per-area'], default='auto')
+    ap.add_argument('--compact', action='store_true', help='v7: panel a in two rows (sustained; target + distractor '
+                    'transient fields in one map), smaller panels; writes fig5_gain_fields_v7')
     a = ap.parse_args()
     main(a.gain_table, a.conditional_table, a.slope_table, a.sigma_table, a.suffix,
-         None if a.sustained_scale == 'auto' else a.sustained_scale == 'per-area')
+         None if a.sustained_scale == 'auto' else a.sustained_scale == 'per-area', a.compact)
