@@ -1,0 +1,149 @@
+item	label	stat	value	ci_lo	ci_hi	sem	k	n	p	source	extra
+B4/B5	dog: Target gain, joint	median	0.1567965745925903	0.1288781482726335	0.24259731173515314	0.045415881272710006	25.0	28	3.203749656677246e-07	notes/data/gain_field_parameters_final2_2026-11.tsv (m7_full)	
+B4/B5	dog: Distractor gain, joint	median	0.06480521080084144	0.03207269706763327	0.15135648567229504	0.036928481315183934	21.0	28	0.02322421222925186	notes/data/gain_field_parameters_final2_2026-11.tsv (m7_full)	
+B4/B5	dog: dS, joint	median	-0.03379223868250847	-0.06572047900408498	-0.014688115566968897	0.01299137663770757	22.0	28	0.0026621222496032715	notes/data/gain_field_parameters_final2_2026-11.tsv (m7_full)	
+B4/B5	dog: dD, joint	median	0.0039011910557746957	-0.04113786946982146	0.12356151640415192	0.034497004997480325	13.0	28	0.29046597119691886	notes/data/gain_field_parameters_final2_2026-11.tsv (m7_full)	
+B4	dog: g_LP, joint	median	-0.06686720252037043	-0.11186054721474645	-0.04642073996365065	0.011784235123103953	24.0	28	2.2873282432556152e-06	notes/data/gain_field_parameters_final2_2026-11.tsv (m7_full)	
+B4	dog: g_HP, joint	median	-0.14764492958784098	-0.179997444152832	-0.07216752320528025	0.019447299286659475	25.0	28	1.5139579772949219e-05	notes/data/gain_field_parameters_final2_2026-11.tsv (m7_full)	
+B4/B5	gauss: Target gain, joint	median	0.44596143066883087	0.2799344211816787	0.789579376578331	0.08221462386554027	25.0	28	4.0978193283081055e-07	notes/data/gain_field_parameters_final2_2026-11.tsv (m7_full)	
+B4/B5	gauss: Distractor gain, joint	median	0.09510227805003518	-0.05268606566824015	0.2050872126128524	0.043968179588551204	17.0	28	0.03170907497406006	notes/data/gain_field_parameters_final2_2026-11.tsv (m7_full)	
+B4/B5	gauss: dS, joint	median	-0.08751086588017634	-0.1109816920943558	-0.0011776685714721402	0.022434300645733103	19.0	28	0.02708435497773773	notes/data/gain_field_parameters_final2_2026-11.tsv (m7_full)	
+B4/B5	gauss: dD, joint	median	0.05500347539782515	-0.035621622577309595	0.12648706417530775	0.03005018350232938	12.0	28	0.14377250522375107	notes/data/gain_field_parameters_final2_2026-11.tsv (m7_full)	
+B4/B5	dn: Target gain, joint	median	0.5278805196285248	0.35323853045701975	0.6662043780088425	0.04218774554440761	28.0	28	7.450580596923828e-09	notes/data/gain_field_parameters_final2_2026-11.tsv (m7_full)	
+B4/B5	dn: Distractor gain, joint	median	0.15472451463574538	0.055847059338702806	0.3231951370835304	0.07555051127435387	22.0	28	0.0017047896981239319	notes/data/gain_field_parameters_final2_2026-11.tsv (m7_full)	
+B4/B5	dn: dS, joint	median	-0.07777391932904722	-0.10243847966194158	-0.026550564914941836	0.02862907625247595	20.0	28	0.0024397894740104675	notes/data/gain_field_parameters_final2_2026-11.tsv (m7_full)	
+B4/B5	dn: dD, joint	median	0.023733079433441176	-0.018558800220489502	0.07203179830685259	0.06974037368625068	10.0	28	0.21827305853366852	notes/data/gain_field_parameters_final2_2026-11.tsv (m7_full)	
+B4/B5	dog: dS alone	median	-0.01375527426449465	-0.017947443812274297	-0.005899052206306525	0.0025717003388693845	22.0	28	0.00010570138692855835	notes/data/conditional_estimates_dog_final2_2026-11.tsv	
+B4/B5	dog: S alone	median	-0.03363870925270278	-0.0366632846896532	-0.023463658637526873	0.0031238772573483455	28.0	28	7.450580596923828e-09	notes/data/conditional_estimates_dog_final2_2026-11.tsv	
+B4/B5	dog: Distractor on top of target, alone	median	0.0310820738607663	-0.0014908640387310502	0.0689623708002506	0.01579481023585002	19.0	28	0.019113145768642426	notes/data/conditional_estimates_dog_final2_2026-11.tsv	
+B4/B5	dog: Distractor alone on the item model	median	-0.0073963672418121	-0.0582475231438854	0.0054920944254929745	0.009743863227770037	18.0	28	0.09002415090799332	notes/data/conditional_estimates_dog_final2_2026-11.tsv	
+B4/B5	dog: dD alone	median	-0.01022073406281375	-0.028560982829263802	0.0051488037837729	0.011919714819288505	17.0	28	0.0992795079946518	notes/data/conditional_estimates_dog_final2_2026-11.tsv	
+B4/B5	dog: dT alone	median	-0.03421637112568135	-0.0681887325572369	0.004630944990962924	0.01513484006856513	19.0	28	0.017886914312839508	notes/data/conditional_estimates_dog_final2_2026-11.tsv	
+B4/B5	dog: dD − dT alone	median	0.0090970982162436	-0.004072000687084725	0.05191099224631542	0.023693960739297998	18.0	28	0.23591722548007965	notes/data/conditional_estimates_dog_final2_2026-11.tsv	
+B4/B5	dog: Target gain alone	median	0.15847174658059582	0.1174047651312975	0.21953695649560612	0.0200174250129752	28.0	28	7.450580596923828e-09	notes/data/conditional_estimates_dog_final2_2026-11.tsv	
+B4/B5	gauss: dS alone (exact)	median	-0.00761929843541655	-0.02640602987506475	-0.001041096955060844	0.009640200160356232	23.0	28	0.0004249662160873413	notes/data/conditional_exact_final2_allfam_2026-11.tsv	
+B4/B5	gauss: dD alone (exact)	median	-0.00445047860630955	-0.022583946974944473	0.01826319787558065	0.01608248992636801	15.0	28	0.6947018131613731	notes/data/conditional_exact_final2_allfam_2026-11.tsv	
+B4/B5	gauss: dT alone (exact)	median	-0.06651740531630874	-0.11590733009606922	-0.018612981248555198	0.03843681285338581	20.0	28	0.021778732538223267	notes/data/conditional_exact_final2_allfam_2026-11.tsv	
+B4/B5	gauss: S alone (exact)	median	-0.0434846431490528	-0.05543999866695575	-0.03452032108776325	0.003519748234826361	28.0	28	7.450580596923828e-09	notes/data/conditional_exact_final2_allfam_2026-11.tsv	
+B4/B5	gauss: Target gain alone (exact)	median	0.4362601618858513	0.36558847617656554	0.5627418991520923	0.05977943755400926	25.0	28	1.043081283569336e-07	notes/data/conditional_exact_final2_allfam_2026-11.tsv	
+B4/B5	dn: dS alone (exact)	median	-0.02812832238598465	-0.04106636690452125	-0.007225628903003526	0.01389590549161104	21.0	28	0.0051764026284217834	notes/data/conditional_exact_final2_allfam_2026-11.tsv	
+B4/B5	dn: dD alone (exact)	median	-0.018210588043351274	-0.0363280482135731	0.00562274170059035	0.019311731556018556	17.0	28	0.23591722548007965	notes/data/conditional_exact_final2_allfam_2026-11.tsv	
+B4/B5	dn: dT alone (exact)	median	-0.06614889703474185	-0.1362358840791853	0.03658398376483402	0.03621617896422789	17.0	28	0.08145394921302795	notes/data/conditional_exact_final2_allfam_2026-11.tsv	
+B4/B5	dn: S alone (exact)	median	-0.020607168730167	-0.037068573988307	-0.015426377351040924	0.003718063268732923	27.0	28	1.259148120880127e-06	notes/data/conditional_exact_final2_allfam_2026-11.tsv	
+B4/B5	dn: Target gain alone (exact)	median	0.3525518129035444	0.26612109226794667	0.46299709075739226	0.03283865905656524	28.0	28	7.450580596923828e-09	notes/data/conditional_exact_final2_allfam_2026-11.tsv	
+B4/B5	dog split model: sustained next − opposite	median	-0.0058548240922391	-0.03240513242781155	0.01951451506465665	0.014187388423807179	15.0	28	0.7281656339764595	notes/data/gain_field_parameters_final2_2026-11.tsv (m8_full_adjopp)	
+B4/B5	dog split model: sustained HP − next	median	-0.016254057176411173	-0.06890050667182855	0.005398793456455048	0.01772347568701272	18.0	28	0.06981273740530014	notes/data/gain_field_parameters_final2_2026-11.tsv (m8_full_adjopp)	
+B4/B5	dog split model: sustained HP − opposite	median	-0.03307055775076151	-0.051797567556301716	-0.019409407395869497	0.01081613786961295	23.0	28	0.004778154194355011	notes/data/gain_field_parameters_final2_2026-11.tsv (m8_full_adjopp)	
+B4	dog one-width model: dS	median	-0.022842518985271454	-0.04196671163663265	-0.004892706871032715	0.01326704003724387	22.0	28	0.03575380891561508	notes/data/gain_field_parameters_final2_2026-11.tsv (m7_full_sigtied)	
+B4	dog target split: target HP − LP	median	0.04694126546382907	-0.0934793874621391	0.15453419089317316	0.047935803458363256	15.0	28	0.3740789592266083	notes/data/gain_field_parameters_final2_2026-11.tsv (m8_full_dT)	
+B4	Target gain per doubling of pRF size	median slope	0.3348065482771876	0.2365738877244274	0.6717418860203617		23.0	28	0.0004249662160873	notes/data/n28/hierarchy_regression_final2_2026-11.tsv	k = slopes > 0
+B4	Distractor gain per doubling of pRF size	median slope	0.1143887203668814	-0.1035553765353021	0.2916718752923706		17.0	28	0.1637990102171898	notes/data/n28/hierarchy_regression_final2_2026-11.tsv	k = slopes > 0
+B4	dog LOSO T: better	share	0.75				21.0	28	0.0007162094116210938	notes/data/loso_exact_final2_excl0102_2026-11.tsv	
+B4	dog LOSO T: direction	share	0.9642857142857143				27.0	28	2.2351741790771484e-08	notes/data/loso_exact_final2_excl0102_2026-11.tsv	
+B4	dog LOSO D: better	share	0.6071428571428571				17.0	28	0.156909741461277	notes/data/loso_exact_final2_excl0102_2026-11.tsv	
+B4	dog LOSO D: direction	share	0.75				21.0	28	0.003438994288444519	notes/data/loso_exact_final2_excl0102_2026-11.tsv	
+B4	dog LOSO DonT: better	share	0.6071428571428571				17.0	28	0.3272097110748291	notes/data/loso_exact_final2_excl0102_2026-11.tsv	
+B4	dog LOSO DonT: direction	share	0.75				21.0	28	0.0004729032516479492	notes/data/loso_exact_final2_excl0102_2026-11.tsv	
+B4	dog LOSO S: better	share	0.9285714285714286				26.0	28	1.5422701835632324e-06	notes/data/loso_exact_final2_excl0102_2026-11.tsv	
+B4	dog LOSO S: direction	share	1.0				28.0	28	7.450580596923828e-09	notes/data/loso_exact_final2_excl0102_2026-11.tsv	
+B4	dog LOSO dS: better	share	0.6785714285714286				19.0	28	0.4117337390780449	notes/data/loso_exact_final2_excl0102_2026-11.tsv	
+B4	dog LOSO dS: direction	share	0.75				21.0	28	0.007071197032928467	notes/data/loso_exact_final2_excl0102_2026-11.tsv	
+B4	dog LOSO dD: better	share	0.42857142857142855				12.0	28	0.25451332330703735	notes/data/loso_exact_final2_excl0102_2026-11.tsv	
+B4	dog LOSO dD: direction	share	0.5				14.0	28	0.9553221687674522	notes/data/loso_exact_final2_excl0102_2026-11.tsv	
+B4	dog LOSO dT: better	share	0.6071428571428571				17.0	28	0.2450956031680107	notes/data/loso_exact_final2_excl0102_2026-11.tsv	
+B4	dog LOSO dT: direction	share	0.7142857142857143				20.0	28	0.01362369954586029	notes/data/loso_exact_final2_excl0102_2026-11.tsv	
+B4	dog LOSO items: better	share	1.0				28.0	28	7.450580596923828e-09	notes/data/loso_exact_final2_excl0102_2026-11.tsv	
+B4	gauss LOSO items: better	share	0.9285714285714286				26.0	28	3.725290298461914e-08	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	gauss LOSO items: direction	share	0.8928571428571429				25.0	28	4.097819328308106e-07	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	gauss LOSO T: better	share	0.8928571428571429				25.0	28	5.677342414855957e-06	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	gauss LOSO T: direction	share	0.9285714285714286				26.0	28	3.725290298461914e-08	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	gauss LOSO D: better	share	0.6428571428571429				18.0	28	0.0298331901431083	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	gauss LOSO D: direction	share	0.8571428571428571				24.0	28	9.395182132720947e-06	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	gauss LOSO DonT: better	share	0.5357142857142857				15.0	28	0.8841757625341415	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	gauss LOSO DonT: direction	share	0.6785714285714286				19.0	28	0.0145988687872886	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	gauss LOSO S: better	share	0.8928571428571429				25.0	28	4.097819328308106e-07	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	gauss LOSO S: direction	share	1.0				28.0	28	7.450580596923828e-09	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	gauss LOSO dS: better	share	0.6071428571428571				17.0	28	0.5369088649749756	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	gauss LOSO dS: direction	share	0.7857142857142857				22.0	28	0.0044067725539207	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	gauss LOSO dD: better	share	0.5				14.0	28	0.8665077835321426	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	gauss LOSO dD: direction	share	0.5714285714285714				16.0	28	0.2641716375946998	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	gauss LOSO dT: better	share	0.5714285714285714				16.0	28	0.7281656339764595	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	gauss LOSO dT: direction	share	0.6785714285714286				19.0	28	0.2182730585336685	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	dn LOSO items: better	share	1.0				28.0	28	7.450580596923828e-09	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	dn LOSO T: better	share	0.8571428571428571				24.0	28	9.319186210632324e-05	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	dn LOSO T: direction	share	1.0				28.0	28	7.450580596923828e-09	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	dn LOSO D: better	share	0.17857142857142858				5.0	28	0.0178869143128395	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	dn LOSO D: direction	share	0.32142857142857145				9.0	28	0.1199713721871376	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	dn LOSO DonT: better	share	0.6071428571428571				17.0	28	0.7792982533574104	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	dn LOSO DonT: direction	share	0.8214285714285714				23.0	28	0.0082246661186218	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	dn LOSO S: better	share	0.75				21.0	28	0.0011721327900886	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	dn LOSO S: direction	share	0.9285714285714286				26.0	28	1.0207295417785645e-06	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	dn LOSO dS: better	share	0.6428571428571429				18.0	28	0.2359172254800796	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	dn LOSO dS: direction	share	0.7142857142857143				20.0	28	0.0379299521446228	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	dn LOSO dD: better	share	0.5357142857142857				15.0	28	0.5979221016168594	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	dn LOSO dD: direction	share	0.7142857142857143				20.0	28	0.0051764026284217	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	dn LOSO dT: better	share	0.39285714285714285				11.0	28	0.1857849210500717	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	dn LOSO dT: direction	share	0.5714285714285714				16.0	28	0.7450922578573227	notes/data/n28/loso_per_step_allfam_final2_2026-11.tsv	
+B4	LOSO kappa: better	share	0.6785714285714286				19.0	28	0.042608387768268585	notes/data/n28/loso_kappa_2026-11_n28.tsv	
+B4	LOSO kappa: direction	share	0.9285714285714286				26.0	28	2.4586915969848633e-07	notes/data/n28/loso_kappa_2026-11_n28.tsv	
+B4	LOSO dnratio: better	share	0.5714285714285714				16.0	28	0.27407141774892807	notes/data/n28/loso_dnw_2026-11_n28.tsv	
+B4	LOSO dnratio: direction	share	0.75				21.0	28	0.01025690883398056	notes/data/n28/loso_dnw_2026-11_n28.tsv	
+B4	LOSO dnw: better	share	0.4642857142857143				13.0	28	0.23591722548007965	notes/data/n28/loso_dnw_2026-11_n28.tsv	
+B4	LOSO dnw: direction	share	0.5				14.0	28	0.5979221016168594	notes/data/n28/loso_dnw_2026-11_n28.tsv	
+B4	kappa, full fits (per participant mean over areas)	median	-0.03631245424427709	-0.08181213006901086	-0.019426341751582962	0.022053039081576024	23.0	28	0.01102352887392044	notes/data/dog_cs_field_full_2026-11.tsv	
+B4	kappa neighbour item_response_pct m7 Early hp_next	mean	-4.9438			3.7132	10.0	28	0.045118	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct m7 Early next_opp	mean	-1.3118			0.77401	10.0	28	0.1638	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct m7 Early hp_opp	mean	-6.2556			3.7712	8.0	28	0.023224	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct m7 All areas hp_next	mean	-3.8019			2.9893	10.0	28	0.020409	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct m7 All areas next_opp	mean	-0.87602			0.53398	11.0	28	0.17091	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct m7 All areas hp_opp	mean	-4.6779			2.9585	8.0	28	0.0095364	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct dogk Early hp_next	mean	-4.3631			3.5703	8.0	28	0.045118	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct dogk Early next_opp	mean	-0.61508			0.69786	13.0	28	0.52214	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct dogk Early hp_opp	mean	-4.9782			3.5608	8.0	28	0.021779	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct dogk All areas hp_next	mean	-3.3872			2.8861	10.0	28	0.024749	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct dogk All areas next_opp	mean	-0.46464			0.48608	14.0	28	0.52214	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct dogk All areas hp_opp	mean	-3.8519			2.8302	8.0	28	0.014599	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct dogk0 Early hp_next	mean	-6.0997			4.655	10.0	28	0.12562	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct dogk0 Early next_opp	mean	-0.88078			0.84833	12.0	28	0.49323	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct dogk0 Early hp_opp	mean	-6.9805			4.6518	10.0	28	0.085655	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct dogk0 All areas hp_next	mean	-4.258			3.5058	10.0	28	0.077416	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct dogk0 All areas next_opp	mean	-0.7387			0.57045	13.0	28	0.50758	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct dogk0 All areas hp_opp	mean	-4.9967			3.461	10.0	28	0.081454	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct data Early hp_next	mean	-6.7331			3.6496	9.0	28	0.094564	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct data Early next_opp	mean	-14.915			6.0455	9.0	28	0.021779	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct data Early hp_opp	mean	-21.648			6.7901	8.0	28	0.0051764	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct data All areas hp_next	mean	-6.8685			2.7462	9.0	28	0.017887	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct data All areas next_opp	mean	-8.6355			4.63	8.0	28	0.059531	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct data All areas hp_opp	mean	-15.504			5.3331	5.0	28	0.012704	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct kappa_effect Early hp_next	mean	1.7366			2.3922	17.0	28	0.39895	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct kappa_effect Early next_opp	mean	0.2657			0.48147	17.0	28	0.45148	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct kappa_effect Early hp_opp	mean	2.0023			2.6743	16.0	28	0.49323	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct kappa_effect All areas hp_next	mean	0.87082			1.5966	20.0	28	0.23592	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct kappa_effect All areas next_opp	mean	0.27407			0.34687	18.0	28	0.17823	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour item_response_pct kappa_effect All areas hp_opp	mean	1.1449			1.8141	18.0	28	0.21827	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour bar_drive_pct_V1-V3 m7 Early hp_next	mean	-0.91597			0.45813	8.0	28	0.03793	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour bar_drive_pct_V1-V3 m7 Early next_opp	mean	-0.40412			0.20822	11.0	28	0.062814	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour bar_drive_pct_V1-V3 m7 Early hp_opp	mean	-1.3201			0.60089	9.0	28	0.029833	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour bar_drive_pct_V1-V3 dogk Early hp_next	mean	-0.83187			0.44066	7.0	28	0.035754	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour bar_drive_pct_V1-V3 dogk Early next_opp	mean	-0.33539			0.21314	10.0	28	0.13147	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour bar_drive_pct_V1-V3 dogk Early hp_opp	mean	-1.1673			0.58903	9.0	28	0.059531	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour bar_drive_pct_V1-V3 dogk0 Early hp_next	mean	-1.0568			0.48692	9.0	28	0.053377	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour bar_drive_pct_V1-V3 dogk0 Early next_opp	mean	-0.39418			0.23333	11.0	28	0.13752	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour bar_drive_pct_V1-V3 dogk0 Early hp_opp	mean	-1.451			0.62951	9.0	28	0.050499	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour bar_drive_pct_V1-V3 kappa_effect Early hp_next	mean	0.22494			0.23826	16.0	28	0.6618	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour bar_drive_pct_V1-V3 kappa_effect Early next_opp	mean	0.058786			0.098167	17.0	28	0.32721	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B4	kappa neighbour bar_drive_pct_V1-V3 kappa_effect Early hp_opp	mean	0.28372			0.32072	16.0	28	0.58239	notes/data/n28/kappa_neighbour_2026-11_n28.tsv	k = above 0
+B5	Fig. 6d quadrants: next − opposite	mean	0.6807423930534905	0.07633832914238228	1.2989870990518337	0.3211704248016171	17.0	28	0.06981273740530014	notes/data/decoding_readout_jointhrf_2026-11.tsv (Fig. 6d, free decoder, V1–V3)	
+B5	Fig. 6d quadrants: HP − opposite	mean	-0.9009813819788025	-1.9670058176164984	0.11561458611301666	0.5338363495965729	16.0	28	0.1637990102171898	notes/data/decoding_readout_jointhrf_2026-11.tsv (Fig. 6d, free decoder, V1–V3)	
+B5	Fig. 6d quadrants: HP − next	mean	-1.5817237750322932	-2.6618762244317287	-0.584534739469646	0.5315483276370296	19.0	28	0.007629185914993286	notes/data/decoding_readout_jointhrf_2026-11.tsv (Fig. 6d, free decoder, V1–V3)	
+B5	Decoded half-bars pooled: HP half − other half	mean	-1.8000055931838734	-2.8700715983412515	-0.7332820581951698	0.5648293627558811	19.0	28	0.006060026586055756	notes/data/decoded_bars_segments_jointhrf_outline_b11_2026-11.tsv	
+B5	Decoded half-bars pooled: next − opposite half	mean	1.2099447092550997	0.35411286083812044	2.08725167643085	0.4478632620269322	18.0	28	0.019113145768642426	notes/data/decoded_bars_segments_jointhrf_outline_b11_2026-11.tsv	
+B5	Decoded half-bars vertical: HP half − other half	mean	-1.7083708135849207	-3.05321600396319	-0.38015696689727074	0.7041747523518392	17.0	28	0.033681392669677734	notes/data/decoded_bars_segments_jointhrf_outline_b11_2026-11.tsv	
+B5	Decoded half-bars vertical: next − opposite half	mean	1.2855552845410387	0.40397821169009773	2.1526226406143234	0.4519023315361886	19.0	28	0.009536407887935638	notes/data/decoded_bars_segments_jointhrf_outline_b11_2026-11.tsv	
+B5	Decoded half-bars horizontal: HP half − other half	mean	-1.8822418624064166	-2.8939327806901303	-0.817915814750937	0.5447933506571124	23.0	28	0.0020434409379959106	notes/data/decoded_bars_segments_jointhrf_outline_b11_2026-11.tsv	
+B5	Decoded half-bars horizontal: next − opposite half	mean	1.1188752692426565	-0.010684820159482158	2.264730388596277	0.5941781986594908	17.0	28	0.10417398810386658	notes/data/decoded_bars_segments_jointhrf_outline_b11_2026-11.tsv	
+B7	dS with kappa − dS without (m7), per participant median over areas	median	-0.0001335665583610494	-0.0011199302971363467	0.00024567265063520126	0.002104405472455764	12.0	28	0.3272097110748291	notes/data/dog_cs_field_full_2026-11.tsv (rows m8_full_dogk; dS − dS_m7)	k = participants with a larger dS
+B7	dS with kappa (pooled)	median	-0.025308728218078575	-0.05319416709244245	-0.0096885911189019	0.01478742860750322	21.0	28	0.0026621222496032715	notes/data/dog_cs_field_full_2026-11.tsv	
+B7	dS without kappa (m7, same table, pooled)	median	-0.03379223868250845	-0.06572047900408502	-0.01468811556696885	0.012991376637707573	22.0	28	0.0026621222496032715	notes/data/dog_cs_field_full_2026-11.tsv	
+B7	DN both baselines: Gauss-Newton corr(w_b, w_d), median over subject × area fits	median	0.9992421343379656	0.9909006576635211	0.9999706053994342		28.0	252		notes/data/dn_basefield_full_2026-11.tsv (model m8_full_dnbd)	ci_lo/ci_hi here = 5th/95th percentile over fits; k = participants
+B7	DN both baselines: corr(w_b, w_d), per participant median	median	0.9992873028066254	0.9986456297427992	0.999607706053868	0.0001571657753333596		28	7.450580596923828e-09	notes/data/dn_basefield_full_2026-11.tsv	

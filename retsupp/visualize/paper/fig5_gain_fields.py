@@ -84,9 +84,11 @@ def summarise(js, cond):
 def write_table(t, js):
     t.to_csv(OUT / f'table_parameters_2026-11{SUFFIX}.tsv', sep='\t', index=False)
     fmt = lambda r: f"{r['median']:+.3f} [{r.ci_low:+.3f}, {r.ci_high:+.3f}]"
-    lines = ['**Table S. Gain-field parameters per ROI (m7_full, n = 30).** Median [bootstrapped 95% CI], Wilcoxon p, BH q '
-             'across 9 ROIs, JZS Bayes factor BF10 (r = .707), and for DoG the conditional median. Gains are the fractional '
-             'change in drive at the centre of a field (+0.30: 30% more). Provisional: current inputs.', '']
+    n_sub = t['n'].max() if 'n' in t else 30
+    lines = [f'**Table S. Gain-field parameters per ROI (gain-field model with all terms fitted jointly, n = {n_sub}).** '
+             'Median [bootstrapped 95% CI], Wilcoxon p, BH q '
+             'across 9 ROIs, JZS Bayes factor BF10 (r = .707), and for DoG the median of the estimate with each term added '
+             'alone. Gains are the fractional change in drive at the centre of a field (+0.30: 30% more).', '']
     for term, lab, _ in TERMS:
         lines += [f'**{lab}**', '', '| ROI | DoG median [CI] | p | q | BF10 | DoG conditional | DN median [CI] | p | q | BF10 |',
                   '|---|---|---|---|---|---|---|---|---|---|']

@@ -1,4 +1,4 @@
-**Table S. Gain-field parameters per ROI (m7_full, n = 30).** Median [bootstrapped 95% CI], Wilcoxon p, BH q across 9 ROIs, JZS Bayes factor BF10 (r = .707), and for DoG the conditional median. Gains are the fractional change in drive at the centre of a field (+0.30: 30% more).
+**Table S. Gain-field parameters per ROI (gain-field model with all terms fitted jointly, n = 28).** Median [bootstrapped 95% CI], Wilcoxon p, BH q across 9 ROIs, JZS Bayes factor BF10 (r = .707), and for DoG the median of the estimate with each term added alone. Gains are the fractional change in drive at the centre of a field (+0.30: 30% more).
 
 **Target gain**
 
