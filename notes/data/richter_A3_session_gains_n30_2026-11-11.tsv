@@ -1,0 +1,11 @@
+label	n	median	ci_lo	ci_hi	mean	sem	mean_ci_lo	mean_ci_hi	pct_pos	p	mech	group
+dS = g_HP − g_LP, session 1	30	-0.0058278	-0.02073	0.021446	0.0072296	0.014018	-0.01851	0.035048	46.667	0.87121	dS	All areas (median over areas)
+dS = g_HP − g_LP, session 1	30	-0.0091811	-0.022123	0.045087	0.0022596	0.023267	-0.043007	0.046475	46.667	0.76107	dS	Early
+dS = g_HP − g_LP, session 2	30	-0.035146	-0.049425	-0.0044607	-0.034485	0.012984	-0.058989	-0.0092972	33.333	0.008143	dS	All areas (median over areas)
+dS = g_HP − g_LP, session 2	30	-0.040524	-0.07224	-0.0094376	-0.036198	0.019123	-0.071248	0.00102	26.667	0.027741	dS	Early
+dS = g_HP − g_LP, session 2 − session 1	30	-0.02224	-0.091589	0.013167	-0.041714	0.024835	-0.089	0.0058777	36.667	0.084065	dS	All areas (median over areas)
+next − opposite (LP split), session 1	30	0.0035396	-0.0093869	0.018338	0.011336	0.011936	-0.011136	0.034589	56.667	0.41613	adjopp	All areas (median over areas)
+next − opposite (LP split), session 1	30	0.034303	-0.01754	0.084459	0.03033	0.018418	-0.0047716	0.06603	63.333	0.11908	adjopp	Early
+next − opposite (LP split), session 2	30	-0.0024163	-0.013432	0.027195	0.0018045	0.014856	-0.02969	0.027104	43.333	0.50276	adjopp	All areas (median over areas)
+next − opposite (LP split), session 2	30	0.039365	-0.01598	0.071059	0.018209	0.021851	-0.026173	0.057624	63.333	0.15189	adjopp	Early
+next − opposite (LP split), session 2 − session 1	30	-0.0054883	-0.021155	0.010302	-0.0095319	0.016121	-0.042515	0.020277	36.667	0.58376	adjopp	All areas (median over areas)

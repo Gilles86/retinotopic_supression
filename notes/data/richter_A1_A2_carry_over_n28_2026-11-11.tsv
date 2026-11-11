@@ -1,0 +1,79 @@
+label	n	median	ci_lo	ci_hi	mean	sem	mean_ci_lo	mean_ci_hi	pct_pos	p	group	split	kind	F	df1	df2
+hp_next	26	-32.165	-44.429	8.8038	-14.118	8.9369	-30.891	3.3901	38.462	0.12267	Early	block1	contrast			
+hp_next	27	7.4427	-21.404	16.084	10.096	10.685	-9.8893	31.945	51.852	0.76761	Early	block2	contrast			
+hp_next	26	-16.553	-35.416	11.215	-12.52	14.262	-39.654	15.406	46.154	0.34033	Early	s1b1	contrast			
+hp_next	26	-3.0497	-24.903	38.721	-0.61483	19.036	-35.824	37.213	46.154	0.9403	Early	s1b2	contrast			
+hp_next	26	-15.769	-65.88	30.086	-5.4397	15.63	-34.205	25.48	46.154	0.4992	Early	s2b1	contrast			
+hp_next	27	-4.2806	-45.258	33.078	-81.951	82.798	-257.46	19.752	44.444	0.66168	Early	s2b2	contrast			
+hp_next	28	0.28472	-34.414	35.564	2.3547	14.041	-24.828	29.484	50	0.88418	Early	ses1	contrast			
+hp_next	28	-19.497	-47.131	7.1797	-16.14	11.671	-38.591	6.5082	35.714	0.18578	Early	ses2	contrast			
+hp_next	28	-22.155	-76.623	34.684	-18.495	24.048	-64.049	29.074	46.429	0.37408	Early	ses2 − ses1	difference			
+hp_next	26	24.291	-21.107	67.248	24.803	18.075	-9.6929	59.727	57.692	0.26871	Early	block2 − block1	difference			
+next_opp	26	-13.564	-51.738	2.891	-4.4815	15.962	-32.144	29.17	38.462	0.14991	Early	block1	contrast			
+next_opp	27	-0.1602	-23.879	25.03	8.7538	11.712	-12.307	32.429	48.148	0.78574	Early	block2	contrast			
+next_opp	26	7.4614	-51.386	36.327	9.329	20.642	-29.337	50.971	50	0.98008	Early	s1b1	contrast			
+next_opp	26	18.233	-20.143	36.265	5.1615	13.079	-20.378	28.838	57.692	0.53166	Early	s1b2	contrast			
+next_opp	26	-11.029	-36.839	5.398	0.58174	20.838	-37.238	43.191	42.308	0.39407	Early	s2b1	contrast			
+next_opp	27	10.727	-27.291	42.671	22.961	30.567	-26.619	88.118	62.963	0.80399	Early	s2b2	contrast			
+next_opp	28	-0.22057	-33.901	26.755	7.8704	22.244	-28.362	55.447	50	0.76214	Early	ses1	contrast			
+next_opp	28	-21.752	-44.323	9.3418	-21.135	10.979	-42.426	0.31487	35.714	0.069813	Early	ses2	contrast			
+next_opp	28	-6.8089	-68.546	33.808	-29.005	28.1	-87.471	20.421	50	0.41173	Early	ses2 − ses1	difference			
+next_opp	26	32.736	-20.128	62.675	15.111	23.539	-32.281	58.576	57.692	0.25782	Early	block2 − block1	difference			
+hp_opp	26	-44.879	-79.937	12.645	-18.6	21.054	-56.056	24.752	34.615	0.079573	Early	block1	contrast			
+hp_opp	27	-4.3555	-35.906	39.619	18.85	20.016	-16.559	59.763	40.741	0.97173	Early	block2	contrast			
+hp_opp	26	2.6638	-81.911	47.424	-3.1909	25.962	-52.315	48.409	53.846	0.90066	Early	s1b1	contrast			
+hp_opp	26	20.993	-54.165	49.735	4.5467	23.124	-39.182	49.331	53.846	0.96018	Early	s1b2	contrast			
+hp_opp	26	-35.668	-77.258	37.204	-4.858	30.962	-60.903	58.766	34.615	0.43745	Early	s2b1	contrast			
+hp_opp	27	-16.388	-41.27	39.331	-58.989	59.902	-191.03	28.586	44.444	0.69639	Early	s2b2	contrast			
+hp_opp	28	-16.337	-27.836	4.4233	10.225	27.723	-30.161	70.463	32.143	0.26417	Early	ses1	contrast			
+hp_opp	28	-23.12	-54.75	-16.136	-37.275	13.94	-65.802	-11.926	21.429	0.0076292	Early	ses2	contrast			
+hp_opp	28	1.6881	-56.424	29.243	-47.5	34.563	-121.81	8.9535	50	0.42475	Early	ses2 − ses1	difference			
+hp_opp	26	40.643	-44.653	116.03	39.914	36.295	-29.864	111.06	57.692	0.27989	Early	block2 − block1	difference			
+hp_next	28	-11.032	-34.946	4.9992	-9.3007	6.6555	-21.947	3.6007	35.714	0.12562	All areas	block1	contrast			
+hp_next	28	-3.8651	-20.355	6.7166	-2.1695	6.7622	-15.19	11.037	50	0.58239	All areas	block2	contrast			
+hp_next	28	-22.03	-36.089	24.933	27.981	37.491	-27.184	109.09	35.714	0.72817	All areas	s1b1	contrast			
+hp_next	28	-12.078	-46.549	26.39	-3.1732	20.804	-39.652	40.096	42.857	0.33857	All areas	s1b2	contrast			
+hp_next	28	-24.991	-35.846	19.177	-10.025	12.804	-33.839	14.55	32.143	0.50758	All areas	s2b1	contrast			
+hp_next	28	-6.8459	-30.326	26.953	-49.6	52.864	-163.77	21.452	46.429	0.83137	All areas	s2b2	contrast			
+hp_next	28	-1.4036	-28.641	15.34	-7.4543	11.643	-29.999	14.922	50	0.58239	All areas	ses1	contrast			
+hp_next	28	-12.473	-35.468	6.4664	-7.0134	10.542	-27.435	13.497	46.429	0.55187	All areas	ses2	contrast			
+hp_next	28	-9.8916	-63.147	32.5	0.44097	21.353	-40.533	42.104	46.429	0.9019	All areas	ses2 − ses1	difference			
+hp_next	28	12.828	-21.288	44.227	7.1312	12.028	-16.692	30.198	53.571	0.52214	All areas	block2 − block1	difference			
+next_opp	28	-10.341	-36.889	4.6688	-12.348	8.6478	-28.536	4.4535	35.714	0.12562	All areas	block1	contrast			
+next_opp	28	-0.15172	-16.983	18.53	4.5391	7.2568	-8.6714	18.716	50	0.9019	All areas	block2	contrast			
+next_opp	28	-6.4812	-30.143	29.365	-8.2529	21.694	-52.877	29.844	46.429	0.91967	All areas	s1b1	contrast			
+next_opp	28	16.509	-13.423	28.296	17.206	19.61	-13.499	60.306	60.714	0.362	All areas	s1b2	contrast			
+next_opp	28	-22.607	-52.834	9.2549	-25.355	14.753	-53.984	2.6264	39.286	0.069813	All areas	s2b1	contrast			
+next_opp	28	4.6954	-22.913	34.002	9.3265	21.014	-24.48	54.979	50	0.9019	All areas	s2b2	contrast			
+next_opp	28	-1.9553	-23.686	29.218	-0.50416	8.2676	-16.885	14.802	46.429	0.88418	All areas	ses1	contrast			
+next_opp	28	-10.565	-35.171	3.2362	-16.425	8.1845	-32.416	-0.70171	39.286	0.056387	All areas	ses2	contrast			
+next_opp	28	-4.4563	-41.524	15.935	-15.921	13.648	-42.388	9.9022	42.857	0.30523	All areas	ses2 − ses1	difference			
+next_opp	28	30.212	-18.42	41.855	16.887	12.704	-7.7744	41.472	57.143	0.1638	All areas	block2 − block1	difference			
+hp_opp	28	-39.986	-52.467	-6.0717	-21.648	12.335	-44.908	2.6678	32.143	0.069813	All areas	block1	contrast			
+hp_opp	28	-4.3525	-27.605	20.526	2.3696	11.159	-18.035	24.273	46.429	0.79656	All areas	block2	contrast			
+hp_opp	28	19.353	-56.251	66.05	19.728	26.928	-29.609	74.948	57.143	0.74509	All areas	s1b1	contrast			
+hp_opp	28	-9.9221	-43.979	28.378	14.033	38.256	-45.857	96.726	50	0.59792	All areas	s1b2	contrast			
+hp_opp	28	-25.149	-68.215	0.28898	-35.38	20.206	-75.799	0.77852	32.143	0.10925	All areas	s2b1	contrast			
+hp_opp	28	-1.0496	-31.374	29.701	-40.274	36.992	-120.63	17.72	50	0.79656	All areas	s2b2	contrast			
+hp_opp	28	-15.791	-29.5	1.4553	-7.9585	11.802	-28.49	16.352	32.143	0.11997	All areas	ses1	contrast			
+hp_opp	28	-23.862	-40.179	-12.585	-23.438	9.346	-41.601	-5.2026	25	0.012704	All areas	ses2	contrast			
+hp_opp	28	6.6751	-52.197	14.76	-15.48	17.409	-49.529	17.634	57.143	0.81392	All areas	ses2 − ses1	difference			
+hp_opp	28	44.126	-17.597	81.445	24.018	20.158	-15.243	62.684	64.286	0.28421	All areas	block2 − block1	difference			
+response, current	27	90.256			83.17	14.322					Early		history			
+response, prev_block	27	106.12			99.465	7.854					Early		history			
+response, prev_session	27	103.85			113.69	14.132					Early		history			
+response, never	27	105.56			101.04	5.9029					Early		history			
+ANOVA LP locations: loc	27									0.23665	Early		anova	1.4674	1	26
+ANOVA LP locations: was_hp	27									0.53793	Early		anova	0.38963	1	26
+ANOVA LP locations: loc * was_hp	27									0.78843	Early		anova	0.073513	1	26
+next: was HP (session 2) − never (session 1)	27	4.1119	-36.834	25.349	10.399	16.88	-16.529	46.869	51.852	0.85931	Early		was_hp			
+opposite: was HP (block 2) − never (block 1)	27	-9.787	-50.168	50.115	2.5594	18.671	-31.505	39.559	48.148	0.82234	Early		was_hp			
+response, current	28	92.793			93.03	10.623					All areas		history			
+response, prev_block	28	107.19			96.647	10.492					All areas		history			
+response, prev_session	28	101.91			105.45	9.7135					All areas		history			
+response, never	28	109.78			104.19	4.0837					All areas		history			
+ANOVA LP locations: loc	28									0.84017	All areas		anova	0.041464	1	27
+ANOVA LP locations: was_hp	28									0.71179	All areas		anova	0.1394	1	27
+ANOVA LP locations: loc * was_hp	28									0.36214	All areas		anova	0.85932	1	27
+next: was HP (session 2) − never (session 1)	28	3.6751	-27.414	17.941	7.4314	14.186	-17.224	36.838	57.143	0.9019	All areas		was_hp			
+opposite: was HP (block 2) − never (block 1)	28	-17.109	-47.158	20.853	-13.711	14.153	-41.74	12.429	42.857	0.49323	All areas		was_hp			

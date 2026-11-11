@@ -1,8 +1,8 @@
 # Richter follow-up (2026-11-11)
 
-Follow-up on the comparison with Richter, van Moorselaar & Theeuwes (eLife 2025). **Phase 1** covers what runs locally
-or as a lookup: B, A4, C (full joint fit only), D1–D6. **Phase 2** covers A1–A3 and C(i)/(ii); those need cluster jobs,
-listed at the end and **not submitted**, pending the user's OK.
+Follow-up on the comparison with Richter, van Moorselaar & Theeuwes (eLife 2025): items A1–A4, B, C and D1–D6. The
+user approved the cluster jobs for A1–A3 and C; they have run (job list at the end). No existing fit was changed, and no
+package file was edited: the ready-to-merge CHANGES text is the last section.
 
 **Sample.** sub-01 and sub-02 are left out of the paper (user decision 2026-11-11). Every number below is n = 28
 (sub-03–30), with the n = 30 value in brackets `[n30: …]` where key_numbers has one.
@@ -38,6 +38,121 @@ listed at the end and **not submitted**, pending the user's OK.
    | dS joint (m7) | −.01 | [−.39, +.38] | .97 | ρ = +.05, p = .79 |
 
    Still null, but the number changes.
+
+## A1. Carry-over of earlier HP locations: Fig. 3d, e per session and per block (early areas, items pooled)
+
+**Method.**
+- The Fig. 3 relative deconvolution was rerun on the final location time series, separately for:
+  - each session;
+  - each block within a session (the session's first or second HP location);
+  - each session × block.
+- Output: `derivatives/paper_2026-11/event_deconv_relative_final2_split_2026-11-11_*` (job 8262343/8262500); local
+  copies are in `notes/data/`, not committed.
+- **Percentages:** each split's window means are % of the subject's mean response in the full-data deconvolution (the
+  Fig. 3e denominator). That denominator is shared across splits. Normalising within each split instead gives the same
+  conclusions but noisier extremes, because a split's own mean can be small.
+- n = 28. The regular schedule only exists from sub-03, so the n = 30 bracket is identical.
+
+**Contrasts per split (mean ± SEM, median, Wilcoxon p):**
+
+| Split | HP − opposite | Next − opposite | HP − next |
+|---|---|---|---|
+| All runs (Fig. 3e) | −21.6 ± 6.8, p = .005 | −14.9 ± 6.0, p = .022 | −6.7 ± 3.6, p = .095 |
+| Session 1 | −2.2 ± 13.8 (median −18.7), p = .26 | −3.5 ± 12.6 (−1.1), p = .66 | +1.4 ± 12.3, p = .75 |
+| Session 2 | −34.6 ± 13.2 (−23.6), **p = .013** | −20.2 ± 11.8 (−14.8), p = .11 | −14.3 ± 11.5, p = .14 |
+| Session 2 − 1 | −32.4 ± 23.0, p = .39 | −16.7 ± 21.0, p = .58 | −15.7 ± 22.7, p = .37 |
+| Block 1 (HP location new in the session) | −34.4 ± 15.1 (−42.8), **p = .023** | −15.1 ± 10.0, p = .095 | −18.1 ± 7.7, **p = .032** |
+| Block 2 (opposite = HP of block 1) | +3.1 ± 15.8, p = .81 | −2.0 ± 11.1, p = .99 | +5.2 ± 9.8, p = .88 |
+| Session 1, block 1 (no location ever HP) | −26.9 ± 21.7 (median +2.9), p = .43 | −13.2 ± 15.7 (−3.5), p = .49 | −13.7 ± 14.9, p = .40 |
+
+All areas: session 1 HP − opposite −7.8 ± 9.7, p = .16; session 2 −20.2 ± 8.5, p = .019.
+
+**Plainly:**
+- **Session 1, where the neighbours had never been HP:** the lower response next to HP does not survive (−3.5 ± 12.6%,
+  p = .66). In the first block, where no location had ever been HP, it is −13.2 ± 15.7% (median −3.5), p = .49.
+- **Session 2 carries the measured pattern,** HP − opposite included. There the two "next" locations were HP in
+  session 1.
+- **Block 2 shows no location effect.** Its opposite location was HP in block 1, which fits a reduction that outlasts
+  the HP block. But block 2 is also where HP − opposite itself vanishes.
+- **The session and block differences are not significant themselves** (p ≥ .26), and every split has only a quarter to
+  half of the data.
+- **Conclusion:** the data cannot separate a neighbour effect from carry-over of earlier HP locations. Without
+  carry-over the neighbour effect is not demonstrable. The HP effect itself also grows from session 1 to session 2, so
+  "learning over sessions" and "carry-over" are confounded in this design.
+
+**Source:** `notes/data/richter_A1_carry_over_common_denominator_n28_2026-11-11.tsv`. The within-split normalisation
+is in `richter_A1_A2_carry_over_n28_2026-11-11.tsv`. With that normalisation: session 1 next − opposite +7.9 ± 22.2,
+p = .76; session 2 −21.1 ± 11.0, p = .070; session 2 HP − opposite −37.3 ± 13.9, p = .008.
+
+## A2. Each location recoded by its HP history (early areas, % of the split's mean)
+
+Session × block splits:
+- **Current HP:** always the HP location.
+- **HP in the previous block:** opposite, in block 2.
+- **HP in the previous session:** both next locations, in session 2.
+- **Never HP so far:** next in session 1; opposite in block 1.
+
+| History | Response (mean ± SEM, % of the split's mean; n = 27) |
+|---|---|
+| Current HP | 83.2 ± 14.3 |
+| HP in the previous block | 99.5 ± 7.9 |
+| HP in the previous session | 113.7 ± 14.1 |
+| Never HP | 101.0 ± 5.9 |
+
+**Repeated-measures ANOVA on the LP locations, location (next, opposite) × was HP before (yes, no):**
+
+| Effect | Early | All areas |
+|---|---|---|
+| Location | F(1, 26) = 1.47, p = .24 | F(1, 27) = 0.04, p = .84 |
+| Was HP before | F(1, 26) = 0.39, p = .54 | F(1, 27) = 0.14, p = .71 |
+| Interaction | F(1, 26) = 0.07, p = .79 | F(1, 27) = 0.86, p = .36 |
+
+**Direct contrasts:**
+
+| Contrast | Early | All areas |
+|---|---|---|
+| Next, was HP (session 2) − never (session 1) | +10.4 ± 16.9, p = .86 | +7.4 ± 14.2, p = .90 |
+| Opposite, was HP (block 2) − never (block 1) | +2.6 ± 18.7, p = .82 | −13.7 ± 14.2, p = .49 |
+
+- Only the current HP location is low. A former HP location does not respond less than one that was never HP, so this
+  analysis finds no carry-over.
+- Together with A1, the neighbour effect is not explained by a lasting reduction at former HP locations. But it isn't
+  demonstrated independently of them either.
+
+**Source:** `richter_A1_A2_carry_over_n28_2026-11-11.tsv`, `richter_A1_A2_split_values_n28_2026-11-11.tsv`.
+
+## A3. The sustained gain per session
+
+**Method.** The sustained terms were estimated alone per session, with the gain-field fits of all runs fixed:
+- dS = g_HP − g_LP, added to m4_TDS;
+- next − opposite, the LP split (new mechanism `adjopp`), added to m7_full.
+
+Linear sufficient statistics come only from the session's runs (`fit_fixed_group_mechanisms --sessions`). Output:
+`derivatives/af_fixed_group_linear_session{1,2}_2026-11-11` (jobs 8262545, 8262606, 8262607).
+
+A full per-session refit of the split model was **not** run: it would be about 2 × 270 ladder fits, hundreds of
+task-hours. The linear per-session estimate is the cheap version agreed. The exact (ΔSSE grid) version is not
+implemented with `--sessions`.
+
+Per subject, the median over areas:
+
+| Term | Session 1 | Session 2 | Session 2 − 1 |
+|---|---|---|---|
+| dS, all areas | −.006 [−.021, +.021], p = .96 | **−.035** [−.062, −.005], 68% < 0, **p = .011** | −.022 [−.091, +.013], p = .095 |
+| dS, early | −.009, p = .85 | −.038, p = .048 | |
+| Next − opposite, all areas | +.005, p = .36 | −.002, p = .61 | −.007, p = .48 |
+| Next − opposite, early | +.040 [−.001, +.101], p = .034 | +.032, p = .25 | |
+
+For comparison, all runs: dS alone −.0138 (D1); split-model next − opposite −.006 (n.s.).
+
+- **The sustained HP suppression is a session-2 effect.** It is absent in session 1 and clear in session 2. The
+  difference between sessions is not significant.
+- **The fitted sustained gain shows no neighbour effect in either session.** Next − opposite is ≈ 0 overall. In early
+  areas in session 1 it even points the other way (+.040, p = .034, uncorrected).
+- **Consistent with A1:** the HP effect measured in Fig. 3 and in the gain fields is carried by session 2.
+
+**Source:** `notes/data/richter_A3_session_gains_n28_2026-11-11.tsv`. n = 30 brackets in `..._n30_...`: session 2 dS
+−.035, p = .008; session 1 −.006, p = .87.
 
 ## A4. Behaviour by HP history (sub-03–30)
 
@@ -95,7 +210,7 @@ The target cells use distractor-present trials only.
   both counts. There is a neighbour cost for the distractor (next slower than opposite) and a graded target cost.
 - **Source:** `richter_B_behaviour_contrasts_n28_2026-11-11.tsv` and `richter_B_behaviour_cells_n28_2026-11-11.tsv`.
 
-## C. How much of the measured HP reduction the model reproduces (full joint fit; the term split is phase 2)
+## C. How much of the measured HP reduction the model reproduces
 
 Early and all areas, % of the subject's mean response, mean ± SEM, Wilcoxon p. The m7_full noise-free prediction went
 through exactly the Fig. 3 pipeline (`notes/data/kappa_neighbour_2026-11/event_deconv_m7`, from job 8236933/34).
@@ -109,8 +224,45 @@ through exactly the Fig. 3 pipeline (`notes/data/kappa_neighbour_2026-11/event_d
 
 - **The joint fit reproduces about half of the HP − LP reduction** (early: −5.4 of −11.7; all areas: −4.1 of −9.7),
   about 30% of HP − opposite, most of HP − next, and none of next − opposite.
-- **Which term carries it:** that needs the variant predictions (job J2).
+- **Which term carries it:** see C(i), (ii) below.
 - **Source:** `richter_C_D1_location_contrasts_n28_2026-11-11.tsv` (rows source = data and m7 prediction).
+
+
+### C(i), (ii): which term carries the predicted reduction (job 8262344/8262544)
+
+**Method.** Noise-free predictions per variant went through the same Fig. 3 pipeline. Output:
+`derivatives/paper_2026-11/event_deconv_terms_pred_2026-11-11_*`. To remove a term, its two gains were set to their
+mean:
+- sustained: (g_HP + 3·g_LP)/4;
+- transient: weighted by each subject's pulses at HP.
+
+Early areas n = 27: sub-30's predicted mean response is not positive, as in the data. Mean ± SEM, % of the mean
+response.
+
+| Variant | HP − LP, early | HP − opposite, early | Next − opposite, early | HP − LP, all areas | HP − opposite, all areas |
+|---|---|---|---|---|---|
+| No HP − LP difference (reference) | −2.6 ± 2.1, p = .32 | −2.0 ± 1.3, p = .11 | +0.8 ± 1.3 | −1.8 ± 2.1, p = .54 | −1.2 ± 1.3, p = .97 |
+| Sustained only (S) | −7.3 ± 4.8, p = .025 | −6.8 ± 4.5, p = .025 | +0.7 ± 1.8 | −5.9 ± 4.0, p = .016 | −5.3 ± 3.7, p = .014 |
+| Sustained + dD (= m7 as fitted) | −5.1 ± 4.1, p = .11 | −4.4 ± 4.1, p = .11 | +1.0 ± 1.7 | −3.7 ± 3.4, p = .043 | −3.1 ± 3.3, p = .040 |
+| Sustained + dD + dT (m8_full_dT) | −4.1 ± 3.8, p = .19 | −2.8 ± 4.0, p = .41 | +1.9 ± 2.2 | −2.9 ± 3.1, p = .043 | −1.8 ± 3.2, p = .12 |
+
+**What each term adds:**
+
+| Term | HP − LP, early | HP − LP, all areas |
+|---|---|---|
+| Sustained HP − LP (S − reference) | −4.7 ± 4.6 (median −12.0), p = .065 | −4.0 ± 3.7 (median −8.4), p = .043 |
+| Distractor transient dD (SD − S) | +2.2 ± 2.1, p = .073 | +2.2 ± 1.3, p = .060 |
+| Target transient dT (SDT − SDT0) | +0.8 ± 1.9, p = .47 | +0.3 ± 1.5, p = .71 |
+
+- **The sustained HP − LP term carries the model's predicted reduction at HP.**
+- **The transient terms do not add to it.** dD pulls it slightly back (the fitted dD makes the HP response a little
+  larger on distractor trials than the sustained field alone would), and dT adds nothing.
+- **No variant predicts the neighbour effect** (next − opposite +0.7 to +1.9%; measured −14.9%).
+- **The model reproduces about half of the measured HP − LP** (−5 to −7% predicted vs −11.7% measured, early).
+- **Consistency check:** the m7 rerun here (SD) agrees with the earlier m7 prediction (−5.4 ± 3.7 at n = 28 with
+  sub-30 included).
+
+**Source:** `notes/data/richter_C_term_contrasts_n28_2026-11-11.tsv` (n = 30 in `..._n30_...`).
 
 ## D1. Missing intervals
 
@@ -181,61 +333,82 @@ See contradiction 3. key_numbers is right; the legend is fixed in `notes/figures
 - **n = 30:** V1 p = .003, V2 p = .015, V3 p = .44.
 - **Source:** `richter_D6_per_area_n28_2026-11-11.tsv`.
 
-## Phase 2: cluster jobs for the user's OK (code committed, nothing submitted)
+## Jobs run (account hare.econ.uzh, approved by the user)
 
-All jobs: account hare.econ.uzh, `--exclude=u24-chaihm0-633`, run from `~/retsupp_plan` after `git pull`.
+| Job | What | Tasks | Time per task | Output |
+|---|---|---|---|---|
+| 8262343 (canary), 8262500 | A1, A2: split deconvolutions | sub-03–30 | ~1 min | `derivatives/paper_2026-11/event_deconv_relative_final2_split_2026-11-11_*` |
+| 8262344 (canary), 8262544 | C: per-term predictions and deconvolution | sub-01–30 | ~4 min | `derivatives/paper_2026-11/location_timeseries_terms_pred_2026-11-11_*`, `event_deconv_terms_pred_2026-11-11_*` |
+| 8262545 (canary), 8262606, 8262607 | A3: per-session dS and adjopp, linear | sub-01–30 per session | ~3.5 min | `derivatives/af_fixed_group_linear_session{1,2}_2026-11-11` |
+| 8262315, 8262316, 8262311, 8262317 | Failed or cancelled first attempts | — | — | 8262311 was submitted before the cluster clone had pulled the new code and was cancelled; the others lacked `~/pylibs/nideconv` on the path or asked for `--exact` with `--sessions` |
 
-| # | For | Script | Array | Resources | Estimated time | Output |
-|---|---|---|---|---|---|---|
-| J1 | A1, A2: Fig. 3 relative deconvolution split by session, by block, and by session × block (8 splits) | `retsupp/visualize/paper/slurm_jobs/deconv_history_splits.sh` | `--array=3-30` (28 tasks) | 4 CPUs, 6 GB, 30 min | ~2 min per task (local canary: 7 s per split for sub-03) | `derivatives/paper_2026-11/event_deconv_relative_final2_split_2026-11-11_{ses1,ses2,block1,block2,s1b1,s1b2,s2b1,s2b2}/` |
-| J2 | C(i), (ii): noise-free predictions per HP − LP term, then the relative deconvolution of each | `retsupp/visualize/paper/slurm_jobs/predict_location_timeseries_terms.sh` | `--array=3-30` (or 1-30 for the n30 bracket) | 2 CPUs, 32 GB, 1 h | ~30–40 min per task (the κ prediction job of the same size took 32 min) | `derivatives/paper_2026-11/location_timeseries_terms_pred_2026-11-11_{nohp,S,SD,SDT,SDT0}/`, `event_deconv_terms_pred_2026-11-11_*/` |
-| J3a | A3: per-session sustained gains, estimated alone on top of the full-data fits: dS (on m4_TDS) and next − opposite (`adjopp`, new, on m7_full), exact ΔSSE curves | `retsupp/modeling/slurm_jobs/fit_fixed_group_mechanisms.sh`, env `SESSIONS=1 EXACT=1 MECHANISMS="dS adjopp" BASE_ROOT=$D/af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf HRF_TABLE=$D/paper_2026-11/roi_hrf_dog_final2.tsv ROIS="V1 V2 V3 V3AB hV4 LO TO VO IPS" OUTPUT_SUBDIR=af_fixed_group_exact_session1_2026-11-11` | `--array=3-30` | 24 GB, 2 h (as the final exact run 8227548) | ~30–60 min per task | `derivatives/af_fixed_group_exact_session1_2026-11-11/` |
-| J3b | same, session 2 | same, `SESSIONS=2`, `OUTPUT_SUBDIR=af_fixed_group_exact_session2_2026-11-11` | `--array=3-30` | same | same | `derivatives/af_fixed_group_exact_session2_2026-11-11/` |
+**Code:**
+- `retsupp/visualize/paper/richter_followup.py`: all summaries.
+- `retsupp/visualize/paper/deconvolve_location_responses.py`: `--split`.
+- `retsupp/visualize/paper/predict_location_timeseries_terms.py` and its slurm script.
+- `retsupp/visualize/paper/slurm_jobs/deconv_history_splits.sh`.
+- `retsupp/modeling/fit_fixed_group_mechanisms.py`: `adjopp`, only when named, so the default list is unchanged.
 
-Suggested order: one canary task each (sub-03), then the arrays.
+## CHANGES (ready to merge into the n = 28 writing package; dated 2026-11-11)
 
-**J1, the splits.** The block is the session's first or second HP location, taken per run from the HP mode in the
-trial table. History follows from the split:
-- In s1b1 nothing has been HP before.
-- In s1b2 the opposite location was HP in block 1.
-- In s2b1 and s2b2 both "next" locations were HP in session 1.
-- In s2b2 the opposite location was also HP in s2b1.
+**Behaviour (Fig. 1 section).**
+- Correct trials: 17,292 (n = 28). The earlier "21,480 correct trials" counted all trials.
+- Pilots: the old −26.6 and +27.3 ms were means. As medians: HP benefit −25.0 ms [−32.4, −20.0], target cost
+  +24.3 ms [+18.5, +36.4].
+- New: behaviour by location relative to HP (B).
+  - **Distractor:** fastest at HP (874 ms), nearly as fast opposite HP (880 ms; HP − opposite −3.8 ms
+    [−15.9, +3.7], p = .34), slowest next to HP (912 ms; next − opposite +37.8 ms [+24.2, +45.5], p < .001).
+  - **Target:** cost graded HP > next > opposite (HP − next +20.6 ms, HP − opposite +30.2 ms, both p < .001; accuracy
+    at HP −4.9% vs opposite).
+  - **Relation to Richter et al.:** they report the benefit only at HP itself and no target cost.
+- Carry-over in behaviour (A4): after the practice change is subtracted, no effect of a location having been HP
+  before (previous block: distractor −9.3 ms, p = .35; previous session: +17.5 ms, p = .37).
 
-Each split goes through `rel_stats` (the Fig. 3e % measure, normalised within the split). Session and block
-differences are then paired across subjects. For A2: the response per history type (current HP / HP in the previous
-block / HP in the previous session / never) and a 2 × 2 repeated-measures ANOVA on the LP locations, location (next,
-opposite) × was HP before (yes, no). Next: never in s1, yes in s2. Opposite: never in block 1, yes in block 2. The local
-canary checked the run selection for sub-03, sub-20 and sub-24 (5-run sessions).
+**Item locations (Fig. 3 section).**
+- HP − opposite (Fig. 3e, early): −21.6 ± 6.8% (95% CI of the mean [−34.9, −8.9]); all areas −15.5 ± 5.3%
+  [−25.4, −5.1].
+- HP − mean of the three LP locations in the Fig. 3d, e deconvolution: early −11.7 ± 4.0%, all areas −9.7 ± 3.1%. The
+  −8.6% / −7.3% come from the earlier HP/LP deconvolution; say which one is quoted.
+- Dorsal n: 26 in b, c (n = 28 sample); key_numbers is right, and the legend template is fixed.
+- Target − distractor (both at LP): early +.038 [+.004, +.105], q = .015; dorsal +.126, q < .001; occipitotemporal
+  +.097, q < .001. So target > distractor > neutral in early visual cortex, as in Richter et al.
+- Per early area (exploratory, uncorrected), HP − opposite: V1 −29.8% (p = .002), V2 −20.0% (p = .010), V3 −11.4%
+  (p = .33). Next − opposite is n.s. in each area. Unlike Richter et al., the effect is not weaker in V1 than in V2.
+- **Carry-over (A1, A2):**
+  - The neighbour effect is not demonstrable without carry-over. Session 1 next − opposite −3.5 ± 12.6%, p = .66;
+    session 2 −20.2 ± 11.8%, p = .11.
+  - The measured HP effect is also mostly a session-2 effect: session 1 HP − opposite −2.2 ± 13.8%, p = .26; session 2
+    −34.6 ± 13.2%, p = .013.
+  - Session differences are not significant (p ≥ .37).
+  - Locations recoded by HP history show no reduction at former HP locations (was HP before: F(1, 26) = 0.39, p = .54).
+  - Discussion wording: "The lower response next to HP could not be separated from carry-over of earlier HP locations
+    (it was present only in session 2, where the neighbouring locations had been HP in session 1), and the HP
+    reduction itself was larger in the second session."
 
-**J2, removing a term.** To remove an HP − LP term, both of its gains are set to their mean, keeping the overall gain:
-- **Sustained:** g_HP, g_LP := (g_HP + 3·g_LP)/4, the mean over the four locations.
-- **Distractor transient:** g_HP_dyn, g_LP_dyn := their mean weighted by the share of distractor pulses at HP in that
-  subject's runs.
-- **Target transient (m8_full_dT):** g_T_HP_dyn, g_T_dyn := their mean weighted by the share of target pulses at HP.
+**Gain fields (Fig. 5 section).**
+- dS estimated alone (DoG): −.0138 [−.0179, −.0059], p = 9 × 10⁻⁵ (n = 28). Gaussian −.0076 [−.0264, −.0010];
+  DN −.0281 [−.0411, −.0072].
+- Split model, as medians over areas with CIs:
 
-Variants:
-- `nohp` = m7 with neither the sustained nor the transient difference. This is the reference and should predict
-  about 0.
-- `S` = m7 with only the sustained difference.
-- `SD` = m7 as fitted, the sustained difference plus dD.
-- `SDT` = m8_full_dT as fitted, which adds dT.
-- `SDT0` = the same m8_full_dT parameters without dT.
+  | Contrast | Median [95% CI] | p |
+  |---|---|---|
+  | Next − opposite | −.006 [−.032, +.020] | .73 |
+  | HP − next | −.016 [−.069, +.005] | .070 |
+  | HP − opposite | −.033 [−.052, −.019] | .005 |
 
-The share carried by each term: S − nohp (sustained alone), SD − S (adding dD), SDT − SDT0 (dT within the m8 fit).
-m7 itself has no target HP − LP term, so dT needs the m8_full_dT fits, which exist for all 30 subjects.
+- Per session (A3; estimated alone, all-run fits fixed): dS session 1 −.006, p = .96; session 2 −.035 [−.062, −.005],
+  p = .011; difference p = .095. The sustained HP suppression appears in the second session. Next − opposite ≈ 0 in
+  both sessions.
+- Between subjects: ρ(dS alone, HP benefit) = −.11 [−.50, +.30], p = .57; ρ(joint dS) = −.01, p = .97. Replaces
+  ρ = −.17 from the earlier fits.
 
-**J3, per-session sustained gains.**
-- **Cheap version, as listed:** the conditional "estimated alone" estimate per session on top of the full-data fits,
-  with the sufficient statistics over that session's runs only (`--sessions`, existing).
-- **New mechanism `adjopp`:** next − opposite on top of m7_full with the LP-split class. It runs only when named, so
-  the default list is unchanged.
-- **Expensive version, not proposed:** refitting m8_full_adjopp per session would mean two new ladder runs of 30 × 9
-  fits each, about 2 × 270 task-hours.
+**Model vs measurement (C).**
+- The joint fit reproduces about half of the measured HP − LP reduction (early −5.4 vs −11.7%; all areas −4.1 vs
+  −9.7%), about 30% of HP − opposite, and none of next − opposite (−1.3 vs −14.9%).
+- The sustained HP − LP term carries it (sustained alone: −7.3%). The distractor transient term slightly reduces it
+  (+2.2%). The target transient term adds nothing (+0.8%).
 
-**Code** (committed, pushed; not submitted):
-- `retsupp/visualize/paper/richter_followup.py`
-- `retsupp/visualize/paper/predict_location_timeseries_terms.py` and `slurm_jobs/predict_location_timeseries_terms.sh`
-- `retsupp/visualize/paper/slurm_jobs/deconv_history_splits.sh`
-- `retsupp/visualize/paper/deconvolve_location_responses.py` (`--split`)
-- `retsupp/modeling/fit_fixed_group_mechanisms.py` (`adjopp`)
-- `retsupp/visualize/paper/fig3_item_locations.py` (D4 legend)
+**pRF models (Fig. 2 section).** DN − DoG held-out R², n = 28: +.0048 [+.0023, +.0094], 25/28, p = 5 × 10⁻⁶.
+
+**Methods (Fig. 6).** Decoder voxels: at most 2000 per area by cross-run reliability, not 200. The Fig. 6 legend is
+right.
