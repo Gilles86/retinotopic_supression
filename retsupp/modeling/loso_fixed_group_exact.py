@@ -73,7 +73,7 @@ def loso(d):
     return d
 
 
-def main(bids_folder, folders, mechanisms=None, out=None):
+def main(bids_folder, folders, mechanisms=None, out=None, exclude_subjects=()):
     global MECH
     MECH = list(mechanisms or MECH)
     deriv = f'{bids_folder}/derivatives'
@@ -84,6 +84,7 @@ def main(bids_folder, folders, mechanisms=None, out=None):
     tables = []
     for folder in folders:
         d = load(deriv, folder, null)
+        d = d[~d.subject.isin(list(exclude_subjects))]   # left out of the pool and of the test
         a = loso(d)
         tables.append(a.drop(columns=['grid', 'curve']).assign(folder=folder))
         print(folder, f'({d.subject.nunique()} subjects, {len(d) // len(MECH)} subject x ROI)')
@@ -108,5 +109,7 @@ if __name__ == '__main__':
     ap.add_argument('--bids-folder', default='/data/ds-retsupp')
     ap.add_argument('--mechanisms', nargs='+', default=None, help=f'Instead of the default {MECH}')
     ap.add_argument('--out', default=None, help='TSV of the per subject x ROI x mechanism LOSO values')
+    ap.add_argument('--exclude-subjects', nargs='*', type=int, default=[],
+                    help='Subjects left out entirely (not in the others\' median, not tested)')
     args = ap.parse_args()
-    main(args.bids_folder, args.folders, args.mechanisms, args.out)
+    main(args.bids_folder, args.folders, args.mechanisms, args.out, args.exclude_subjects)
