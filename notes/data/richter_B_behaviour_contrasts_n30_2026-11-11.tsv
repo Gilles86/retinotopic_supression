@@ -1,0 +1,15 @@
+label	n	median	ci_lo	ci_hi	mean	sem	mean_ci_lo	mean_ci_hi	pct_pos	p	item	measure
+next − opposite	30	34.609	21.481	43.907	27.694	6.1638	15.2	39.36	76.667	0.00012334	distractor	rt_ms
+hp − next	30	-37.807	-40.879	-29.803	-37.208	3.064	-43.171	-31.435	0	1.8626e-09	distractor	rt_ms
+hp − opposite	30	-6.058	-21.816	3.3481	-9.5142	5.7223	-20.916	1.4488	43.333	0.146	distractor	rt_ms
+hp − absent	30	15.768	2.1025	23.208	15.218	4.1776	6.919	22.989	70	0.0012321	distractor	rt_ms
+next − opposite	30	-1.1048	-6.25	0	-3.1524	1.0215	-5.1894	-1.2266	30	0.011484	distractor	accuracy_pct
+hp − next	30	3.125	1.9444	5.5556	4.165	0.72097	2.8009	5.5804	90	1.2957e-05	distractor	accuracy_pct
+hp − opposite	30	0.55556	0	1.8056	1.0126	0.695	-0.29377	2.3847	66.667	0.13848	distractor	accuracy_pct
+hp − absent	30	-2.5694	-3.6806	-1.4583	-2.6195	0.72418	-3.976	-1.1557	13.333	0.00031751	distractor	accuracy_pct
+next − opposite	30	12.496	2.886	18.408	11.922	3.2358	5.8598	18.094	70	0.0014575	target	rt_ms
+hp − next	30	20.997	17.484	29.684	24.303	4.418	15.943	32.802	83.333	4.4219e-06	target	rt_ms
+hp − opposite	30	34.036	23.522	51.607	36.225	4.3887	27.824	44.55	90	4.6566e-08	target	rt_ms
+next − opposite	30	-1.3889	-4.1667	-0.17361	-2.1096	0.69684	-3.4901	-0.78914	26.667	0.0082481	target	accuracy_pct
+hp − next	30	-1.7361	-3.125	0	-2.2464	0.78416	-3.7774	-0.81226	30	0.0097291	target	accuracy_pct
+hp − opposite	30	-4.8611	-5.5556	-3.8194	-4.3561	0.72976	-5.7407	-2.963	20	2.831e-05	target	accuracy_pct

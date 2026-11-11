@@ -1,0 +1,9 @@
+label	n	median	ci_lo	ci_hi	mean	sem	mean_ci_lo	mean_ci_hi	pct_pos	p	item
+opposite: block 2 (was HP in block 1) − block 1 (never HP)	28	-31.002	-49.467	-0.39447	-30.573	11.591	-52.706	-8.809	32.143	0.011839	distractor
+previous-block HP, difference in differences [opposite b2 − b1] − [next b2 − b1]	28	-9.2828	-31.068	9.2139	-9.9746	11.04	-31.29	11.083	39.286	0.35016	distractor
+next: session 2 (was HP in session 1) − session 1 (never HP)	28	-6.1313	-59.418	13.337	-14.814	12.2	-37.791	8.9147	46.429	0.25451	distractor
+previous-session HP, difference in differences [next s2 − s1] − [opposite (block 1) s2 − s1]	28	17.538	-27.668	38.697	12.203	15.505	-16.464	42.917	57.143	0.37408	distractor
+opposite: block 2 (was HP in block 1) − block 1 (never HP)	28	-34.234	-55.64	-4.6677	-29.676	9.6886	-48.05	-11.426	28.571	0.0070712	target
+previous-block HP, difference in differences [opposite b2 − b1] − [next b2 − b1]	28	-4.3199	-31.164	13.504	-9.343	9.0339	-26.65	7.8098	46.429	0.4791	target
+next: session 2 (was HP in session 1) − session 1 (never HP)	28	-21.48	-51.135	12.483	-13.798	11.329	-35.236	7.8566	35.714	0.2098	target
+previous-session HP, difference in differences [next s2 − s1] − [opposite (block 1) s2 − s1]	28	1.5504	-40.925	43.314	3.6699	12.786	-20.686	28.431	50	0.99106	target

@@ -1,0 +1,10 @@
+label	n	median	ci_lo	ci_hi	mean	sem	mean_ci_lo	mean_ci_hi	pct_pos	p	source
+held-out R², DN − DoG (stage 3, fold mean, median over nine areas)	28	0.0047541	0.0023337	0.0094054	0.0074838	0.0014928	0.0047366	0.010423	89.286	4.7684e-06	notes/data/prf_jointhrf_summary_final2_2026-11.tsv
+dS estimated alone, dog (per-subject median over areas)	28	-0.013755	-0.017947	-0.0058991	-0.011794	0.0025717	-0.016789	-0.0069746	21.429	0.0001057	notes/data/conditional_estimates_dog_final2_2026-11.tsv
+dS estimated alone, gauss (per-subject median over areas)	28	-0.0076193	-0.026406	-0.0010411	-0.023423	0.0096402	-0.045084	-0.0091211	17.857	0.00042497	notes/data/conditional_exact_final2_allfam_2026-11.tsv
+dS estimated alone, dn (per-subject median over areas)	28	-0.028128	-0.041066	-0.0072256	-0.036558	0.013896	-0.065541	-0.01257	25	0.0051764	notes/data/conditional_exact_final2_allfam_2026-11.tsv
+split model: next − opposite (per-subject median over areas)	28	-0.0058548	-0.032405	0.019515	0.00018042	0.014187	-0.026181	0.027182	46.429	0.72817	notes/data/gain_field_parameters_final2_2026-11.tsv (m8_full_adjopp)
+split model: HP − next (per-subject median over areas)	28	-0.016254	-0.068901	0.0053988	-0.032307	0.017723	-0.066499	0.0012218	35.714	0.069813	notes/data/gain_field_parameters_final2_2026-11.tsv (m8_full_adjopp)
+split model: HP − opposite (per-subject median over areas)	28	-0.033071	-0.051798	-0.019409	-0.031902	0.010816	-0.052644	-0.011047	17.857	0.0047782	notes/data/gain_field_parameters_final2_2026-11.tsv (m8_full_adjopp)
+Spearman ρ, dS alone (DoG) vs HP benefit (LP − HP RT)	28	-0.11275	-0.49809	0.30303						0.56782	conditional_exact / gain_field_parameters + behaviour trials
+Spearman ρ, dS joint m7 (DoG) vs HP benefit (LP − HP RT)	28	-0.0071155	-0.38784	0.37954						0.97133	conditional_exact / gain_field_parameters + behaviour trials

@@ -1,0 +1,3 @@
+label	n	median	ci_lo	ci_hi	mean	sem	mean_ci_lo	mean_ci_hi	pct_pos	p
+distractor at HP − LP, sub-03–30	28	-24.996	-32.435	-19.967	-26.637	3.133	-32.63	-20.864	0	7.4506e-09
+target at HP − LP (distractor trials), sub-03–30	28	24.257	18.45	36.364	27.252	4.3378	19.105	35.56	85.714	1.5423e-06

@@ -1,0 +1,15 @@
+item	measure	cell	n	mean	median
+distractor	rt_ms	hp	28	874.28	872.75
+distractor	rt_ms	next	28	911.66	909.69
+distractor	rt_ms	opposite	28	880.16	848.57
+distractor	rt_ms	absent	28	860.89	846.21
+distractor	accuracy_pct	hp	28	86.648	90.278
+distractor	accuracy_pct	next	28	82.587	86.806
+distractor	accuracy_pct	opposite	28	85.692	86.806
+distractor	accuracy_pct	absent	28	89.459	94.097
+target	rt_ms	hp	28	904.7	899.11
+target	rt_ms	next	28	881.14	868.32
+target	rt_ms	opposite	28	870.4	865.72
+target	accuracy_pct	hp	28	83.453	85.069
+target	accuracy_pct	next	28	85.438	88.542
+target	accuracy_pct	opposite	28	87.723	90.278

@@ -1,0 +1,7 @@
+label	n	median	ci_lo	ci_hi	mean	sem	mean_ci_lo	mean_ci_hi	pct_pos	p	group	q
+target − distractor (both at LP)	30	0.037455	0.0036199	0.092522	0.042182	0.016566	0.0097808	0.073081	70	0.014538	Early	0.014538
+target (HP and LP averaged) − distractor (LP)	30	0.020098	-0.036455	0.090118	0.027332	0.019384	-0.010026	0.065036	60	0.19093	Early	0.19093
+target − distractor (both at LP)	28	0.11371	0.051343	0.17653	0.12161	0.025871	0.072527	0.1713	82.143	5.5298e-05	Dorsal	0.00016589
+target (HP and LP averaged) − distractor (LP)	28	0.074075	0.018074	0.16074	0.090495	0.035144	0.023787	0.1576	71.429	0.017887	Dorsal	0.02683
+target − distractor (both at LP)	30	0.094612	0.055157	0.14146	0.099474	0.026209	0.049012	0.14986	73.333	0.00031275	Occipitotemporal	0.00046913
+target (HP and LP averaged) − distractor (LP)	30	0.071622	0.058449	0.12113	0.084167	0.027741	0.029764	0.13799	76.667	0.0007979	Occipitotemporal	0.0023937

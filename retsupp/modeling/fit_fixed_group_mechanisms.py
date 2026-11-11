@@ -67,6 +67,7 @@ from retsupp.modeling.fit_af_prf_cv_v2 import (
 from retsupp.modeling.fit_cv_ladder_nested import GAINS, LADDER, TIE_PARTNER, sign_pattern_of
 from retsupp.modeling.dn_baseline_field import DNBaselineField
 from retsupp.modeling.dog_centre_surround_field import DoGCentreSurroundField
+from retsupp.modeling.lp_split import LPSplitDoG
 from retsupp.modeling.target_split import TargetSplitDN, TargetSplitDoG
 from retsupp.utils.data import Subject
 
@@ -92,16 +93,18 @@ MECHANISMS = {
     'kappa': ('m7_full', ['kappa'], None),
     'dnw': ('m7_full', ['w_b', 'w_d'], None),
     'dnratio': ('m7_full', ['w_b', 'w_d'], None),
+    # Sustained LP gain split, next to HP minus opposite HP (lp_split), on top of m7_full; e.g. per session (--sessions).
+    'adjopp': ('m7_full', ['g_adj_minus_opp'], None),
 }
 # Mechanisms with their own model class (the others use build_full_model), and the family it needs.
-MECH_MODEL = {'kappa': 'dog', 'dnw': 'dn', 'dnratio': 'dn'}
+MECH_MODEL = {'kappa': 'dog', 'dnw': 'dn', 'dnratio': 'dn', 'adjopp': 'dog'}
 # Direction of the perturbation per parameter (default +1 each).
 PERTURB_SIGN = {'dnratio': [1.0, -1.0]}
 # Lower and upper δ of the --exact grid. items stops at item_scale = 0.
 EXACT_RANGE = {'items': (-1., .5), 'T': (-1.5, 1.5), 'D': (-1.5, 1.5),
                'S': (-.4, .4), 'dS': (-.8, .8), 'dD': (-1.5, 1.5),
                'dT': (-1.5, 1.5), 'DonT': (-1.5, 1.5),
-               'kappa': (-1., 1.), 'dnw': (-1.5, 1.5), 'dnratio': (-.5, .5)}   # sub-03 canary: minima within ±0.15
+               'kappa': (-1., 1.), 'dnw': (-1.5, 1.5), 'dnratio': (-.5, .5), 'adjopp': (-.8, .8)}   # sub-03 canary: minima within ±0.15
 N_GRID = 25
 
 
@@ -173,6 +176,8 @@ def mech_model(sub, data, roi, mech):
               target_indicator=ti, ring_positions=get_ring_positions(),
               hrf_model=roi_hrf_model(sub, roi, HRF_TABLE), sign_pattern=sign_pattern_of('m7_full'),
               item_scale_mode='free')
+    if mech == 'adjopp':
+        return LPSplitDoG(**kw)
     if FAMILY == 'dog':
         return DoGCentreSurroundField(**kw)
     return DNBaselineField(targets=('b', 'd'), **kw)
@@ -207,7 +212,7 @@ def base_parameters(sub, model, roi, base, width, overlay_root):
         pars['sigma_T_dyn'] = pars['sigma_dyn']
     if 'g_T_HP_dyn' in labels:
         pars['g_T_HP_dyn'] = pars['g_T_dyn']
-    for new in ('kappa', 'w_b', 'w_d', 'theta_bd'):   # m8 terms at the value that reproduces m7 (θ = 0: HP only)
+    for new in ('kappa', 'w_b', 'w_d', 'theta_bd', 'g_adj_minus_opp'):   # m8 terms at the value that reproduces m7 (θ = 0: HP only)
         if new in labels:
             pars[new] = 0.0
     assert not pars.isna().any().any(), pars.columns[pars.isna().any()]
