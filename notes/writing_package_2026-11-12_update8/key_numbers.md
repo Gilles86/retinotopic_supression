@@ -118,3 +118,37 @@ Sources (new):
 ## Not changed by update 8 (and why)
 
 See UPDATE_NOTES.md, "Not regenerated".
+
+## Behaviour: accuracy per condition (new, final; same text as in the status update)
+## Accuracy per condition (fills the TODO in the behaviour paragraph)
+
+Source: `notes/data/behaviour_accuracy_n28_2026-11-12.tsv`, from `retsupp/visualize/paper/behaviour_accuracy.py`.
+
+The statistics are the same as for the response times, n = 28:
+- **Accuracy:** per participant, % correct in each condition. The 499 trials without a response count as errors.
+- **Effect:** the median of the within-participant differences, in percentage points (pp), with a bootstrapped 95% CI
+  (10,000 resamples over participants).
+- **Also shown:** the condition means with the mean difference in brackets, and the number of participants in the
+  median's direction.
+- **Test:** two-sided Wilcoxon signed-rank.
+- **Target comparison:** on distractor-present trials only, as for the response times.
+
+| Effect | Median difference [95% CI] | Condition means (mean difference) | Participants in that direction | p |
+|---|---|---|---|---|
+| Distractor at HP vs LP | +2.3 pp [+1.3, +4.4] | 86.6 vs 83.6% (+3.0) | 24/28 | 6.7 × 10⁻⁵ |
+| Distractor at LP vs absent | −5.2 pp [−6.1, −3.7] | 83.6 vs 89.5% (−5.8) | 26/28 | 1.0 × 10⁻⁵ |
+| Distractor at HP vs absent | −2.9 pp [−4.0, −1.6] | 86.6 vs 89.5% (−2.8) | 25/28 | 3.7 × 10⁻⁴ |
+| Target at HP vs LP (distractor trials) | −2.0 pp [−3.5, −1.3] | 83.5 vs 86.2% (−2.7) | 22/28 | .0011 |
+
+Accuracy follows the response times in every comparison, so there is no speed–accuracy trade-off:
+- a distractor at HP costs less than one at LP;
+- a distractor at LP costs most;
+- a target at HP is found less accurately as well as more slowly.
+
+**Suggested text, replacing the ⟦TODO⟧:**
+
+> "Accuracy mirrored the response times, so the effects did not reflect a speed–accuracy trade-off: participants were
+> more accurate with the distractor at the HP than at an LP location (86.6 vs 83.6%; median difference +2.3 percentage
+> points [1.3, 4.4], 24 of 28 participants, p = 6.7 × 10⁻⁵), least accurate with a distractor at an LP location
+> relative to no distractor (−5.2 points [−6.1, −3.7], 26 of 28, p = 1.0 × 10⁻⁵), and less accurate when the target
+> appeared at the HP location (83.5 vs 86.2%; −2.0 points [−3.5, −1.3], 22 of 28, p = .0011)."
