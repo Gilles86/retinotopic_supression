@@ -5,8 +5,8 @@
 #SBATCH --exclude=u24-chaihm0-633
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=16G
-#SBATCH --time=00:40:00
+#SBATCH --mem=24G           # canary sub-03: MaxRSS 15.9 GB, 2 min
+#SBATCH --time=00:10:00
 #
 # Side project (hippocampus): cleaned BOLD of the FreeSurfer regions, one task per subject.
 #   cd ~/retsupp_side_hpc && sbatch --array=3-30 retsupp/side_hippocampus/slurm_jobs/extract_region_ts.sh
