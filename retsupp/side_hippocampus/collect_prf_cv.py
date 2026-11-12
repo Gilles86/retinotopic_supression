@@ -35,7 +35,7 @@ def fold_agreement(d, col):
 def main(bids_folder, voxels_out, summary_out):
     files = sorted((Path(bids_folder) / 'derivatives' / OUT_SUBDIR).glob('sub-*/*_voxels.tsv.gz'))
     print(len(files), 'files')
-    df = pd.concat([pd.read_csv(f, sep='\t') for f in files], ignore_index=True)
+    df = pd.concat([pd.read_csv(f, sep='\t', dtype={'variant': str}) for f in files], ignore_index=True)
     key = ['subject', 'region', 'variant', 'model', 'voxel']
     g = df.groupby(key)
     vox = g[['sse_test', 'sst_test']].sum()
