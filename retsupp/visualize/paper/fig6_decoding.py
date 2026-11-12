@@ -558,7 +558,7 @@ def panel_bands_sketch(ax):
     ax.text(ITEM_R + .25, ITEM_ECC, 'HP item', color=HP, fontsize=6.5, ha='left', va='center')
 
 
-def panel_ecc(ax, be, pb, pred=None):
+def panel_ecc(ax, be, pb, pred=None, compact=False):
     from retsupp.visualize.paper.paper_style import FG, HP, offset_spines
     rings = sorted(c for c in be.columns if c.startswith('ring'))
     x = np.array([float(r.split('_')[1]) for r in rings]) + .125
@@ -572,7 +572,8 @@ def panel_ecc(ax, be, pb, pred=None):
         ax.text((a + b) / 2, hi - .62, stars(pb[key]), ha='center', va='top', fontsize=7, color=HP)
     # Beyond the aperture edge there is no bar to decode; the items start just outside it.
     ax.axvspan(APERTURE, ECC_MAX, facecolor='w', edgecolor='.6', hatch='////', lw=0, zorder=0)
-    ax.text((APERTURE + ECC_MAX) / 2, (lo + hi) / 2, 'Aperture edge (items beyond, at 4°)', rotation=90, ha='center',
+    ax.text((APERTURE + ECC_MAX) / 2, (lo + hi) / 2, 'Aperture edge' if compact else 'Aperture edge (items beyond, at 4°)',
+            rotation=90, ha='center',
             va='center', fontsize=6, color='.35', bbox=dict(boxstyle='square,pad=.15', fc='w', ec='none'))
     if pred is None:
         ax.fill_between(x, m - se, m + se, color=HP, alpha=.2, lw=0)
@@ -592,10 +593,16 @@ def panel_ecc(ax, be, pb, pred=None):
     ax.set_yticklabels(['−4', '−2', '0', '2'])
     ax.set_xlabel('Eccentricity (°)')
     ax.set_ylabel('HP − other\nquadrants (%)')
-    ax.annotate('Not larger near the items', xy=(2.9, m[-2]), xytext=(1.0, -3.4), fontsize=6.5, color=HP,
-                ha='left', va='center',
-                arrowprops=dict(arrowstyle='-|>', color=HP, lw=1., mutation_scale=7, shrinkA=2, shrinkB=5,
-                                connectionstyle='angle3,angleA=0,angleB=70', relpos=(1., .5)))
+    if compact:   # narrow e: label in the clear space above the curve, straight connector down to the outer ring
+        ax.annotate('Not larger near the items', xy=(x[-2], m[-2] + se[-2]), xytext=(1.3, .55), fontsize=6.5,
+                    color=HP, ha='left', va='center',
+                    arrowprops=dict(arrowstyle='-|>', color=HP, lw=1., mutation_scale=7, shrinkA=2, shrinkB=4,
+                                    relpos=(1., .5)))
+    else:
+        ax.annotate('Not larger near the items', xy=(2.9, m[-2]), xytext=(1.0, -3.4), fontsize=6.5, color=HP,
+                    ha='left', va='center',
+                    arrowprops=dict(arrowstyle='-|>', color=HP, lw=1., mutation_scale=7, shrinkA=2, shrinkB=5,
+                                    connectionstyle='angle3,angleA=0,angleB=70', relpos=(1., .5)))
     offset_spines(ax)
 
 
@@ -1163,7 +1170,7 @@ def panel_pathways(ax, per, pw, st):
     ax.set_xticks(np.arange(3) * 1.25 + .13)
     ax.set_xticklabels(['Early', 'Dorsal', 'Occipito-\ntemporal'], fontsize=6.5)
     ax.tick_params(axis='x', length=0)
-    ax.set_ylabel('HP − other\nquadrants (%)')
+    ax.set_ylabel('HP − other (%)', labelpad=1)
     offset_spines(ax)
 
 
@@ -1282,6 +1289,8 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     # Row 3: e quadrants, f eccentricity.
     fig.text(.2 / W, 1.93 / H, 'Weaker than the quadrants next to it, and not driven by the items outside the aperture',
              fontsize=7.5, color=HP, va='center')
+    if pathways:
+        fig.text(5.45 / W, 1.93 / H, 'Also in occipitotemporal areas', fontsize=7.5, color=HP, va='center')
     qe = quadrant_effects(d, decoder)
     qst = quadrant_stats(qe)
     ax = fig.add_axes([.7 / W, .72 / H, 1.25 / W, .9 / H])
@@ -1289,16 +1298,18 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     area_tag(ax, x=1.0, y=1.0, ha='right')
     fig.text(.02 / W, 1.93 / H, 'd' if v3 else 'e', fontsize=8, fontweight='bold', va='center', ha='left')
     ax = fig.add_axes([2.95 / W, .42 / H, (2.25 if pathways else 3.9 if v3 else 3.95) / W, 1.2 / H])
-    panel_ecc(ax, be, pb, pred=pred[1] if pred else None)
+    panel_ecc(ax, be, pb, pred=pred[1] if pred else None, compact=pathways)
     area_tag(ax, x=.02, y=.3)
     letter(ax, 'e' if v3 else 'f', x=-.17 * (3.9 / 2.25 if pathways else 1), y=1.02)
     pw_txt = ''
     if pathways:
         per, pw = pathway_effects(d, decoder)
         pst = pathway_stats(per, pw)
-        ax = fig.add_axes([5.75 / W, .42 / H, 1.25 / W, 1.2 / H])
+        ax = fig.add_axes([5.75 / W, .52 / H, 1.25 / W, 1.0 / H])
         panel_pathways(ax, per, pw, pst)
-        letter(ax, 'f', x=-.45, y=1.02)
+        bb = ax.get_window_extent()
+        print(f'f axes box {bb.width / fig.dpi:.2f} x {bb.height / fig.dpi:.2f} in (w x h)')
+        letter(ax, 'f', x=-.3, y=1.02)
         fmt_pw = lambda k: (f'{k} {pst[k]["m"]:+.2f} ± {pst[k]["se"]:.2f}%, p = {pst[k]["p"]:.3f}, '   # noqa: E731
                             f'{pst[k]["below"]:.0f}% of subjects below 0, n = {pst[k]["n"]}').replace('-', '−')
         pw_txt = '; '.join(fmt_pw(k) for k in ('Early', 'Dorsal', 'Occipitotemporal')) + '; all higher areas (dorsal and ' \
