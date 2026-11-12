@@ -584,7 +584,12 @@ def panel_ecc(ax, be, pb, pred=None, compact=False):
         ax.fill_between(x, pm - pse, pm + pse, color=FG, alpha=.15, lw=0, zorder=1)
         ax.plot(x, pm, color=FG, lw=1.1, zorder=2)
         ax.errorbar(x, m, yerr=se, fmt='o', ms=3, color=HP, mec='w', mew=.5, lw=.9, capsize=0, zorder=3)
-        ax.text(.05, -2.7, 'Gain-field model', fontsize=6.5, color=FG, ha='left', va='top')
+        if compact == 2:   # glyph key in the free strip at the bottom left
+            ax.add_patch(plt_rect((.08, -3.75), .3, .35, ax.transData, FG))
+            ax.plot([.08, .38], [-3.575, -3.575], color=FG, lw=1.1)
+            ax.text(.45, -3.575, 'Gain-field model', fontsize=6.5, color=FG, ha='left', va='center')
+        else:
+            ax.text(.05, -2.7, 'Gain-field model', fontsize=6.5, color=FG, ha='left', va='top')
     ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
     ax.set_xlim(0, ECC_MAX)
     ax.set_xticks([0, 1, 2, 3])
@@ -593,7 +598,12 @@ def panel_ecc(ax, be, pb, pred=None, compact=False):
     ax.set_yticklabels(['−4', '−2', '0', '2'])
     ax.set_xlabel('Eccentricity (°)')
     ax.set_ylabel('HP − other\nquadrants (%)')
-    if compact:   # narrow e: label in the clear space above the curve, straight connector down to the outer ring
+    if compact == 2:
+        ax.annotate('Not larger near items', xy=(x[-2], m[-2] + se[-2]), xytext=(1.25, .75), fontsize=6.5,
+                    color=HP, ha='left', va='center',
+                    arrowprops=dict(arrowstyle='-|>', color=HP, lw=1., mutation_scale=7, shrinkA=1, shrinkB=4,
+                                    relpos=(.88, 0.)))
+    elif compact:   # narrow e: label in the clear space above the curve, straight connector down to the outer ring
         ax.annotate('Not larger near the items', xy=(x[-2], m[-2] + se[-2]), xytext=(1.3, .55), fontsize=6.5,
                     color=HP, ha='left', va='center',
                     arrowprops=dict(arrowstyle='-|>', color=HP, lw=1., mutation_scale=7, shrinkA=2, shrinkB=4,
@@ -753,14 +763,14 @@ def plt_rect(xy, w, h, transform, color, alpha=.15):
     return Rectangle(xy, w, h, transform=transform, facecolor=color, alpha=alpha, lw=0, clip_on=False)
 
 
-def sweep_segments(P, grid):
+def sweep_segments(P, grid, opposite=False):
     """Per subject × bar position (P from ``pooled_condition``): the decoded − mean-over-HP difference on the bar's segment
     in the quadrant facing HP and in the quadrants next to it (mean of those present), % of the bar's mean."""
     from retsupp.visualize.paper.figS_decoded_bars import QUAD
     X, Y = grid[:, 0].reshape(50, 50), grid[:, 1].reshape(50, 50)
     inside = np.hypot(X, Y) <= APERTURE
     ns, nb = P.shape[0], P.shape[1]
-    hp_v, nx_v = np.full((ns, nb), np.nan), np.full((ns, nb), np.nan)
+    hp_v, nx_v, op_v = np.full((ns, nb), np.nan), np.full((ns, nb), np.nan), np.full((ns, nb), np.nan)
     for b in range(nb):
         bar = (P[:, b, 2].mean(0) > .5) & inside
         bm = np.array([P[s, b, 0][bar].mean() for s in range(ns)])
@@ -774,7 +784,9 @@ def sweep_segments(P, grid):
         nk = [k for k in seg if k.startswith('Next')]
         if nk:
             nx_v[:, b] = np.mean([seg[k] for k in nk], 0)
-    return hp_v, nx_v
+        if 'Opposite' in seg:
+            op_v[:, b] = seg['Opposite']
+    return (hp_v, nx_v, op_v) if opposite else (hp_v, nx_v)
 
 
 def load_prediction(prefix, decoder=DECODER, rois=EARLY):
@@ -790,11 +802,11 @@ def load_prediction(prefix, decoder=DECODER, rois=EARLY):
     sw = {}
     for v in ('model', 'control'):
         z = np.load(DATA / f'decoded_bars_condition_{prefix}_{v}_outline_2026-11.npz')
-        hp_v, nx_v = sweep_segments(pooled_condition(z['mean']), z['grid'])
-        sw[v] = dict(hp=hp_v, next=nx_v, subjects=list(np.asarray(z['subjects'])))
+        hp_v, nx_v, op_v = sweep_segments(pooled_condition(z['mean']), z['grid'], opposite=True)
+        sw[v] = dict(hp=hp_v, next=nx_v, opp=op_v, subjects=list(np.asarray(z['subjects'])))
     subs = sorted(set(sw['model']['subjects']) & set(sw['control']['subjects']))
     ix = {v: [sw[v]['subjects'].index(x) for x in subs] for v in sw}
-    sweep = {k: sw['model'][k][ix['model']] - sw['control'][k][ix['control']] for k in ('hp', 'next')}
+    sweep = {k: sw['model'][k][ix['model']] - sw['control'][k][ix['control']] for k in ('hp', 'next', 'opp')}
     sweep['subjects'] = np.array(subs)
     qd = (q['model'] - q['control']).dropna()
     bd = (be['model'] - be['control']).dropna()
@@ -811,7 +823,32 @@ def load_prediction(prefix, decoder=DECODER, rois=EARLY):
     return qd, bd, sweep, extra
 
 
-def bar_sweep(fig, source, x0, x1, y_img, y_ax, h_ax, W, H, vmax=3., pred=None, size=.56):
+def sweep_half_icons(ax, w=.075, h=.5, y=-.98):
+    """Under the sweep's x axis: for bars left and right of the centre, an aperture icon (HP upper right, ringed red)
+    with the quadrants that bar crosses shaded in the colours of d, and their names."""
+    from matplotlib.patches import Circle, Wedge
+    from retsupp.visualize.paper.paper_style import HP
+    halves = [(0., [(90, 180, 'adjacent'), (180, 270, 'opposite')], 'Next to HP + opposite', 'left'),
+              (1. - w, [(0, 90, 'hp'), (270, 360, 'adjacent')], 'HP + next to HP', 'right')]
+    for x, wedges, lab, side in halves:
+        ins = ax.inset_axes([x, y, w, h])
+        for a0, a1, c in wedges:
+            ins.add_patch(Wedge((0, 0), APERTURE, a0, a1, facecolor=LOC_COLORS[c], alpha=.35, lw=0))
+        ins.add_patch(Circle((0, 0), APERTURE, fill=False, ec='.55', lw=.5))
+        for j, a in enumerate((45, 135, 225, 315)):
+            q = ITEM_ECC * np.array([np.cos(np.deg2rad(a)), np.sin(np.deg2rad(a))])
+            ins.add_patch(Circle(q, ITEM_R, facecolor='w', ec=HP if j == 0 else '.6', lw=.9 if j == 0 else .5))
+        ins.set_xlim(-5, 5)
+        ins.set_ylim(-5, 5)
+        ins.set_aspect('equal')
+        ins.set_axis_off()
+        if side == 'left':
+            ax.text(x + w + .01, y + h / 2, lab, transform=ax.transAxes, fontsize=6, color='.3', ha='left', va='center')
+        else:
+            ax.text(x - .01, y + h / 2, lab, transform=ax.transAxes, fontsize=6, color='.3', ha='right', va='center')
+
+
+def bar_sweep(fig, source, x0, x1, y_img, y_ax, h_ax, W, H, vmax=3., pred=None, size=.56, opposite=False):
     """The bar sweep beside c: the decoded-bar difference image at every bar position (outline decoder), aligned above
     a plot of the segment differences in the quadrant facing HP and next to it against the bar centre (data: points
     and SEM; with ``pred``, the gain-field model's prediction as line and SEM band)."""
@@ -825,7 +862,7 @@ def bar_sweep(fig, source, x0, x1, y_img, y_ax, h_ax, W, H, vmax=3., pred=None, 
     X, Y = grid[:, 0].reshape(50, 50), grid[:, 1].reshape(50, 50)
     inside = np.hypot(X, Y) <= APERTURE
     ns = len(P)
-    hp_v, nx_v = sweep_segments(P, grid)
+    hp_v, nx_v, op_v = sweep_segments(P, grid, opposite=True)
     lo, hi = -3.15, 3.15
     ax = fig.add_axes([x0 / W, y_ax / H, (x1 - x0) / W, h_ax / H])
     for b, c in enumerate(centres):
@@ -836,7 +873,12 @@ def bar_sweep(fig, source, x0, x1, y_img, y_ax, h_ax, W, H, vmax=3., pred=None, 
         iax = fig.add_axes([(xc - size / 2) / W, y_img / H, size / W, size / H])
         _disc(iax, _smooth_masked(rel, foot), 'RdBu_r', -vmax, vmax, outline=bar & inside)
     stats_txt = []
-    for v, col, lab, dy, key in ((nx_v, MUTED, 'Next to HP', 1, 'next'), (hp_v, HP, 'HP quadrant', -1, 'hp')):
+    series = [(nx_v, MUTED, 'Next to HP', 1, 'next'), (hp_v, HP, 'HP quadrant', -1, 'hp')]
+    if opposite:   # v9: quadrant colours of d, and the opposite segment (bars left of centre) as a dashed third line
+        series = [(nx_v, LOC_COLORS['adjacent'], 'Next to HP', 1, 'next'), (op_v, LOC_COLORS['opposite'], 'Opposite', -1, 'opp'),
+                  (hp_v, HP, 'HP quadrant', -1, 'hp')]
+    for v, col, lab, dy, key in series:
+        ls = '--' if key == 'opp' else '-'
         ok = np.isfinite(v).all(0)
         m, se = np.nanmean(v, 0), np.nanstd(v, 0, ddof=1) / np.sqrt(ns)
         if pred is None:
@@ -846,11 +888,16 @@ def bar_sweep(fig, source, x0, x1, y_img, y_ax, h_ax, W, H, vmax=3., pred=None, 
             pv = pred[key]
             pm, pse = np.nanmean(pv, 0), np.nanstd(pv, 0, ddof=1) / np.sqrt(np.isfinite(pv).sum(0))
             ax.fill_between(centres[ok], (pm - pse)[ok], (pm + pse)[ok], color=col, alpha=.2, lw=0, zorder=1)
-            ax.plot(centres[ok], pm[ok], '-', color=col, lw=1.1, zorder=2)
+            ax.plot(centres[ok], pm[ok], ls, color=col, lw=1.1, zorder=2)
             ax.errorbar(centres[ok] + dy * .04, m[ok], yerr=se[ok], fmt='o', ms=3, color=col, mec='w', mew=.5, lw=.9,
                         capsize=0, zorder=3)
         last = np.flatnonzero(ok)[-1]
-        ax.text(centres[last] + .12, m[last] + dy * .55, lab, color=col, fontsize=6.5, va='center', ha='left')
+        if key == 'opp':   # its bars end at the centre: label at its left end, below the points
+            first = np.flatnonzero(ok)[0]
+            ax.text(centres[first] - .1, min(m[first] - se[first], pm[first] - pse[first] if pred is not None else 0) - .35,
+                    lab, color=col, fontsize=6.5, va='top', ha='left')
+        else:
+            ax.text(centres[last] + .12, m[last] + dy * .55, lab, color=col, fontsize=6.5, va='center', ha='left')
         for b in np.flatnonzero(ok):
             p = stats.wilcoxon(v[:, b]).pvalue
             stats_txt.append(f'{lab.lower()} at {centres[b]:+.1f}°: {m[b]:+.2f} ± {se[b]:.2f}%, p = {p:.3f}')
@@ -860,12 +907,15 @@ def bar_sweep(fig, source, x0, x1, y_img, y_ax, h_ax, W, H, vmax=3., pred=None, 
                         va='bottom' if dy > 0 else 'top')
     if pred is not None:
         tf = ax.transAxes
-        ax.add_patch(plt_rect((.03, .07), .06, .07, tf, FG_))
-        ax.plot([.03, .09], [.105, .105], transform=tf, color=FG_, lw=1.1, clip_on=False)
-        ax.text(.1, .105, 'Gain-field model', transform=tf, fontsize=6.5, color=FG_, va='center')
-        ax.plot([.42, .42], [.06, .15], transform=tf, color=FG_, lw=.9, clip_on=False)
-        ax.plot(.42, .105, 'o', transform=tf, ms=3, color=FG_, mec='w', mew=.5, clip_on=False)
-        ax.text(.435, .105, 'Data', transform=tf, fontsize=6.5, color=FG_, va='center')
+        kx, ky = (.55, .95) if opposite else (.03, .105)
+        ax.add_patch(plt_rect((kx, ky - .035), .06, .07, tf, FG_))
+        ax.plot([kx, kx + .06], [ky, ky], transform=tf, color=FG_, lw=1.1, clip_on=False)
+        ax.text(kx + .07, ky, 'Gain-field model', transform=tf, fontsize=6.5, color=FG_, va='center')
+        ax.plot([kx + .39, kx + .39], [ky - .045, ky + .045], transform=tf, color=FG_, lw=.9, clip_on=False)
+        ax.plot(kx + .39, ky, 'o', transform=tf, ms=3, color=FG_, mec='w', mew=.5, clip_on=False)
+        ax.text(kx + .405, ky, 'Data', transform=tf, fontsize=6.5, color=FG_, va='center')
+    if opposite:   # which quadrants a bar crosses on each side of the centre (HP upper right, ringed red)
+        sweep_half_icons(ax)
     ax.axhline(0, color='.6', lw=.6, ls='--', zorder=0)
     ax.set_xlim(lo, hi)
     ax.set_xticks([-2.7, -1.8, -0.9, 0, 0.9, 1.8, 2.7])
@@ -873,7 +923,7 @@ def bar_sweep(fig, source, x0, x1, y_img, y_ax, h_ax, W, H, vmax=3., pred=None, 
     ax.set_ylim(-2.6, 2.1)
     ax.set_yticks([-2, 0, 2])
     ax.tick_params(labelsize=6.5)
-    ax.set_xlabel('Bar centre (°; positive, toward HP)', fontsize=7, labelpad=1)
+    ax.set_xlabel('Bar centre (°)' if opposite else 'Bar centre (°; positive, toward HP)', fontsize=7, labelpad=1)
     ax.set_ylabel('Segment\ndifference (%)', fontsize=7, labelpad=2)
     offset_spines(ax)
     return len(centres), '; '.join(stats_txt).replace('-', '−')
@@ -1174,8 +1224,85 @@ def panel_pathways(ax, per, pw, st):
     offset_spines(ax)
 
 
+AREA_TXT = """ f, The same contrast as d (per subject and area, the decoded intensity on the bar's pixels per quadrant averaged over runs, in % of the mean of the four quadrants, HP minus the mean of the three other quadrants), pooled first and then per area. Left, pooled: the mean over all nine areas and over the areas of each pathway that a subject has (an area was skipped for a subject when fewer than 20 voxels passed the criteria); dots are subjects, points and bars the mean ± SEM; one-sided Wilcoxon signed-rank test (HP < other quadrants), uncorrected. Right, per area: mean ± SEM over subjects; the same test, Benjamini-Hochberg across the nine areas; stars mark q < .05. {pw}. Data only: the gain-field model was simulated for V1–V3 alone."""
+
+
+def area_stats(per, pw):
+    """Pooled columns (all areas, each pathway): one-sided Wilcoxon; areas: one-sided Wilcoxon, BH across the nine."""
+    pooled = {'All areas': per.mean(1, skipna=True)}
+    pooled.update({k: pw[k] for k in pw})
+    out = {'pooled': {}, 'area': {}}
+    for k, v in pooled.items():
+        v = v.dropna()
+        out['pooled'][k] = dict(v=v, m=v.mean(), se=v.sem(), n=len(v), p=stats.wilcoxon(v, alternative='less').pvalue,
+                                below=(v < 0).mean() * 100)
+    rois = [r for r in ROI_ORDER_ALL if r in per]
+    ps = np.array([stats.wilcoxon(per[r].dropna(), alternative='less').pvalue for r in rois])
+    qs = stats.false_discovery_control(ps)
+    for r, p_, q_ in zip(rois, ps, qs):
+        v = per[r].dropna()
+        out['area'][r] = dict(m=v.mean(), se=v.sem(), n=len(v), p=p_, q=q_)
+    return out
+
+
+def area_text(per, ast):
+    f = lambda x: f'{x:+.2f}'.replace('-', '−')   # noqa: E731
+    pooled = '; '.join(f'{k} {f(d["m"])} ± {d["se"]:.2f}%, p = {d["p"]:.3f}, {d["below"]:.0f}% of subjects below 0, '
+                       f'n = {d["n"]}' for k, d in ast['pooled'].items())
+    areas = '; '.join(f'{r} {f(d["m"])} ± {d["se"]:.2f}%, p = {d["p"]:.3f}, q = {d["q"]:.3f}, n = {d["n"]}'
+                      for r, d in ast['area'].items())
+    return 'Pooled: ' + pooled + '. Per area: ' + areas
+
+
+ROI_ORDER_ALL = ['V1', 'V2', 'V3', 'V3AB', 'IPS', 'hV4', 'VO', 'LO', 'TO']
+
+
+def panel_areas(ax, per, pw, ast):
+    """f (v9): pooled columns first (all areas, Early, Dorsal, Occipitotemporal: subject dots, mean ± SEM, p), then the
+    nine areas grouped by pathway (mean ± SEM, stars where BH q < .05), as in Fig. 5c."""
+    from retsupp.visualize.paper.paper_style import FG, HP, ROI_X, offset_spines, roi_axis
+    rng = np.random.default_rng(5)
+    lo, hi = -8, 8
+    pooled_x = {'All areas': -9.4, 'Early': -7.2, 'Dorsal': -5.0, 'Occipitotemporal': -2.8}
+    for k, x in pooled_x.items():
+        d = ast['pooled'][k]
+        ax.scatter(x - .35 + rng.uniform(-.3, .3, d['n']), d['v'], s=5, color=HP, alpha=.35, lw=0, zorder=2)
+        ax.errorbar(x + .4, d['m'], yerr=d['se'], fmt='o', ms=4.5, color=HP if d['p'] < .05 else '.45', mec='w', mew=.6,
+                    lw=1.3, capsize=0, zorder=4)
+        lab = (stars(d['p']) + ' ' if d['p'] < .05 else '') + f'p = {d["p"]:.3f}'.replace('0.', '.')
+        ax.text(x, hi, lab, ha='center', va='top', fontsize=6, color=HP if d['p'] < .05 else '.45')
+    ax.axvline(-1.4, color='.85', lw=.6, zorder=0)
+    for r, d in ast['area'].items():
+        x = ROI_X[r]
+        sig = d['q'] < .05
+        ax.errorbar(x, d['m'], yerr=d['se'], fmt='o', ms=3.5, color=HP if sig else '.45', mec='w', mew=.5, lw=1.,
+                    capsize=0, zorder=4)
+        if sig:
+            ax.text(x, hi, stars(d['q']), ha='center', va='top', fontsize=7, color=HP)
+    sig = [(r, d) for r, d in ast['area'].items() if d['q'] < .05]
+    if sig:   # the q values once, over the significant areas (one label when they share a value)
+        qs_ = sorted({f'{d["q"]:.3f}' for _, d in sig})
+        xm = np.mean([ROI_X[r] for r, _ in sig])
+        ax.text(xm, hi - 1.6, ('q = ' + ', '.join(qs_)).replace('0.', '.'), ha='center', va='top', fontsize=6,
+                color=HP)
+    ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
+    ax.set_ylim(lo, hi)
+    ax.set_yticks([-6, -3, 0, 3])
+    ax.set_yticklabels(['−6', '−3', '0', '3'])
+    ax.set_ylabel('HP − other (%)', labelpad=1)
+    roi_axis(ax, rotate=False, fontsize=6.5, group_fontsize=6.5)
+    xs = list(pooled_x.values()) + [ROI_X[r] for r in ROI_ORDER_ALL]
+    ax.set_xticks(xs)
+    ax.set_xticklabels(['All areas', 'Early', 'Dorsal', 'Occipito-\ntemporal'] + ROI_ORDER_ALL, fontsize=6.5)
+    ax.set_xlim(-10.6, ROI_X['TO'] + .6)
+    ax.tick_params(axis='x', length=0, pad=2)
+    ax.text(-6.1, hi + .3, 'Pooled', ha='center', va='bottom', fontsize=6.5, color='.4')
+    ax.text((ROI_X['V1'] + ROI_X['TO']) / 2, hi + .3, 'Per area', ha='center', va='bottom', fontsize=6.5, color='.4')
+    offset_spines(ax)
+
+
 def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, source_note='', frames_style='magma', v3=False,
-         sweep=False, prediction=None, pathways=False):
+         sweep=False, prediction=None, pathways=False, sweep_opposite=False):
     """v3: 180 mm wide; the per-area test (old d) goes to its own supplementary figure, the rest re-lettered a-e."""
     import matplotlib.pyplot as plt
     from retsupp.visualize.paper.paper_style import FG, HP, STIM, letter, save
@@ -1219,8 +1346,9 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     pred = load_prediction(prediction, decoder) if prediction else None
 
     from retsupp.visualize.paper.paper_style import DOUBLE
-    W, H = (DOUBLE, 6.3) if v3 else (7.25, 6.3)
-    DY = .55                                      # rows 1-2 sit above the taller row 3
+    Y4 = 1.6 if pathways == 'areas' else 0.        # '--pathways areas': f gets a row of its own at the bottom
+    W, H = (DOUBLE, 6.3 + Y4) if v3 else (7.25, 6.3 + Y4)
+    DY = .55 + Y4                                 # rows 1-2 sit above the taller row 3
     fig = plt.figure(figsize=(W, H))
     # Row 1: a frames, b quality.
     many = len(rois) > 3
@@ -1262,7 +1390,7 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     sweep_out = None
     if sweep:  # the whole sweep of bar positions, images aligned above the segment differences
         sweep_out = bar_sweep(fig, source, *((2.95, 6.5) if two else (2.05, 6.55)), 2.72 + DY, 1.98 + DY, .52, W, H,
-                              pred=pred[2] if pred else None, size=.48 if two else .56)
+                              pred=pred[2] if pred else None, size=.48 if two else .56, opposite=sweep_opposite)
         ins_lab = None
     elif v3:     # without the per-area panel the insets get room: larger, labels at 7 pt
         ins_lab = bar_insets(fig, source, (2.0, 1.98 + DY), W, H, size=1.12, gap=.5, fs=7) if ins_file.exists() else None
@@ -1287,22 +1415,36 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
         letter(ax, 'd', x=-.2 if many else -.42, y=1.15)
 
     # Row 3: e quadrants, f eccentricity.
-    fig.text(.2 / W, 1.93 / H, 'Weaker than the quadrants next to it, and not driven by the items outside the aperture',
+    fig.text(.2 / W, (1.93 + Y4) / H, 'Weaker than the quadrants next to it, and not driven by the items outside the aperture',
              fontsize=7.5, color=HP, va='center')
-    if pathways:
+    if pathways == 'areas':
+        fig.text(.2 / W, 1.5 / H, 'Pooled over areas also beyond V1–V3 (occipitotemporal); per area reliable in V2 and V3',
+                 fontsize=7.5, color=HP, va='center')
+        fig.text(.02 / W, 1.5 / H, 'f', fontsize=8, fontweight='bold', va='center', ha='left')
+    elif pathways:
         fig.text(5.45 / W, 1.93 / H, 'Also in occipitotemporal areas', fontsize=7.5, color=HP, va='center')
     qe = quadrant_effects(d, decoder)
     qst = quadrant_stats(qe)
-    ax = fig.add_axes([.7 / W, .72 / H, 1.25 / W, .9 / H])
+    ax = fig.add_axes([.7 / W, (.72 + Y4) / H, 1.25 / W, .9 / H])
     panel_quadrants(ax, qe, qst, pred=pred[0] if pred else None)
     area_tag(ax, x=1.0, y=1.0, ha='right')
-    fig.text(.02 / W, 1.93 / H, 'd' if v3 else 'e', fontsize=8, fontweight='bold', va='center', ha='left')
-    ax = fig.add_axes([2.95 / W, .42 / H, (2.25 if pathways else 3.9 if v3 else 3.95) / W, 1.2 / H])
-    panel_ecc(ax, be, pb, pred=pred[1] if pred else None, compact=pathways)
+    fig.text(.02 / W, (1.93 + Y4) / H, 'd' if v3 else 'e', fontsize=8, fontweight='bold', va='center', ha='left')
+    ew = 2.25 if pathways is True else 3.9 if v3 else 3.95
+    ax = fig.add_axes([2.95 / W, (.42 + Y4) / H, ew / W, 1.2 / H])
+    panel_ecc(ax, be, pb, pred=pred[1] if pred else None, compact=pathways is True)
     area_tag(ax, x=.02, y=.3)
-    letter(ax, 'e' if v3 else 'f', x=-.17 * (3.9 / 2.25 if pathways else 1), y=1.02)
+    letter(ax, 'e' if v3 else 'f', x=-.17 * (3.9 / ew), y=1.02)
     pw_txt = ''
-    if pathways:
+    if pathways == 'areas':
+        per, pw = pathway_effects(d, decoder)
+        ast = area_stats(per, pw)
+        ax = fig.add_axes([.75 / W, .5 / H, 5.6 / W, .85 / H])
+        panel_areas(ax, per, pw, ast)
+        bb = ax.get_window_extent()
+        print(f'f axes box {bb.width / fig.dpi:.2f} x {bb.height / fig.dpi:.2f} in (w x h)')
+        pw_txt = area_text(per, ast)
+        print('areas', pw_txt)
+    elif pathways:
         per, pw = pathway_effects(d, decoder)
         pst = pathway_stats(per, pw)
         ax = fig.add_axes([5.75 / W, .52 / H, 1.25 / W, 1.0 / H])
@@ -1363,7 +1505,18 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
                                   ap=APERTURE, item_r=ITEM_R, insets=(SWEEP_TXT.format(nb=sweep_out[0], sweep_stats=sweep_out[1]) if sweep_out else INSET_TXT.format(ins_far=ins_lab[0][0], ins_mid=ins_lab[0][1], ins_hp=ins_lab[0][2], ins_seg='; '.join(f'{k} segment {m:+.2f} ± {se:.2f}%, two-sided Wilcoxon p = {p:.3f}' for k, m, se, p in ins_lab[1])) if ins_lab else ''), item_in=ITEM_ECC - ITEM_R, bar=bar_txt, bar_base=bar_base,
                                   w0=BAR_WINDOW[0], w1=BAR_WINDOW[1], source=source_note,
                                   q_lr=qst['p_lr'], quad=qst['text'])
-    if pathways:
+    if sweep_opposite:
+        old = 'in the two quadrants next to HP (grey; mean of the segments present)'
+        assert old in leg
+        leg = leg.replace(old, 'in the two quadrants next to HP (dark grey; mean of the segments present) and in the '
+                          'quadrant opposite HP (light grey, dashed; only bars left of the centre reach it). A bar left of '
+                          'the centre crosses the quadrants next to HP and opposite it, a bar right of the centre the '
+                          'quadrant facing HP and the other quadrant next to it (icons under the axis, HP ringed red; the '
+                          'colours are those of d), so the next-to-HP line runs across the whole sweep and the other two '
+                          'only over one half each')
+    if pathways == 'areas':
+        leg = leg.rstrip() + AREA_TXT.format(pw=pw_txt) + '\n'
+    elif pathways:
         leg = leg.rstrip() + PATHWAY_TXT.format(pw=pw_txt) + '\n'
     if pred:
         r_data = q[(q.decoder == decoder) & q.roi.isin(EARLY)].groupby('subject').r.mean().median()
@@ -1406,7 +1559,11 @@ if __name__ == '__main__':
     ap.add_argument('--frames-style', default='magma', choices=['blue', 'magma'], help='decoded rows of a: magma on black or blue')
     ap.add_argument('--v3', action='store_true', help='180 mm wide; the per-area test to a supplementary figure; a-e')
     ap.add_argument('--sweep', action='store_true', help='c: every bar position with its segment differences, not three insets')
-    ap.add_argument('--pathways', action='store_true', help='f: the HP − other quadrants contrast of d per pathway, all areas')
+    ap.add_argument('--pathways', nargs='?', const=True, default=False,
+                    help="f: the HP − other quadrants contrast of d per pathway; '--pathways areas': pooled columns "
+                         "first, then every area (BH across the nine)")
+    ap.add_argument('--sweep-opposite', action='store_true',
+                    help='c: the opposite-quadrant segment as a third line and icons of the quadrants each half crosses')
     ap.add_argument('--prediction', default=None,
                     help='file prefix of the gain-field model prediction (collect_simulate_decode.py --fitted), e.g. '
                          'decode_simfit: drawn over c (sweep), d and e')
@@ -1421,4 +1578,4 @@ if __name__ == '__main__':
         plot_bar_crossing(name='figS_bar_crossing_response' + a.supp_suffix, source_note='')
     else:
         plot(a.name, a.source, a.rois, a.decoder, source_note=f'pRFs: {a.source} fold fits.', frames_style=a.frames_style, v3=a.v3, sweep=a.sweep,
-             prediction=a.prediction, pathways=a.pathways)
+             prediction=a.prediction, pathways=a.pathways, sweep_opposite=a.sweep_opposite)
