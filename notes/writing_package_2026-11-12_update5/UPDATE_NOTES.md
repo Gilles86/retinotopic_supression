@@ -73,3 +73,31 @@ Sources: `notes/fig3_robustness_2026-11-12.md`, `notes/data/fig3_robustness_n28_
 - Methods or Results caveat: "Because voxels were selected by a pRF centred within 2° of an item location, and few
   pRFs in higher visual areas are centred on these small locations, per-area estimates outside early visual cortex
   rest on few voxels (median 1–2 per location) and are reported for completeness only."
+
+## Instruction: why item-specific responses are measurable only in early visual cortex (2026-11-12)
+
+**Writing agent: say this explicitly** (Methods, voxel selection, and Results/Discussion where Fig. 3 per-area or
+higher-area item effects come up). The item-location analysis needs voxels whose pRF sees one item location and not its
+neighbours. That is possible in early visual cortex but not in higher areas, for two reasons, with numbers (n = 28):
+
+1. **pRF size versus item spacing.** Near the item ring (3–5° eccentricity), median pRF σ (final DoG pRFs) is V1 0.64°,
+   V2 0.81°, V3 0.99° (FWHM 1.5°, 1.9°, 2.3°), but V3AB 1.40°, hV4 1.07°, LO 1.10°, TO 1.67° (FWHM 3.3°, 2.5°, 2.6°,
+   3.9°). The eight items sit 3.1° apart on the 4° ring (the four possible target/distractor locations 5.7° apart), and
+   each item is 1.5° long. So a higher-area pRF spans more than one item position and cannot isolate the response to
+   the item at one location; an early-visual pRF can. (IPS and VO have too few voxels near 4° eccentricity for a stable
+   size estimate.) Source: `notes/data/fig1_prf_sigma_final2.tsv` (participants 3–30, voxel-weighted mean σ within
+   3–5° per participant, median over participants).
+2. **Few pRFs centred on the item locations.** Voxels count for a location if their pRF centre lies within 2° of it
+   (and they are reliable across runs). At a participant's sparsest location the median number of such voxels is
+   V1 8, V2 12, V3 7, but V3AB 3, IPS 1, hV4 2, VO 2, LO 2, TO 2. With a floor of 5 voxels per location, early visual
+   cortex keeps 26 of 28 participants, TO 4, VO 2. Source: `notes/fig3_robustness_2026-11-12.md`.
+
+Suggested wording (Methods or Results): "Item-specific responses require pRFs that respond to one item location and not
+its neighbours. Near the item ring, pRFs in V1–V3 are small (median FWHM 1.5–2.3°) relative to the 3.1° spacing of the
+items, but pRFs in higher areas are larger (FWHM 2.5–3.9° in hV4, LO, V3AB and TO), and few of them are centred on an
+item location (median 1–3 voxels per location, against 7–12 in V1–V3). We therefore draw conclusions about
+item-specific responses from early visual cortex and report the other areas for completeness."
+
+Do NOT present the absence of reliable per-area item effects in higher areas as evidence that the HP effect is absent
+there: the gain-field model (Fig. 5), which uses all of an area's voxels and does not require item-specific pRFs, finds
+the sustained HP effect pooled over all areas and in TO.
