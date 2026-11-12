@@ -34,6 +34,10 @@
 #   HRF_TABLE=<tsv> one HRF per subject x ROI (build_roi_hrf_table.py; root gets a _roihrf suffix)
 #   FROZEN_PRF=1 with CV_SCHEME=run3 and BASE_ROOT=<all-runs root>: pRFs frozen at the all-runs fit, m7 + MODELS refitted per fold (_frozenprf)
 #   RELIABLE_ONLY=1 keeps voxels with cross-run reliability > 0 (root gets a _reliable suffix), needs BASE_ROOT
+#   SELECTION_TABLE=<dir> MIN_R=0.2 [MAX_P=0.01]: voxels by cross-run reliability vs a circular-shift null
+#     (cv/voxel_reliability_null.py), no p_signal, no 500 cap (root gets a _relnull_r<MIN_R> suffix)
+#   WARM_POLISH_ROOT=<polished root> with POLISH=1 POLISH_METHOD=alt POLISH_MODELS="m4_TDS m7_full": skip the clamped
+#     chain, start the all-free fits from that root (pRFs of new voxels from whole-brain m4)
 # Task index -> (subject, ROI): idx0 = task-1; subject = idx0/11 + 1; roi = ROIS[idx0%11].
 
 set -eo pipefail
@@ -46,7 +50,7 @@ BASE_ROOT="${BASE_ROOT:-}"
 FAMILY="${FAMILY:-dog}"
 HP_ROTATION="${HP_ROTATION:-0}"
 MODELS="${MODELS:-}"
-TAG="${CV_SCHEME}${FROZEN_PRF:+_frozenprf}${BOUNDED:+_bounded}${POLISH:+_polish}${MAX_BOLD_SD:+_maxsd$MAX_BOLD_SD}_${LOSS}_${FAMILY}_hprot${HP_ROTATION}${RELIABLE_ONLY:+_reliable}${HRF_TABLE:+_roihrf}"
+TAG="${CV_SCHEME}${FROZEN_PRF:+_frozenprf}${BOUNDED:+_bounded}${POLISH:+_polish}${MAX_BOLD_SD:+_maxsd$MAX_BOLD_SD}_${LOSS}_${FAMILY}_hprot${HP_ROTATION}${RELIABLE_ONLY:+_reliable}${MIN_R:+_relnull_r$MIN_R}${HRF_TABLE:+_roihrf}${WARM_POLISH_ROOT:+_warmpolish}"
 ROIS=(${ROI_LIST:-V1 V2 V3 V3AB hV4 LO TO VO IPS SPL1 FEF})
 if [[ -n "${PER_SUBJECT:-}" ]]; then
     subject=$SLURM_ARRAY_TASK_ID
@@ -99,6 +103,8 @@ echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
     ${WARM_ROOT:+--warm-root $WARM_ROOT} ${GD_ITER:+--gd-iterations $GD_ITER} \
     ${GD_MIN_ITER:+--gd-min-iterations $GD_MIN_ITER} ${SIGMA_STARTS:+--sigma-starts $SIGMA_STARTS} \
     ${LBFGS_ROUNDS:+--lbfgs-rounds $LBFGS_ROUNDS} ${OUTPUT_ROOT:+--output-root $OUTPUT_ROOT} \
-    ${HRF_TABLE:+--hrf-table $HRF_TABLE} ${POLISH_MODELS:+--polish-models $POLISH_MODELS} ${POLISH_METHOD:+--polish-method $POLISH_METHOD} ${POLISH_SUFFIX:+--polish-suffix $POLISH_SUFFIX} ${POLISH_ROUNDS:+--polish-rounds $POLISH_ROUNDS} ${POLISH_MAX_ITER:+--polish-max-iter $POLISH_MAX_ITER}
+    ${HRF_TABLE:+--hrf-table $HRF_TABLE} ${POLISH_MODELS:+--polish-models $POLISH_MODELS} ${POLISH_METHOD:+--polish-method $POLISH_METHOD} ${POLISH_SUFFIX:+--polish-suffix $POLISH_SUFFIX} ${POLISH_ROUNDS:+--polish-rounds $POLISH_ROUNDS} ${POLISH_MAX_ITER:+--polish-max-iter $POLISH_MAX_ITER} \
+    ${SELECTION_TABLE:+--selection-table $SELECTION_TABLE} ${MIN_R:+--min-r $MIN_R} ${MAX_P:+--max-p $MAX_P} \
+    ${WARM_POLISH_ROOT:+--warm-polish-root $WARM_POLISH_ROOT}
 
 echo "Finished: $(date)"

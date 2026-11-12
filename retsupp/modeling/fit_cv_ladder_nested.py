@@ -87,6 +87,17 @@ fold. Root gets a _frozenprf suffix.
 the ``prf_cv_reliability`` folds). The m00, m0, m1 and m3b fits come from ``--base-root``, restricted
 to those voxels, so m4 onward refit the shared terms on them. Root gets a _reliable suffix.
 
+``--selection-table <dir> --min-r R`` selects the voxels without p_signal and without the 500 cap: ROI voxels with
+model-free cross-run reliability r > R and p <= ``--max-p`` (0.01) against a circular-shift null
+(``cv/voxel_reliability_null.py``), plus ``--max-bold-sd`` as usual. Root gets a _relnull_r<R> suffix.
+
+``--warm-polish-root <polished root>`` (with ``--polish --polish-method alt --polish-models ...``) fits only the
+all-free models, skipping the clamped chain: each starts from the shared terms of that root's fit of the same
+model, subject and area, with per-voxel pRFs from it where the voxel was fitted there and from the whole-brain m4
+pRF (baseline/amplitude by least squares, then Adam on those pRFs with the shared terms fixed) elsewhere. For a
+new voxel selection this replaces m00 ... m7 + polish by one warm polish. The alternating polish saves a
+checkpoint after every round (``*_polish-ckpt.pkl`` next to the output) and resumes from it.
+
 Output: ``derivatives/af_prf_cv_ladder_nested[_<scheme>][_bounded][_polished]/<model>/sub-XX/``.
 Existing outputs are loaded, never overwritten.
 
@@ -514,11 +525,14 @@ def polish_fit(model, bold_train, paradigm, init_pars, free_shared,
 
 
 def polish_alternating(model, bold_train, paradigm, init_pars, free_shared, fixed, shared_all,
-                       bounded=False, rounds=2, learning_rate=1e-3, max_iter=3000):
+                       bounded=False, rounds=2, learning_rate=1e-3, max_iter=3000, checkpoint=None):
     """Block-coordinate polish, robust to float32 gradient noise (where one L-BFGS over all parameters can stall
     with an ABNORMAL line search): per-voxel pRFs by Adam gradient descent with the shared terms fixed, then the
     shared terms by bounded L-BFGS with the pRFs fixed, ``rounds`` times. Each step is kept only if it lowers the
-    training SSE, so the result is never above the clamped start."""
+    training SSE, so the result is never above the clamped start.
+
+    ``checkpoint``: a pickle path written after every round (best parameters so far); a rerun resumes from the
+    round after the last one saved, so a task that hits its time limit loses at most one round."""
     y = np.asarray(bold_train, dtype=np.float64)
 
     def sse(p):
@@ -528,8 +542,15 @@ def polish_alternating(model, bold_train, paradigm, init_pars, free_shared, fixe
     best = init_pars[labels].copy()
     f0 = fbest = sse(best)
     log = []
+    start_round = 0
+    if checkpoint is not None and Path(checkpoint).exists():
+        with open(checkpoint, 'rb') as f:
+            ck = pickle.load(f)
+        best, fbest, f0, log = ck['best'].reindex(columns=labels), ck['fbest'], ck['f0'], ck['log']
+        start_round = ck['round'] + 1
+        print(f'    resuming after alt round {ck["round"]} from {checkpoint} (SSE {fbest:.2f})')
     freeze = list(dict.fromkeys([p for p in (fixed or []) + list(shared_all) if p in labels]))
-    for r in range(rounds):
+    for r in range(start_round, rounds):
         fitter = ParameterFitter(model, pd.DataFrame(bold_train), paradigm)
         pv = fitter.fit(init_pars=best, max_n_iterations=max_iter, min_n_iterations=200, lag=100, r2_atol=1e-8,
                         fixed_pars=freeze, learning_rate=learning_rate, progressbar=False)
@@ -542,11 +563,59 @@ def polish_alternating(model, bold_train, paradigm, init_pars, free_shared, fixe
         f_sh = sse(sh)
         if f_sh < fbest:
             best, fbest = sh, f_sh
-        log.append(dict(round=r, sse_after_prf=f_pv, sse_after_shared=f_sh))
-        print(f'    alt round {r}: SSE pRF step {f_pv:.2f}, shared step {f_sh:.2f} (start {f0:.2f})')
+        log.append(dict(round=r, sse_after_prf=f_pv, sse_after_shared=f_sh, seconds=time.time() - t0))
+        print(f'    alt round {r}: SSE pRF step {f_pv:.2f}, shared step {f_sh:.2f} (start {f0:.2f}) '
+              f'| {time.time() - t0:.0f}s', flush=True)
+        if checkpoint is not None:
+            _atomic_pickle(checkpoint, dict(round=r, best=best, fbest=fbest, f0=f0, log=log))
     return best, dict(optimizer='alt_gd_lbfgs', seconds=time.time() - t0, sse_clamped=f0, sse_final=fbest,
                       nit=0, rounds=rounds, status=0, message='alternating', grad_norm=float('nan'),
                       grad_norm_shared=float('nan'), log=log)
+
+
+def _atomic_pickle(path, obj):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + '.tmp')
+    with open(tmp, 'wb') as f:
+        pickle.dump(obj, f)
+    tmp.replace(path)
+
+
+ROI_ALIASES = {'V3AB': ['V3A', 'V3B'], 'LO': ['LO1', 'LO2'], 'TO': ['TO1', 'TO2'], 'VO': ['VO1', 'VO2']}
+
+
+def roi_mask(sub, roi, n_vox):
+    """BOLD-mask voxels of ``roi``, built as in ``select_roi_voxels_psignal`` (same aliases, same masker)."""
+    masker = sub.get_bold_mask(return_masker=True)
+    masker.fit()
+    out = np.zeros(n_vox, dtype=bool)
+    for r in ROI_ALIASES.get(roi, [roi]):
+        out |= masker.transform(sub.get_retinotopic_roi(roi=r, bold_space=True)).astype(bool).ravel()
+    return out
+
+
+def select_from_table(sub, roi, prf_pars, table_dir, min_r, max_p):
+    """Voxels of ``roi`` with cross-run reliability r > ``min_r`` and circular-shift p <= ``max_p``
+    (``cv/voxel_reliability_null.py``), and a finite whole-brain DoG pRF (the start of the fits). No p_signal,
+    no cap on the number of voxels."""
+    s = sub.subject_id
+    tab = pd.read_csv(Path(table_dir) / f'sub-{s:02d}' / f'sub-{s:02d}_reliability_null.tsv.gz', sep='\t')
+    n_vox = len(prf_pars)
+    in_roi = roi_mask(sub, roi, n_vox)
+    ok = np.zeros(n_vox, dtype=bool)
+    sel = tab[(tab.r > min_r) & (tab.p <= max_p)].voxel_index.to_numpy()
+    ok[sel] = True
+    covered = np.zeros(n_vox, dtype=bool)
+    covered[tab.voxel_index.to_numpy()] = True
+    finite = np.isfinite(prf_pars[['x', 'y', 'sd', 'amplitude']].to_numpy()).all(1)
+    mask = in_roi & ok & finite
+    descr = (f'ROI {roi} | reliability r > {min_r:g}, null p <= {max_p:g}: {(in_roi & ok).sum()} of {in_roi.sum()} '
+             f'ROI voxels ({(in_roi & ~covered).sum()} not in the table), {(in_roi & ok & ~finite).sum()} without '
+             f'a finite m4 pRF dropped')
+    if mask.sum() == 0:
+        raise RuntimeError(f'No voxels survive: {descr}.')
+    return mask, descr
 
 
 def bar_paradigm(sub, run_meta, resolution, grid_radius):
@@ -565,7 +634,8 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
          loss='sse', base_roots=(), family='dog', hp_rotation=0, reliable_only=False,
          warm_roots=(), gd_min_iterations=1000, sigma_starts=SIGMA_STARTS, lbfgs_rounds=LBFGS_ROUNDS,
          hrf_table=None, frozen_prf=False, polish_models=None, polish_method='lbfgs',
-         polish_suffix='_polished', polish_rounds=2, polish_max_iter=3000):
+         polish_suffix='_polished', polish_rounds=2, polish_max_iter=3000,
+         selection_table=None, min_r=None, max_p=0.01, warm_polish_root=None):
     if cv_scheme not in SCHEMES:
         raise ValueError(f'cv_scheme must be in {SCHEMES}')
     if frozen_prf and (cv_scheme == 'full' or not base_roots):
@@ -576,6 +646,10 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
         raise ValueError('--polish only implements the SSE loss')
     if polish and family != 'dog':
         raise ValueError('--polish only implements the DoG family')
+    if selection_table and (reliable_only or min_r is None):
+        raise ValueError('--selection-table needs --min-r and replaces --reliable-only')
+    if warm_polish_root and not (polish and polish_models and polish_method == 'alt'):
+        raise ValueError('--warm-polish-root needs --polish --polish-method alt --polish-models ...')
     per_voxel_cols = PER_VOXEL_COLS + (
         ['neural_baseline', 'surround_baseline'] if family == 'dn' else [])
     bids_folder = Path(bids_folder)
@@ -590,6 +664,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
             + ('' if family == 'dog' else f'_{family}')
             + (f'_hprot{hp_rotation}' if hp_rotation else '')
             + ('_reliable' if reliable_only else '')
+            + (f'_relnull_r{min_r:g}' if selection_table else '')
             + ('_roihrf' if hrf_table else '')
             + ('_frozenprf' if frozen_prf else '')))
     polish_root = root.parent / f'{root.name}{polish_suffix}'
@@ -606,9 +681,12 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
     prf_pars = pd.DataFrame(
         sub.get_prf_parameters_volume(model=4, return_images=False))
     def fit_one(roi):
-        voxel_mask, descr = choose_voxel_mask(
-            sub, roi, prf_pars, use_psignal=True, p_signal_thr=p_signal_thr,
-            r2_thr=0.05, model_label=4, max_voxels=max_voxels)
+        if selection_table:
+            voxel_mask, descr = select_from_table(sub, roi, prf_pars, selection_table, min_r, max_p)
+        else:
+            voxel_mask, descr = choose_voxel_mask(
+                sub, roi, prf_pars, use_psignal=True, p_signal_thr=p_signal_thr,
+                r2_thr=0.05, model_label=4, max_voxels=max_voxels)
         print(f'{descr}: {voxel_mask.sum()} voxels')
         if max_bold_sd:
             # Applied after the top-N ranking, so the result is a strict subset of
@@ -657,6 +735,65 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
 
         fits: dict[str, list] = {}
 
+        def ckpt_path(name, k, what):
+            return (polish_root / name / f'sub-{subject:02d}'
+                    / f'sub-{subject:02d}_roi-{roi}_fold-{k}_{what}.pkl')
+
+        def warm_polish_init(name, k, m_tr, y_tr, paradigm, sp, item_scale):
+            """Start of the all-free fit of ``name`` on the current voxels without the clamped chain.
+
+            Shared terms (gains, σ's, item scale): the ``--warm-polish-root`` fit of the same model, subject and
+            area (fitted on another voxel set). Per-voxel pRFs: that fit where the voxel was in it; elsewhere the
+            whole-brain DoG pRF (model 4) with baseline and amplitude refitted by least squares, then Adam on those
+            voxels' pRFs with the shared terms fixed at the warm values (exact: with the shared terms fixed the
+            voxels are independent), as m00/m0 do (``--gd-iterations``, ``--learning-rate``). The alternating
+            polish then refits everything. Saved as a checkpoint, so a rerun does not redo it."""
+            ck = ckpt_path(name, k, 'warm-init')
+            if ck.exists():
+                with open(ck, 'rb') as f:
+                    d = pickle.load(f)
+                print(f'  warm init {name} fold {k}: loaded {ck}')
+                return d['init'], d['info']
+            labels = list(m_tr.parameter_labels)
+            pkl = Path(warm_polish_root) / name / f'sub-{subject:02d}' / f'sub-{subject:02d}_roi-{roi}_cv-fits.pkl'
+            with open(pkl, 'rb') as f:
+                old = pickle.load(f)
+            folds_old = old['fit_pars_per_fold']
+            p_old = folds_old[min(k, len(folds_old) - 1)]
+            p_old = p_old.set_index(pd.Index(np.asarray(old['voxel_ids'])))
+            shared_all = shared_pars_for(sp, item_scale) + (fixed_pars_for(sp, item_scale) or [])
+            per_voxel = [c for c in labels if c not in shared_all]
+            init = make_init_pars(prf_pars, voxel_mask, sp, sigma_af_init=2.0, sigma_dyn_init=2.0,
+                                  item_scale=item_scale).reindex(columns=labels)
+            for c in labels:
+                if c not in per_voxel:
+                    if c not in p_old.columns:
+                        raise ValueError(f'{pkl} lacks shared term {c}')
+                    init[c] = float(p_old[c].iloc[0])
+            hit = np.isin(voxel_ids, p_old.index)
+            pv_ix = [labels.index(c) for c in per_voxel]
+            init.iloc[np.where(hit)[0], pv_ix] = p_old.loc[voxel_ids[hit], per_voxel].to_numpy()
+            new = np.where(~hit)[0]
+            t0 = time.time()
+            info = dict(warm_root=str(warm_polish_root), n_warm=int(hit.sum()), n_new=int(new.size))
+            if new.size:
+                y_new = pd.DataFrame(np.asarray(y_tr)[:, new])
+                sub_init = init.iloc[new].reset_index(drop=True)
+                sub_init = ParameterFitter(m_tr, y_new, paradigm).refine_baseline_and_amplitude(
+                    sub_init, l2_alpha=1e-3)
+                fitter = ParameterFitter(m_tr, y_new, paradigm)
+                pv = fitter.fit(init_pars=sub_init.reindex(columns=labels), max_n_iterations=gd_iterations,
+                                min_n_iterations=gd_min_iterations, lag=200, r2_atol=1e-7, fixed_pars=shared_all,
+                                learning_rate=learning_rate, progressbar=False)
+                init.iloc[new, pv_ix] = pv.reindex(columns=labels)[per_voxel].to_numpy()
+            info['seconds_new_voxels'] = time.time() - t0
+            if init[labels].isna().any().any():
+                raise ValueError(f'{name} fold {k}: NaN in the warm start')
+            print(f'  warm init {name} fold {k}: {hit.sum()} voxels from {warm_polish_root}, {new.size} new '
+                  f'(m4 + Adam on their pRFs, {info["seconds_new_voxels"]:.0f}s)', flush=True)
+            _atomic_pickle(ck, dict(init=init, info=info))
+            return init, info
+
         def warm(name, k, init):
             """Start from an earlier fit of the same model and voxels where one exists."""
             for wr in warm_roots:
@@ -699,6 +836,10 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                     needed.append(n)
 
         stages = [('clamped', n) for n in needed]
+        if warm_polish_root:
+            # Only the all-free fits of the named models, each started from the earlier polished fit (no clamped
+            # chain): see warm_polish_init.
+            stages = []
         if polish:
             # --polish-models restricts the all-free pass to these models (each from its own clamped optimum)
             stages += [('polish', n) for n in needed if not polish_models or n in polish_models]
@@ -825,11 +966,18 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                     free_sh = [p for p in shared if p != 'sigma_T_dyn']
                     free_pv = [p for p in labels
                                if p not in shared and p not in fixed]
-                    init = fits[name][k].reindex(columns=labels)
+                    warm_info = None
+                    if warm_polish_root:
+                        init, warm_info = warm_polish_init(name, k, m_tr, y_tr, train['paradigm'], sp, item_scale)
+                    else:
+                        init = fits[name][k].reindex(columns=labels)
                     if polish_method == 'alt':
                         pars, info = polish_alternating(m_tr, y_tr, train['paradigm'], init, free_sh, fixed,
                                                         shared, bounded=bounded, rounds=polish_rounds,
-                                                        max_iter=polish_max_iter)
+                                                        max_iter=polish_max_iter,
+                                                        checkpoint=ckpt_path(name, k, 'polish-ckpt'))
+                        if warm_info is not None:
+                            info['warm_start'] = warm_info
                     else:
                         pars, info = polish_fit(m_tr, y_tr, train['paradigm'], init,
                                                 free_sh, free_pv, bounded=bounded)
@@ -1003,12 +1151,14 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                 shared_par_labels=shared_labels,
                 per_voxel_par_cols=per_voxel_cols,
                 train_run_meta_per_fold=tr_meta, held_run_meta_per_fold=he_meta,
-                selector='psignal', p_signal_thr=p_signal_thr,
+                selector=('relnull' if selection_table else 'psignal'), p_signal_thr=p_signal_thr,
                 extra_meta=dict(parent=parent, sign_pattern=sp,
                                 item_scale=item_scale, cv_scheme=cv_scheme,
                                 max_voxels=max_voxels,
                                 gd_iterations=gd_iterations, stage=stage,
                                 bounded=bounded, loss=loss, hp_rotation=hp_rotation,
+                                selection_table=selection_table, min_r=min_r, max_p=max_p,
+                                warm_polish_root=warm_polish_root,
                                 optimizer_info=infos))
             with open(pkl, 'wb') as f:
                 pickle.dump(dict(fit_pars_per_fold=fold_pars, parent=parent,
@@ -1053,6 +1203,16 @@ if __name__ == '__main__':
     ap.add_argument('--polish-suffix', default='_polished', help='Suffix of the polish root (tests).')
     ap.add_argument('--polish-rounds', type=int, default=2, help='Alternating polish: rounds.')
     ap.add_argument('--polish-max-iter', type=int, default=3000, help='Alternating polish: Adam iterations per round.')
+    ap.add_argument('--selection-table', default=None,
+                    help='Directory of cv/voxel_reliability_null.py tables (derivatives/prf_cv_roi_reliability_null): '
+                         'select ROI voxels with r > --min-r and p <= --max-p instead of p_signal / top-N; root gets '
+                         'a _relnull_r<min-r> suffix.')
+    ap.add_argument('--min-r', type=float, default=None)
+    ap.add_argument('--max-p', type=float, default=0.01)
+    ap.add_argument('--warm-polish-root', default=None,
+                    help='With --polish --polish-method alt --polish-models: skip the clamped chain and start each '
+                         'polished model from this polished root (shared terms; pRFs where the voxel was fitted, '
+                         'whole-brain m4 + Adam elsewhere).')
     ap.add_argument('--bounded', action='store_true',
                     help='Box the shared terms (SHARED_BOUNDS); root gets '
                          'a _bounded suffix.')
@@ -1093,4 +1253,5 @@ if __name__ == '__main__':
          gd_min_iterations=a.gd_min_iterations, sigma_starts=starts, lbfgs_rounds=a.lbfgs_rounds,
          hrf_table=a.hrf_table, frozen_prf=a.frozen_prf, polish_models=a.polish_models,
          polish_method=a.polish_method, polish_suffix=a.polish_suffix,
-         polish_rounds=a.polish_rounds, polish_max_iter=a.polish_max_iter)
+         polish_rounds=a.polish_rounds, polish_max_iter=a.polish_max_iter,
+         selection_table=a.selection_table, min_r=a.min_r, max_p=a.max_p, warm_polish_root=a.warm_polish_root)
