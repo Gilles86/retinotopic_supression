@@ -30,5 +30,5 @@ CODE_DIR="${CODE_DIR:-$(cd "${SLURM_SUBMIT_DIR}" && git rev-parse --show-topleve
 export PYTHONPATH="${CODE_DIR}${PYTHONPATH:+:$PYTHONPATH}"
 echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
 
-exec "$HOME/data/conda/envs/retsupp_cuda/bin/python" -u -m retsupp.modeling.fit_width_profiles
+exec "$HOME/data/conda/envs/retsupp_cuda/bin/python" -u -m retsupp.modeling.fit_width_profiles \
     "$subject" ${ROIS:+--rois $ROIS}
