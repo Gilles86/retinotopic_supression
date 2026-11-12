@@ -41,7 +41,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-ALL_ROIS = ['V1', 'V2', 'V3', 'V3AB', 'IPS', 'hV4', 'VO', 'LO', 'TO']   # fixed order (also seeds the shuffles)
+ALL_ROIS = ['V1', 'V2', 'V3', 'V3AB', 'IPS', 'hV4', 'VO', 'LO', 'TO',   # fixed order (also seeds the shuffles)
+            'mid', 'high', 'dorsal', 'occtemp']                         # pooled sets (decode_final.POOLED), appended
 ANGLE = {'upper_right': 45, 'upper_left': 135, 'lower_left': 225, 'lower_right': 315}
 QUADRANTS = {'upper_right': (1, 1), 'upper_left': (-1, 1), 'lower_left': (-1, -1), 'lower_right': (1, -1)}
 BANDS = [('0-1.5', 0., 1.5), ('1.5-2.5', 1.5, 2.5), ('2.5-ap', 2.5, np.inf)]

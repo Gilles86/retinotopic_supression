@@ -37,7 +37,8 @@ Voxels: the ROI's voxels with cross-run reliability > 0 on the fold's training r
 ``--selection relnull --min-r R``: instead, the ROI's voxels with cross-run reliability r > R and circular-shift
 p <= ``--max-p`` (.01) on the fold's training runs (``modeling/cv/voxel_reliability_null.py --folds``) and mean
 training-run BOLD SD <= ``--max-bold-sd``, at most ``--max-voxels`` (highest r first); outputs then go to
-``<out-root>/<prf-source>_relnull_r<R>``. Decoder
+``<out-root>/<prf-source>_relnull_r<R>``. ``--rois`` also takes the pooled sets of ``POOLED`` (with
+``--out-suffix _pooled`` they go to their own root). Decoder
 settings are the calibrated ones of ``decode.py``: bar-only paradigm, L2 = 1.0, learning rate 0.5,
 ResidualFitter 2000 iterations, sd_min 0.2.
 
@@ -68,6 +69,10 @@ import pandas as pd
 from retsupp.utils.data import Subject
 
 N_TR = 258
+# Pooled area sets (--rois mid high dorsal occtemp): the union of the members' voxels, each with its own fold pRF
+# (and its area's HRF); selection per voxel as for single areas, the cap applies to the set.
+POOLED = {'mid': ['V3AB', 'hV4'], 'high': ['LO', 'TO', 'VO', 'IPS'], 'dorsal': ['V3AB', 'IPS'],
+          'occtemp': ['hV4', 'VO', 'LO', 'TO']}
 QUADRANTS = {'upper_right': (1, 1), 'upper_left': (-1, 1), 'lower_left': (-1, -1), 'lower_right': (1, -1)}
 # prf-source -> (derivatives folder, file tag, model class, flexible HRF?, HRF lower bounds?)
 SOURCES = {
@@ -117,7 +122,7 @@ def make_model(source, grid, paradigm, data, parameters, sd_min=.2):
 def select_voxels(pars_all, roi_of, rel, roi, max_voxels, max_bold_sd):
     """The ROI's voxels with a complete fit, training reliability > 0 and BOLD SD <= max_bold_sd, at most
     ``max_voxels`` (highest reliability first). Returns (selected voxel_index, number of ROI voxels)."""
-    ids = roi_of.index[roi_of.to_numpy() == roi]
+    ids = roi_of.index[roi_of.isin(POOLED.get(roi, [roi])).to_numpy()]
     p = pars_all.loc[ids]
     r = rel.reindex(ids)
     keep = p.notna().all(axis=1).to_numpy() & (r.reliability.to_numpy() > 0)
@@ -131,7 +136,7 @@ def select_voxels(pars_all, roi_of, rel, roi, max_voxels, max_bold_sd):
 
 def select_voxels_relnull(pars_all, roi_of, tab, roi, max_voxels, max_bold_sd, min_r, max_p):
     """As ``select_voxels`` with the fold-wise reliability-null table: r > min_r, p <= max_p, sd <= max_bold_sd."""
-    ids = roi_of.index[roi_of.to_numpy() == roi]
+    ids = roi_of.index[roi_of.isin(POOLED.get(roi, [roi])).to_numpy()]
     p = pars_all.loc[ids]
     t = tab.reindex(ids)
     keep = p.notna().all(axis=1).to_numpy() & (t.r.to_numpy() > min_r) & (t.p.to_numpy() <= max_p)
@@ -236,7 +241,7 @@ def check_prfs(subject, fold, source, bids, joint_tag='final2', rois=('V1', 'V2'
 
 def main(subject, session, run, rois, bids, source, decoders, joint_tag, max_voxels, max_bold_sd, l2_norm, learning_rate,
          max_iter, min_iter, resid_max_iter, resolution=50, grid_radius=5.0, out_root=None, selection='loo', min_r=None,
-         max_p=.01):
+         max_p=.01, out_suffix=''):
     sub = Subject(subject, bids_folder=bids)
     if run not in sub.get_runs(session):
         print(f'sub-{subject:02d} has no ses-{session} run-{run}; nothing to do')
@@ -245,7 +250,7 @@ def main(subject, session, run, rois, bids, source, decoders, joint_tag, max_vox
     if selection == 'relnull' and min_r is None:
         raise ValueError('--selection relnull needs --min-r')
     out_root = Path(out_root or deriv / 'decoded_final_2026-11') / (
-        source if selection == 'loo' else f'{source}_relnull_r{min_r:g}')
+        (source if selection == 'loo' else f'{source}_relnull_r{min_r:g}') + out_suffix)
     fold = fold_of(sub, session, run)
     hp = sub.get_hpd_locations().get((session, run))
     aperture = float(sub.get_experimental_settings(session, run)['radius_bar_aperture'])
@@ -355,6 +360,7 @@ if __name__ == '__main__':
                     help='loo: training-run reliability > 0 (default); relnull: fold-wise r > --min-r, p <= --max-p')
     ap.add_argument('--min-r', type=float, default=None)
     ap.add_argument('--max-p', type=float, default=.01)
+    ap.add_argument('--out-suffix', default='', help="appended to the output folder name, e.g. '_pooled'")
     ap.add_argument('--check-prfs', action='store_true',
                     help='only verify the model construction against the fold fit of --session/--run (see check_prfs)')
     a = ap.parse_args()
@@ -364,4 +370,4 @@ if __name__ == '__main__':
         raise SystemExit
     main(a.subject, a.session, a.run, a.rois, a.bids_folder, a.prf_source, a.decoders, a.joint_tag, a.max_voxels, a.max_bold_sd,
          a.l2_norm, a.learning_rate, a.max_n_iterations, a.min_n_iterations, a.resid_max_iter, out_root=a.out_root,
-         selection=a.selection, min_r=a.min_r, max_p=a.max_p)
+         selection=a.selection, min_r=a.min_r, max_p=a.max_p, out_suffix=a.out_suffix)
