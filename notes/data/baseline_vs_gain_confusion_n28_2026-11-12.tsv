@@ -1,0 +1,4 @@
+generator	gain (dS)	trial-locked baseline	both	neither
+multiplicative	0.6	0.0	0.0	0.4
+sustained_additive	0.0	0.0	0.0	1.0
+trial_additive	0.0	1.0	0.0	0.0

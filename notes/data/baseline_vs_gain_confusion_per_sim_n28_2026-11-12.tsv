@@ -1,0 +1,31 @@
+generator	sim	detected
+multiplicative	0	neither
+multiplicative	1	gain (dS)
+multiplicative	2	gain (dS)
+multiplicative	3	neither
+multiplicative	4	gain (dS)
+multiplicative	5	gain (dS)
+multiplicative	6	neither
+multiplicative	7	gain (dS)
+multiplicative	8	neither
+multiplicative	9	gain (dS)
+sustained_additive	0	neither
+sustained_additive	1	neither
+sustained_additive	2	neither
+sustained_additive	3	neither
+sustained_additive	4	neither
+sustained_additive	5	neither
+sustained_additive	6	neither
+sustained_additive	7	neither
+sustained_additive	8	neither
+sustained_additive	9	neither
+trial_additive	0	trial-locked baseline
+trial_additive	1	trial-locked baseline
+trial_additive	2	trial-locked baseline
+trial_additive	3	trial-locked baseline
+trial_additive	4	trial-locked baseline
+trial_additive	5	trial-locked baseline
+trial_additive	6	trial-locked baseline
+trial_additive	7	trial-locked baseline
+trial_additive	8	trial-locked baseline
+trial_additive	9	trial-locked baseline

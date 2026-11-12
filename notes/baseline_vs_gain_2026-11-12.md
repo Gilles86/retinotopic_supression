@@ -1,8 +1,8 @@
-# Baseline shift vs response gain at the HP location (2026-11-12, n = 28; phase 1)
+# Baseline shift vs response gain at the HP location (2026-11-12, n = 28)
 
 Question from the Introduction: is the effect at the HP location a gain on the stimulus drive (response gain, e.g.
 Reynolds & Heeger, 2009) or a shift of the baseline (e.g. Kastner et al., 1999)? Final DoG joint-HRF fits, sub-03–30,
-gains in percent. Phase 1: identifiability, a local slope test, and the cluster design (not submitted).
+gains in percent. **All results are on the current final fits (pRFs and HRF fitted jointly, gain fields fitted with the pRFs frozen); they may be rerun after the planned refit of the pRFs together with the gain fields.**
 
 ## Step 0. Identifiability of a sustained additive baseline at HP — not identifiable
 
@@ -91,3 +91,59 @@ Then locally: collect the per-subject tables, pooled tests (per participant medi
 CI, k of n; per area BH over nine), held-out ΔR² per design against the joint fit, the recovery confusion matrix, the
 supplementary figure (a schematic, b step-1 slopes, c held-out ΔR², d confusion matrix), key_numbers additions and
 wording, added to notes/writing_package_2026-11-12_update5/ (shared with the per-area Fig. 3 update: add files, append sections to its key_numbers.md and UPDATE_NOTES.md, rezip notes/writing_package_2026-11-12_update5.zip).
+
+
+## Results of steps 2–4 (jobs 8303096 canary, 8303254 main; 239 participant × area fits, n = 28)
+
+Code `retsupp/modeling/fit_baseline_terms.py`; collection and figure `retsupp/visualize/paper/figS_baseline_vs_gain.py`;
+tables `notes/data/baseline_vs_gain_terms_n28_2026-11-12.tsv`, `..._change_...`, `..._confusion_...`; figure
+`notes/figures/paper_2026-11/figS_baseline_vs_gain_n28.{pdf,png,md}`. Per participant the median over areas; median over
+participants, bootstrapped 95% CI, Wilcoxon. Trial-locked amplitudes in % signal change at full pRF overlap (w = 1);
+gain terms in % (gain × 100). Held-out ΔR² × 10⁻⁴ on run 3, relative to the joint fit.
+
+| Test | Estimate [95% CI] | k of n | p | Held-out ΔR² (× 10⁻⁴) | Better in | p |
+|---|---|---|---|---|---|---|
+| Sustained additive offset at HP | not identifiable (regressor kept after run-mean removal: 0.0 in all 239 fits) | — | — | — | — | — |
+| Bar-response slope, HP vs LP (step 1) | −2.1% [−4.6, −0.7] | 20/28 < 0 | .012 | — | — | — |
+| Bar-response slope, HP vs next | −3.5% [−5.2, −0.9] | 21/28 < 0 | .0011 | — | — | — |
+| Trial-locked at HP, search onsets | +1.5% signal [+0.0, +2.9] | 19/28 > 0 | .010 | +0.13 [−0.44, +0.70] | 16/28 | .41 |
+| Trial-locked at HP, fixation onsets | −0.7% signal [−1.0, +0.9] | 15/28 < 0 | .85 | +1.33 [+0.64, +2.59] (from the common term) | 24/28 | 1 × 10⁻⁴ |
+| Common trial response, fixation onsets (nuisance) | +6.8% signal [+1.6, +17.2] | 22/28 > 0 | 4 × 10⁻⁵ | (same design) | | |
+| Trial-locked (search) + transient HP − LP terms | trial +1.5 [+0.6, +2.9] (23/28 > 0, p = 2 × 10⁻⁴); distractor HP − LP −2.5% [−3.6, −1.2] (22/28 < 0, p = 1 × 10⁻⁴); target HP − LP −0.9% (p = .20) | | | −2.2 [−3.0, −0.3] | 4/28 | 1 × 10⁻⁴ (worse) |
+| dS when the trial-locked (search) term is added | changes by −0.78 points [−1.05, −0.50] | | 4 × 10⁻⁵ | −1.3 [−2.0, −0.5] | 6/28 | 6 × 10⁻⁴ (worse) |
+
+Recovery (10 simulated datasets × 28 participants, fitted with both terms; detected = group p < .05, negative):
+simulated gain → gain detected 0.6, trial baseline 0.0, both 0.0, neither 0.4; simulated trial-locked baseline →
+trial baseline 1.0, gain 0.0; simulated sustained offset → neither 1.0. So the two forms are never confused; a
+trial-locked baseline of matched size is always found; the gain at the group size is found in 6 of 10 datasets by this
+single-step test (the sustained gain is a small effect).
+
+Reading:
+- A sustained, block-long baseline shift at HP cannot be measured here (run means removed). Methods sentence in step 0.
+- What can be measured points to a gain: the response to the bar is smaller where it crosses HP (−2.1%), the same size
+  as the fitted sustained HP − LP gain (−1.4%), and a change in slope.
+- A trial-locked additive baseline at HP is absent: no held-out improvement locked to search (16/28, p = .41), and its
+  HP-specific amplitude is if anything positive, not a suppression; locked to fixation the HP-specific amplitude is null
+  (p = .85). The fixation-locked held-out gain comes from a response common to all locations, which the joint model
+  lacks (a general trial response, not about HP). The recovery shows such a baseline would have been detected.
+- Caveat: with the trial-locked HP term in the model, the transient distractor HP − LP gain and dS shift (−2.5% and
+  −0.8 points) and held-out prediction gets worse: the trial-locked HP response and the transient HP terms are partly
+  collinear, so their joint estimates should not be interpreted.
+
+## Suggested wording
+
+Results 4 (after "We also tested variants..."): "We also asked whether the effect at the HP location is a gain or a
+shift of the baseline. A sustained additive offset at the HP location is not identifiable in our data, because each run
+was expressed as percent signal change of its own mean and the HP location was constant within a run. What remains
+testable points to a gain: the response to the mapping bar was smaller where it crossed the HP location than where it
+crossed the other locations (slope −2.1% [−4.6, −0.7], 20 of 28 participants, p = .012), a change in slope that a gain
+predicts and an offset does not. An additive response at the HP location locked to each trial did not improve held-out
+prediction (16 of 28 participants, p = .41), although simulations showed that one of matched size would have been
+detected in every simulated dataset."
+
+Discussion, on Richter et al.'s proactive suppression: "Richter et al. (2025) found reduced responses at the
+high-probability location even when the search display was omitted, and interpreted this as proactive suppression. A
+baseline shift sustained over a block cannot be measured in our design, and a trial-locked one, which our simulations
+showed we could detect, was absent. What we did find, a smaller response to the mapping bar at the HP location and a
+lower fitted gain there, is a change in how strongly that location is driven; proactive suppression in our data is
+therefore better described as a reduced gain than as an offset."
