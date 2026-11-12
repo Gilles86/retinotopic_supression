@@ -5,7 +5,7 @@
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=2
 #SBATCH --time=01:30:00
-#SBATCH --mem=24G
+#SBATCH --mem=32G
 #
 # Field widths conditional on a reliable gain (retsupp.modeling.fit_width_profiles): per-run sufficient statistics
 # for the gains at the fitted widths and on a width grid (sustained and transient) on the final joint fit.
