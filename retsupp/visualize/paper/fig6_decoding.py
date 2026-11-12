@@ -196,22 +196,24 @@ def disc(ax, img, cmap, vmax, vmin=0, r=APERTURE):
     return im
 
 
-def panel_frames(fig, box, frames, W, H, style='blue'):
-    """a: rows true bar, one decoded run, group mean; columns time points."""
+def panel_frames(fig, box, frames, W, H, style='blue', times=None, labels=None):
+    """a: rows true bar, one decoded run, group mean; columns time points (``times``, default FRAMES)."""
     import matplotlib.colors as mcolors
     from retsupp.visualize.paper.paper_style import FG, STIM
+    FR = list(times or FRAMES)
     x0, y0, w, h = box
-    n = len(FRAMES)
+    n = len(FR)
     size = min(w / n * .92, h / 3 * .92)
     gapx = (w - n * size) / (n - 1)
     gapy = (h - 3 * size) / 2
     cm = mcolors.LinearSegmentedColormap.from_list('stim', ['#FFFFFF', STIM])
-    rows = [('Bar', frames['paradigm'].astype(float), 1.),
-            (f'Best run\n{frames["ex_label"]}', frames['example'], np.nanpercentile(frames['example'], 99.7)),
-            (f'Mean of {frames.get("n_group", 30)}\nsubjects (V1)', frames['group'], np.nanpercentile(frames['group'], 99.7))]
+    labs = labels or ('Bar', f'Best run\n{frames["ex_label"]}', f'Mean of {frames.get("n_group", 30)}\nsubjects (V1)')
+    rows = [(labs[0], frames['paradigm'].astype(float), 1.),
+            (labs[1], frames['example'], np.nanpercentile(frames['example'], 99.7)),
+            (labs[2], frames['group'], np.nanpercentile(frames['group'], 99.7))]
     axes = []
     for i, (lab, arr, vmax) in enumerate(rows):
-        for k, t in enumerate(FRAMES):
+        for k, t in enumerate(FR):
             ax = fig.add_axes([(x0 + k * (size + gapx)) / W, (y0 + h - (i + 1) * size - i * gapy) / H, size / W, size / H])
             if style == 'magma' and i > 0:               # decoded rows as Fig. 4's model panels: magma on black
                 from matplotlib.patches import Circle
@@ -302,13 +304,15 @@ def smoothed_map(rm):
     return np.nanmean(sm, 0), inside
 
 
-def panel_map(ax, rm, vmax=3, label='HP', tag=True):
+def panel_map(ax, rm, vmax=3, label='HP', tag=True, cmap='RdBu_r', diag=('.55', .4, ':'), lp_label=False):
     from retsupp.visualize.paper.paper_style import HP
-    im = disc(ax, smoothed_map(rm)[0], 'RdBu_r', vmax, -vmax)
+    im = disc(ax, smoothed_map(rm)[0], cmap, vmax, -vmax)
     for a in (45, 135):
         t = np.deg2rad(a)
         ax.plot([-APERTURE * np.cos(t), APERTURE * np.cos(t)], [-APERTURE * np.sin(t), APERTURE * np.sin(t)],
-                color='.55', lw=.4, ls=':')
+                color=diag[0], lw=diag[1], ls=diag[2])
+    if lp_label:
+        ax.text(-ITEM_ECC, -ITEM_R - .25, 'LP', color='.4', fontsize=6, ha='center', va='top')
     items(ax, HP)
     ax.set_xlim(-4.95, 4.95)
     ax.set_ylim(-4.95, 4.95)
@@ -393,7 +397,7 @@ def quadrant_effects(d, decoder=DECODER, rois=EARLY):
     return s
 
 
-def quadrant_stats(s):
+def quadrant_stats(s, sem='within'):
     out = dict(p_lr=stats.wilcoxon(s.left - s.right).pvalue,
                p_adj=stats.wilcoxon(s.hp - s.adjacent, alternative='less').pvalue,
                p_opp=stats.wilcoxon(s.hp - s.opposite, alternative='less').pvalue,
@@ -1078,7 +1082,7 @@ def plot_all_rois(name='figS_decoding_all_rois', source='jointhrf'):
         ypos[lab] = y
         arr = par if roi is None else G[rois.index(roi)]
         vmax = 1. if roi is None else np.nanpercentile(arr, 99.7)
-        for k, t in enumerate(FRAMES):
+        for k, t in enumerate(FR):
             ax = fig.add_axes([(x0 + k * (size + gap)) / W, y / H, size / W, size / H])
             if roi is None:
                 disc(ax, arr[k], cm, vmax)
@@ -1234,7 +1238,7 @@ def sweep_data(source):
                 centres=(z['edges'][:-1] + z['edges'][1:]) / 2)
 
 
-def prediction_text(pred, qe, be, sw, r_data=None):
+def prediction_text(pred, qe, be, sw, r_data=None, ecc=True, numbers_only=False):
     """Predicted vs observed: quadrant contrasts (HP − next, next − opposite), the sweep segments and the eccentricity
     profile; per-subject correlation of predicted and observed HP − next."""
     qp, bp_, swp, extra = pred
@@ -1263,7 +1267,8 @@ def prediction_text(pred, qe, be, sw, r_data=None):
     r_sw = np.corrcoef(obs_all, pr_all)[0, 1]
     sweep = 'Bar sweep (c): ' + '; '.join(rows) + f'; correlation of the observed and predicted group means over the ' \
         f'{len(obs_all)} segment × position points r = {mn(r_sw)}'
-    ecc = f'Whole aperture (e): HP − other quadrants observed {fmt(be["all"])}, predicted {fmt(bp_["all"])}'
+    ecc_txt = (f'Whole aperture (e): HP − other quadrants observed {fmt(be["all"])}, predicted {fmt(bp_["all"])}'
+               if ecc else '')
     cov = (f' The joint fit covers a median {extra["coverage"]:.0f}% of the decoder\'s voxels per run and area, and the '
            f'simulated runs decode about as well as the real ones (frame-wise r, median over subjects of the V1–V3 mean: '
            f'{extra["r_model"]:.2f} simulated' + (f', {r_data:.2f} measured' if r_data is not None else '') + ').')
@@ -1275,7 +1280,10 @@ def prediction_text(pred, qe, be, sw, r_data=None):
                    'minus its average over the four rotations, in % of that average, V1–V3), then smoothed and averaged '
                    f'over subjects as the data; same colour scale. Spatial correlation of the two group maps inside the '
                    f'aperture r = {mn(extra["map_r"])}. ')
-    return PRED_TXT.format(map_txt=map_txt, n=len(qp), numbers=quad + '. ' + sweep + '. ' + ecc + '.') + cov
+    numbers = quad + '. ' + sweep + '.' + (' ' + ecc_txt + '.' if ecc_txt else '')
+    if numbers_only:
+        return numbers + cov
+    return PRED_TXT.format(map_txt=map_txt, n=len(qp), numbers=numbers) + cov
 
 
 PATHWAYS = {'Early': ['V1', 'V2', 'V3'], 'Dorsal': ['V3AB', 'IPS'], 'Occipitotemporal': ['hV4', 'VO', 'LO', 'TO']}
@@ -1420,6 +1428,368 @@ def panel_areas(ax, per, pw, ast):
     ax.text(-6.1, hi + .3, 'Pooled', ha='center', va='bottom', fontsize=6.5, color='.4')
     ax.text((ROI_X['V1'] + ROI_X['TO']) / 2, hi + .3, 'Per area', ha='center', va='bottom', fontsize=6.5, color='.4')
     offset_spines(ax)
+
+
+MAP_CMAP = 'BrBG'          # v10: diverging map without the stimulus blue or the HP red (brown = less, teal = more)
+DIFF_LABEL = 'Decoded intensity\n(% vs mean)'
+EFFECT_LABEL = 'HP − other\nquadrants (%)'
+PATHWAY_ORDER = [('Early', ['V1', 'V2', 'V3']), ('Occipitotemporal', ['hV4', 'VO', 'LO', 'TO']), ('Dorsal', ['V3AB', 'IPS'])]
+
+
+def glyph_key(ax, entries, x, y, dy=.0, dx=0., fs=6.5, seg=.06, transform=None):
+    """Glyph key: entries (label, kind, color, ls); kind 'line' (line + band) or 'point' (point with bar)."""
+    tf = transform or ax.transAxes
+    for i, (lab, kind, col, ls) in enumerate(entries):
+        xx, yy = x + i * dx, y - i * dy
+        if kind == 'line':
+            ax.add_patch(plt_rect((xx, yy - .045), seg, .09, tf, col, alpha=.18))
+            ax.plot([xx, xx + seg], [yy, yy], transform=tf, color=col, lw=1.1, ls=ls, clip_on=False)
+        else:
+            ax.plot([xx + seg / 2] * 2, [yy - .06, yy + .06], transform=tf, color=col, lw=.9, clip_on=False)
+            ax.plot(xx + seg / 2, yy, 'o', transform=tf, ms=3.2, color=col, mec='w', mew=.5, clip_on=False)
+        ax.text(xx + seg + .015, yy, lab, transform=tf, fontsize=fs, color=col if kind == 'point' else '.25',
+                va='center', ha='left')
+
+
+def sweep_half_icons_up(ax, w=.1, h=.55, y=-1.0):
+    """Under the slim sweep: what a bar left and right of the centre crosses, drawn with HP at 12 o'clock as in the
+    maps (the sweep frame has HP upper right; turned 45° counter-clockwise, its bars run diagonally): the quadrants the
+    bar crosses shaded in d's colours, the bar itself as a dark stroke."""
+    from matplotlib.patches import Circle, Polygon, Wedge
+    from retsupp.visualize.paper.paper_style import HP
+    k = np.sqrt(.5)
+    rot = lambda px, py: (k * px - k * py, k * px + k * py)   # noqa: E731  sweep frame -> HP at 12 o'clock
+    halves = [(0., [(135, 225, 'adjacent'), (225, 315, 'opposite')], -1.4, 'Next to HP + opposite', 'left'),
+              (1. - w, [(45, 135, 'hp'), (315, 405, 'adjacent')], 1.4, 'HP + next to HP', 'right')]
+    for x, wedges, bx, lab, side in halves:
+        ins = ax.inset_axes([x, y, w, h])
+        for a0, a1, c in wedges:
+            ins.add_patch(Wedge((0, 0), APERTURE, a0, a1, facecolor=LOC_COLORS[c], alpha=.35, lw=0))
+        ins.add_patch(Circle((0, 0), APERTURE, fill=False, ec='.55', lw=.5))
+        hw = .45
+        corners = [rot(bx - hw, -2.6), rot(bx + hw, -2.6), rot(bx + hw, 2.6), rot(bx - hw, 2.6)]
+        ins.add_patch(Polygon(corners, closed=True, facecolor='.25', alpha=.55, lw=0))
+        for j, a in enumerate(ITEM_ANGLES):
+            q = ITEM_ECC * np.array([np.cos(np.deg2rad(a)), np.sin(np.deg2rad(a))])
+            ins.add_patch(Circle(q, ITEM_R, facecolor='w', ec=HP if j == 0 else '.6', lw=.9 if j == 0 else .5))
+        ins.set_xlim(-5, 5)
+        ins.set_ylim(-5, 5)
+        ins.set_aspect('equal')
+        ins.set_axis_off()
+        tx = x + w + .015 if side == 'left' else x - .015
+        ax.text(tx, y + h / 2, lab, transform=ax.transAxes, fontsize=6, color='.3', ha=side, va='center')
+
+
+def panel_sweep_slim(ax, source, pred=None):
+    """c (v10): the segment differences against the bar centre (outline decoder), no thumbnails: HP quadrant (red),
+    next to HP (dark grey) and opposite (light grey, dashed); data points ± SEM, the model as line + band; stars in one
+    colour (two-sided Wilcoxon per position, uncorrected). Returns the per-position statistics text."""
+    from retsupp.visualize.paper.figS_decoded_bars import pooled_condition
+    from retsupp.visualize.paper.paper_style import FG, HP, offset_spines
+    z = np.load(DATA / f'decoded_bars_condition_{source}_outline_2026-11.npz')
+    P = pooled_condition(z['mean'])
+    centres = (z['edges'][:-1] + z['edges'][1:]) / 2
+    hp_v, nx_v, op_v = sweep_segments(P, z['grid'], opposite=True)
+    ns = len(P)
+    series = [(nx_v, LOC_COLORS['adjacent'], 'Next to HP', 'next', '-', 0.),
+              (op_v, '#7B8794', 'Opposite', 'opp', (0, (3, 1.5)), -.05), (hp_v, HP, 'HP quadrant', 'hp', '-', .05)]
+    ax.axhline(0, color='.85', lw=.6, zorder=0)
+    stats_txt = []
+    for v, col, lab, key, ls, dx in series:
+        ok = np.isfinite(v).all(0)
+        m, se = np.nanmean(v, 0), np.nanstd(v, 0, ddof=1) / np.sqrt(ns)
+        if pred is not None and key in pred:
+            pv = pred[key]
+            pm, pse = np.nanmean(pv, 0), np.nanstd(pv, 0, ddof=1) / np.sqrt(np.isfinite(pv).sum(0))
+            ax.fill_between(centres[ok], (pm - pse)[ok], (pm + pse)[ok], color=col, alpha=.16, lw=0, zorder=1)
+            ax.plot(centres[ok], pm[ok], color=col, lw=1.1, ls=ls, zorder=2)
+        ax.errorbar(centres[ok] + dx, m[ok], yerr=se[ok], fmt='o', ms=3, color=col, mec='w', mew=.5, lw=.9, capsize=0,
+                    zorder=3)
+        for b in np.flatnonzero(ok):
+            p_ = stats.wilcoxon(v[:, b]).pvalue
+            stats_txt.append(f'{lab} at {centres[b]:+.1f}°: {m[b]:+.2f} ± {se[b]:.2f}%, p = {p_:.3f}')
+            st = stars(p_)
+            if st:
+                up = m[b] > 0
+                ax.text(centres[b] + dx, m[b] + (se[b] + .15) * (1 if up else -1), st, color=FG, fontsize=7,
+                        ha='center', va='bottom' if up else 'top')
+        # direct labels at the line ends, staggered so they never stack
+        i = np.flatnonzero(ok)
+        if key == 'opp':      # labels inside the plot, in free space next to their own line
+            ax.text(centres[i[0]] - .15, -1.9, lab, color=col, fontsize=6.5, ha='left', va='center')
+        elif key == 'next':
+            ax.text(1.35, 1.75, lab, color=col, fontsize=6.5, ha='center', va='center')
+        else:
+            ax.text(1.95, -2.3, lab, color=col, fontsize=6.5, ha='center', va='center')
+    ax.set_xlim(-3.1, 3.1)
+    ax.set_xticks([-2.7, -1.8, -0.9, 0, 0.9, 1.8, 2.7])
+    ax.set_xticklabels([f'{t:+.1f}'.replace('-', '−').replace('+0.0', '0') for t in ax.get_xticks()], fontsize=6.5)
+    ax.set_ylim(-2.6, 2.4)
+    ax.set_yticks([-2, 0, 2])
+    ax.set_yticklabels(['−2', '0', '2'])
+    ax.tick_params(labelsize=6.5)
+    ax.set_xlabel('Bar centre (°)', fontsize=7, labelpad=1)
+    ax.set_ylabel('Segment\ndifference (%)', fontsize=7, labelpad=2)
+    offset_spines(ax)
+    sweep_half_icons_up(ax)
+    return '; '.join(stats_txt).replace('-', '−')
+
+
+def panel_quadrants_v10(ax, s, st, pred=None):
+    """d (v10): per quadrant (HP, next to HP, opposite) decoded intensity in % vs the mean of the four; subject dots,
+    mean ± SEM (plain SEM over subjects, as row 3); the model as a line + band centred on the data mean."""
+    import matplotlib.transforms as mtrans
+    from matplotlib.patches import Circle, Wedge
+    from retsupp.visualize.paper.paper_style import FG, HP, offset_spines
+    cls = [c for c, _ in QUAD_CLASSES]
+    rng = np.random.default_rng(3)
+    for i, c in enumerate(cls):
+        col = LOC_COLORS[c]
+        v = s[c]
+        ax.scatter(i - .2 + rng.uniform(-.12, .12, len(v)), v, s=6, color=col, alpha=.4, lw=0, zorder=2)
+        if pred is not None:
+            pm, pse = pred[c].mean(), pred[c].sem()
+            ax.fill_between([i + .02, i + .38], pm - pse, pm + pse, color=FG, alpha=.15, lw=0, zorder=1)
+            ax.plot([i + .02, i + .38], [pm, pm], color=FG, lw=1.1, zorder=3)
+        ax.errorbar(i + .2, v.mean(), yerr=v.sem(), fmt='o', ms=4.5, color=col, mec='w', mew=.7, lw=1.3, capsize=0,
+                    zorder=4)
+    lo, hi = -5.5, 4.8
+    if st['p_adj'] < .05:
+        y = 3.8
+        ax.plot([.2, .2, 1.2, 1.2], [y - .3, y, y, y - .3], color=FG, lw=.7)
+        ax.text(.7, y + .05, stars(st['p_adj']), ha='center', va='bottom', fontsize=7, color=FG)
+    ax.set_ylim(lo, hi)
+    ax.axhline(0, color='.85', lw=.6, zorder=0)
+    ax.set_xlim(-.5, 2.5)
+    ax.set_xticks([])
+    ax.set_yticks([-4, 0, 4])
+    ax.set_yticklabels(['−4', '0', '4'])
+    ax.set_ylabel(DIFF_LABEL, fontsize=7)
+    tr = mtrans.blended_transform_factory(ax.transData, ax.transAxes)
+    wedges = {'hp': [(45, 135)], 'adjacent': [(135, 225), (-45, 45)], 'opposite': [(225, 315)]}
+    for i, (c, lab) in enumerate(QUAD_CLASSES):
+        ins = ax.inset_axes([i - .3, -.5, .6, .44], transform=tr)
+        for a0, a1 in wedges[c]:
+            ins.add_patch(Wedge((0, 0), APERTURE, a0, a1, facecolor=LOC_COLORS[c], alpha=.35, lw=0))
+        ins.add_patch(Circle((0, 0), APERTURE, fill=False, ec='.55', lw=.5))
+        for j, a in enumerate(ITEM_ANGLES):
+            q = ITEM_ECC * np.array([np.cos(np.deg2rad(a)), np.sin(np.deg2rad(a))])
+            ins.add_patch(Circle(q, ITEM_R, facecolor='w', ec=HP if j == 0 else '.6', lw=.9 if j == 0 else .5))
+        ins.set_xlim(-5, 5)
+        ins.set_ylim(-5, 5)
+        ins.set_aspect('equal')
+        ins.set_axis_off()
+        ax.text(i, -.54, lab, transform=tr, ha='center', va='top', fontsize=6.5, color=HP if c == 'hp' else '.3')
+    offset_spines(ax)
+
+
+def panel_pathways_v10(ax, per, ast):
+    """Row 3: the HP − other quadrants contrast pooled per pathway (Early, Occipitotemporal, Dorsal): subject dots,
+    mean ± SEM, stars and exact one-sided p."""
+    from retsupp.visualize.paper.paper_style import FG, HP, offset_spines
+    rng = np.random.default_rng(5)
+    lo, hi = -8, 9
+    for i, (k, _) in enumerate(PATHWAY_ORDER):
+        d = ast['pooled'][k]
+        ax.scatter(i - .17 + rng.uniform(-.14, .14, d['n']), d['v'], s=6, color=HP, alpha=.35, lw=0, zorder=2)
+        ax.errorbar(i + .17, d['m'], yerr=d['se'], fmt='o', ms=4.5, color=HP, mec='w', mew=.7, lw=1.3, capsize=0,
+                    zorder=4)
+        lab = (stars(d['p']) + '\n' if d['p'] < .05 else '\n') + f'p = {d["p"]:.3f}'.replace('0.', '.')
+        ax.text(i, hi, lab, ha='center', va='top', fontsize=6.5, color=FG, linespacing=1.)
+    ax.axhline(0, color='.85', lw=.6, zorder=0)
+    ax.set_ylim(lo, hi)
+    ax.set_yticks([-6, -3, 0, 3])
+    ax.set_yticklabels(['−6', '−3', '0', '3'])
+    ax.set_xlim(-.55, len(PATHWAY_ORDER) - .45)
+    ax.set_xticks(range(len(PATHWAY_ORDER)))
+    ax.set_xticklabels([f'{k}\n({", ".join(r)})' for k, r in PATHWAY_ORDER], fontsize=6.5)
+    ax.tick_params(axis='x', length=0)
+    ax.set_ylabel(EFFECT_LABEL, fontsize=7)
+    offset_spines(ax)
+
+
+def panel_quality_v10(ax, qs, pq, rois):
+    """b (v10): decoded vs true bar per area; held-out runs (stimulus blue, median and bootstrapped 95% CI over subject
+    dots) and frames shuffled (grey, visible); glyph key."""
+    from retsupp.visualize.paper.paper_style import FG, STIM, offset_spines, roi_axis
+    for i, (roi, x) in enumerate(zip(rois, roi_xs(rois))):
+        g = qs[qs.roi == roi]
+        if not len(g):
+            continue
+        subject_dots(ax, x - .12, g.r.to_numpy(), STIM, i, s=5, width=.09, ms=4.2)
+        subject_dots(ax, x + .2, g.r_shuffle.to_numpy(), '.45', 10 + i, s=0, ms=3.6)
+        ax.text(x, .64, stars(pq[roi]), ha='center', va='bottom', fontsize=6.5, color=FG)
+    ax.axhline(0, color='.85', lw=.6, zorder=0)
+    ax.set_ylim(-.06, .76)
+    ax.set_yticks([0, .2, .4, .6])
+    ax.set_yticklabels(['0', '.2', '.4', '.6'])
+    ax.set_ylabel('Decoded vs\ntrue bar (r)', fontsize=7)
+    tf = ax.transAxes
+    for j, (lab, col) in enumerate((('Held-out run', STIM), ('Frames shuffled', '.45'))):
+        xx = .47 + j * .25
+        ax.plot(xx, 1.08, 'o', transform=tf, ms=3.6, color=col, mec='w', mew=.6, clip_on=False)
+        ax.text(xx + .02, 1.08, lab, transform=tf, fontsize=6.5, color=col, ha='left', va='center')
+    offset_spines(ax)
+    roi_axis(ax, rotate=False, fontsize=6, group_fontsize=6)
+
+
+LEGEND_V10 = """
+**Figure 6. The bar stimulus can be read out of visual cortex, and it is read out at lower intensity in the quadrant facing the HP location.** The bar of every run was decoded from the BOLD activity of one area at a time with pRFs (difference of Gaussians, one HRF per subject and area fitted jointly with the pRFs, no gain terms) fitted on the other runs (cross-validation folds), so the decoded run never entered the pRF fit; voxels with cross-run reliability > 0 on the training runs (at most 2000 per area); the encoding model contains only the bar, not the search items. Throughout, the visual field is rotated so that the HP location lies at 12 o'clock (red ring; grey rings, the LP locations). Points and bars in c (bottom), d and e are the mean ± SEM over subjects (n = {n}); lines and bands in c and d are the gain-field model's prediction (mean ± SEM; see below). a, True bar (top) and decoded intensity in one held-out run ({ex_sub} {ex_run}, V1; frame-wise r = {ex_r:.2f}, rank {ex_rank} of {n_runs} subject × run × area decodes; the median run has r = {r_med:.2f}) and averaged over runs and subjects (V1), at four time points; decoded rows on a magma scale from 0 to each row's maximum; grey circle, the {ap}° aperture of the bar. b, Per subject and area, the spatial correlation between decoded and true frame inside the aperture, averaged over frames with a bar and runs (blue dots), against the same with the order of the true frames shuffled (100 permutations; grey); points and bars, median and bootstrapped 95% CI; decoded vs shuffled, one-sided Wilcoxon signed-rank test (*** p < .001); {quality}. c, V1–V3 pooled. Left, the decoded intensity on the bar's pixels minus its average over the four rotations, in % of that average (diverging scale: brown less, teal more), averaged over runs, V1–V3 and subjects and smoothed (Gaussian, σ = 0.4°); the dotted diagonals bound the quadrant facing HP. Right of it, the same map from the gain-field model simulation (spatial correlation with the data map inside the aperture r = {map_r}). Bottom right, single bar positions without averaging over the field: the decoded bar (decoder with the bar outline given) minus the mean decoded bar at the same time point over the subject's runs (balanced over HP locations), each run first scaled to a common mean intensity on the bar, on the bar's segment in the quadrant facing HP (red), in the quadrants next to HP (dark grey; mean of the segments present) and in the quadrant opposite HP (light grey, dashed), in % of the mean decoded intensity on the bar, against the bar centre (horizontal bars reflected onto vertical ones across the diagonal through HP; positive, toward HP). The icons under the axis show which quadrants a bar left or right of the centre crosses (dark stroke, the bar), so the next-to-HP segment exists along the whole sweep and the other two along one half each. Stars, two-sided Wilcoxon signed-rank test per position, uncorrected (* p < .05, ** p < .01): {sweep_stats}. d, V1–V3 pooled: decoded intensity on the bar's pixels per quadrant of the aperture (free decoder), per subject and area averaged over runs and expressed in % vs the mean of the four quadrants, then averaged over V1–V3: the quadrant facing HP, the two next to it (pooled; they do not differ, two-sided Wilcoxon p = {q_lr:.2f}) and the opposite one; {quad}. The difference does not grow toward the aperture edge, next to the items (Supplementary Fig. S, decoded intensity by eccentricity). e, The contrast of d (HP minus the mean of the three other quadrants, same normalisation) for every area, averaged per subject over the areas of a pathway that the subject has (an area was skipped for a subject when fewer than 20 voxels passed the criteria; dorsal n = {n_dorsal}); one-sided Wilcoxon signed-rank test (HP < other quadrants), uncorrected: {pathways}. Per-area values with Benjamini-Hochberg q are in Supplementary Fig. S (decoded intensity at HP per area); individually, only V2 and V3 reach q < .05.
+
+Gain-field model: per subject and run, the BOLD of V1–V3 was simulated from the subject's joint fit (pRFs fitted together with the gain fields on all runs: sustained HP and LP gains and field width, transient distractor and target gains, search items, one HRF per subject and area) plus the real run's residuals under that fit, phase-randomised (one random phase per frequency for all voxels), and decoded exactly as the data, on the decoder's voxels that are also in the joint fit; a paired simulation with the five gains at 0 and the same noise was decoded alike, and the prediction is the difference per subject, averaged like the data. {pred_numbers}
+"""
+
+
+def plot_v10(name='fig6_decoding_v10', source='jointhrf', decoder=DECODER, prediction='decode_simfit', supp_suffix='',
+             ecc_name=None):
+    """Condensed Fig. 6: a (4 frames) | b; c maps (data | model) + slim sweep | d quadrants; e pathway-pooled contrast.
+    Eccentricity panel and per-area values go to supplementary figures (``figS_decoding_eccentricity``,
+    ``figS_decoding_hp_per_area`` with BH q of the d-normalised contrast)."""
+    import matplotlib.pyplot as plt
+    from retsupp.visualize.paper.paper_style import DOUBLE, FG, HP, ROI_ORDER, STIM, letter, save
+    rois = list(ROI_ORDER)
+    d = pd.read_csv(DATA / f'decoding_readout_{source}_2026-11.tsv', sep='\t')
+    e = effects(d)
+    t = test_bh(e, rois, decoder)
+    t_out = test_bh(e, rois, 'outline') if 'outline' in set(d.decoder) else None
+    q = pd.read_csv(DATA / f'decoding_quality_{source}_2026-11.tsv', sep='\t')
+    qs = q[q.decoder == decoder].groupby(['subject', 'roi'])[['r', 'r_shuffle']].mean().reset_index()
+    pq = {roi: stats.wilcoxon(g.r - g.r_shuffle, alternative='greater').pvalue for roi, g in qs.groupby('roi')}
+    maps = np.load(DATA / f'decoding_maps_{source}_2026-11.npz')
+    rm = rel_maps(maps, decoder)
+    fr = np.load(DATA / f'decoding_frames_{source}_2026-11.npz')
+    ex = np.load(DATA / f'decoding_example_run_{source}_2026-11.npz')
+    sub, run, roi = EXAMPLES[source]
+    frames = dict(paradigm=fr['paradigm'], group=fr['group'][list(fr['rois']).index('V1'), list(fr['decoders']).index('free')].astype(float),
+                  example=ex[f'{sub}_{run}_roi-{roi}'].astype(float))
+    n_group = int(fr['n_group']) if 'n_group' in fr.files else 30
+    qf = q[q.decoder == 'free'].sort_values('r', ascending=False).reset_index(drop=True)
+    hit = (qf.subject == int(sub[4:])) & (qf.session == int(run[4])) & (qf.run == int(run[-1])) & (qf.roi == roi)
+    ex_r, ex_rank = qf[hit].r.iloc[0], int(np.flatnonzero(hit)[0]) + 1
+    pred = load_prediction(prediction, decoder)
+    qe = quadrant_effects(d, decoder)
+    qst = quadrant_stats(qe, sem='plain')
+    per, pw = pathway_effects(d, decoder)
+    ast = area_stats(per, pw)
+
+    W, H = DOUBLE, 6.3
+    fig = plt.figure(figsize=(W, H))
+    # Row 1
+    fig.text(.02 / W, 6.17 / H, 'a', fontsize=8, fontweight='bold', va='center')
+    fig.text(.2 / W, 6.17 / H, 'Bar decoded from held-out runs', fontsize=7.5, color=STIM, va='center')
+    panel_frames(fig, (.62, 4.38, 2.3, 1.52), frames, W, H, style='magma', times=[15, 28, 72, 89],
+                 labels=('Bar', f'Best run\nr = {ex_r:.2f}'.replace('0.', '.'), f'Mean\n(n = {n_group})'))
+    ax = fig.add_axes([3.75 / W, 4.72 / H, 3.25 / W, 1.15 / H])
+    panel_quality_v10(ax, qs, pq, rois)
+    letter(ax, 'b', x=-.14, y=1.04)
+    # Row 2
+    fig.text(.02 / W, 4.12 / H, 'c', fontsize=8, fontweight='bold', va='center')
+    fig.text(.2 / W, 4.12 / H, 'Lower intensity facing HP (V1–V3 pooled)', fontsize=7.5, color=HP, va='center')
+    ax = fig.add_axes([.05 / W, 2.62 / H, 1.05 / W, 1.05 / H])
+    im = panel_map(ax, rm, tag=False, cmap=MAP_CMAP, diag=('.3', .6, ':'), lp_label=True)
+    ax.text(.5, 1.0, 'Data', transform=ax.transAxes, fontsize=6.5, color='.3', ha='center', va='bottom')
+    ax2 = fig.add_axes([1.17 / W, 2.62 / H, 1.05 / W, 1.05 / H])
+    panel_map(ax2, pred[3]['rm'], label='', tag=False, cmap=MAP_CMAP, diag=('.3', .6, ':'))
+    ax2.text(.5, 1.0, 'Gain-field model', transform=ax2.transAxes, fontsize=6.5, color=FG, ha='center', va='bottom')
+    mo, ins_ = smoothed_map(rm)
+    mm = smoothed_map(pred[3]['rm'])[0]
+    ok = ins_ & np.isfinite(mo) & np.isfinite(mm)
+    map_r = float(np.corrcoef(mo[ok], mm[ok])[0, 1])
+    cax = fig.add_axes([.62 / W, 2.42 / H, 1.0 / W, .06 / H])
+    cb = fig.colorbar(im, cax=cax, orientation='horizontal', ticks=[-3, 0, 3])
+    cb.ax.set_xticklabels(['−3', '0', '3'], fontsize=6)
+    cb.ax.tick_params(length=2, width=.5, pad=1)
+    cb.outline.set_linewidth(.4)
+    cb.ax.set_xlabel('Decoded intensity (% vs mean)', fontsize=6.5, labelpad=2)
+    ax = fig.add_axes([2.95 / W, 2.98 / H, 2.1 / W, .72 / H])
+    sweep_stats = panel_sweep_slim(ax, source, pred[2])
+    glyph_key(ax, [('Gain-field model', 'line', FG, '-'), ('Data', 'point', FG, None)], x=.0, y=1.13, dx=.42)
+    ax = fig.add_axes([5.62 / W, 3.0 / H, 1.42 / W, .7 / H])
+    panel_quadrants_v10(ax, qe, qst, pred[0])
+    letter(ax, 'd', x=-.36, y=1.08)
+    # Row 3
+    fig.text(.02 / W, 1.78 / H, 'e', fontsize=8, fontweight='bold', va='center')
+    fig.text(.2 / W, 1.78 / H, 'Beyond V1–V3: occipitotemporal, not dorsal', fontsize=7.5, color=HP, va='center')
+    ax = fig.add_axes([.72 / W, .5 / H, 2.4 / W, 1.05 / H])
+    panel_pathways_v10(ax, per, ast)
+    boxes = {}
+    for a_ in fig.axes:
+        bb = a_.get_window_extent()
+        boxes[a_] = (bb.width / fig.dpi, bb.height / fig.dpi)
+    print('e axes box', [f'{w:.2f} x {h:.2f}' for a_, (w, h) in boxes.items() if a_ is ax])
+
+    # Caption numbers
+    nq = qs.groupby('roi').r.median()
+    quality = '; '.join(f'{r} median r = {nq[r]:.2f} vs {qs[qs.roi == r].r_shuffle.median():.3f}, {fmt_p(pq[r])}'
+                        for r in rois if r in nq)
+    f2 = lambda x: f'{x:+.2f}'.replace('-', '−')   # noqa: E731
+    pw_txt = '; '.join(f'{k} ({", ".join(r_)}) {f2(ast["pooled"][k]["m"])} ± {ast["pooled"][k]["se"]:.2f}%, '
+                       f'p = {ast["pooled"][k]["p"]:.3f}, {ast["pooled"][k]["below"]:.0f}% of subjects below 0, '
+                       f'n = {ast["pooled"][k]["n"]}' for k, r_ in PATHWAY_ORDER)
+    pw_txt += (f'; all nine areas {f2(ast["pooled"]["All areas"]["m"])} ± {ast["pooled"]["All areas"]["se"]:.2f}%, '
+               f'p = {ast["pooled"]["All areas"]["p"]:.3f}')
+    r_data = q[(q.decoder == decoder) & q.roi.isin(EARLY)].groupby('subject').r.mean().median()
+    pt = prediction_text(pred[:3] + ({k: v for k, v in pred[3].items() if k != 'map_r'},), qe, None, sweep_data(source),
+                         r_data, ecc=False, numbers_only=True)
+    leg = LEGEND_V10.format(n=qs.subject.nunique(), ex_sub=sub, ex_run=run.replace('_', ' '), ex_r=ex_r, ex_rank=ex_rank,
+                            n_runs=len(qf), r_med=qf.r.median(), ap=APERTURE, quality=quality, map_r=f2(map_r).lstrip('+'),
+                            sweep_stats=sweep_stats, q_lr=qst['p_lr'], quad=qst['text'], pathways=pw_txt,
+                            n_dorsal=ast['pooled']['Dorsal']['n'], pred_numbers=pt)
+    save(fig, name, leg)
+    print('map r', round(map_r, 3))
+    print('pathways', pw_txt)
+
+    # Supplement: per-area test (unchanged) + the d-normalised per-area values with BH q
+    tests = '; '.join(f'{r.roi} median {r["median"]:+.4f}, {r.pct_below:.0f}% of subjects below 0, n = {r.n}, '
+                      f'p = {r.p:.3f}, q = {r.q:.3f}' for _, r in t.iterrows())
+    outline = ''
+    if t_out is not None:
+        outline = (' Open markers and the upper row of stars: the decoder with the bar outline given (only the pixels the '
+                   'bar covers are decoded, the rest fixed at 0; median and bootstrapped 95% CI), same tests: '
+                   + '; '.join(f'{r.roi} median {r["median"]:+.4f}, p = {r.p:.3f}, q = {r.q:.3f}' for _, r in t_out.iterrows()))
+        outline += '. Filled markers and the lower row of stars: the unconstrained decoder.'
+    i0, i1 = LEGEND.index(' d, Per subject and ROI'), LEGEND.index(' e, Decoded')
+    d_text = LEGEND[i0:i1].format(tests=tests, outline=outline)
+    d_text += (' With the normalisation of Fig. 6d,e (per subject and area, the decoded intensity per quadrant in % vs '
+               'the mean of the four, HP minus the mean of the other three; mean ± SEM; one-sided Wilcoxon, '
+               'Benjamini-Hochberg across the nine areas): ' + area_text(per, ast).split('Per area: ')[1] + '.')
+    test_figure(e, t, rois, decoder, t_out, d_text, f'figS_decoding_hp_per_area{supp_suffix}')
+    plot_eccentricity(ecc_name or f'figS_decoding_eccentricity{supp_suffix}', source, decoder, pred[1])
+    return fig
+
+
+def plot_eccentricity(name, source='jointhrf', decoder=DECODER, pred=None):
+    """Supplement (was Fig. 6e): HP − other quadrants by eccentricity, with the gain-field model."""
+    import matplotlib.pyplot as plt
+    from retsupp.visualize.paper.paper_style import DOUBLE, save
+    bands = pd.read_csv(DATA / f'decoding_bands_{source}_2026-11.tsv.gz', sep='\t')
+    be = band_effects(bands, decoder)
+    pb = {k: stats.wilcoxon(be[k], alternative='less').pvalue for k in ['all'] + [b[0] for b in BANDS]}
+    fried = stats.friedmanchisquare(*[be[b[0]] for b in BANDS]).pvalue
+    oi = stats.wilcoxon(be['2.5-ap'] - be['0-1.5']).pvalue
+    fov = be[['ring_0.00', 'ring_0.25', 'ring_0.50']].mean(1)
+    W, H = DOUBLE * .62, 1.9
+    fig = plt.figure(figsize=(W, H))
+    ax = fig.add_axes([.75 / W, .42 / H, (W - 1.0) / W, 1.3 / H])
+    panel_ecc(ax, be, pb, pred=pred)
+    area_tag(ax, x=.02, y=.3)
+    f2 = lambda x: f'{x:+.1f}'.replace('-', '−')   # noqa: E731
+    band_txt = '; '.join(f'{lab} {f2(be[k].mean())} ± {be[k].sem():.1f}%, p = {pb[k]:.3f}' for k, a, b, lab in BANDS)
+    band_txt += f'; whole aperture {f2(be["all"].mean())} ± {be["all"].sem():.1f}%, p = {pb["all"]:.3f}'
+    pm = pred['all'] if pred is not None else None
+    legend = (f"**Figure S. The decoded difference at HP does not grow toward the items (Fig. 6, by eccentricity).** "
+              f"Decoding as in Fig. 6 (V1–V3 pooled, unconstrained decoder). Per subject and area, the decoded intensity on "
+              f"the bar's pixels in the quadrant facing HP minus that in the three other quadrants, in % of the latter, per "
+              f"ring of 0.25° eccentricity, mean of V1–V3 per subject; points and bars, mean ± SEM over subjects (n = "
+              f"{len(be)}); line and band, the gain-field model's prediction (as in Fig. 6; whole aperture "
+              f"{f2(pm.mean()) if pm is not None else 'n/a'} ± {pm.sem():.1f}%), in the three bands shaded. Items (radius "
+              f"{ITEM_R}°) begin at {ITEM_ECC - ITEM_R:.2f}° eccentricity, just outside the aperture, and their responses "
+              f"are in the BOLD data but not in the encoding model; if item responses leaking into the aperture produced "
+              f"the difference, it would grow toward the aperture edge. It does not: per band (one-sided Wilcoxon "
+              f"signed-rank test, uncorrected, * p < .05, ** p < .01) {band_txt}; the three bands do not differ (Friedman "
+              f"test, p = {fried:.2f}; outer minus inner band, two-sided Wilcoxon p = {oi:.2f}). Within 0.75° of the "
+              f"fovea there is no difference ({f2(fov.mean())} ± {fov.sem():.1f}%).")
+    save(fig, name, legend)
 
 
 def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, source_note='', frames_style='magma', v3=False,
@@ -1683,6 +2053,8 @@ if __name__ == '__main__':
     ap.add_argument('--pathways', nargs='?', const=True, default=False,
                     help="f: the HP − other quadrants contrast of d per pathway; '--pathways areas': pooled columns "
                          "first, then every area (BH across the nine)")
+    ap.add_argument('--v10', action='store_true', help='condensed Fig. 6 (plot_v10) and its supplements')
+    ap.add_argument('--ecc-name', default=None, help='v10: name of the eccentricity supplement')
     ap.add_argument('--sweep-opposite', action='store_true',
                     help='c: the opposite-quadrant segment as a third line and icons of the quadrants each half crosses')
     ap.add_argument('--prediction', default=None,
@@ -1699,6 +2071,9 @@ if __name__ == '__main__':
         plot_all_rois(name='figS_decoding_all_rois' + a.supp_suffix)
     elif a.step == 'plot_bar_crossing':
         plot_bar_crossing(name='figS_bar_crossing_response' + a.supp_suffix, source_note='')
+    elif a.v10:
+        plot_v10(a.name, a.source, a.decoder, prediction=a.prediction or 'decode_simfit', supp_suffix=a.supp_suffix,
+                 ecc_name=a.ecc_name)
     else:
         plot(a.name, a.source, a.rois, a.decoder, source_note=f'pRFs: {a.source} fold fits.', frames_style=a.frames_style, v3=a.v3, sweep=a.sweep,
              prediction=a.prediction, pathways=a.pathways, sweep_opposite=a.sweep_opposite)
