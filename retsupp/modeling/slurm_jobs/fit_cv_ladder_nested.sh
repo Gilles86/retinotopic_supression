@@ -86,6 +86,7 @@ g = tf.config.list_physical_devices('GPU'); print(f'cuInit warm-up: {len(g)} GPU
 else
     export CUDA_VISIBLE_DEVICES=""
 fi
+export TMPDIR="/scratch/$USER/tmp/${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID:-0}"; mkdir -p "$TMPDIR"   # per-task, off /home
 export TF_NUM_INTRAOP_THREADS="${SLURM_CPUS_PER_TASK:-4}"
 export TF_NUM_INTEROP_THREADS=2
 export PYTHONUNBUFFERED=1
