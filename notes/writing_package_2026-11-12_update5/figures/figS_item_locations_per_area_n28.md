@@ -1,0 +1,20 @@
+**Figure S. Item responses by location relative to HP, per area (n = 28).** As Fig. 3e, for each of the nine areas separately: each location type (HP, red; next to HP, the two neighbouring locations pooled, dark grey; opposite HP, light grey) relative to the mean of the four item locations over the window 3.2–6.4 s after search onset, item types pooled, in % of each participant's mean response over the twelve item × location cells in that area; mean ± within-subject SEM. Each panel has its own y-scale: in a single area the mean response is small for some participants, so the percentages spread widely (TO, IPS, VO); medians are in the table below. n per panel: participants with voxels at every item location and a positive mean response in that area (the pilots sub-01 and sub-02 are left out of the paper). Under each panel: repeated-measures ANOVA on location type (one-way, items pooled), F and Benjamini-Hochberg q across the nine areas. Brackets: contrasts (HP vs next to HP, next to HP vs opposite, HP vs opposite) with q < .05, Wilcoxon signed-rank test, Benjamini-Hochberg across the nine areas per contrast; * q < .05, ** q < .01. Exploratory per area; the inference is at the pathway level (Fig. 3e).
+
+Items pooled; % of each participant's mean response over the twelve item × location cells in that area (window 3.2–6.4 s); participants whose mean response in an area is not positive are left out (n per area). ANOVA: one-way repeated-measures, location type (HP, next to HP, opposite HP), uncorrected F, BH q across the nine areas. Contrasts: mean ± SEM [bootstrapped 95% CI of the mean, 10 000 resamples], participants below 0, Wilcoxon signed-rank p, Benjamini-Hochberg q across the nine areas per contrast. Exploratory per area; the pathway-level tests are in Fig. 3. Data: `notes/data/fig3_location_per_area_n28_2026-11-12.tsv`; code: `retsupp/visualize/paper/fig3_location_per_area.py`.
+
+| Area | n | Location type F (p, q) | HP − opposite (%) | p / q | Next − opposite (%) | p / q | HP − next (%) | p / q |
+|---|---|---|---|---|---|---|---|---|
+| V1 | 28 | F(2, 54) = 5.79 (.005, .047) | −52.8 ± 16.4 [−86.3, −23.1], 21/28 < 0 | .002 / .015 | −30.3 ± 14.6 [−59.3, −2.9], 18/28 < 0 | .090 / .405 | −22.5 ± 15.6 [−56.0, +3.7], 16/28 < 0 | .150 / .385 |
+| V2 | 28 | F(2, 54) = 2.10 (.132, .538) | −20.6 ± 9.4 [−39.1, −3.0], 20/28 < 0 | .010 / .031 | −9.2 ± 12.3 [−30.9, +16.5], 19/28 < 0 | .138 / .413 | −11.4 ± 8.1 [−27.3, +3.8], 19/28 < 0 | .171 / .385 |
+| V3 | 28 | F(2, 54) = 0.70 (.503, .754) | −7.0 ± 10.5 [−27.3, +13.3], 19/28 < 0 | .327 / .491 | −9.1 ± 5.3 [−19.7, +0.7], 17/28 < 0 | .210 / .472 | +2.1 ± 7.6 [−11.9, +17.0], 15/28 < 0 | .884 / .884 |
+| V3AB | 25 | F(2, 48) = 0.26 (.769, .811) | −9.3 ± 13.5 [−35.6, +15.6], 16/25 < 0 | .275 / .491 | −6.4 ± 16.2 [−37.5, +24.6], 13/25 < 0 | .771 / .868 | −2.9 ± 8.5 [−18.7, +13.9], 14/25 < 0 | .339 / .510 |
+| IPS | 13 | F(2, 24) = 1.60 (.222, .538) | −11.7 ± 17.6 [−47.9, +18.9], 8/13 < 0 | .635 / .817 | −35.7 ± 26.7 [−92.4, +4.4], 7/13 < 0 | .273 / .492 | +24.0 ± 14.7 [−1.3, +53.8], 4/13 < 0 | .168 / .385 |
+| hV4 | 28 | F(2, 54) = 1.18 (.314, .566) | −12.4 ± 11.2 [−35.9, +7.0], 16/28 < 0 | .264 / .491 | −13.4 ± 7.1 [−27.9, −0.2], 18/28 < 0 | .086 / .405 | +1.0 ± 10.3 [−21.1, +18.2], 12/28 < 0 | .412 / .529 |
+| VO | 17 | F(2, 32) = 0.21 (.811, .811) | +16.1 ± 31.5 [−34.8, +83.7], 10/17 < 0 | .747 / .840 | +11.8 ± 14.8 [−13.9, +41.5], 10/17 < 0 | .890 / .890 | +4.3 ± 27.7 [−47.8, +58.2], 10/17 < 0 | .782 / .880 |
+| LO | 26 | F(2, 50) = 0.21 (.809, .811) | +1.7 ± 9.3 [−16.1, +19.9], 14/26 < 0 | .842 / .842 | +5.0 ± 6.2 [−6.4, +17.5], 12/26 < 0 | .565 / .727 | −3.3 ± 7.4 [−16.7, +11.7], 17/26 < 0 | .340 / .510 |
+| TO | 21 | F(2, 40) = 1.48 (.239, .538) | −111.5 ± 87.4 [−304.2, +17.9], 16/21 < 0 | .010 / .031 | −55.4 ± 63.9 [−197.2, +37.7], 11/21 < 0 | .495 / .727 | −56.1 ± 28.8 [−115.7, −6.2], 15/21 < 0 | .042 / .379 |
+
+- HP − opposite, q < .05: V1, V2, TO.
+- Next − opposite, q < .05: none.
+- HP − next, q < .05: none.
+- Location type ANOVA, q < .05: V1.
