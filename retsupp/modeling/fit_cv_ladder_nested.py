@@ -513,6 +513,42 @@ def polish_fit(model, bold_train, paradigm, init_pars, free_shared,
     return fit_pars, info
 
 
+def polish_alternating(model, bold_train, paradigm, init_pars, free_shared, fixed, shared_all,
+                       bounded=False, rounds=2, learning_rate=1e-3, max_iter=3000):
+    """Block-coordinate polish, robust to float32 gradient noise (where one L-BFGS over all parameters can stall
+    with an ABNORMAL line search): per-voxel pRFs by Adam gradient descent with the shared terms fixed, then the
+    shared terms by bounded L-BFGS with the pRFs fixed, ``rounds`` times. Each step is kept only if it lowers the
+    training SSE, so the result is never above the clamped start."""
+    y = np.asarray(bold_train, dtype=np.float64)
+
+    def sse(p):
+        return float(((y - np.asarray(model.predict(paradigm=paradigm, parameters=p), dtype=np.float64)) ** 2).sum())
+    t0 = time.time()
+    labels = list(model.parameter_labels)
+    best = init_pars[labels].copy()
+    f0 = fbest = sse(best)
+    log = []
+    freeze = list(dict.fromkeys([p for p in (fixed or []) + list(shared_all) if p in labels]))
+    for r in range(rounds):
+        fitter = ParameterFitter(model, pd.DataFrame(bold_train), paradigm)
+        pv = fitter.fit(init_pars=best, max_n_iterations=max_iter, min_n_iterations=200, lag=100, r2_atol=1e-8,
+                        fixed_pars=freeze, learning_rate=learning_rate, progressbar=False)
+        pv = pv.reindex(columns=labels)
+        f_pv = sse(pv)
+        if f_pv < fbest:
+            best, fbest = pv, f_pv
+        sh, info = shared_fit(model, bold_train, paradigm, best, free_shared, bounded=bounded, sigma_starts=(None,))
+        sh = sh.reindex(columns=labels)
+        f_sh = sse(sh)
+        if f_sh < fbest:
+            best, fbest = sh, f_sh
+        log.append(dict(round=r, sse_after_prf=f_pv, sse_after_shared=f_sh))
+        print(f'    alt round {r}: SSE pRF step {f_pv:.2f}, shared step {f_sh:.2f} (start {f0:.2f})')
+    return best, dict(optimizer='alt_gd_lbfgs', seconds=time.time() - t0, sse_clamped=f0, sse_final=fbest,
+                      nit=0, rounds=rounds, status=0, message='alternating', grad_norm=float('nan'),
+                      grad_norm_shared=float('nan'), log=log)
+
+
 def bar_paradigm(sub, run_meta, resolution, grid_radius):
     return np.vstack([
         sub.get_bar_stimulus(session=rm.session, run=rm.run,
@@ -528,7 +564,8 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
          output_root=None, polish=False, bounded=False, max_bold_sd=None,
          loss='sse', base_roots=(), family='dog', hp_rotation=0, reliable_only=False,
          warm_roots=(), gd_min_iterations=1000, sigma_starts=SIGMA_STARTS, lbfgs_rounds=LBFGS_ROUNDS,
-         hrf_table=None, frozen_prf=False, polish_models=None):
+         hrf_table=None, frozen_prf=False, polish_models=None, polish_method='lbfgs',
+         polish_suffix='_polished'):
     if cv_scheme not in SCHEMES:
         raise ValueError(f'cv_scheme must be in {SCHEMES}')
     if frozen_prf and (cv_scheme == 'full' or not base_roots):
@@ -555,7 +592,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
             + ('_reliable' if reliable_only else '')
             + ('_roihrf' if hrf_table else '')
             + ('_frozenprf' if frozen_prf else '')))
-    polish_root = root.parent / f'{root.name}_polished'
+    polish_root = root.parent / f'{root.name}{polish_suffix}'
     hrf_tab = load_hrf_table(hrf_table)
     models = models or [m for m in LADDER if m not in TARGET_SPLIT]
 
@@ -789,8 +826,12 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                     free_pv = [p for p in labels
                                if p not in shared and p not in fixed]
                     init = fits[name][k].reindex(columns=labels)
-                    pars, info = polish_fit(m_tr, y_tr, train['paradigm'], init,
-                                            free_sh, free_pv, bounded=bounded)
+                    if polish_method == 'alt':
+                        pars, info = polish_alternating(m_tr, y_tr, train['paradigm'], init, free_sh, fixed,
+                                                        shared, bounded=bounded)
+                    else:
+                        pars, info = polish_fit(m_tr, y_tr, train['paradigm'], init,
+                                                free_sh, free_pv, bounded=bounded)
                     print(f'  fold {k}: SSE clamped {info["sse_clamped"]:.2f}'
                           f' -> {info["sse_final"]:.2f} | nit {info["nit"]} | '
                           f'|grad| {info["grad_norm"]:.3g} (shared '
@@ -1005,6 +1046,10 @@ if __name__ == '__main__':
     ap.add_argument('--polish-models', nargs='+', default=None,
                     help='With --polish: refit only these models with all parameters free (default: every model '
                          'fitted or loaded).')
+    ap.add_argument('--polish-method', choices=['lbfgs', 'alt'], default='lbfgs',
+                    help='lbfgs: one L-BFGS over all parameters; alt: alternate Adam on the pRFs and L-BFGS on the '
+                         'shared terms (robust to float32 gradient noise).')
+    ap.add_argument('--polish-suffix', default='_polished', help='Suffix of the polish root (tests).')
     ap.add_argument('--bounded', action='store_true',
                     help='Box the shared terms (SHARED_BOUNDS); root gets '
                          'a _bounded suffix.')
@@ -1043,4 +1088,5 @@ if __name__ == '__main__':
          max_bold_sd=a.max_bold_sd, loss=a.loss, base_roots=a.base_root, family=a.family,
          hp_rotation=a.hp_rotation, reliable_only=a.reliable_only, warm_roots=a.warm_root,
          gd_min_iterations=a.gd_min_iterations, sigma_starts=starts, lbfgs_rounds=a.lbfgs_rounds,
-         hrf_table=a.hrf_table, frozen_prf=a.frozen_prf, polish_models=a.polish_models)
+         hrf_table=a.hrf_table, frozen_prf=a.frozen_prf, polish_models=a.polish_models,
+         polish_method=a.polish_method, polish_suffix=a.polish_suffix)

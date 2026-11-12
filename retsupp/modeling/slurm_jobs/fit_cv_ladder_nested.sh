@@ -15,7 +15,8 @@
 #   sbatch --array=1-330 retsupp/modeling/slurm_jobs/fit_cv_ladder_nested.sh
 #   CV_SCHEME=run3 sbatch --array=1-330 ...
 #   POLISH=1 sbatch --array=1-330 ...    # + all-free polish pass
-#   POLISH_MODELS="m4_TDS m7_full" restricts the polish pass to these models
+#   POLISH_MODELS="m4_TDS m7_full" restricts the polish pass to these models; POLISH_METHOD=alt alternates Adam (pRFs)
+#   and L-BFGS (shared terms); POLISH_SUFFIX=_x writes the polish to <root>_x (tests)
 #   CV_SCHEME=full POLISH=1 sbatch --array=1-330 ...  # main fits
 #   BOUNDED=1 boxes the shared terms (root gets a _bounded suffix)
 #   LOSS=nll fits the shared terms by likelihood (root gets a _nll suffix)
@@ -80,6 +81,6 @@ echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
     ${WARM_ROOT:+--warm-root $WARM_ROOT} ${GD_ITER:+--gd-iterations $GD_ITER} \
     ${GD_MIN_ITER:+--gd-min-iterations $GD_MIN_ITER} ${SIGMA_STARTS:+--sigma-starts $SIGMA_STARTS} \
     ${LBFGS_ROUNDS:+--lbfgs-rounds $LBFGS_ROUNDS} ${OUTPUT_ROOT:+--output-root $OUTPUT_ROOT} \
-    ${HRF_TABLE:+--hrf-table $HRF_TABLE} ${POLISH_MODELS:+--polish-models $POLISH_MODELS}
+    ${HRF_TABLE:+--hrf-table $HRF_TABLE} ${POLISH_MODELS:+--polish-models $POLISH_MODELS} ${POLISH_METHOD:+--polish-method $POLISH_METHOD} ${POLISH_SUFFIX:+--polish-suffix $POLISH_SUFFIX}
 
 echo "Finished: $(date)"
