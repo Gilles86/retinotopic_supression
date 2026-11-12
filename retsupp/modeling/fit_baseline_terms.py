@@ -28,8 +28,8 @@ Designs (amplitudes estimated on the training runs = all runs but run 3 of each 
 Recovery (step 4, ``--n-sim``): from the joint fit with the sustained HP gain tied to LP (P0n), simulated data
   Y = P0n + signal + phase-randomised residual (one random phase spectrum per run, shared by all voxels, so the
   residual's spatial correlations are kept), with signal = (i) multiplicative: δ·X_dS with δ = the group dS
-  (``--sim-ds``, −0.014); (ii) trial-locked additive: amplitude matched so that the mean change at the voxels with
-  w_v > 0.5 over the 0–8 s after search onsets equals that of (i); (iii) sustained additive, then each run's mean
+  (``--sim-ds``, −0.014); (ii) trial-locked additive: amplitude matched to (i) in signal power (sum of squares) at
+  the voxels nearest HP (w_v at least half its maximum), negative; (iii) sustained additive, then each run's mean
   removed (what the cleaning does). For each simulated dataset the dS and trial_search designs are estimated as above;
   group-level recovery (which term is detected) is computed offline from the per-subject outputs.
 
@@ -184,12 +184,13 @@ def fit_roi(sub, roi, data, out_dir, overlay_root, n_sim, sim_ds, seed):
     dn['g_HP'] -= fgm.H
     Xds = (pred(up) - pred(dn)) / (2 * fgm.H)
     Xtr = terms['trial_spec_search']
-    sel = (w_spec > .5).any(0)
-    u_s = onset_series(sub, run_meta, 'target', np.ones(int(round(8 / sub.get_tr(1, 1)))))  # 0–8 s after onsets
-    win = u_s > 0
-    mult_effect = (sim_ds * Xds)[win][:, sel].mean() if sel.any() else np.nan
-    add_unit = Xtr[win][:, sel].mean() if sel.any() else np.nan
-    amp = mult_effect / add_unit if (sel.any() and add_unit != 0) else np.nan
+    # Matched size: the same signal power (sum of squares) at the voxels nearest HP (w_v at least half its maximum),
+    # with the sign of a suppression. A match on the mean is ill-posed here: both signals have about zero mean per run.
+    wmax = np.abs(w_spec).max(0)
+    sel = wmax >= .5 * wmax.max()
+    mult_ss = ((sim_ds * Xds)[:, sel] ** 2).sum()
+    add_ss = (Xtr[:, sel] ** 2).sum()
+    amp = -np.sqrt(mult_ss / add_ss) if add_ss > 0 else np.nan
     gens = {'multiplicative': sim_ds * Xds, 'trial_additive': amp * Xtr}
     sus = w_spec * (amp if np.isfinite(amp) else 0.)
     for rm in run_meta:
