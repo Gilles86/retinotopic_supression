@@ -90,6 +90,40 @@ def collect_fitted(bids, source, noise, out_dir, prefix='decode_simfit', jobs=4)
         print(f'{v}: {len(tasks)} subject x ROI -> {out}', flush=True)
 
 
+def collect_fitted_maps(bids, source, noise, out_dir, prefix='decode_simfit', jobs=4, decoder='free'):
+    """The HP-rotated maps of ``fig6_collect`` (per subject × ROI, mean over runs of the per-pixel drive with HP upper
+    right) for the fitted-model simulation, one file per variant in the layout of ``decoding_maps_<source>_2026-11.npz``:
+    ``decoding_maps_<prefix>_<variant>_2026-11.npz``."""
+    from multiprocessing import Pool
+
+    import numpy as np
+
+    from retsupp.visualize.paper.fig6_collect import one_run
+    root = Path(bids) / 'derivatives' / 'decoded_sim_fitted_2026-11' / source / f'noise-{noise}'
+    for v in ('model', 'control'):
+        out = Path(out_dir) / f'decoding_maps_{prefix}_{v}_2026-11.npz'
+        if out.exists():
+            raise FileExistsError(f'{out} exists; not overwriting')
+        files = sorted((root / v / decoder).glob('sub-*/decoded_*.npz'))
+        rois = [r for r in ('V1', 'V2', 'V3') if any(f.stem.endswith(f'roi-{r}') for f in files)]
+        subjects = sorted({int(f.parent.name.split('-')[1]) for f in files})
+        S = {s: i for i, s in enumerate(subjects)}
+        tot = np.zeros((len(subjects), len(rois), 1, 2, 50, 50))
+        n = np.zeros_like(tot)
+        with Pool(jobs) as pool:
+            for meta, _q, _rows, maps, *_ in pool.imap_unordered(one_run, [(f, bids, source) for f in files], chunksize=4):
+                ix = (S[meta['subject']], rois.index(meta['roi']), 0)
+                ok = np.isfinite(maps)
+                tot[ix] += np.where(ok, maps, 0)
+                n[ix] += ok
+        with np.errstate(invalid='ignore'):
+            mp = tot / n
+        np.savez_compressed(out, drive=mp[:, :, :, 0].astype(np.float32), mean=mp[:, :, :, 1].astype(np.float32),
+                            n_runs=n[:, :, :, 0].max((-1, -2)), subjects=np.array(subjects), rois=np.array(rois),
+                            decoders=np.array([decoder]), grid=np.load(files[0])['grid'])
+        print(f'{v}: {len(files)} runs, {len(subjects)} subjects -> {out}', flush=True)
+
+
 if __name__ == '__main__':
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
@@ -97,10 +131,14 @@ if __name__ == '__main__':
     p.add_argument('--noise', default='phase')
     p.add_argument('--out', default='notes/data/decode_sim_2026-11.tsv')
     p.add_argument('--fitted', action='store_true', help='collect simulate_decode.py --mode fitted (see collect_fitted)')
+    p.add_argument('--maps', action='store_true', help='with --fitted: only the HP-rotated maps (collect_fitted_maps)')
     p.add_argument('--out-dir', default='notes/data')
     p.add_argument('--prefix', default='decode_simfit')
     p.add_argument('-j', '--jobs', type=int, default=4)
     a = p.parse_args()
+    if a.fitted and a.maps:
+        collect_fitted_maps(a.bids_folder, a.source, a.noise, a.out_dir, a.prefix, a.jobs)
+        raise SystemExit
     if a.fitted:
         collect_fitted(a.bids_folder, a.source, a.noise, a.out_dir, a.prefix, a.jobs)
         raise SystemExit
