@@ -63,7 +63,25 @@ exec >"$LOGFILE" 2>&1
 echo "Host: $(hostname) | job ${SLURM_JOB_ID} task ${SLURM_ARRAY_TASK_ID} | sub-${subject} ${roi} | cv=${CV_SCHEME} polish=${POLISH:-0} | $(date)"
 scontrol update jobid="${SLURM_JOB_ID}" name="cvl_nested_${TAG}" 2>/dev/null || true
 
-export CUDA_VISIBLE_DEVICES=""
+if [[ -n "${GPU:-}" ]]; then
+    # GPU=1: submit with --partition=lowprio --gres=gpu:1 --constraint="L4|A100" (CUDA 11.8 env).
+    SYS_CUDA_GLOB=( /apps/u24/opt/x86_64_v3/cuda-11.8.0-* )
+    if [[ -d "${SYS_CUDA_GLOB[0]}/targets/x86_64-linux/lib" ]]; then
+        export LD_LIBRARY_PATH="${SYS_CUDA_GLOB[0]}/targets/x86_64-linux/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    fi
+    # cuInit-race defense: per-node lock on /dev/shm (shared across jobs on a node), see fit_prf_l4_chunked.sh.
+    LOCK="/dev/shm/cuinit_warm_$(hostname -s).flock"
+    (
+        flock -w 60 -x 200 || exit 0
+        "$HOME/data/conda/envs/retsupp_cuda/bin/python" -c "
+import os, sys
+os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
+import tensorflow as tf
+g = tf.config.list_physical_devices('GPU'); print(f'cuInit warm-up: {len(g)} GPU(s)', flush=True); sys.exit(0 if g else 1)"
+    ) 200>"$LOCK" || { echo "FATAL: no GPU after warm-up"; exit 1; }
+else
+    export CUDA_VISIBLE_DEVICES=""
+fi
 export TF_NUM_INTRAOP_THREADS="${SLURM_CPUS_PER_TASK:-4}"
 export TF_NUM_INTEROP_THREADS=2
 export PYTHONUNBUFFERED=1
@@ -81,6 +99,6 @@ echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
     ${WARM_ROOT:+--warm-root $WARM_ROOT} ${GD_ITER:+--gd-iterations $GD_ITER} \
     ${GD_MIN_ITER:+--gd-min-iterations $GD_MIN_ITER} ${SIGMA_STARTS:+--sigma-starts $SIGMA_STARTS} \
     ${LBFGS_ROUNDS:+--lbfgs-rounds $LBFGS_ROUNDS} ${OUTPUT_ROOT:+--output-root $OUTPUT_ROOT} \
-    ${HRF_TABLE:+--hrf-table $HRF_TABLE} ${POLISH_MODELS:+--polish-models $POLISH_MODELS} ${POLISH_METHOD:+--polish-method $POLISH_METHOD} ${POLISH_SUFFIX:+--polish-suffix $POLISH_SUFFIX}
+    ${HRF_TABLE:+--hrf-table $HRF_TABLE} ${POLISH_MODELS:+--polish-models $POLISH_MODELS} ${POLISH_METHOD:+--polish-method $POLISH_METHOD} ${POLISH_SUFFIX:+--polish-suffix $POLISH_SUFFIX} ${POLISH_ROUNDS:+--polish-rounds $POLISH_ROUNDS} ${POLISH_MAX_ITER:+--polish-max-iter $POLISH_MAX_ITER}
 
 echo "Finished: $(date)"

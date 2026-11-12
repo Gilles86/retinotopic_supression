@@ -565,7 +565,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
          loss='sse', base_roots=(), family='dog', hp_rotation=0, reliable_only=False,
          warm_roots=(), gd_min_iterations=1000, sigma_starts=SIGMA_STARTS, lbfgs_rounds=LBFGS_ROUNDS,
          hrf_table=None, frozen_prf=False, polish_models=None, polish_method='lbfgs',
-         polish_suffix='_polished'):
+         polish_suffix='_polished', polish_rounds=2, polish_max_iter=3000):
     if cv_scheme not in SCHEMES:
         raise ValueError(f'cv_scheme must be in {SCHEMES}')
     if frozen_prf and (cv_scheme == 'full' or not base_roots):
@@ -828,7 +828,8 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                     init = fits[name][k].reindex(columns=labels)
                     if polish_method == 'alt':
                         pars, info = polish_alternating(m_tr, y_tr, train['paradigm'], init, free_sh, fixed,
-                                                        shared, bounded=bounded)
+                                                        shared, bounded=bounded, rounds=polish_rounds,
+                                                        max_iter=polish_max_iter)
                     else:
                         pars, info = polish_fit(m_tr, y_tr, train['paradigm'], init,
                                                 free_sh, free_pv, bounded=bounded)
@@ -1050,6 +1051,8 @@ if __name__ == '__main__':
                     help='lbfgs: one L-BFGS over all parameters; alt: alternate Adam on the pRFs and L-BFGS on the '
                          'shared terms (robust to float32 gradient noise).')
     ap.add_argument('--polish-suffix', default='_polished', help='Suffix of the polish root (tests).')
+    ap.add_argument('--polish-rounds', type=int, default=2, help='Alternating polish: rounds.')
+    ap.add_argument('--polish-max-iter', type=int, default=3000, help='Alternating polish: Adam iterations per round.')
     ap.add_argument('--bounded', action='store_true',
                     help='Box the shared terms (SHARED_BOUNDS); root gets '
                          'a _bounded suffix.')
@@ -1089,4 +1092,5 @@ if __name__ == '__main__':
          hp_rotation=a.hp_rotation, reliable_only=a.reliable_only, warm_roots=a.warm_root,
          gd_min_iterations=a.gd_min_iterations, sigma_starts=starts, lbfgs_rounds=a.lbfgs_rounds,
          hrf_table=a.hrf_table, frozen_prf=a.frozen_prf, polish_models=a.polish_models,
-         polish_method=a.polish_method, polish_suffix=a.polish_suffix)
+         polish_method=a.polish_method, polish_suffix=a.polish_suffix,
+         polish_rounds=a.polish_rounds, polish_max_iter=a.polish_max_iter)
