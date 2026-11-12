@@ -90,20 +90,31 @@ def summarise(js, cond):
 
 def write_table(t, js):
     t.to_csv(OUT / f'table_parameters_2026-11{SUFFIX}.tsv', sep='\t', index=False)
-    fmt = lambda r: f"{r['median']:+.3f} [{r.ci_low:+.3f}, {r.ci_high:+.3f}]"
+    k = 100. if PERCENT else 1.
+    if PERCENT:
+        fmt = lambda r: (f"{k * r['median']:+.1f}% [{k * r.ci_low:+.1f}, {k * r.ci_high:+.1f}]").replace('-', '−')
+    else:
+        fmt = lambda r: f"{r['median']:+.3f} [{r.ci_low:+.3f}, {r.ci_high:+.3f}]"
     n_sub = t['n'].max() if 'n' in t else 30
     lines = [f'**Table S. Gain-field parameters per ROI (gain-field model with all terms fitted jointly, n = {n_sub}'
              + (f'; {FIT_LABEL}' if FIT_LABEL else '') + ').** '
              'Median [bootstrapped 95% CI], Wilcoxon p, BH q '
              'across 9 ROIs, JZS Bayes factor BF10 (r = .707), and for DoG the median of the estimate with each term added '
-             'alone. Gains are the fractional change in drive at the centre of a field (+0.30: 30% more).', '']
+             'alone. ' + ('Gains in % (the change in drive at the centre of a field: +30%, 30% more); HP − LP '
+                          'differences in percentage points. DN columns: the DN fits with the pRFs held at the fit '
+                          'without gain fields (not refitted). The estimated-alone column ("DoG conditional") of '
+                          'the target and distractor gain adds the term to base models that were not refitted; report '
+                          'those two from the joint fit.' if PERCENT else
+                          'Gains are the fractional change in drive at the centre of a field (+0.30: 30% more).'), '']
     for term, lab, _ in TERMS:
         lines += [f'**{lab}**', '', '| ROI | DoG median [CI] | p | q | BF10 | DoG conditional | DN median [CI] | p | q | BF10 |',
                   '|---|---|---|---|---|---|---|---|---|---|']
         for roi in ROI_ORDER:
             a = t[(t.model == 'DoG') & (t.term == term) & (t.roi == roi)].iloc[0]
             b = t[(t.model == 'DN') & (t.term == term) & (t.roi == roi)].iloc[0]
-            lines.append(f"| {roi} | {fmt(a)} | {a.p:.3g} | {a.q:.3g} | {a.bf10:.2g} | {a.conditional_median:+.3f} | "
+            lines.append(f"| {roi} | {fmt(a)} | {a.p:.3g} | {a.q:.3g} | {a.bf10:.2g} | "
+                         + (f"{k * a.conditional_median:+.1f}%".replace('-', '−') if PERCENT else f"{a.conditional_median:+.3f}")
+                         + f" | "
                          f"{fmt(b)} | {b.p:.3g} | {b.q:.3g} | {b.bf10:.2g} |")
         lines.append('')
     lines += ['**Field size (FWHM = 2.355 σ, degrees), median [95% CI], % of fits at a bound**', '',
@@ -252,9 +263,8 @@ def pooled_legend_pct(cond, js):
     jd = js['dog']
     txt = {f'{term}_{w}': one(df.groupby('subject')[term].median())
            for term in ('dS', 'dD') for w, df in (('alone', cond), ('joint', jd))}
-    lab = f' ({FIT_LABEL})' if FIT_LABEL else ''
-    return (f"\n**Figure S. The HP − LP gain differences per participant, median over the nine areas.** Gain-field model "
-            f"fits with DoG pRFs{lab}; gains in % (differences in percentage points). Left in each panel, each term "
+    lab = (FIT_LABEL[0].upper() + FIT_LABEL[1:]) if FIT_LABEL else 'Gain-field model fits with DoG pRFs'
+    return (f"\n**Figure S. The HP − LP gain differences per participant, median over the nine areas.** {lab}; gains in % (differences in percentage points). Left in each panel, each term "
             f"estimated alone (added alone to the model with item weight, target, distractor and sustained gain); right, "
             f"the joint fit with all terms together. Dots, participants; points and bars, the median and bootstrapped "
             f"95% CI; above, the share of participants below 0 and the Wilcoxon p. a, dS, the sustained gain at HP "
@@ -506,7 +516,7 @@ def panel_hierarchy(ax, t, size, slopes):
                     ax.text(xi + dx, yi + dy * kk, roi, fontsize=6 if PERCENT else 5.5, color='.4', ha='center',
                             va='center')
             xs = lx[[ROI_ORDER.index(q) for q in ('VO', 'TO', 'IPS')]]
-            ax.text(xs.max() + .02, .03 * kk, 'VO, TO, IPS', fontsize=6 if PERCENT else 5.5,
+            ax.text(xs.max() + .02, -6 if PERCENT else .03, 'VO, TO, IPS', fontsize=6 if PERCENT else 5.5,
                     color='.4', ha='right', va='center')
     ax.axhline(0, color='.7', lw=.7, ls='--', zorder=0)
     ticks = [.6, 1., 1.6]
@@ -514,7 +524,7 @@ def panel_hierarchy(ax, t, size, slopes):
     ax.set_xticklabels([f'{v:g}' for v in ticks])
     ax.set_xlim(np.log2(.5), np.log2(1.8))
     if PERCENT:
-        ax.set_ylim(-12, 68)
+        ax.set_ylim(-12, 82)
         ax.set_yticks([0, 20, 40, 60])
         ax.set_ylabel('Median gain (%)')
     else:
