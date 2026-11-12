@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=cvl_nested
-#SBATCH --account=zne.uzh
+#SBATCH --account=hare.econ.uzh
 #SBATCH --partition=standard
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=4   # tasks used ~45-60% of 8 CPUs (sacct TotalCPU, 2026-11-06)
@@ -15,6 +15,7 @@
 #   sbatch --array=1-330 retsupp/modeling/slurm_jobs/fit_cv_ladder_nested.sh
 #   CV_SCHEME=run3 sbatch --array=1-330 ...
 #   POLISH=1 sbatch --array=1-330 ...    # + all-free polish pass
+#   POLISH_MODELS="m4_TDS m7_full" restricts the polish pass to these models
 #   CV_SCHEME=full POLISH=1 sbatch --array=1-330 ...  # main fits
 #   BOUNDED=1 boxes the shared terms (root gets a _bounded suffix)
 #   LOSS=nll fits the shared terms by likelihood (root gets a _nll suffix)
@@ -79,6 +80,6 @@ echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
     ${WARM_ROOT:+--warm-root $WARM_ROOT} ${GD_ITER:+--gd-iterations $GD_ITER} \
     ${GD_MIN_ITER:+--gd-min-iterations $GD_MIN_ITER} ${SIGMA_STARTS:+--sigma-starts $SIGMA_STARTS} \
     ${LBFGS_ROUNDS:+--lbfgs-rounds $LBFGS_ROUNDS} ${OUTPUT_ROOT:+--output-root $OUTPUT_ROOT} \
-    ${HRF_TABLE:+--hrf-table $HRF_TABLE}
+    ${HRF_TABLE:+--hrf-table $HRF_TABLE} ${POLISH_MODELS:+--polish-models $POLISH_MODELS}
 
 echo "Finished: $(date)"

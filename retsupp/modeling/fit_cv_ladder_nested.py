@@ -528,7 +528,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
          output_root=None, polish=False, bounded=False, max_bold_sd=None,
          loss='sse', base_roots=(), family='dog', hp_rotation=0, reliable_only=False,
          warm_roots=(), gd_min_iterations=1000, sigma_starts=SIGMA_STARTS, lbfgs_rounds=LBFGS_ROUNDS,
-         hrf_table=None, frozen_prf=False):
+         hrf_table=None, frozen_prf=False, polish_models=None):
     if cv_scheme not in SCHEMES:
         raise ValueError(f'cv_scheme must be in {SCHEMES}')
     if frozen_prf and (cv_scheme == 'full' or not base_roots):
@@ -663,7 +663,8 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
 
         stages = [('clamped', n) for n in needed]
         if polish:
-            stages += [('polish', n) for n in needed]
+            # --polish-models restricts the all-free pass to these models (each from its own clamped optimum)
+            stages += [('polish', n) for n in needed if not polish_models or n in polish_models]
         polished: dict[str, list] = {}
         for stage, name in stages:
             out_root = root if stage == 'clamped' else polish_root
@@ -1001,6 +1002,9 @@ if __name__ == '__main__':
     ap.add_argument('--polish', action='store_true',
                     help='Then refit every model with all parameters free '
                          '(written to <root>_polished).')
+    ap.add_argument('--polish-models', nargs='+', default=None,
+                    help='With --polish: refit only these models with all parameters free (default: every model '
+                         'fitted or loaded).')
     ap.add_argument('--bounded', action='store_true',
                     help='Box the shared terms (SHARED_BOUNDS); root gets '
                          'a _bounded suffix.')
@@ -1039,4 +1043,4 @@ if __name__ == '__main__':
          max_bold_sd=a.max_bold_sd, loss=a.loss, base_roots=a.base_root, family=a.family,
          hp_rotation=a.hp_rotation, reliable_only=a.reliable_only, warm_roots=a.warm_root,
          gd_min_iterations=a.gd_min_iterations, sigma_starts=starts, lbfgs_rounds=a.lbfgs_rounds,
-         hrf_table=a.hrf_table, frozen_prf=a.frozen_prf)
+         hrf_table=a.hrf_table, frozen_prf=a.frozen_prf, polish_models=a.polish_models)
