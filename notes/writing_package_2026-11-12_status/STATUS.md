@@ -166,7 +166,8 @@ Mark each in the text with **[PENDING: …]** so the numbers can be swapped in w
 
 ## Expected order of arrival
 
-1. Update 8 (Fig. 5 v11 and the parameter table from the refitted fits): this evening, marked provisional until C1 is
-   decided.
+1. Update 8 (Fig. 5 v11 and the parameter table from the refitted fits): ready, sent with this note
+   (`writing_package_2026-11-12_update8.zip`). It is provisional until C1 is decided and supersedes the table in
+   section B.
 2. C1 and C2: tonight.
 3. Update 9 (C3): after update 8.
