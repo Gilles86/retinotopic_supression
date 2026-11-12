@@ -63,8 +63,11 @@ participant, averaged like the data. The gain fit used all runs, including the d
 > low-probability locations) and was not reliable in the data (next to HP − opposite +0.68%, p = .070)."
 
 > "Pooled over areas, the decoded bar was also weaker in the quadrant facing HP outside early visual cortex, in
-> occipitotemporal (−1.06 ± 0.41%, p = .006) but not in dorsal areas (−0.12 ± 0.75%, p = .56), the same split as for
-> the HP-specific gain (Fig. 5c). Area by area, the effect was reliable in V2 and V3 (q = .033)."
+> occipitotemporal (−1.06 ± 0.41%, p = .006) but not in dorsal areas (−0.12 ± 0.75%, p = .56). Area by area, the
+> effect was reliable in V2 and V3 (q = .033)."
+
+  Do **not** add "the same split as for the HP-specific gain". After the pRF refit, the per-pathway dS (Fig. 5c) is not
+  reliable in any single pathway once corrected (early q = .057, occipitotemporal q = .089); see section B."
 
 **Supplementary figures:**
 
@@ -94,14 +97,20 @@ participant, averaged like the data. The gain fit used all runs, including the d
 
 | | Before | After refit |
 |---|---|---|
-| dS estimated alone, pooled | −1.4% (p = 1×10⁻⁴) | −1.3% (p = 2×10⁻⁴) |
-| dS estimated alone, per area | V3, TO significant | V3 −2.7%, **hV4 −2.7%** significant; TO −1.9% (q = .065) |
-| dS in the joint fit | −3.4% (p = .003) | −3.5% (p = .004) |
+| dS estimated alone, pooled | −1.4% (p = 1×10⁻⁴) | −1.0% [−1.9, −0.4], 22 of 28 < 0, p = 2.7×10⁻⁴ |
+| dS estimated alone, per area | V3, TO significant | V3 −2.7%, hV4 −2.4%, TO −1.9% (each q = .036) |
+| dS estimated alone, per pathway | early, occipitotemporal q = .040 | not reliable in any single pathway (early q = .057, occipitotemporal q = .089) |
+| dS in the joint fit | −3.4% (p = .003) | −3.5% [−6.7, −1.3], p = .0044; V3 −9.5% (q = .034), hV4 −5.6% (q = .024); TO no longer significant |
 | Target gain | +16% | +17%, same areas significant |
 | Distractor gain | +6.5% (p = .023) | +8.0% (p = .023), same areas |
 | Sustained LP gain | −6.7% | −11% (TO −67%, IPS −58%) |
 
-- **Claims:** the dS claim stands, and so do the target and distractor results.
+- **Claims:** the dS claim stands pooled and per area (V3, hV4, TO when estimated alone), and so do the target and
+  distractor results. The per-pathway statement ("in early and occipitotemporal areas, not in dorsal") no longer holds
+  after correction; describe dS by area and pooled.
+- **Which fits count:** as for every earlier number, estimated-alone fits that fail the linearity check are excluded
+  (13 of the dS fits on the refitted base). Without that filter the pooled value would be −1.3%; do not use it.
+- **Exact values and sources** are in update 8 (`key_numbers.md`), which supersedes this table.
 - **The sustained LP gain needs care.** Its sign holds, but in higher areas its size trades off against the item
   weight and the pRF amplitude, so its absolute level is not well determined. Write "negative", not a precise size.
 - **Fig. 5 and the parameter table** are redrawn from these fits in update 8. Until then, keep the current Fig. 5 and
