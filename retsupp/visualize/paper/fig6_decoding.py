@@ -399,7 +399,7 @@ def quadrant_stats(s):
     return out
 
 
-def panel_quadrants(ax, s, st):
+def panel_quadrants(ax, s, st, pred=None):
     """d: decoded intensity per quadrant relative to the mean of the four, in g's HP / next / opposite order and colours."""
     import matplotlib.transforms as mtrans
     from matplotlib.patches import Circle, Wedge
@@ -414,6 +414,13 @@ def panel_quadrants(ax, s, st):
         ax.scatter(i + rng.uniform(-.13, .13, len(v)), v[c], s=6, color=col, alpha=.4, lw=0, zorder=2)
         se = norm[c].std(ddof=1) / np.sqrt(len(v)) * np.sqrt(k / (k - 1))
         ax.errorbar(i + .27, v[c].mean(), yerr=se, fmt='o', ms=5, color=col, mec='w', mew=.7, lw=1.4, capsize=0, zorder=4)
+    if pred is not None:   # gain-field model: line + band (mean ± SEM over subjects) across each condition
+        for i, c in enumerate(cls):
+            pm, pse = pred[c].mean(), pred[c].sem()
+            ax.fill_between([i - .2, i + .45], pm - pse, pm + pse, color=FG, alpha=.15, lw=0, zorder=1)
+            ax.plot([i - .2, i + .45], [pm, pm], color=FG, lw=1.1, zorder=3)
+        ax.text(2.5, pred['opposite'].mean() + 1.0, 'Gain-field\nmodel', fontsize=6, color=FG, ha='right', va='bottom',
+                linespacing=1.)
     lo, hi = -6, 5
     ax.set_ylim(lo, hi)
     if st['p_adj'] < .05:
@@ -543,7 +550,7 @@ def panel_bands_sketch(ax):
     ax.text(ITEM_R + .25, ITEM_ECC, 'HP item', color=HP, fontsize=6.5, ha='left', va='center')
 
 
-def panel_ecc(ax, be, pb):
+def panel_ecc(ax, be, pb, pred=None):
     from retsupp.visualize.paper.paper_style import FG, HP, offset_spines
     rings = sorted(c for c in be.columns if c.startswith('ring'))
     x = np.array([float(r.split('_')[1]) for r in rings]) + .125
@@ -559,8 +566,16 @@ def panel_ecc(ax, be, pb):
     ax.axvspan(APERTURE, ECC_MAX, facecolor='w', edgecolor='.6', hatch='////', lw=0, zorder=0)
     ax.text((APERTURE + ECC_MAX) / 2, (lo + hi) / 2, 'Aperture edge (items beyond, at 4°)', rotation=90, ha='center',
             va='center', fontsize=6, color='.35', bbox=dict(boxstyle='square,pad=.15', fc='w', ec='none'))
-    ax.fill_between(x, m - se, m + se, color=HP, alpha=.2, lw=0)
-    ax.plot(x, m, color=HP, lw=1.3)
+    if pred is None:
+        ax.fill_between(x, m - se, m + se, color=HP, alpha=.2, lw=0)
+        ax.plot(x, m, color=HP, lw=1.3)
+    else:   # data as points + SEM, the gain-field model as line + band
+        pv = pred[rings].to_numpy()
+        pm, pse = pv.mean(0), pv.std(0, ddof=1) / np.sqrt(len(pv))
+        ax.fill_between(x, pm - pse, pm + pse, color=FG, alpha=.15, lw=0, zorder=1)
+        ax.plot(x, pm, color=FG, lw=1.1, zorder=2)
+        ax.errorbar(x, m, yerr=se, fmt='o', ms=3, color=HP, mec='w', mew=.5, lw=.9, capsize=0, zorder=3)
+        ax.text(x[-1] - .05, pm[-1] + .55, 'Gain-field model', fontsize=6.5, color=FG, ha='right', va='bottom')
     ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
     ax.set_xlim(0, ECC_MAX)
     ax.set_xticks([0, 1, 2, 3])
@@ -718,21 +733,15 @@ def bar_insets(fig, source, xy, W, H, size=.7, gap=.1, vmax=3., bins=(2, 3, 4), 
 SWEEP_TXT = """ Right of the map, the same contrast on single bar positions without any averaging over the visual field, as the bar sweeps across the aperture: the decoded bar (decoder with the bar outline given) minus the mean decoded bar at the same time point over the subject's runs, averaged within each HP location first and then over the four, so the stimulus is identical and only the HP location differs; each run scaled to a common mean intensity on the bar first, rotated so HP is at the upper right in 90° steps, horizontal bars reflected onto vertical ones across the diagonal through HP. Top, the difference image at each of the {nb} bar positions (bar centre on the axis below; negative, the side away from HP), smoothed (Gaussian, σ = 0.2°), same colour scale as the map, on the bar's footprint. Bottom, the difference on the bar's segment in the quadrant facing HP (red; only bars that reach it) and in the two quadrants next to HP (grey; mean of the segments present), in % of the mean decoded intensity on the bar; mean ± SEM over subjects; stars, two-sided Wilcoxon signed-rank test per position, uncorrected (* p < .05, ** p < .01). {sweep_stats}."""
 
 
-def bar_sweep(fig, source, x0, x1, y_img, y_ax, h_ax, W, H, vmax=3.):
-    """The bar sweep beside c: the decoded-bar difference image at every bar position (outline decoder), aligned above
-    a line plot of the segment differences in the quadrant facing HP and next to it against the bar centre."""
-    from scipy import ndimage
-    from retsupp.visualize.paper.figS_decoded_bars import QUAD, _disc, _smooth_masked, pooled_condition
-    from retsupp.visualize.paper.paper_style import HP, MUTED, offset_spines
-    z = np.load(DATA / f'decoded_bars_condition_{source}_outline_2026-11.npz')
-    P = pooled_condition(z['mean'])
-    grid = z['grid']
-    centres = (z['edges'][:-1] + z['edges'][1:]) / 2
+def sweep_segments(P, grid):
+    """Per subject × bar position (P from ``pooled_condition``): the decoded − mean-over-HP difference on the bar's segment
+    in the quadrant facing HP and in the quadrants next to it (mean of those present), % of the bar's mean."""
+    from retsupp.visualize.paper.figS_decoded_bars import QUAD
     X, Y = grid[:, 0].reshape(50, 50), grid[:, 1].reshape(50, 50)
     inside = np.hypot(X, Y) <= APERTURE
-    ns = len(P)
-    hp_v, nx_v = np.full((ns, len(centres)), np.nan), np.full((ns, len(centres)), np.nan)
-    for b in range(len(centres)):
+    ns, nb = P.shape[0], P.shape[1]
+    hp_v, nx_v = np.full((ns, nb), np.nan), np.full((ns, nb), np.nan)
+    for b in range(nb):
         bar = (P[:, b, 2].mean(0) > .5) & inside
         bm = np.array([P[s, b, 0][bar].mean() for s in range(ns)])
         seg = {}
@@ -745,6 +754,48 @@ def bar_sweep(fig, source, x0, x1, y_img, y_ax, h_ax, W, H, vmax=3.):
         nk = [k for k in seg if k.startswith('Next')]
         if nk:
             nx_v[:, b] = np.mean([seg[k] for k in nk], 0)
+    return hp_v, nx_v
+
+
+def load_prediction(prefix, decoder=DECODER, rois=EARLY):
+    """The gain-field model's prediction through the Fig. 6 readouts (``simulate_decode.py --mode fitted``, collected by
+    ``collect_simulate_decode.py --fitted``): per subject, readout(model) − readout(control), the paired run with the
+    gains at 0 and the same noise. Returns quadrant effects (as ``quadrant_effects``), band effects (as
+    ``band_effects``) and the bar-sweep segment differences (hp, next; subject × bar position)."""
+    from retsupp.visualize.paper.figS_decoded_bars import pooled_condition
+    d = pd.read_csv(DATA / f'{prefix}_readout_2026-11.tsv', sep='\t')
+    q = {v: quadrant_effects(g, decoder, rois) for v, g in d.groupby('variant')}
+    b = pd.read_csv(DATA / f'{prefix}_bands_2026-11.tsv.gz', sep='\t')
+    be = {v: band_effects(g, decoder, rois) for v, g in b.groupby('variant')}
+    sw = {}
+    for v in ('model', 'control'):
+        z = np.load(DATA / f'decoded_bars_condition_{prefix}_{v}_outline_2026-11.npz')
+        hp_v, nx_v = sweep_segments(pooled_condition(z['mean']), z['grid'])
+        sw[v] = dict(hp=hp_v, next=nx_v, subjects=list(np.asarray(z['subjects'])))
+    subs = sorted(set(sw['model']['subjects']) & set(sw['control']['subjects']))
+    ix = {v: [sw[v]['subjects'].index(x) for x in subs] for v in sw}
+    sweep = {k: sw['model'][k][ix['model']] - sw['control'][k][ix['control']] for k in ('hp', 'next')}
+    sweep['subjects'] = np.array(subs)
+    qd = (q['model'] - q['control']).dropna()
+    bd = (be['model'] - be['control']).dropna()
+    return qd, bd, sweep
+
+
+def bar_sweep(fig, source, x0, x1, y_img, y_ax, h_ax, W, H, vmax=3., pred=None):
+    """The bar sweep beside c: the decoded-bar difference image at every bar position (outline decoder), aligned above
+    a plot of the segment differences in the quadrant facing HP and next to it against the bar centre (data: points
+    and SEM; with ``pred``, the gain-field model's prediction as line and SEM band)."""
+    from scipy import ndimage
+    from retsupp.visualize.paper.figS_decoded_bars import QUAD, _disc, _smooth_masked, pooled_condition
+    from retsupp.visualize.paper.paper_style import FG as FG_, HP, MUTED, offset_spines
+    z = np.load(DATA / f'decoded_bars_condition_{source}_outline_2026-11.npz')
+    P = pooled_condition(z['mean'])
+    grid = z['grid']
+    centres = (z['edges'][:-1] + z['edges'][1:]) / 2
+    X, Y = grid[:, 0].reshape(50, 50), grid[:, 1].reshape(50, 50)
+    inside = np.hypot(X, Y) <= APERTURE
+    ns = len(P)
+    hp_v, nx_v = sweep_segments(P, grid)
     lo, hi = -3.15, 3.15
     ax = fig.add_axes([x0 / W, y_ax / H, (x1 - x0) / W, h_ax / H])
     size = .56
@@ -756,11 +807,19 @@ def bar_sweep(fig, source, x0, x1, y_img, y_ax, h_ax, W, H, vmax=3.):
         iax = fig.add_axes([(xc - size / 2) / W, y_img / H, size / W, size / H])
         _disc(iax, _smooth_masked(rel, foot), 'RdBu_r', -vmax, vmax, outline=bar & inside)
     stats_txt = []
-    for v, col, lab, dy in ((nx_v, MUTED, 'Next to HP', 1), (hp_v, HP, 'HP quadrant', -1)):
+    for v, col, lab, dy, key in ((nx_v, MUTED, 'Next to HP', 1, 'next'), (hp_v, HP, 'HP quadrant', -1, 'hp')):
         ok = np.isfinite(v).all(0)
         m, se = np.nanmean(v, 0), np.nanstd(v, 0, ddof=1) / np.sqrt(ns)
-        ax.fill_between(centres[ok], (m - se)[ok], (m + se)[ok], color=col, alpha=.2, lw=0)
-        ax.plot(centres[ok], m[ok], 'o-', color=col, ms=3, lw=1.2)
+        if pred is None:
+            ax.fill_between(centres[ok], (m - se)[ok], (m + se)[ok], color=col, alpha=.2, lw=0)
+            ax.plot(centres[ok], m[ok], 'o-', color=col, ms=3, lw=1.2)
+        else:   # model as line + band, data as points + SEM
+            pv = pred[key]
+            pm, pse = np.nanmean(pv, 0), np.nanstd(pv, 0, ddof=1) / np.sqrt(np.isfinite(pv).sum(0))
+            ax.fill_between(centres[ok], (pm - pse)[ok], (pm + pse)[ok], color=col, alpha=.2, lw=0, zorder=1)
+            ax.plot(centres[ok], pm[ok], '-', color=col, lw=1.1, zorder=2)
+            ax.errorbar(centres[ok] + dy * .04, m[ok], yerr=se[ok], fmt='o', ms=3, color=col, mec='w', mew=.5, lw=.9,
+                        capsize=0, zorder=3)
         last = np.flatnonzero(ok)[-1]
         ax.text(centres[last] + .12, m[last] + dy * .55, lab, color=col, fontsize=6.5, va='center', ha='left')
         for b in np.flatnonzero(ok):
@@ -770,6 +829,12 @@ def bar_sweep(fig, source, x0, x1, y_img, y_ax, h_ax, W, H, vmax=3.):
             if st:
                 ax.text(centres[b], m[b] + dy * (se[b] + .25), st, color=col, fontsize=7, ha='center',
                         va='bottom' if dy > 0 else 'top')
+    if pred is not None:
+        ax.plot([.08, .15], [.1, .1], transform=ax.transAxes, color=FG_, lw=1.1)
+        ax.text(.17, .1, 'Gain-field model', transform=ax.transAxes, fontsize=6.5, color=FG_, va='center')
+        ax.errorbar([.62], [.1], yerr=[[.05], [.05]], fmt='o', ms=3, color=FG_, mec='w', mew=.5, lw=.9,
+                    transform=ax.transAxes, clip_on=False)
+        ax.text(.64, .1, 'Data', transform=ax.transAxes, fontsize=6.5, color=FG_, va='center')
     ax.axhline(0, color='.6', lw=.6, ls='--', zorder=0)
     ax.set_xlim(lo, hi)
     ax.set_xticks([-2.7, -1.8, -0.9, 0, 0.9, 1.8, 2.7])
@@ -925,6 +990,7 @@ def plot_bar_crossing(name='figS_bar_crossing_response', source_note=''):
     from retsupp.visualize.paper.paper_style import save
     bp = load_bar_pass()
     bst = bar_pass_stats(bp)
+    pred = load_prediction(prediction, decoder) if prediction else None
     W, H = 3.6, 1.75
     fig = plt.figure(figsize=(W, H))
     bar_pass_icon(fig, .05, .2, .95, bp.groupby('t')[['hp', 'adjacent', 'opposite']].mean().mean(1))
@@ -955,8 +1021,52 @@ def test_figure(e, t, rois, decoder, t_out, d_text, name):
     save(fig, name, legend)
 
 
+PRED_TXT = """Lines and bands in c (bottom), d and e: what the fitted gain-field model predicts for these readouts (mean ± SEM over subjects; points with bars are the data). Per subject and run, the BOLD of V1–V3 was simulated from the subject's joint fit (pRFs fitted together with the gain fields on all runs: sustained HP and LP gains and field width, transient distractor and target gains, search items, one HRF per subject and ROI) plus the real run's residuals under that fit, phase-randomised (one random phase per frequency for all voxels, so the noise keeps each voxel's spectrum and the covariance between voxels but nothing locked to the stimulus), and decoded exactly as the data (the same fold pRFs without gain terms, which never saw the run, and the same noise model and readouts), on the decoder's voxels that are also in the joint fit; a paired simulation with the five gains at 0 and the same noise was decoded alike, and the prediction is the difference (model − gains at 0) per subject, averaged like the data (n = {n}). {numbers}"""
+
+
+def sweep_data(source):
+    from retsupp.visualize.paper.figS_decoded_bars import pooled_condition
+    z = np.load(DATA / f'decoded_bars_condition_{source}_outline_2026-11.npz')
+    hp_v, nx_v = sweep_segments(pooled_condition(z['mean']), z['grid'])
+    return dict(hp=hp_v, next=nx_v, subjects=np.asarray(z['subjects']),
+                centres=(z['edges'][:-1] + z['edges'][1:]) / 2)
+
+
+def prediction_text(pred, qe, be, sw):
+    """Predicted vs observed: quadrant contrasts (HP − next, next − opposite), the sweep segments and the eccentricity
+    profile; per-subject correlation of predicted and observed HP − next."""
+    qp, bp_, swp = pred
+    mn = lambda x, sign='': format(x, sign + '.2f').replace('-', '−')   # noqa: E731
+    fmt = lambda v: f'{mn(v.mean(), "+")} ± {v.sem():.2f}%'   # noqa: E731
+    con = {}
+    for nm, (a, b) in {'HP − next to HP': ('hp', 'adjacent'), 'next to HP − opposite': ('adjacent', 'opposite'),
+                       'HP − opposite': ('hp', 'opposite')}.items():
+        o, m = qe[a] - qe[b], qp[a] - qp[b]
+        both = o.index.intersection(m.index)
+        r, pr = stats.pearsonr(o[both], m[both])
+        con[nm] = f'{nm}: observed {fmt(o)}, predicted {fmt(m)} (per-subject r = {mn(r)}, p = {pr:.2f})'
+    quad = 'Quadrants (d): ' + '; '.join(con.values()) + '; predicted per quadrant HP ' + fmt(qp.hp) + ', next to HP ' + \
+        fmt(qp.adjacent) + ', opposite ' + fmt(qp.opposite)
+    # Sweep: observed and predicted segment differences per bar position.
+    cen = sw['centres']
+    rows = []
+    obs_all, pr_all = [], []
+    for k, lab in (('hp', 'HP quadrant'), ('next', 'next to HP')):
+        o, m = sw[k], swp[k]
+        ok = np.isfinite(o).all(0) & np.isfinite(m).all(0)
+        om, mm = np.nanmean(o, 0), np.nanmean(m, 0)
+        obs_all += list(om[ok])
+        pr_all += list(mm[ok])
+        rows.append(f'{lab} segment, mean over bar positions observed {mn(om[ok].mean(), "+")}%, predicted {mn(mm[ok].mean(), "+")}%')
+    r_sw = np.corrcoef(obs_all, pr_all)[0, 1]
+    sweep = 'Bar sweep (c): ' + '; '.join(rows) + f'; correlation of the observed and predicted group means over the ' \
+        f'{len(obs_all)} segment × position points r = {mn(r_sw)}'
+    ecc = f'Whole aperture (e): HP − other quadrants observed {fmt(be["all"])}, predicted {fmt(bp_["all"])}'
+    return PRED_TXT.format(n=len(qp), numbers=quad + '. ' + sweep + '. ' + ecc + '.')
+
+
 def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, source_note='', frames_style='magma', v3=False,
-         sweep=False):
+         sweep=False, prediction=None):
     """v3: 180 mm wide; the per-area test (old d) goes to its own supplementary figure, the rest re-lettered a-e."""
     import matplotlib.pyplot as plt
     from retsupp.visualize.paper.paper_style import FG, HP, STIM, letter, save
@@ -997,6 +1107,7 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
 
     bp = load_bar_pass()
     bst = bar_pass_stats(bp)
+    pred = load_prediction(prediction, decoder) if prediction else None
 
     from retsupp.visualize.paper.paper_style import DOUBLE
     W, H = (DOUBLE, 6.3) if v3 else (7.25, 6.3)
@@ -1025,7 +1136,8 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     ins_file = DATA / f'decoded_bars_condition_{source}_outline_2026-11.npz'
     sweep_out = None
     if sweep:  # the whole sweep of bar positions, images aligned above the segment differences
-        sweep_out = bar_sweep(fig, source, 2.05, 6.55, 2.72 + DY, 1.98 + DY, .52, W, H)
+        sweep_out = bar_sweep(fig, source, 2.05, 6.55, 2.72 + DY, 1.98 + DY, .52, W, H,
+                              pred=pred[2] if pred else None)
         ins_lab = None
     elif v3:     # without the per-area panel the insets get room: larger, labels at 7 pt
         ins_lab = bar_insets(fig, source, (2.0, 1.98 + DY), W, H, size=1.12, gap=.5, fs=7) if ins_file.exists() else None
@@ -1055,11 +1167,11 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     qe = quadrant_effects(d, decoder)
     qst = quadrant_stats(qe)
     ax = fig.add_axes([.7 / W, .72 / H, 1.25 / W, .9 / H])
-    panel_quadrants(ax, qe, qst)
+    panel_quadrants(ax, qe, qst, pred=pred[0] if pred else None)
     area_tag(ax, x=1.0, y=1.0, ha='right')
     fig.text(.02 / W, 1.93 / H, 'd' if v3 else 'e', fontsize=8, fontweight='bold', va='center', ha='left')
     ax = fig.add_axes([2.95 / W, .42 / H, (3.9 if v3 else 3.95) / W, 1.2 / H])
-    panel_ecc(ax, be, pb)
+    panel_ecc(ax, be, pb, pred=pred[1] if pred else None)
     area_tag(ax, x=.02, y=.3)
     letter(ax, 'e' if v3 else 'f', x=-.17, y=1.02)
 
@@ -1109,6 +1221,10 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
                                   ap=APERTURE, item_r=ITEM_R, insets=(SWEEP_TXT.format(nb=sweep_out[0], sweep_stats=sweep_out[1]) if sweep_out else INSET_TXT.format(ins_far=ins_lab[0][0], ins_mid=ins_lab[0][1], ins_hp=ins_lab[0][2], ins_seg='; '.join(f'{k} segment {m:+.2f} ± {se:.2f}%, two-sided Wilcoxon p = {p:.3f}' for k, m, se, p in ins_lab[1])) if ins_lab else ''), item_in=ITEM_ECC - ITEM_R, bar=bar_txt, bar_base=bar_base,
                                   w0=BAR_WINDOW[0], w1=BAR_WINDOW[1], source=source_note,
                                   q_lr=qst['p_lr'], quad=qst['text'])
+    if pred:
+        pt = prediction_text(pred, qe, be, sweep_data(source))
+        leg = leg.rstrip() + ' ' + pt + '\n'
+        print('prediction', pt)
     if v3:
         i0 = leg.index(' d, Per subject and ROI, the mean decoded intensity')
         i1 = leg.index(' e, Decoded')
@@ -1145,6 +1261,9 @@ if __name__ == '__main__':
     ap.add_argument('--frames-style', default='magma', choices=['blue', 'magma'], help='decoded rows of a: magma on black or blue')
     ap.add_argument('--v3', action='store_true', help='180 mm wide; the per-area test to a supplementary figure; a-e')
     ap.add_argument('--sweep', action='store_true', help='c: every bar position with its segment differences, not three insets')
+    ap.add_argument('--prediction', default=None,
+                    help='file prefix of the gain-field model prediction (collect_simulate_decode.py --fitted), e.g. '
+                         'decode_simfit: drawn over c (sweep), d and e')
     a = ap.parse_args()
     if a.step == 'collect':
         collect(a.bids_folder, a.source, a.out)
@@ -1155,4 +1274,5 @@ if __name__ == '__main__':
     elif a.step == 'plot_bar_crossing':
         plot_bar_crossing(name='figS_bar_crossing_response' + a.supp_suffix, source_note='')
     else:
-        plot(a.name, a.source, a.rois, a.decoder, source_note=f'pRFs: {a.source} fold fits.', frames_style=a.frames_style, v3=a.v3, sweep=a.sweep)
+        plot(a.name, a.source, a.rois, a.decoder, source_note=f'pRFs: {a.source} fold fits.', frames_style=a.frames_style, v3=a.v3, sweep=a.sweep,
+             prediction=a.prediction)
