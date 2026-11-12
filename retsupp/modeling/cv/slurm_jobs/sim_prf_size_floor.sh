@@ -5,8 +5,8 @@
 #SBATCH --exclude=u24-chaihm0-633
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=16G
-#SBATCH --time=02:00:00
+#SBATCH --mem=32G          # canary: 5 GB at res 50, >16 GB (killed) at res 150
+#SBATCH --time=01:00:00    # canary: 3 min at res 50 (8 CPUs)
 #
 # Parameter recovery of small pRFs (cv/sim_prf_size_floor.py). One array task per (family, R², condition):
 # task id = 100*family_idx + 10*r2_idx + condition_idx, family_idx 0 = gauss, 1 = dog; r2_idx 0 = .35, 1 = .15;
