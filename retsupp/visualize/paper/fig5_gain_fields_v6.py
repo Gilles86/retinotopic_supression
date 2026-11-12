@@ -442,6 +442,8 @@ def panel_maps_v9(fig, p, x0, y_top, cw, gap, bgap, under, bars=True):
     xx, yy = np.meshgrid(g, g)
     maps = {a: fields(p.loc[a], xx, yy) for a in AREAS}
     diff = {a: 100 * p.loc[a, 'dS_map'] * gauss(xx, yy, RING['hp'], p.loc[a, 'sigma_AF']) for a in AREAS}
+    r = np.hypot(xx, yy)                                  # soft circular edge: 1 inside 4.9°, cosine to 0 at 6°
+    fade = np.where(r < 4.9, 1., np.where(r > EXTENT, 0., .5 * (1 + np.cos(np.pi * (r - 4.9) / (EXTENT - 4.9)))))
     dmin = min(diff[a].min() for a in AREAS)            # the deepest area's HP − LP (%), the end of the scale
     norm = mpl.colors.Normalize(vmin=dmin, vmax=0.)
     vmax = np.ceil(max(max(maps[a][1].max(), maps[a][2].max()) for a in AREAS) / .1) * .1
@@ -452,9 +454,11 @@ def panel_maps_v9(fig, p, x0, y_top, cw, gap, bgap, under, bars=True):
         _, tgt, dis = maps[a]
         xa = xs + c * (cw + gap)
         ax = fig.add_axes([xa / W, y / H, cw / W, cw / H])
-        # reversed so that 0 is white and the deepest value is dark red
-        ax.imshow(-diff[a], extent=(-EXTENT, EXTENT, -EXTENT, EXTENT), origin='lower', cmap=HP_CMAP,
-                  norm=mpl.colors.Normalize(0, -dmin), interpolation='bilinear')
+        # reversed so that 0 is white and the deepest value is dark red; faded to white towards a circular edge so
+        # the field does not end in a hard cut at the square border
+        rgba = HP_CMAP(mpl.colors.Normalize(0, -dmin)(-diff[a]))
+        rgba[..., :3] = rgba[..., :3] * fade[..., None] + (1 - fade[..., None])
+        ax.imshow(rgba, extent=(-EXTENT, EXTENT, -EXTENT, EXTENT), origin='lower', interpolation='bilinear')
         half = diff[a].min() / 2                         # FWHM contour of the HP-specific field
         ax.contour(xx, yy, diff[a], levels=[half], colors=[HP], linewidths=.6)
         draw_display(ax)
@@ -468,8 +472,9 @@ def panel_maps_v9(fig, p, x0, y_top, cw, gap, bgap, under, bars=True):
         # transient: target and distractor in one map, in percent
         xa = xt + c * (cw + gap)
         ax = fig.add_axes([xa / W, y / H, cw / W, cw / H])
-        ax.imshow(transient_rgb(tgt, dis, vmax), extent=(-EXTENT, EXTENT, -EXTENT, EXTENT), origin='lower',
-                  interpolation='bilinear')
+        img = transient_rgb(tgt, dis, vmax)
+        img = img * fade[..., None] + (1 - fade[..., None])
+        ax.imshow(img, extent=(-EXTENT, EXTENT, -EXTENT, EXTENT), origin='lower', interpolation='bilinear')
         draw_display(ax, [('target', TGT), ('distractor', DIS)])
         ax.set_title(a, fontsize=7.5, pad=2, color=FG)
         tx, ty = RING[TGT]
