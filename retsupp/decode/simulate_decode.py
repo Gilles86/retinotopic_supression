@@ -27,9 +27,32 @@ Outputs (never inside existing derivatives folders)::
 
 Default out-root: ``<bids>/derivatives/decoded_sim_2026-11``.
 
+``--mode fitted``: the truth is the subject's fitted joint gain-field model instead of a synthetic field. One task =
+one subject × session (``--runs`` restricts further). Per ROI:
+
+1. Signal. The polished ``m7_full`` fit of ``--ladder-root`` (per-voxel DoG pRFs fitted together with the gain fields
+   on all runs, one HRF per subject × ROI from ``--hrf-table``, the 8-item paradigm with the fitted item drive scale)
+   predicts every run's BOLD (runs concatenated in the fit's order, as in the fit) twice: ``model``, all terms as
+   fitted (sustained HP / LP gains and field width, distractor and target transients, items), and ``control``, the
+   same parameters with the five gains (g_HP, g_LP, g_HP_dyn, g_LP_dyn, g_T_dyn) at 0, i.e. pRFs and items only.
+2. Voxels. Those ``decode_final.py`` selects for the run (fold pRFs of the run's held-out fold, reliability > 0,
+   BOLD SD ≤ 20%, at most 2000) that are also in the joint fit (its voxel set is smaller). The gain fit used all runs,
+   the decoder's pRFs only the other folds, exactly as for the data.
+3. Noise. The real run's residuals under the ``model`` prediction, phase-randomised as above; one draw, added to
+   both variants (plus the real run's mean offset), so ``model − control`` is paired.
+4. Decoding and readout as in ``decode_final.py`` (fold pRFs, bar-only paradigm, ResidualFitter fitted per variant,
+   ``free`` and ``outline`` decoders). Written in ``decode_final.py``'s layout, so the Fig. 6 collectors run on it::
+
+    <out-root>/<prf-source>/noise-<noise>/<variant>/<decoder>/sub-XX/
+        decoded_ses-S_run-R_roi-ROI.npz, readout_ses-S_run-R_roi-ROI.tsv
+
+   Default out-root: ``<bids>/derivatives/decoded_sim_fitted_2026-11``.
+
 Usage::
 
     python -m retsupp.decode.simulate_decode 23 --session 1 --run 1 --rois V1 V2 V3
+    python -m retsupp.decode.simulate_decode 23 --mode fitted --session 1 --prf-source jointhrf \
+        --ladder-root <polished root> --hrf-table <roi_hrf_dog_final2.tsv>
 """
 from __future__ import annotations
 
@@ -172,11 +195,145 @@ def main(subject, session, run, rois, bids, source, decoders, joint_tag, amplitu
         print(f'{roi} done ({time.time() - t0:.0f} s)', flush=True)
 
 
+GAINS = ('g_HP', 'g_LP', 'g_HP_dyn', 'g_LP_dyn', 'g_T_dyn')
+VARIANTS = ('model', 'control')
+
+
+def joint_signals(sub, rois, ladder_root, hrf_table, resolution=50, grid_radius=5.0):
+    """Prediction of the polished m7_full fit for every run (concatenated as in the fit), per ROI and variant
+    (``model``: as fitted; ``control``: the five gains at 0). Returns ({roi: {variant: (T_all, V)}}, {roi: voxel_ids},
+    {(session, run): start row}, {roi: shared parameters})."""
+    import pickle
+    from retsupp.modeling.fit_af_prf_cv_v2 import build_data_and_paradigm, build_model, get_ring_positions
+    from retsupp.modeling.fit_cv_ladder_nested import sign_pattern_of
+    from retsupp.modeling.roi_hrf import hrf_model as roi_hrf_model, load_table
+    _bold, par, ci, di, ti, grid, _, meta = build_data_and_paradigm(sub, resolution=resolution, grid_radius=grid_radius,
+                                                                    item_shape='rectangle')
+    del _bold
+    table = load_table(hrf_table)
+    pred, ids, shared = {}, {}, {}
+    for roi in rois:
+        pkl = Path(ladder_root) / 'm7_full' / f'sub-{sub.subject_id:02d}' / f'sub-{sub.subject_id:02d}_roi-{roi}_cv-fits.pkl'
+        if not pkl.exists():
+            print(f'{roi}: no joint fit ({pkl})', flush=True)
+            continue
+        with open(pkl, 'rb') as f:
+            fit = pickle.load(f)
+        model = build_model(grid_coords=grid, paradigm=par, condition_indicator=ci, dynamic_indicator=di,
+                            target_indicator=ti, ring_positions=get_ring_positions(),
+                            hrf_model=roi_hrf_model(sub, roi, table), sign_pattern=sign_pattern_of('m7_full'),
+                            item_scale='free')
+        p7 = fit['fit_pars_per_fold'][0].reindex(columns=list(model.parameter_labels))
+        assert not p7.isna().any().any(), f'{roi}: NaN parameters in the joint fit'
+        p0 = p7.copy()
+        p0[list(GAINS)] = 0.
+        pred[roi] = {v: np.asarray(model.predict(paradigm=par, parameters=p), dtype=np.float32)
+                     for v, p in (('model', p7), ('control', p0))}
+        ids[roi] = np.asarray(fit['voxel_ids'])
+        shared[roi] = p7.iloc[0][['sigma_AF', 'sigma_dyn', 'item_scale', *GAINS]].astype(float).to_dict()
+        print(f'{roi}: joint fit {len(ids[roi])} voxels, ' + ', '.join(f'{k} {v:+.3f}' for k, v in shared[roi].items()),
+              flush=True)
+    span = {(int(m.session), int(m.run)): int(m.start) for m in meta}
+    return pred, ids, span, shared
+
+
+def save_decoded(out, session, run, roi, decoded, paradigm, grid, hp, sel, dof, ro):
+    out.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(out / f'decoded_ses-{session}_run-{run}_roi-{roi}.npz', decoded=decoded.astype(np.float16),
+                        paradigm=paradigm.astype(np.uint8), grid=grid, hp_location=np.array(str(hp)),
+                        voxel_index=np.asarray(sel), dof=np.float32(dof if dof is not None else np.nan))
+    ro.to_csv(out / f'readout_ses-{session}_run-{run}_roi-{roi}.tsv', sep='\t', index=False)
+
+
+def main_fitted(subject, runs, rois, bids, source, decoders, joint_tag, ladder_root, hrf_table, noise_kind, seed,
+                max_voxels, max_bold_sd, l2_norm, learning_rate, max_iter, min_iter, resid_max_iter, resolution=50,
+                grid_radius=5.0, out_root=None):
+    sub = Subject(subject, bids_folder=bids)
+    deriv = Path(bids) / 'derivatives'
+    out_root = Path(out_root or deriv / 'decoded_sim_fitted_2026-11') / source / f'noise-{noise_kind}'
+    runs = [(s, r) for s, r in runs if r in sub.get_runs(s)]
+    fn = lambda v, dec, s, r, roi: (out_root / v / dec / f'sub-{subject:02d}' / f'readout_ses-{s}_run-{r}_roi-{roi}.tsv')
+    todo = [(s, r) for s, r in runs if not all(fn(v, d, s, r, roi).exists() for v in VARIANTS for d in decoders
+                                               for roi in rois)]
+    if not todo:
+        print('All outputs exist')
+        return
+    t0 = time.time()
+    pred, ids, span, shared = joint_signals(sub, rois, ladder_root, hrf_table, resolution, grid_radius)
+    print(f'joint predictions ({time.time() - t0:.0f} s)', flush=True)
+    with np.load(deriv / 'cleaned_bold_cache' / f'sub-{subject:02d}' / f'sub-{subject:02d}_kind-full_res-{resolution}.npz') as f:
+        bold_all = f['bold']
+    bold_runs = {(s, r): slice_run(bold_all, sub, s, r).astype(np.float32) for s, r in todo}
+    del bold_all
+    for session, run in todo:
+        fold = fold_of(sub, session, run)
+        hp = sub.get_hpd_locations().get((session, run))
+        aperture = float(sub.get_experimental_settings(session, run)['radius_bar_aperture'])
+        pars_all, roi_of = load_prfs(deriv, subject, fold, source, joint_tag)
+        rel = pd.read_csv(deriv / 'prf_cv_roi_reliability' / f'sub-{subject:02d}' /
+                          f'sub-{subject:02d}_fold-{fold}_reliability.tsv.gz', sep='\t').set_index('voxel_index')
+        paradigm = sub.get_bar_stimulus(session=session, run=run, resolution=resolution,
+                                        grid_radius=grid_radius).astype(np.float32)
+        T = paradigm.shape[0]
+        gx, gy = sub.get_extended_grid_coordinates(resolution=resolution, session=session, run=run, grid_radius=grid_radius)
+        grid = np.stack([gx.ravel(), gy.ravel()], axis=1).astype(np.float32)
+        par_flat = paradigm.reshape(T, -1)
+        par_df = pd.DataFrame(par_flat, index=pd.Index(np.arange(T), name='frame'))
+        a = span[(session, run)]
+        print(f'ses-{session} run-{run}: fold {fold}, HP {hp}, aperture {aperture}°', flush=True)
+        for ri, roi in enumerate(rois):
+            if roi not in pred:
+                continue
+            sel_dec, n_roi = select_voxels(pars_all, roi_of, rel, roi, max_voxels, max_bold_sd)
+            col = {v: i for i, v in enumerate(ids[roi])}
+            sel = [v for v in sel_dec if v in col]
+            if len(sel) < 20:
+                print(f'  {roi}: {len(sel)} voxels in both, skipped', flush=True)
+                continue
+            t1 = time.time()
+            real = bold_runs[(session, run)][:, np.asarray(sel)]
+            cols = [col[v] for v in sel]
+            signal = {v: pred[roi][v][a:a + T, cols] for v in VARIANTS}
+            resid = real - signal['model']
+            rng = np.random.default_rng([seed, subject, session, run, ri])
+            noise = phase_randomise(resid, rng) if noise_kind == 'phase' else ar1_noise(resid, rng)
+            r2 = 1 - resid.var(0) / real.var(0)
+            pars = pars_all.loc[sel].reset_index(drop=True).astype(np.float32)
+            pars = pars[list(make_model(source, grid, par_flat, None, pars).parameter_labels)]
+            print(f'  {roi}: {len(sel)} voxels ({len(sel_dec)} decoder voxels, {len(ids[roi])} in the joint fit); '
+                  f'joint-fit R² on this run median {np.median(r2):.3f}; control/model signal SD ratio median '
+                  f'{np.median(signal["control"].std(0) / np.maximum(signal["model"].std(0), 1e-6)):.3f}', flush=True)
+            for v in VARIANTS:
+                sim = signal[v] + noise + resid.mean(0)
+                data = pd.DataFrame(sim, index=par_df.index)
+                omega, dof = fit_noise(make_model(source, grid, par_flat, data, pars), data, par_df, pars, resid_max_iter)
+                for dec in decoders:
+                    if fn(v, dec, session, run, roi).exists():
+                        continue
+                    mask = (paradigm > 0) if dec == 'outline' else None
+                    decoded = decode(make_model(source, grid, par_flat, data, pars), data, pars, omega, dof, mask,
+                                     l2_norm, learning_rate, max_iter, min_iter, (T, resolution, resolution))
+                    ro = readout(decoded, paradigm, grid, aperture, hp).assign(
+                        subject=subject, session=session, run=run, roi=roi, decoder=dec, source=source, fold=fold,
+                        hp_location=hp, n_voxels=len(sel), n_decoder_voxels=len(sel_dec), variant=v, noise=noise_kind,
+                        **{k: val for k, val in shared[roi].items()})
+                    save_decoded(out_root / v / dec / f'sub-{subject:02d}', session, run, roi, decoded, paradigm, grid,
+                                 hp, sel, dof, ro)
+                    hp_row = ro[ro.is_hp].iloc[0]
+                    print(f'    {v} {dec}: drive_bar HP {hp_row.drive_bar:.4f}, LP mean '
+                          f'{ro[~ro.is_hp].drive_bar.mean():.4f}', flush=True)
+            print(f'  {roi} done ({time.time() - t1:.0f} s)', flush=True)
+    print(f'Finished ({time.time() - t0:.0f} s)', flush=True)
+
+
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('subject', type=int)
+    ap.add_argument('--mode', choices=['synthetic', 'fitted'], default='synthetic')
     ap.add_argument('--session', type=int, required=True)
-    ap.add_argument('--run', type=int, required=True)
+    ap.add_argument('--run', type=int, default=None, help='synthetic: required; fitted: default all runs of the session')
+    ap.add_argument('--ladder-root', default=None, help='fitted: polished joint-fit root (m7_full)')
+    ap.add_argument('--hrf-table', default=None, help='fitted: HRF per subject x ROI used by that fit')
     ap.add_argument('--rois', nargs='+', default=['V1', 'V2', 'V3'])
     ap.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
     ap.add_argument('--prf-source', choices=list(SOURCES), default='canonical')
@@ -195,6 +352,12 @@ if __name__ == '__main__':
     ap.add_argument('--resid-max-iter', type=int, default=2000)
     ap.add_argument('--out-root', default=None)
     a = ap.parse_args()
+    if a.mode == 'fitted':
+        runs = [(a.session, r) for r in ([a.run] if a.run else range(1, 7))]
+        main_fitted(a.subject, runs, a.rois, a.bids_folder, a.prf_source, a.decoders, a.joint_tag, a.ladder_root,
+                    a.hrf_table, a.noise, a.seed, a.max_voxels, a.max_bold_sd, a.l2_norm, a.learning_rate,
+                    a.max_n_iterations, a.min_n_iterations, a.resid_max_iter, out_root=a.out_root)
+        raise SystemExit
     main(a.subject, a.session, a.run, a.rois, a.bids_folder, a.prf_source, a.decoders, a.joint_tag, a.amplitudes, a.fwhm,
          a.noise, a.seed, a.max_voxels, a.max_bold_sd, a.l2_norm, a.learning_rate, a.max_n_iterations,
          a.min_n_iterations, a.resid_max_iter, out_root=a.out_root)
