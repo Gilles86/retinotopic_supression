@@ -776,6 +776,11 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
     if v11:
         lab = fit_label or ('Gain-field model fits with DoG pRFs, the pRFs refitted together with the gain fields')
         legend = legend.replace('Gain-field model fits with DoG pRFs (n = ', f'{lab} (n = ', 1)
+        old = '(median joint-fit LP gain; at HP, that plus the HP − LP difference drawn)'
+        assert old in legend
+        legend = legend.replace(old, old[:-1] + '; with the pRFs refitted, the level shared by all four locations '
+                                'trades off against the item weight and the pRF amplitude, so read its sign, not its '
+                                'size)')
     save(fig, f'fig5_gain_fields_{layout}' + suffix, legend)
     print('scales:', scales, 'per-area sustained:', per_area_sustained)
     print(p.loc[AREAS].round(4).to_string())

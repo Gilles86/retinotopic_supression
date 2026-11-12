@@ -281,6 +281,8 @@ def main(a):
 
     t = pd.DataFrame(B.rows)
     t.to_csv(f'{a.out}.tsv', sep='\t', index=False)
+    md = [('- ' + m[2:]) if m.startswith('− ') else m for m in md]
+    md = [m.replace('ρ = -', 'ρ = −').replace('= -0.', '= −0.') for m in md]
     Path(f'{a.out}.md').write_text('\n'.join(md) + '\n')
     print('\n'.join(md))
 
