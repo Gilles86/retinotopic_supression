@@ -34,3 +34,12 @@ def create_animation(stimulus, frametimes=None, interval=250, display=True):
         return HTML(ani.to_jshtml())
     else:
         return ani
+
+def rotate_x_y(x, y, angle):
+    """Rotate coordinates (x, y) by angle (in radians)"""
+    x = np.asarray(x)
+    y = np.asarray(y)
+    angle = np.asarray(angle)
+    x_rot = x * np.cos(angle) - y * np.sin(angle)
+    y_rot = x * np.sin(angle) + y * np.cos(angle)
+    return x_rot, y_rot
