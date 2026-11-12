@@ -292,14 +292,19 @@ def items(ax, hp_color, lw=.8):
                             clip_on=False))
 
 
-def panel_map(ax, rm, vmax=3):
-    from retsupp.visualize.paper.paper_style import HP
+def smoothed_map(rm):
+    """Group map of c: each subject's map smoothed inside the aperture (Gaussian, 2 pixels = 0.4°), then averaged."""
     c = np.linspace(-5, 5, 50)
     X, Y = np.meshgrid(c, c)
     inside = np.hypot(X, Y) <= APERTURE
     sm = np.array([ndimage.gaussian_filter(np.where(inside, np.nan_to_num(p), 0), 2) /
                    ndimage.gaussian_filter(inside.astype(float), 2) for p in rm])
-    im = disc(ax, np.nanmean(sm, 0), 'RdBu_r', vmax, -vmax)
+    return np.nanmean(sm, 0), inside
+
+
+def panel_map(ax, rm, vmax=3, label='HP', tag=True):
+    from retsupp.visualize.paper.paper_style import HP
+    im = disc(ax, smoothed_map(rm)[0], 'RdBu_r', vmax, -vmax)
     for a in (45, 135):
         t = np.deg2rad(a)
         ax.plot([-APERTURE * np.cos(t), APERTURE * np.cos(t)], [-APERTURE * np.sin(t), APERTURE * np.sin(t)],
@@ -308,8 +313,10 @@ def panel_map(ax, rm, vmax=3):
     ax.set_xlim(-4.95, 4.95)
     ax.set_ylim(-4.95, 4.95)
     ax.set_aspect('equal')
-    ax.text(ITEM_R + .25, ITEM_ECC, 'HP', color=HP, fontsize=6.5, ha='left', va='center')
-    area_tag(ax, x=0., y=1.)
+    if label:
+        ax.text(ITEM_R + .25, ITEM_ECC, label, color=HP, fontsize=6.5, ha='left', va='center')
+    if tag:
+        area_tag(ax, x=0., y=1.)
     return im
 
 
@@ -789,10 +796,15 @@ def load_prediction(prefix, decoder=DECODER, rois=EARLY):
     qual = qual[qual.roi.isin(rois)].groupby(['variant', 'subject']).r.mean().groupby('variant').median()
     extra = dict(coverage=float((r.n_voxels / r.n_decoder_voxels).median() * 100), r_model=float(qual['model']),
                  r_control=float(qual['control']))
+    mfile = {v: DATA / f'decoding_maps_{prefix}_{v}_2026-11.npz' for v in ('model', 'control')}
+    if all(f.exists() for f in mfile.values()):   # c's map: rel_maps per variant, then model − control per subject
+        mz = {v: np.load(f) for v, f in mfile.items()}
+        assert list(mz['model']['subjects']) == list(mz['control']['subjects'])
+        extra['rm'] = rel_maps(mz['model'], decoder, rois) - rel_maps(mz['control'], decoder, rois)
     return qd, bd, sweep, extra
 
 
-def bar_sweep(fig, source, x0, x1, y_img, y_ax, h_ax, W, H, vmax=3., pred=None):
+def bar_sweep(fig, source, x0, x1, y_img, y_ax, h_ax, W, H, vmax=3., pred=None, size=.56):
     """The bar sweep beside c: the decoded-bar difference image at every bar position (outline decoder), aligned above
     a plot of the segment differences in the quadrant facing HP and next to it against the bar centre (data: points
     and SEM; with ``pred``, the gain-field model's prediction as line and SEM band)."""
@@ -809,7 +821,6 @@ def bar_sweep(fig, source, x0, x1, y_img, y_ax, h_ax, W, H, vmax=3., pred=None):
     hp_v, nx_v = sweep_segments(P, grid)
     lo, hi = -3.15, 3.15
     ax = fig.add_axes([x0 / W, y_ax / H, (x1 - x0) / W, h_ax / H])
-    size = .56
     for b, c in enumerate(centres):
         bar = P[:, b, 2].mean(0) > .5
         foot = ndimage.binary_dilation(bar, iterations=1) & inside
@@ -845,9 +856,9 @@ def bar_sweep(fig, source, x0, x1, y_img, y_ax, h_ax, W, H, vmax=3., pred=None):
         ax.add_patch(plt_rect((.03, .07), .06, .07, tf, FG_))
         ax.plot([.03, .09], [.105, .105], transform=tf, color=FG_, lw=1.1, clip_on=False)
         ax.text(.1, .105, 'Gain-field model', transform=tf, fontsize=6.5, color=FG_, va='center')
-        ax.plot([.3, .3], [.06, .15], transform=tf, color=FG_, lw=.9, clip_on=False)
-        ax.plot(.3, .105, 'o', transform=tf, ms=3, color=FG_, mec='w', mew=.5, clip_on=False)
-        ax.text(.315, .105, 'Data', transform=tf, fontsize=6.5, color=FG_, va='center')
+        ax.plot([.42, .42], [.06, .15], transform=tf, color=FG_, lw=.9, clip_on=False)
+        ax.plot(.42, .105, 'o', transform=tf, ms=3, color=FG_, mec='w', mew=.5, clip_on=False)
+        ax.text(.435, .105, 'Data', transform=tf, fontsize=6.5, color=FG_, va='center')
     ax.axhline(0, color='.6', lw=.6, ls='--', zorder=0)
     ax.set_xlim(lo, hi)
     ax.set_xticks([-2.7, -1.8, -0.9, 0, 0.9, 1.8, 2.7])
@@ -1034,7 +1045,7 @@ def test_figure(e, t, rois, decoder, t_out, d_text, name):
     save(fig, name, legend)
 
 
-PRED_TXT = """Lines and bands in c (bottom), d and e: what the fitted gain-field model predicts for these readouts (mean ± SEM over subjects; points with bars are the data). Per subject and run, the BOLD of V1–V3 was simulated from the subject's joint fit (pRFs fitted together with the gain fields on all runs: sustained HP and LP gains and field width, transient distractor and target gains, search items, one HRF per subject and ROI) plus the real run's residuals under that fit, phase-randomised (one random phase per frequency for all voxels, so the noise keeps each voxel's spectrum and the covariance between voxels but nothing locked to the stimulus), and decoded exactly as the data (the same fold pRFs without gain terms, which never saw the run, and the same noise model and readouts), on the decoder's voxels that are also in the joint fit; a paired simulation with the five gains at 0 and the same noise was decoded alike, and the prediction is the difference (model − gains at 0) per subject, averaged like the data (n = {n}). {numbers}"""
+PRED_TXT = """{map_txt}Lines and bands in c (bottom), d and e: what the fitted gain-field model predicts for these readouts (mean ± SEM over subjects; points with bars are the data). Per subject and run, the BOLD of V1–V3 was simulated from the subject's joint fit (pRFs fitted together with the gain fields on all runs: sustained HP and LP gains and field width, transient distractor and target gains, search items, one HRF per subject and ROI) plus the real run's residuals under that fit, phase-randomised (one random phase per frequency for all voxels, so the noise keeps each voxel's spectrum and the covariance between voxels but nothing locked to the stimulus), and decoded exactly as the data (the same fold pRFs without gain terms, which never saw the run, and the same noise model and readouts), on the decoder's voxels that are also in the joint fit; a paired simulation with the five gains at 0 and the same noise was decoded alike, and the prediction is the difference (model − gains at 0) per subject, averaged like the data (n = {n}). {numbers}"""
 
 
 def sweep_data(source):
@@ -1078,7 +1089,15 @@ def prediction_text(pred, qe, be, sw, r_data=None):
     cov = (f' The joint fit covers a median {extra["coverage"]:.0f}% of the decoder\'s voxels per run and area, and the '
            f'simulated runs decode about as well as the real ones (frame-wise r, median over subjects of the V1–V3 mean: '
            f'{extra["r_model"]:.2f} simulated' + (f', {r_data:.2f} measured' if r_data is not None else '') + ').')
-    return PRED_TXT.format(n=len(qp), numbers=quad + '. ' + sweep + '. ' + ecc + '.') + cov
+    map_txt = ''
+    if 'map_r' in extra:
+        map_txt = ('The right circle in c ("Gain-field model") is the same map computed from the simulation described '
+                   'next: per subject the rotated map of the simulation with the fitted gains minus that of the paired '
+                   'simulation with the gains at 0 (each built exactly as the data map: drive on the bar\'s pixels, '
+                   'minus its average over the four rotations, in % of that average, V1–V3), then smoothed and averaged '
+                   f'over subjects as the data; same colour scale. Spatial correlation of the two group maps inside the '
+                   f'aperture r = {mn(extra["map_r"])}. ')
+    return PRED_TXT.format(map_txt=map_txt, n=len(qp), numbers=quad + '. ' + sweep + '. ' + ecc + '.') + cov
 
 
 def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, source_note='', frames_style='magma', v3=False,
@@ -1147,20 +1166,36 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     # Row 2: c map, d angle, e the test.
     fig.text(.2 / W, (3.4 + DY) / H, 'The bar is decoded at lower intensity in the quadrant facing the HP location', fontsize=7.5,
              color=HP, va='center')
-    ax = fig.add_axes([.1 / W, (1.78 + DY) / H, 1.36 / W, 1.36 / H])
-    im = panel_map(ax, rm)
+    two = bool(pred) and 'rm' in pred[3]
+    if two:   # data and gain-field model circles side by side, the sweep shifted right
+        ax = fig.add_axes([.05 / W, (1.86 + DY) / H, 1.2 / W, 1.2 / H])
+        im = panel_map(ax, rm, tag=False)
+        area_tag(ax, x=0., y=.1)
+        ax.text(.5, 1.0, 'Data', transform=ax.transAxes, fontsize=6.5, color='.3', ha='center', va='bottom')
+        ax2 = fig.add_axes([1.33 / W, (1.86 + DY) / H, 1.2 / W, 1.2 / H])
+        panel_map(ax2, pred[3]['rm'], label='', tag=False)
+        ax2.text(.5, 1.0, 'Gain-field model', transform=ax2.transAxes, fontsize=6.5, color=FG, ha='center',
+                 va='bottom')
+        mo, mm = smoothed_map(rm)[0], smoothed_map(pred[3]['rm'])[0]
+        ins = smoothed_map(rm)[1]
+        ok = ins & np.isfinite(mo) & np.isfinite(mm)
+        pred[3]['map_r'] = float(np.corrcoef(mo[ok], mm[ok])[0, 1])
+        print('map correlation predicted vs observed', round(pred[3]['map_r'], 3))
+    else:
+        ax = fig.add_axes([.1 / W, (1.78 + DY) / H, 1.36 / W, 1.36 / H])
+        im = panel_map(ax, rm)
     ins_file = DATA / f'decoded_bars_condition_{source}_outline_2026-11.npz'
     sweep_out = None
     if sweep:  # the whole sweep of bar positions, images aligned above the segment differences
-        sweep_out = bar_sweep(fig, source, 2.05, 6.55, 2.72 + DY, 1.98 + DY, .52, W, H,
-                              pred=pred[2] if pred else None)
+        sweep_out = bar_sweep(fig, source, *((2.95, 6.5) if two else (2.05, 6.55)), 2.72 + DY, 1.98 + DY, .52, W, H,
+                              pred=pred[2] if pred else None, size=.48 if two else .56)
         ins_lab = None
     elif v3:     # without the per-area panel the insets get room: larger, labels at 7 pt
         ins_lab = bar_insets(fig, source, (2.0, 1.98 + DY), W, H, size=1.12, gap=.5, fs=7) if ins_file.exists() else None
     else:
         ins_lab = bar_insets(fig, source, (1.5, 2.2 + DY), W, H, gap=.06) if ins_file.exists() else None
     fig.text(.02 / W, (3.4 + DY) / H, 'c', fontsize=8, fontweight='bold', va='center', ha='left')
-    cax = fig.add_axes([.38 / W, (1.68 + DY) / H, .86 / W, .06 / H])
+    cax = fig.add_axes([((.86 if two else .38) / W), (1.68 + DY) / H, .86 / W, .06 / H])
     cb = fig.colorbar(im, cax=cax, orientation='horizontal', ticks=[-3, 0, 3])
     cb.ax.set_xticklabels(['−3%', '0', '3%'], fontsize=6)
     cb.ax.tick_params(length=2, width=.5, pad=1)
