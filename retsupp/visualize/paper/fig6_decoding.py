@@ -715,6 +715,74 @@ def bar_insets(fig, source, xy, W, H, size=.7, gap=.1, vmax=3., bins=(2, 3, 4), 
     return labs, segs
 
 
+SWEEP_TXT = """ Right of the map, the same contrast on single bar positions without any averaging over the visual field, as the bar sweeps across the aperture: the decoded bar (decoder with the bar outline given) minus the mean decoded bar at the same time point over the subject's runs, averaged within each HP location first and then over the four, so the stimulus is identical and only the HP location differs; each run scaled to a common mean intensity on the bar first, rotated so HP is at the upper right in 90° steps, horizontal bars reflected onto vertical ones across the diagonal through HP. Top, the difference image at each of the {nb} bar positions (bar centre on the axis below; negative, the side away from HP), smoothed (Gaussian, σ = 0.2°), same colour scale as the map, on the bar's footprint. Bottom, the difference on the bar's segment in the quadrant facing HP (red; only bars that reach it) and in the two quadrants next to HP (grey; mean of the segments present), in % of the mean decoded intensity on the bar; mean ± SEM over subjects; stars, two-sided Wilcoxon signed-rank test per position, uncorrected (* p < .05, ** p < .01). {sweep_stats}."""
+
+
+def bar_sweep(fig, source, x0, x1, y_img, y_ax, h_ax, W, H, vmax=3.):
+    """The bar sweep beside c: the decoded-bar difference image at every bar position (outline decoder), aligned above
+    a line plot of the segment differences in the quadrant facing HP and next to it against the bar centre."""
+    from scipy import ndimage
+    from retsupp.visualize.paper.figS_decoded_bars import QUAD, _disc, _smooth_masked, pooled_condition
+    from retsupp.visualize.paper.paper_style import HP, MUTED, offset_spines
+    z = np.load(DATA / f'decoded_bars_condition_{source}_outline_2026-11.npz')
+    P = pooled_condition(z['mean'])
+    grid = z['grid']
+    centres = (z['edges'][:-1] + z['edges'][1:]) / 2
+    X, Y = grid[:, 0].reshape(50, 50), grid[:, 1].reshape(50, 50)
+    inside = np.hypot(X, Y) <= APERTURE
+    ns = len(P)
+    hp_v, nx_v = np.full((ns, len(centres)), np.nan), np.full((ns, len(centres)), np.nan)
+    for b in range(len(centres)):
+        bar = (P[:, b, 2].mean(0) > .5) & inside
+        bm = np.array([P[s, b, 0][bar].mean() for s in range(ns)])
+        seg = {}
+        for qn, (sx, sy) in QUAD.items():
+            mk = bar & (np.sign(X) == sx) & (np.sign(Y) == sy)
+            if mk.sum() >= 10:
+                seg[qn] = np.array([P[s, b, 1][mk].mean() for s in range(ns)]) / bm * 100
+        if 'HP' in seg:
+            hp_v[:, b] = seg['HP']
+        nk = [k for k in seg if k.startswith('Next')]
+        if nk:
+            nx_v[:, b] = np.mean([seg[k] for k in nk], 0)
+    lo, hi = -3.15, 3.15
+    ax = fig.add_axes([x0 / W, y_ax / H, (x1 - x0) / W, h_ax / H])
+    size = .56
+    for b, c in enumerate(centres):
+        bar = P[:, b, 2].mean(0) > .5
+        foot = ndimage.binary_dilation(bar, iterations=1) & inside
+        rel = np.mean([100 * P[s, b, 1] / P[s, b, 0][bar & inside].mean() for s in range(ns)], 0)
+        xc = x0 + (c - lo) / (hi - lo) * (x1 - x0)
+        iax = fig.add_axes([(xc - size / 2) / W, y_img / H, size / W, size / H])
+        _disc(iax, _smooth_masked(rel, foot), 'RdBu_r', -vmax, vmax, outline=bar & inside)
+    stats_txt = []
+    for v, col, lab, dy in ((nx_v, MUTED, 'Next to HP', 1), (hp_v, HP, 'HP quadrant', -1)):
+        ok = np.isfinite(v).all(0)
+        m, se = np.nanmean(v, 0), np.nanstd(v, 0, ddof=1) / np.sqrt(ns)
+        ax.fill_between(centres[ok], (m - se)[ok], (m + se)[ok], color=col, alpha=.2, lw=0)
+        ax.plot(centres[ok], m[ok], 'o-', color=col, ms=3, lw=1.2)
+        last = np.flatnonzero(ok)[-1]
+        ax.text(centres[last] + .12, m[last] + dy * .55, lab, color=col, fontsize=6.5, va='center', ha='left')
+        for b in np.flatnonzero(ok):
+            p = stats.wilcoxon(v[:, b]).pvalue
+            stats_txt.append(f'{lab.lower()} at {centres[b]:+.1f}°: {m[b]:+.2f} ± {se[b]:.2f}%, p = {p:.3f}')
+            st = '**' if p < .01 else '*' if p < .05 else ''
+            if st:
+                ax.text(centres[b], m[b] + dy * (se[b] + .25), st, color=col, fontsize=7, ha='center',
+                        va='bottom' if dy > 0 else 'top')
+    ax.axhline(0, color='.6', lw=.6, ls='--', zorder=0)
+    ax.set_xlim(lo, hi)
+    ax.set_xticks([-2.7, -1.8, -0.9, 0, 0.9, 1.8, 2.7])
+    ax.set_xticklabels([f'{t:+.1f}'.replace('-', '−').replace('+0.0', '0') for t in ax.get_xticks()], fontsize=6.5)
+    ax.set_ylim(-2.6, 2.1)
+    ax.set_yticks([-2, 0, 2])
+    ax.tick_params(labelsize=6.5)
+    ax.set_xlabel('Bar centre (°; positive, toward HP)', fontsize=7, labelpad=1)
+    ax.set_ylabel('Segment\ndifference (%)', fontsize=7, labelpad=2)
+    offset_spines(ax)
+    return len(centres), '; '.join(stats_txt).replace('-', '−')
+
+
 def plot_all_rois(name='figS_decoding_all_rois', source='jointhrf'):
     """Supplementary figure: the group-mean decoded frames per ROI at the time points of Fig. 6a (unconstrained decoder)."""
     import matplotlib.colors as mcolors
@@ -887,7 +955,8 @@ def test_figure(e, t, rois, decoder, t_out, d_text, name):
     save(fig, name, legend)
 
 
-def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, source_note='', frames_style='magma', v3=False):
+def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, source_note='', frames_style='magma', v3=False,
+         sweep=False):
     """v3: 180 mm wide; the per-area test (old d) goes to its own supplementary figure, the rest re-lettered a-e."""
     import matplotlib.pyplot as plt
     from retsupp.visualize.paper.paper_style import FG, HP, STIM, letter, save
@@ -954,7 +1023,11 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     ax = fig.add_axes([.1 / W, (1.78 + DY) / H, 1.36 / W, 1.36 / H])
     im = panel_map(ax, rm)
     ins_file = DATA / f'decoded_bars_condition_{source}_outline_2026-11.npz'
-    if v3:     # without the per-area panel the insets get room: larger, labels at 7 pt
+    sweep_out = None
+    if sweep:  # the whole sweep of bar positions, images aligned above the segment differences
+        sweep_out = bar_sweep(fig, source, 2.05, 6.55, 2.72 + DY, 1.98 + DY, .52, W, H)
+        ins_lab = None
+    elif v3:     # without the per-area panel the insets get room: larger, labels at 7 pt
         ins_lab = bar_insets(fig, source, (2.0, 1.98 + DY), W, H, size=1.12, gap=.5, fs=7) if ins_file.exists() else None
     else:
         ins_lab = bar_insets(fig, source, (1.5, 2.2 + DY), W, H, gap=.06) if ins_file.exists() else None
@@ -1033,7 +1106,7 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     leg = LEGEND.format(title=title, areas=areas, hrf=hrf, prf_model=prf_model, n=qs.subject.nunique(), quality=quality, tests=tests, outline=outline,
                                   bands=band_txt, friedman=fried, outer_inner=oi, fovea=fovea, ex_sub=sub, ex_r=ex_r,
                                   ex_rank=ex_rank, n_runs=len(qf), r_med=qf.r.median(), ex_run=run.replace('_', ' '),
-                                  ap=APERTURE, item_r=ITEM_R, insets=(INSET_TXT.format(ins_far=ins_lab[0][0], ins_mid=ins_lab[0][1], ins_hp=ins_lab[0][2], ins_seg='; '.join(f'{k} segment {m:+.2f} ± {se:.2f}%, two-sided Wilcoxon p = {p:.3f}' for k, m, se, p in ins_lab[1])) if ins_lab else ''), item_in=ITEM_ECC - ITEM_R, bar=bar_txt, bar_base=bar_base,
+                                  ap=APERTURE, item_r=ITEM_R, insets=(SWEEP_TXT.format(nb=sweep_out[0], sweep_stats=sweep_out[1]) if sweep_out else INSET_TXT.format(ins_far=ins_lab[0][0], ins_mid=ins_lab[0][1], ins_hp=ins_lab[0][2], ins_seg='; '.join(f'{k} segment {m:+.2f} ± {se:.2f}%, two-sided Wilcoxon p = {p:.3f}' for k, m, se, p in ins_lab[1])) if ins_lab else ''), item_in=ITEM_ECC - ITEM_R, bar=bar_txt, bar_base=bar_base,
                                   w0=BAR_WINDOW[0], w1=BAR_WINDOW[1], source=source_note,
                                   q_lr=qst['p_lr'], quad=qst['text'])
     if v3:
@@ -1071,6 +1144,7 @@ if __name__ == '__main__':
     ap.add_argument('--supp-suffix', default='', help='appended to the names of the plot_all_rois / _examples / bar_crossing figures')
     ap.add_argument('--frames-style', default='magma', choices=['blue', 'magma'], help='decoded rows of a: magma on black or blue')
     ap.add_argument('--v3', action='store_true', help='180 mm wide; the per-area test to a supplementary figure; a-e')
+    ap.add_argument('--sweep', action='store_true', help='c: every bar position with its segment differences, not three insets')
     a = ap.parse_args()
     if a.step == 'collect':
         collect(a.bids_folder, a.source, a.out)
@@ -1081,4 +1155,4 @@ if __name__ == '__main__':
     elif a.step == 'plot_bar_crossing':
         plot_bar_crossing(name='figS_bar_crossing_response' + a.supp_suffix, source_note='')
     else:
-        plot(a.name, a.source, a.rois, a.decoder, source_note=f'pRFs: {a.source} fold fits.', frames_style=a.frames_style, v3=a.v3)
+        plot(a.name, a.source, a.rois, a.decoder, source_note=f'pRFs: {a.source} fold fits.', frames_style=a.frames_style, v3=a.v3, sweep=a.sweep)
