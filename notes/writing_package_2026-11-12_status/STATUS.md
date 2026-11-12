@@ -13,45 +13,44 @@ It applies on top of update 7.
 
 ## A. New Fig. 6, decoding (ready; replaces the current Fig. 6)
 
-Files: `figures/fig6_decoding_v11_n28.{pdf,png,md}`, 180 mm × 6.5 in. The `.md` is the full caption with every number.
-Decoders on pooled dorsal and occipitotemporal voxels run tonight. If they are worth showing, row 3 will be laid out
-again; the letters a–e stay.
+Files: `figures/fig6_decoding_v13_n28.{pdf,png,md}`. The figure is 180 mm × 4.9 in, in two rows. The `.md` is the full
+caption with every number. Decoders on pooled dorsal and occipitotemporal voxels run tonight; panel letters a–f stay.
 
 The figure's argument, row by row:
 
-- **Row 1, "Bar decoded from held-out runs" (a, b).** Example frames, then decoding quality per area. The bar is
-  recovered from held-out runs in every area.
+- **Row 1, "Bar decoded in every area, lower facing HP".**
+  - **a: example frames.** The bar, the best run, and the mean over participants.
+  - **b: decoding quality per area.** The bar is recovered from held-out runs in every area.
+  - **c: the HP effect per area,** directly under b on the same area axis. HP − other three quadrants (% of the
+    four-quadrant mean), mean ± SEM, BH correction across the nine areas.
+    - V2 −1.68 ± 0.73% and V3 −1.62 ± 0.59% reach q = .033; all other areas have q ≥ .18.
+    - V3AB, hV4 and VO are as large as V2 and V3 but noisier.
+  - **d: the same contrast pooled per pathway,** on c's y-axis.
+    - Early −1.35 ± 0.51% (p = .010)
+    - Occipitotemporal −1.06 ± 0.41% (p = .006)
+    - Dorsal −0.12 ± 0.75% (p = .56, n = 24)
+
+    All areas pooled: −1.14 ± 0.39%, p = .003. One-sided Wilcoxon tests.
 - **Row 2, "Lower intensity facing HP (V1–V3 pooled)".**
-  - **c, left: two rotated maps** (HP at 12 o'clock), the data next to what the fitted gain-field model predicts for
+  - **e, left: two rotated maps** (HP at 12 o'clock), the data next to what the fitted gain-field model predicts for
     the same readout. Both show lower decoded intensity toward HP. The spatial correlation inside the aperture is
     r = 0.51.
-  - **c, right: the bar sweep.** The difference on each segment of the bar against bar centre, for three segments:
+  - **e, right: the bar sweep.** The difference on each segment of the bar against bar centre, for three segments:
     - the quadrant facing HP (red);
     - next to HP (dark grey);
     - opposite (light grey, dashed).
 
-    Icons under the axis show which quadrants a bar crosses: left of centre it crosses next to HP and opposite; right
-    of centre it crosses HP and next to HP. Wherever the bar enters the quadrant facing HP, that segment is decoded
-    weaker (−1.3% at +0.9°, p < .05). The segment next to HP is weaker nowhere.
-  - **d: quadrant readout** with the model prediction. Observed: HP −1.02 ± 0.38%, next to HP +0.57 ± 0.17%,
-    opposite −0.12 ± 0.24% (mean ± SEM), HP < next one-sided p = .004. Predicted: HP −0.91%, next +0.19%,
-    opposite +0.53%.
-- **Row 3, "Pooled beyond V1–V3: occipitotemporal, not dorsal" (e).** HP − other three quadrants. Left: pooled per
-  pathway. Right: each of the nine areas, grouped by pathway.
-  - Early −1.35 ± 0.51% (p = .010)
-  - Occipitotemporal −1.06 ± 0.41% (p = .006)
-  - Dorsal −0.12 ± 0.75% (p = .56, n = 24)
-
-  All areas pooled: −1.14 ± 0.39%, p = .003. Per area (BH across the nine areas), only V2 (−1.68 ± 0.73%) and V3
-  (−1.62 ± 0.59%) reach q = .033; all other areas have q ≥ .18. V3AB, hV4 and VO are as large as V2 and V3 but noisier.
-  One-sided Wilcoxon tests, same normalisation as d.
+    Icons under the axis show which quadrants a bar crosses. Wherever the bar enters the quadrant facing HP, that
+    segment is decoded weaker (−1.3% at +0.9°, p < .05). The segment next to HP is weaker nowhere.
+  - **f: quadrant readout** with the model prediction. Observed: HP −1.02 ± 0.38%, next to HP +0.57 ± 0.17%, opposite
+    −0.12 ± 0.24% (mean ± SEM), HP < next one-sided p = .004. Predicted: HP −0.91%, next +0.19%, opposite +0.53%.
 
 **Moved to the supplement:**
 
 - `figures/figS_decoding_eccentricity_n28`: the check against the items outside the aperture. The effect does not grow
   toward the aperture edge, and the model predicts the same smooth rise. Cite it in one sentence.
 - `figures/figS_decoding_hp_per_area_v10_n28`: the per-area test with both decoders, and the per-area values with
-  their exact p and q (the same values as in e, right).
+  their exact p and q (the same values as in c).
 - `figures/figS_decoding_sweep_per_area_n28`: the sweep and maps for every area. The pattern is clear in V2 and V3;
   higher areas are too noisy per area.
 
@@ -140,11 +139,11 @@ Mark each in the text with **[PENDING: …]** so the numbers can be swapped in w
 **C2. Voxel selection, decoding** (just started; expected tonight).
 - **What runs:** the same two looser selections for the decoder, computed per fold on the training runs only, so the
   decoded run never chooses its own voxels. Readouts: decoding quality per area, the quadrant test (6d), the pooled
-  and per-area effects (Fig. 6e and its per-area supplement), the sweep, and pooled-voxel decoders for the dorsal and occipitotemporal pathways (to fill the free slot in row 3).
+  and per-area effects (Fig. 6c, d and the per-area supplement), the sweep, and pooled-voxel decoders for the dorsal and occipitotemporal pathways (to fill the free slot in row 3).
 - **Same decision rule:** the main figure keeps the current selection unless a looser one clearly improves decoding
   quality and the precision of the HP effect.
 - **Main interest:** whether the higher areas (V3AB, hV4, VO), now large but noisy, become reliable with more voxels.
-- **Placeholder (Fig. 6e text, Supplement):** "[PENDING: decoding with a looser voxel selection]".
+- **Placeholder (Fig. 6c/d text, Supplement):** "[PENDING: decoding with a looser voxel selection]".
 
 **C3. The HP-specific gain along the visual hierarchy** (update 9; runs on the refitted fits).
 - **Question:** does each gain term grow or shrink along the hierarchy (pRF size, area rank)? Includes target vs dS,
