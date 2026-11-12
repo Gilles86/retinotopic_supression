@@ -27,12 +27,13 @@ Outputs (never inside existing derivatives folders)::
 
 Default out-root: ``<bids>/derivatives/decoded_sim_2026-11``.
 
-``--mode fitted``: the truth is the subject's fitted joint gain-field model instead of a synthetic field. One task =
-one subject × session (``--runs`` restricts further). Per ROI:
+``--mode fitted``: the truth is the subject's fitted joint gain-field model instead of a synthetic field. One call =
+one subject × session (``--run``, ``--rois`` restrict it; the SLURM array runs one subject × run × ROI per task). Per ROI:
 
 1. Signal. The polished ``m7_full`` fit of ``--ladder-root`` (per-voxel DoG pRFs fitted together with the gain fields
    on all runs, one HRF per subject × ROI from ``--hrf-table``, the 8-item paradigm with the fitted item drive scale)
-   predicts every run's BOLD (runs concatenated in the fit's order, as in the fit) twice: ``model``, all terms as
+   predicts the run's BOLD (from the run's own paradigm, so without the previous run's HRF tail that the
+   concatenated fit carried into its first frames) twice: ``model``, all terms as
    fitted (sustained HP / LP gains and field width, distractor and target transients, items), and ``control``, the
    same parameters with the five gains (g_HP, g_LP, g_HP_dyn, g_LP_dyn, g_T_dyn) at 0, i.e. pRFs and items only.
 2. Voxels. Those ``decode_final.py`` selects for the run (fold pRFs of the run's held-out fold, reliability > 0,
@@ -199,17 +200,27 @@ GAINS = ('g_HP', 'g_LP', 'g_HP_dyn', 'g_LP_dyn', 'g_T_dyn')
 VARIANTS = ('model', 'control')
 
 
-def joint_signals(sub, rois, ladder_root, hrf_table, resolution=50, grid_radius=5.0):
-    """Prediction of the polished m7_full fit for every run (concatenated as in the fit), per ROI and variant
-    (``model``: as fitted; ``control``: the five gains at 0). Returns ({roi: {variant: (T_all, V)}}, {roi: voxel_ids},
-    {(session, run): start row}, {roi: shared parameters})."""
+def joint_signals(sub, session, run, rois, ladder_root, hrf_table, resolution=50, grid_radius=5.0):
+    """Prediction of the polished m7_full fit for one run (the run's own 8-item paradigm, HP indicator and distractor /
+    target pulses, built as in ``fit_af_prf_cv_v2.build_data_and_paradigm``, on the fit's grid), per ROI and variant
+    (``model``: as fitted; ``control``: the five gains at 0). Returns ({roi: {variant: (T, V)}}, {roi: voxel_ids},
+    {roi: shared parameters})."""
     import pickle
-    from retsupp.modeling.fit_af_prf_cv_v2 import build_data_and_paradigm, build_model, get_ring_positions
+    from retsupp.modeling.cv_helpers import CONDITIONS
+    from retsupp.modeling.fit_af_prf_cv_v2 import _pad_or_crop, build_model, get_ring_positions
     from retsupp.modeling.fit_cv_ladder_nested import sign_pattern_of
     from retsupp.modeling.roi_hrf import hrf_model as roi_hrf_model, load_table
-    _bold, par, ci, di, ti, grid, _, meta = build_data_and_paradigm(sub, resolution=resolution, grid_radius=grid_radius,
-                                                                    item_shape='rectangle')
-    del _bold
+    gx, gy = sub.get_extended_grid_coordinates(resolution=resolution, session=1, run=1, grid_radius=grid_radius)
+    grid = np.stack((gx.ravel(), gy.ravel()), axis=1).astype(np.float32)
+    par = sub.get_stimulus_with_distractors(session=session, run=run, resolution=resolution, grid_radius=grid_radius,
+                                            distractor_shape='rectangle', distractor_long_side=1.5,
+                                            distractor_short_side=0.375).astype(np.float32)
+    par = par.reshape(par.shape[0], -1)
+    T = par.shape[0]
+    ci = np.zeros((T, len(CONDITIONS)), np.float32)
+    ci[:, CONDITIONS.index(sub.get_hpd_locations()[(session, run)])] = 1.
+    di = _pad_or_crop(sub.get_dynamic_indicator(session=session, run=run).astype(np.float32), T)
+    ti = _pad_or_crop(sub.get_target_indicator(session=session, run=run).astype(np.float32), T)
     table = load_table(hrf_table)
     pred, ids, shared = {}, {}, {}
     for roi in rois:
@@ -233,8 +244,7 @@ def joint_signals(sub, rois, ladder_root, hrf_table, resolution=50, grid_radius=
         shared[roi] = p7.iloc[0][['sigma_AF', 'sigma_dyn', 'item_scale', *GAINS]].astype(float).to_dict()
         print(f'{roi}: joint fit {len(ids[roi])} voxels, ' + ', '.join(f'{k} {v:+.3f}' for k, v in shared[roi].items()),
               flush=True)
-    span = {(int(m.session), int(m.run)): int(m.start) for m in meta}
-    return pred, ids, span, shared
+    return pred, ids, shared
 
 
 def save_decoded(out, session, run, roi, decoded, paradigm, grid, hp, sel, dof, ro):
@@ -259,8 +269,6 @@ def main_fitted(subject, runs, rois, bids, source, decoders, joint_tag, ladder_r
         print('All outputs exist')
         return
     t0 = time.time()
-    pred, ids, span, shared = joint_signals(sub, rois, ladder_root, hrf_table, resolution, grid_radius)
-    print(f'joint predictions ({time.time() - t0:.0f} s)', flush=True)
     with np.load(deriv / 'cleaned_bold_cache' / f'sub-{subject:02d}' / f'sub-{subject:02d}_kind-full_res-{resolution}.npz') as f:
         bold_all = f['bold']
     bold_runs = {(s, r): slice_run(bold_all, sub, s, r).astype(np.float32) for s, r in todo}
@@ -279,8 +287,8 @@ def main_fitted(subject, runs, rois, bids, source, decoders, joint_tag, ladder_r
         grid = np.stack([gx.ravel(), gy.ravel()], axis=1).astype(np.float32)
         par_flat = paradigm.reshape(T, -1)
         par_df = pd.DataFrame(par_flat, index=pd.Index(np.arange(T), name='frame'))
-        a = span[(session, run)]
-        print(f'ses-{session} run-{run}: fold {fold}, HP {hp}, aperture {aperture}°', flush=True)
+        pred, ids, shared = joint_signals(sub, session, run, rois, ladder_root, hrf_table, resolution, grid_radius)
+        print(f'ses-{session} run-{run}: fold {fold}, HP {hp}, aperture {aperture}° ({time.time() - t0:.0f} s)', flush=True)
         for ri, roi in enumerate(rois):
             if roi not in pred:
                 continue
@@ -293,7 +301,7 @@ def main_fitted(subject, runs, rois, bids, source, decoders, joint_tag, ladder_r
             t1 = time.time()
             real = bold_runs[(session, run)][:, np.asarray(sel)]
             cols = [col[v] for v in sel]
-            signal = {v: pred[roi][v][a:a + T, cols] for v in VARIANTS}
+            signal = {v: pred[roi][v][:T, cols] for v in VARIANTS}
             resid = real - signal['model']
             rng = np.random.default_rng([seed, subject, session, run, ri])
             noise = phase_randomise(resid, rng) if noise_kind == 'phase' else ar1_noise(resid, rng)
