@@ -33,7 +33,11 @@ for one subject × fold: it recomputes the held-out R² of the fold fit from thi
 compares it with the R² the fit wrote.
 
 Voxels: the ROI's voxels with cross-run reliability > 0 on the fold's training runs and BOLD SD ≤
-``--max-bold-sd`` (the outlier rule), at most ``--max-voxels`` (highest reliability first). Decoder
+``--max-bold-sd`` (the outlier rule), at most ``--max-voxels`` (highest reliability first). With
+``--selection relnull --min-r R``: instead, the ROI's voxels with cross-run reliability r > R and circular-shift
+p <= ``--max-p`` (.01) on the fold's training runs (``modeling/cv/voxel_reliability_null.py --folds``) and mean
+training-run BOLD SD <= ``--max-bold-sd``, at most ``--max-voxels`` (highest r first); outputs then go to
+``<out-root>/<prf-source>_relnull_r<R>``. Decoder
 settings are the calibrated ones of ``decode.py``: bar-only paradigm, L2 = 1.0, learning rate 0.5,
 ResidualFitter 2000 iterations, sd_min 0.2.
 
@@ -123,6 +127,21 @@ def select_voxels(pars_all, roi_of, rel, roi, max_voxels, max_bold_sd):
     if len(sel) > max_voxels:
         sel = r.loc[sel].reliability.sort_values(ascending=False).index[:max_voxels]
     return sel, len(ids)
+
+
+def select_voxels_relnull(pars_all, roi_of, tab, roi, max_voxels, max_bold_sd, min_r, max_p):
+    """As ``select_voxels`` with the fold-wise reliability-null table: r > min_r, p <= max_p, sd <= max_bold_sd."""
+    ids = roi_of.index[roi_of.to_numpy() == roi]
+    p = pars_all.loc[ids]
+    t = tab.reindex(ids)
+    keep = p.notna().all(axis=1).to_numpy() & (t.r.to_numpy() > min_r) & (t.p.to_numpy() <= max_p)
+    if max_bold_sd is not None:
+        keep &= t.sd.to_numpy() <= max_bold_sd
+    sel = ids[keep]
+    n_pass = len(sel)
+    if len(sel) > max_voxels:
+        sel = t.loc[sel].r.sort_values(ascending=False).index[:max_voxels]
+    return sel, len(ids), n_pass
 
 
 def fit_noise(model, data, par_df, pars, resid_max_iter):
@@ -216,13 +235,17 @@ def check_prfs(subject, fold, source, bids, joint_tag='final2', rois=('V1', 'V2'
 
 
 def main(subject, session, run, rois, bids, source, decoders, joint_tag, max_voxels, max_bold_sd, l2_norm, learning_rate,
-         max_iter, min_iter, resid_max_iter, resolution=50, grid_radius=5.0, out_root=None):
+         max_iter, min_iter, resid_max_iter, resolution=50, grid_radius=5.0, out_root=None, selection='loo', min_r=None,
+         max_p=.01):
     sub = Subject(subject, bids_folder=bids)
     if run not in sub.get_runs(session):
         print(f'sub-{subject:02d} has no ses-{session} run-{run}; nothing to do')
         return
     deriv = Path(bids) / 'derivatives'
-    out_root = Path(out_root or deriv / 'decoded_final_2026-11') / source
+    if selection == 'relnull' and min_r is None:
+        raise ValueError('--selection relnull needs --min-r')
+    out_root = Path(out_root or deriv / 'decoded_final_2026-11') / (
+        source if selection == 'loo' else f'{source}_relnull_r{min_r:g}')
     fold = fold_of(sub, session, run)
     hp = sub.get_hpd_locations().get((session, run))
     aperture = float(sub.get_experimental_settings(session, run)['radius_bar_aperture'])
@@ -234,8 +257,12 @@ def main(subject, session, run, rois, bids, source, decoders, joint_tag, max_vox
         print('All outputs exist')
         return
     pars_all, roi_of = load_prfs(deriv, subject, fold, source, joint_tag)
-    rel = pd.read_csv(deriv / 'prf_cv_roi_reliability' / f'sub-{subject:02d}' / f'sub-{subject:02d}_fold-{fold}_reliability.tsv.gz',
-                      sep='\t').set_index('voxel_index')
+    if selection == 'loo':
+        rel = pd.read_csv(deriv / 'prf_cv_roi_reliability' / f'sub-{subject:02d}' / f'sub-{subject:02d}_fold-{fold}_reliability.tsv.gz',
+                          sep='\t').set_index('voxel_index')
+    else:
+        from retsupp.modeling.cv.voxel_reliability_null import fold_path
+        rel = pd.read_csv(fold_path(bids, subject, fold), sep='\t').set_index('voxel_index')
     cache = deriv / 'cleaned_bold_cache' / f'sub-{subject:02d}' / f'sub-{subject:02d}_kind-full_res-{resolution}.npz'
     t0 = time.time()
     with np.load(cache) as f:
@@ -256,11 +283,15 @@ def main(subject, session, run, rois, bids, source, decoders, joint_tag, max_vox
         pars_of['items'] = np.maximum(items, paradigm)
 
     for roi in rois:
-        sel, n_roi = select_voxels(pars_all, roi_of, rel, roi, max_voxels, max_bold_sd)
+        if selection == 'loo':
+            sel, n_roi = select_voxels(pars_all, roi_of, rel, roi, max_voxels, max_bold_sd)
+            n_pass = len(sel)
+        else:
+            sel, n_roi, n_pass = select_voxels_relnull(pars_all, roi_of, rel, roi, max_voxels, max_bold_sd, min_r, max_p)
         if len(sel) < 20:
             print(f'{roi}: only {len(sel)} voxels, skipped', flush=True)
             continue
-        print(f'{roi}: {len(sel)} voxels (reliability > 0 of {n_roi})', flush=True)
+        print(f'{roi}: {len(sel)} voxels ({selection}: {n_pass} pass of {n_roi})', flush=True)
         pars = pars_all.loc[sel].reset_index(drop=True).astype(np.float32)
         data = pd.DataFrame(bold_run[:, np.asarray(sel)], index=pd.Index(np.arange(T), name='frame'))
 
@@ -288,7 +319,10 @@ def main(subject, session, run, rois, bids, source, decoders, joint_tag, max_vox
                              (T, resolution, resolution))
             ro = readout(decoded, paradigm, grid, aperture, hp).assign(subject=subject, session=session, run=run, roi=roi,
                                                                        decoder=dec, source=source, fold=fold, hp_location=hp,
-                                                                       n_voxels=len(sel))
+                                                                       n_voxels=len(sel),
+                                                                       **({} if selection == 'loo' else dict(
+                                                                           n_voxels_pass=n_pass,
+                                                                           selection=f'relnull_r{min_r:g}')))
             np.savez_compressed(out / f'decoded_ses-{session}_run-{run}_roi-{roi}.npz', decoded=decoded.astype(np.float16),
                                 paradigm=paradigm.astype(np.uint8), grid=grid, hp_location=np.array(str(hp)),
                                 voxel_index=np.asarray(sel), dof=np.float32(dof if dof is not None else np.nan),
@@ -317,6 +351,10 @@ if __name__ == '__main__':
     ap.add_argument('--min-n-iterations', type=int, default=200)
     ap.add_argument('--resid-max-iter', type=int, default=2000)
     ap.add_argument('--out-root', default=None)
+    ap.add_argument('--selection', choices=['loo', 'relnull'], default='loo',
+                    help='loo: training-run reliability > 0 (default); relnull: fold-wise r > --min-r, p <= --max-p')
+    ap.add_argument('--min-r', type=float, default=None)
+    ap.add_argument('--max-p', type=float, default=.01)
     ap.add_argument('--check-prfs', action='store_true',
                     help='only verify the model construction against the fold fit of --session/--run (see check_prfs)')
     a = ap.parse_args()
@@ -325,4 +363,5 @@ if __name__ == '__main__':
         check_prfs(a.subject, fold, a.prf_source, a.bids_folder, a.joint_tag, a.rois)
         raise SystemExit
     main(a.subject, a.session, a.run, a.rois, a.bids_folder, a.prf_source, a.decoders, a.joint_tag, a.max_voxels, a.max_bold_sd,
-         a.l2_norm, a.learning_rate, a.max_n_iterations, a.min_n_iterations, a.resid_max_iter, out_root=a.out_root)
+         a.l2_norm, a.learning_rate, a.max_n_iterations, a.min_n_iterations, a.resid_max_iter, out_root=a.out_root,
+         selection=a.selection, min_r=a.min_r, max_p=a.max_p)

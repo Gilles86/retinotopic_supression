@@ -17,9 +17,18 @@ Output (never overwritten):
 ``voxel_index`` = index into the BOLD mask (the ladder's ``voxel_ids``). Used by
 ``fit_cv_ladder_nested.py --selection-table``.
 
+``--folds``: the same statistic per cross-validation fold of ``fit_prf_cv.make_fold_assignments`` (3 folds, the
+folds of the pRF fits and of ``decode/decode_final.py``), computed on that fold's TRAINING runs only, so a held-out
+(decoded) run never influences its voxel selection. ``sd`` is then the mean BOLD SD over the training runs, the
+null seeded by (subject, fold). Output (never overwritten):
+``derivatives/prf_cv_roi_reliability_null_folds/sub-XX/sub-XX_fold-K_reliability_null.tsv.gz`` with
+``voxel_index``, ``roi``, ``r``, ``null_mean``, ``null_95``, ``p``, ``sd``, ``n_train_runs``. Used by
+``decode_final.py --selection relnull``.
+
 Usage::
 
     python -m retsupp.modeling.cv.voxel_reliability_null 3 --bids-folder /shares/zne.uzh/gdehol/ds-retsupp
+    python -m retsupp.modeling.cv.voxel_reliability_null 3 --folds
 """
 from __future__ import annotations
 
@@ -37,11 +46,17 @@ T_RUN = 258
 N_NULL = 100
 SHIFT_RANGE = (30, 228)   # TRs; integers drawn in [30, 228)
 OUT_SUBDIR = 'prf_cv_roi_reliability_null'
+FOLDS_SUBDIR = 'prf_cv_roi_reliability_null_folds'
 
 
 def out_path(bids_folder, subject):
     return (Path(bids_folder) / 'derivatives' / OUT_SUBDIR / f'sub-{subject:02d}'
             / f'sub-{subject:02d}_reliability_null.tsv.gz')
+
+
+def fold_path(bids_folder, subject, fold):
+    return (Path(bids_folder) / 'derivatives' / FOLDS_SUBDIR / f'sub-{subject:02d}'
+            / f'sub-{subject:02d}_fold-{fold}_reliability_null.tsv.gz')
 
 
 def _z(a):
@@ -107,9 +122,48 @@ def main(subject, bids_folder):
     print(f'sub-{subject:02d}: {len(df)} voxels -> {out}')
 
 
+def main_folds(subject, bids_folder, n_folds=3):
+    """Per fold: r, null, p and SD on the fold's training runs only (see the module docstring)."""
+    from retsupp.modeling.cv.fit_prf_cv import make_fold_assignments
+    bids_folder = Path(bids_folder)
+    todo = [k for k in range(n_folds) if not fold_path(bids_folder, subject, k).exists()]
+    if not todo:
+        print('All fold outputs exist, nothing to do')
+        return
+    der = bids_folder / 'derivatives'
+    sub = Subject(subject, bids_folder)
+    folds = make_fold_assignments(sub, n_folds=n_folds)
+    masker = maskers.NiftiMasker(mask_img=sub.get_bold_mask(session=1, run=sub.get_runs(1)[0]))
+    masker.fit()
+    vox, roi = roi_voxels(sub, masker)
+    bold = {}
+    for ses, run in sorted(r for f in folds for r in f):
+        fn = (der / 'cleaned' / f'sub-{subject:02d}' / f'ses-{ses}' / 'func'
+              / f'sub-{subject:02d}_ses-{ses}_task-search_desc-cleaned_run-{run}_bold.nii.gz')
+        bold[ses, run] = masker.transform(fn).astype(np.float32)[:T_RUN, vox]
+    for k in todo:
+        train = sorted(r for j, f in enumerate(folds) if j != k for r in f)
+        runs = np.stack([bold[r] for r in train])
+        r_obs, null = reliability_null(runs, np.random.default_rng([subject, k]))
+        p = ((null >= r_obs[:, None]).sum(1) + 1) / (N_NULL + 1)
+        df = pd.DataFrame(dict(sub=subject, fold=k, voxel_index=vox, roi=roi, r=r_obs, null_mean=null.mean(1),
+                               null_95=np.quantile(null, .95, axis=1), p=p, sd=runs.std(1).mean(0),
+                               n_train_runs=len(train)))
+        out = fold_path(bids_folder, subject, k)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        df.to_csv(out, sep='\t', index=False)
+        print(f'sub-{subject:02d} fold {k}: {len(train)} training runs, {len(df)} voxels; r > .1 & p <= .01: '
+              f'{((df.r > .1) & (df.p <= .01)).sum()}, r > .2 & p <= .01: {((df.r > .2) & (df.p <= .01)).sum()} -> {out}',
+              flush=True)
+
+
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('subject', type=int)
     ap.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
+    ap.add_argument('--folds', action='store_true', help='per CV fold, on the training runs only')
     a = ap.parse_args()
-    main(a.subject, a.bids_folder)
+    if a.folds:
+        main_folds(a.subject, a.bids_folder)
+    else:
+        main(a.subject, a.bids_folder)
