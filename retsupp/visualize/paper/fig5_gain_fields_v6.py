@@ -21,6 +21,13 @@ Run through ``run_excluding`` for n = 28::
 the full width (sustained block left, transient block right, colour keys under each block, one shared key for the target
 and distractor fields) and draws the sustained HP gain as median g_LP + the median dS ESTIMATED ALONE (the value panel c
 plots), so the HP - LP printed on each map equals panel c; parameters go to ``..._2026-11-12_v8.tsv``.
+
+``--layout v11`` is v10 on a reference fit given by its tables (``--gain-table``, ``--conditional-table``; e.g. the
+polished fits, pRFs refitted together with the gain fields) with the sustained width of each map restricted to fits with
+a reliable sustained gain (``--widths-table``, the ``_widths_thr2.tsv`` of ``field_widths_reliable``) and every sentence
+that names significant areas computed from the data (joint and estimated alone, per pathway). The per-pathway pooling
+is written to ``notes/data/dS_pooled_by_pathway<suffix>_2026-11-12_v11.tsv``. Driver for a whole reference fit:
+``retsupp/visualize/paper/regenerate_reference.sh``.
 """
 from __future__ import annotations
 
@@ -48,7 +55,7 @@ TR_SIGMA = TR_FWHM / FWHM
 TGT, DIS = 'opp', 'left'          # target opposite HP; distractor at the LP location next to HP (its gain is the average)
 
 
-def map_parameters(gain_table, exclude=(1, 2), cond=None):
+def map_parameters(gain_table, exclude=(1, 2), cond=None, widths=None):
     """Per area, the median over participants of each participant's joint-fit parameter (DoG, m7_full).
 
     cond: the estimated-alone table (subject, roi, dS, ...). If given, the HP gain drawn is median g_LP + the median dS
@@ -69,8 +76,42 @@ def map_parameters(gain_table, exclude=(1, 2), cond=None):
         p['n_alone'] = c.groupby('roi').dS.size().reindex(p.index)
         p['dS_map'] = p.dS_alone
     p['g_HP_map'] = p.g_LP + p.dS_map
+    if widths is not None:                 # the width among fits with a reliable sustained gain (field_widths_reliable)
+        w = pd.read_csv(widths, sep='\t')
+        w = w[(w.field == 'sustained') & w.subset.str.startswith('reliable')].set_index('roi')
+        p['sigma_AF_all'] = p.sigma_AF
+        p['n_width'] = w['n'].reindex(p.index)
+        p['sigma_AF'] = (w['median'].reindex(p.index) / FWHM).fillna(p.sigma_AF)
     p['fwhm_AF'] = FWHM * p.sigma_AF
     return p
+
+
+def q_by_area(df, term):
+    """BH q per area (Wilcoxon against 0) of one term, as panel c and the parameter table."""
+    ps = [stats.wilcoxon(df[df.roi == r][term].dropna()).pvalue for r in ROI_ORDER]
+    return dict(zip(ROI_ORDER, stats.false_discovery_control(ps)))
+
+
+def and_list(xs):
+    xs = list(xs)
+    return 'no area' if not xs else xs[0] if len(xs) == 1 else ', '.join(xs[:-1]) + ' and ' + xs[-1]
+
+
+def pathway_pooling(cond, term='dS'):
+    """Per participant the median of the term over the areas of each pathway (and over all nine), median over
+    participants (%, bootstrapped 95% CI), participants < 0, Wilcoxon; BH across the three pathways."""
+    from retsupp.visualize.paper.fig45_common import median_ci
+    from retsupp.visualize.paper.paper_style import ROI_GROUPS
+    rows = []
+    for name, rois in list(ROI_GROUPS) + [('All areas', tuple(ROI_ORDER))]:
+        v = cond[cond.roi.isin(rois)].groupby('subject')[term].median().dropna() * 100
+        m, lo, hi = median_ci(v.to_numpy())
+        rows.append(dict(group=name, n=len(v), median_pct=m, ci_lo=lo, ci_hi=hi, k_neg=int((v < 0).sum()),
+                         p=stats.wilcoxon(v).pvalue))
+    g = pd.DataFrame(rows)
+    k = g.group != 'All areas'
+    g.loc[k, 'q_BH3'] = stats.false_discovery_control(g.loc[k, 'p'])
+    return g
 
 
 def fields(p, xx, yy):
@@ -529,7 +570,7 @@ def panel_maps_v9(fig, p, x0, y_top, cw, gap, bgap, under, bars=True):
 
 
 def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_area_sustained=None, compact=False,
-         layout=None):
+         layout=None, widths_table=None, fit_label=None):
     # the same inputs and options as fig5_gain_fields_n28 (final fits, b-d unchanged in content)
     F.FINAL, F.SUFFIX, F.WIDTHS_SUPP = True, suffix, True
     F.GAIN_TABLE = gain_table
@@ -540,11 +581,12 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
     d = js['dog']
     n = d.subject.nunique()
     layout = layout or ('v7' if compact else 'v6')
-    compact = layout in ('v7', 'v8', 'v9', 'v10')
-    v10 = layout == 'v10'      # v10: v9 with panel c led by the all-areas pooled estimate
-    v9 = layout in ('v9', 'v10')
-    v8 = layout in ('v8', 'v9', 'v10')        # v9: the v8 layout and parameters, in percent, sustained block as HP − LP maps
-    p = map_parameters(gain_table, cond=cond if v8 else None)
+    compact = layout in ('v7', 'v8', 'v9', 'v10', 'v11')
+    v11 = layout == 'v11'      # v11: v10 on a reference fit, reliable-gain widths, significance sentences from the data
+    v10 = layout in ('v10', 'v11')      # v10: v9 with panel c led by the all-areas pooled estimate
+    v9 = layout in ('v9', 'v10', 'v11')
+    v8 = layout in ('v8', 'v9', 'v10', 'v11')        # v9: the v8 layout and parameters, in percent, sustained block as HP − LP maps
+    p = map_parameters(gain_table, cond=cond if v8 else None, widths=widths_table if v11 else None)
 
     from retsupp.visualize.paper.fig7_behaviour import icons, row
     from retsupp.visualize.paper.paper_style import stimulus_icon
@@ -724,9 +766,16 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
     legend = head + ' ' + general.strip() + ' ' + a_txt + ' b–d: ' + rest
     legend = legend.replace('-0.', '−0.')
     if v9:
-        legend = percent_legend(legend, p, n, dmin)
+        legend = percent_legend(legend, p, n, dmin, data_driven=(js['dog'], cond) if v11 else None)
     if v10:
-        legend = pooled_legend(legend, pooled_c)
+        pw = None
+        if v11:
+            pw = pathway_pooling(cond)
+            pw.to_csv(f'notes/data/dS_pooled_by_pathway{suffix}_2026-11-12_v11.tsv', sep='\t', index=False)
+        legend = pooled_legend(legend, pooled_c, pw)
+    if v11:
+        lab = fit_label or ('Gain-field model fits with DoG pRFs, the pRFs refitted together with the gain fields')
+        legend = legend.replace('Gain-field model fits with DoG pRFs (n = ', f'{lab} (n = ', 1)
     save(fig, f'fig5_gain_fields_{layout}' + suffix, legend)
     print('scales:', scales, 'per-area sustained:', per_area_sustained)
     print(p.loc[AREAS].round(4).to_string())
@@ -734,6 +783,8 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
         search_figure(p, n, suffix)
     if layout == 'v9':
         search_figure_v2(p, n, suffix)
+    if v11:
+        search_figure_v2(p, n, suffix, name='figS_gain_field_map_search_v3', dd=(js['dog'], cond))
     (p if v8 else p.drop(columns='dS_map')).to_csv(
         f'notes/data/fig5_gain_field_map_parameters{suffix}_2026-11-12{"_" + layout if v8 else ""}.tsv', sep='\t',
              float_format='%.5f')
@@ -777,9 +828,18 @@ def pooled_all_areas(ax, cond, ylim):
     return dict(median=m, lo=a, hi=b, k=k, n=len(v), p=p)
 
 
-def pooled_legend(legend, pc):
-    """v10 legend: panel c's sentence led by the all-areas pooled estimate, plus the groups (dS_pooled_by_pathway)."""
-    g = pd.read_csv('notes/data/dS_pooled_by_pathway_n28_2026-11-12.tsv', sep='\t').set_index('group')
+def pooled_legend(legend, pc, pathways=None):
+    """v10 legend: panel c's sentence led by the all-areas pooled estimate, plus the groups (dS_pooled_by_pathway).
+    pathways (v11): the per-pathway table computed from the data; the clause naming where it is reliable follows it."""
+    g = (pd.read_csv('notes/data/dS_pooled_by_pathway_n28_2026-11-12.tsv', sep='\t') if pathways is None
+         else pathways).set_index('group')
+    clause = 'Present in early and occipitotemporal areas, not reliable in dorsal areas'
+    if pathways is not None:
+        names = {'Early': 'early', 'Dorsal': 'dorsal', 'Occipitotemporal': 'occipitotemporal'}
+        yes = [names[k] for k in names if g.loc[k, 'q_BH3'] < .05]
+        no = [names[k] for k in names if g.loc[k, 'q_BH3'] >= .05]
+        clause = (f'Present in {and_list(yes)} areas' + (f', not reliable in {and_list(no)} areas' if no else '')
+                  if yes else 'Not reliable in any single pathway')
     def grp(name, lab):
         r = g.loc[name]
         return f"{lab} {r.median_pct:+.1f}% (q = {r.q_BH3:.3f})".replace('-', '−').replace('= 0.', '= .')
@@ -788,8 +848,7 @@ def pooled_legend(legend, pc):
     txt = (f"c, leftmost and larger: all areas pooled (per participant the median dS over the nine areas; median over "
            f"participants {pc['median']:+.1f}% [{pc['lo']:+.1f}, {pc['hi']:+.1f}], negative in {pc['k']} of {pc['n']} "
            f"participants, Wilcoxon p = {pexp}); the claim rests on this pooled effect, consistent across "
-           f"participants, rather than on any single area. Present in early and occipitotemporal areas, not reliable "
-           f"in dorsal areas (the same pooling per pathway, BH across the three: "
+           f"participants, rather than on any single area. {clause} (the same pooling per pathway, BH across the three: "
            f"{grp('Early', 'early')}, {grp('Dorsal', 'dorsal')}, {grp('Occipitotemporal', 'occipitotemporal')}). "
            f"Right of the divider, the nine areas as before: ").replace('+-', '−').replace('-', '−')
     i = legend.find(' c, ')
@@ -805,7 +864,7 @@ def to_pct(m):
     return f'{sgn}{x:.{dec}f}%'
 
 
-def percent_legend(legend, p, n, dmin):
+def percent_legend(legend, p, n, dmin, data_driven=None):
     """v9 legend: panel a rewritten (HP − LP difference maps, percent); every signed gain value in b–d (the
     per-ROI and pooled estimates and their CIs) converted to percent; differences are percentage points of gain."""
     import re
@@ -815,11 +874,28 @@ def percent_legend(legend, p, n, dmin):
     head = head.replace('a gain is the fractional change in drive at the centre of a field (+0.30: 30% more)',
                         'gains are in % (the change in drive at the centre of a field: +30%, 30% more); differences '
                         'between gains (HP − LP) are in percentage points of gain, written as %')
+    wn = (lambda a: f", median of the {int(p.loc[a, 'n_width'])} fits with a reliable sustained gain; all fits "
+          f"{FWHM * p.loc[a, 'sigma_AF_all']:.1f}°") if 'n_width' in p else (lambda a: '')
     vals = '; '.join(
         f"{a}: sustained gain at LP {pct(p.loc[a, 'g_LP'])}, at HP {pct(p.loc[a, 'g_HP_map'])} (HP − LP = dS "
         f"estimated alone {pct(p.loc[a, 'dS_map'])}, the median of panel c; joint-fit dS {pct(p.loc[a, 'dS'])}), "
-        f"width σ {p.loc[a, 'sigma_AF']:.2f}° (FWHM {p.loc[a, 'fwhm_AF']:.1f}°); target gain {pct(p.loc[a, 'T'], 0)}; "
+        f"width σ {p.loc[a, 'sigma_AF']:.2f}° (FWHM {p.loc[a, 'fwhm_AF']:.1f}°{wn(a)}); target gain {pct(p.loc[a, 'T'], 0)}; "
         f"distractor gain {pct(p.loc[a, 'D'], 0)}" for a in AREAS)
+    width_txt = "Gaussian at HP (the area's median fitted width)"
+    sig_txt = ("V3, hV4 and TO are the areas where the sustained gain is reliably lower at HP than at LP in the joint fit "
+               "(q < .05); estimated alone, as drawn, the difference is reliable in V3 and TO (panel c).")
+    if data_driven is not None:
+        jd, cond = data_driven
+        qj, qa = q_by_area(jd, 'dS'), q_by_area(cond, 'dS')
+        sj = [r for r in ROI_ORDER if qj[r] < .05]
+        sa = [r for r in ROI_ORDER if qa[r] < .05]
+        near = [f'{r} q = {qa[r]:.3f}'.replace('= 0.', '= .') for r in AREAS if .05 <= qa[r] < .1]
+        sig_txt = (f"The sustained gain is reliably lower at HP than at LP (q < .05) in {and_list(sj)} in the joint fit "
+                   f"and, estimated alone as drawn, in {and_list(sa)} (panel c)"
+                   + (f"; {', '.join(near)} estimated alone" if near else '') + '.')
+        if 'n_width' in p:
+            width_txt = ("Gaussian at HP (width: the area's median full width at half maximum among fits whose sustained "
+                         "gain is reliably different from zero, |gain| > 2 SE; Supplementary Fig., field widths)")
     neg = [r for r in ROI_ORDER if p.loc[r, 'g_LP'] < 0 and p.loc[r, 'g_HP_map'] < 0]
     a_txt = (
         " a, The fitted parametric gain field over the search display, not data: for each area, the median over "
@@ -829,7 +905,7 @@ def percent_legend(legend, p, n, dmin):
         "the 3.17° aperture of the mapping bar; +, fixation. Left three maps, the sustained field at HP minus at the "
         "low-probability (LP) locations: only the HP-specific part of the sustained field, the area's median HP − LP "
         "difference estimated alone (dS, the value panel c plots, printed in bold next to HP) times the field's "
-        "Gaussian at HP (the area's median fitted width); thin red line, the half-maximum (FWHM) contour of that field. "
+        + width_txt + "; thin red line, the half-maximum (FWHM) contour of that field. "
         "One scale for the three areas, white (no difference) to dark red at the deepest area's HP − LP "
         f"({dmin:+.1f}%; no headroom, so that area saturates). ".replace("-", "−") + "The sustained field itself is a suppression at all four "
         "possible locations in most areas "
@@ -842,8 +918,7 @@ def percent_legend(legend, p, n, dmin):
         "transient fields exist only while a search display is on; their fitted width is often at a bound of the fit "
         f"(0.5° or 8°), so it is set for display to the same FWHM of {TR_FWHM:.1f}° in every area and is not "
         "interpreted (field widths per participant: Supplementary Fig., field widths). Values used: " + vals + ". "
-        "V3, hV4 and TO are the areas where the sustained gain is reliably lower at HP than at LP in the joint fit "
-        "(q < .05); estimated alone, as drawn, the difference is reliable in V3 and TO (panel c). The sum of the three "
+        + sig_txt + " The sum of the three "
         "fields during a search display is in Supplementary Fig. (gain field during search).")
     rest = legend[a_end:]
     # signed decimals (gains, differences of gains, their CIs) -> %; q and p values are unsigned and stay
@@ -931,7 +1006,8 @@ SEARCH_LEGEND_V2 = """
 """
 
 
-def search_figure_v2(p, n, suffix):
+def search_figure_v2(p, n, suffix, name='figS_gain_field_map_search_v2', dd=None):
+    """dd (v11): (joint fit, estimated-alone table); the sentence on the transient HP − LP difference is computed."""
     """As search_figure, in percent, with the sustained HP gain = median g_LP + median dS estimated alone (Fig. 5 v9)."""
     W = DOUBLE
     cw, gap = 1.55, .35
@@ -996,8 +1072,22 @@ def search_figure_v2(p, n, suffix):
         ax.plot(0, 0, '+', color=FG, ms=2.5, mew=.5)
         fig.text(x_lab / W, (yc - .1) / H, head, fontsize=7, weight='bold', color=DISTRACTOR, va='center')
         fig.text(x_lab / W, (yc - .26) / H, sub, fontsize=6.5, color='.4', va='center')
-    save(fig, 'figS_gain_field_map_search_v2' + suffix,
-         SEARCH_LEGEND_V2.format(n=n, fwhm=TR_FWHM, values='; '.join(values)).replace('-', '−'))
+    leg = SEARCH_LEGEND_V2.format(n=n, fwhm=TR_FWHM, values='; '.join(values))
+    if dd is not None:
+        qj, qa = q_by_area(dd[0], 'dD'), q_by_area(dd[1], 'dD')
+        sj = [f'{r} (q = {qj[r]:.3f})' for r in ROI_ORDER if qj[r] < .05]
+        sa = [f'{r} (q = {qa[r]:.3f})' for r in ROI_ORDER if qa[r] < .05]
+        txt = ('The transient HP − LP difference (dD) is reliable in ' + (and_list(sj) if sj else 'no area')
+               + ' fitted jointly and in ' + (and_list(sa) if sa else 'no area') + ' estimated alone (Fig. 5d legend)'
+               + ('' if any(r in AREAS for r in [x.split()[0] for x in sj]) else
+                  '; in the three areas drawn it is not reliable, so the transient part of the HP − LP difference '
+                  'drawn here is not an effect') + '.')
+        old = ('The transient HP − LP difference is not reliable in any area, jointly fitted or estimated alone '
+               '(Fig. 5d legend), so the transient part of the HP − LP difference drawn here is not an effect.')
+        assert old in leg
+        leg = leg.replace(old, txt.replace('= 0.', '= .')).replace(
+            "exactly as in Fig. 5a.", "exactly as in Fig. 5a, with the width of Fig. 5a.")
+    save(fig, name + suffix, leg.replace('-', '−'))
     print('\n'.join(values))
 
 
@@ -1011,9 +1101,14 @@ if __name__ == '__main__':
     ap.add_argument('--sustained-scale', choices=['auto', 'shared', 'per-area'], default='auto')
     ap.add_argument('--compact', action='store_true', help='v7: panel a in two rows (sustained; target + distractor '
                     'transient fields in one map), smaller panels; writes fig5_gain_fields_v7')
-    ap.add_argument('--layout', choices=['v6', 'v7', 'v8', 'v9', 'v10'], default=None, help='v8: panel a as one row of six maps '
+    ap.add_argument('--layout', choices=['v6', 'v7', 'v8', 'v9', 'v10', 'v11'], default=None, help='v8: panel a as one row of six maps '
                     'over the full width, keys under the blocks, sustained HP − LP = dS estimated alone (panel c); '
                     'writes fig5_gain_fields_v8 and the parameter table with suffix _v8')
+    ap.add_argument('--widths-table', default=None,
+                    help='v11: field_widths_reliable ..._widths_thr2.tsv; the sustained width of each map is the median '
+                         'among fits with a reliable sustained gain')
+    ap.add_argument('--fit-label', default=None, help='v11: how the legend names the fits (first sentence)')
     a = ap.parse_args()
     main(a.gain_table, a.conditional_table, a.slope_table, a.sigma_table, a.suffix,
-         None if a.sustained_scale == 'auto' else a.sustained_scale == 'per-area', a.compact, a.layout)
+         None if a.sustained_scale == 'auto' else a.sustained_scale == 'per-area', a.compact, a.layout,
+         a.widths_table, a.fit_label)

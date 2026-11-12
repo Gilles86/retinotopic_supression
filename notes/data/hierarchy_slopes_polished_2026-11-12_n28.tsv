@@ -1,0 +1,673 @@
+subject	slope	parameter	rois
+3	0.6479792414798877	Target gain	all nine
+4	2.418030634727427	Target gain	all nine
+5	0.2330143626445457	Target gain	all nine
+6	0.2713530236432187	Target gain	all nine
+7	1.0888143787105737	Target gain	all nine
+8	-3.1879375436217057	Target gain	all nine
+9	2.927038155201981	Target gain	all nine
+10	0.6782970101196703	Target gain	all nine
+11	0.403463929249208	Target gain	all nine
+12	0.09653476229755743	Target gain	all nine
+13	0.4943695692469118	Target gain	all nine
+14	1.0643423636183658	Target gain	all nine
+15	0.27753031733772004	Target gain	all nine
+16	0.7352285001713982	Target gain	all nine
+17	0.09934647049035315	Target gain	all nine
+18	-0.04748089185878008	Target gain	all nine
+19	-0.007233341954499237	Target gain	all nine
+20	0.1373432411913802	Target gain	all nine
+21	0.19420117529169995	Target gain	all nine
+22	1.331239311809598	Target gain	all nine
+23	0.16890660168366128	Target gain	all nine
+24	-0.22317114991284748	Target gain	all nine
+25	0.8438813650960556	Target gain	all nine
+26	-0.43019296458998924	Target gain	all nine
+27	0.6880975138589075	Target gain	all nine
+28	1.1748290392808778	Target gain	all nine
+29	-0.797494076322011	Target gain	all nine
+30	0.2420599172323591	Target gain	all nine
+3	0.09921672160742465	Target gain	early + dorsal
+4	5.019306074447836	Target gain	early + dorsal
+5	-0.37340086040843967	Target gain	early + dorsal
+6	0.19463363976930848	Target gain	early + dorsal
+7	1.8627466041956093	Target gain	early + dorsal
+8	0.2675392407955322	Target gain	early + dorsal
+9	0.19272565970560546	Target gain	early + dorsal
+10	0.4730157278713236	Target gain	early + dorsal
+11	-0.04155946492184041	Target gain	early + dorsal
+12	0.12223385300313748	Target gain	early + dorsal
+13	0.3903075083616559	Target gain	early + dorsal
+14	1.2279889915863431	Target gain	early + dorsal
+15	0.18167738244542223	Target gain	early + dorsal
+16	1.4844521344689017	Target gain	early + dorsal
+17	0.3024936063301513	Target gain	early + dorsal
+18	0.18818766807657225	Target gain	early + dorsal
+19	0.34709358463840634	Target gain	early + dorsal
+20	-4.102112372885223	Target gain	early + dorsal
+21	0.22040337128240572	Target gain	early + dorsal
+22	2.570135822015843	Target gain	early + dorsal
+23	0.11858603964024113	Target gain	early + dorsal
+24	-0.4576642763325928	Target gain	early + dorsal
+25	0.563539387589311	Target gain	early + dorsal
+26	-0.0980413542681778	Target gain	early + dorsal
+27	0.6225357863574326	Target gain	early + dorsal
+28	-0.12817707864548797	Target gain	early + dorsal
+29	-1.7027966605221483	Target gain	early + dorsal
+30	0.41966086297112676	Target gain	early + dorsal
+3	1.0408477514885133	Target gain	early + occipitotemporal
+4	0.17165318610813493	Target gain	early + occipitotemporal
+5	0.8077443364277754	Target gain	early + occipitotemporal
+6	0.4016363396784643	Target gain	early + occipitotemporal
+7	0.5169547947705644	Target gain	early + occipitotemporal
+8	-6.303364110692325	Target gain	early + occipitotemporal
+9	4.5197339412018245	Target gain	early + occipitotemporal
+10	0.036858931485852356	Target gain	early + occipitotemporal
+11	0.7707364552389028	Target gain	early + occipitotemporal
+12	0.12744552255631458	Target gain	early + occipitotemporal
+13	0.28390683813947465	Target gain	early + occipitotemporal
+14	0.7459955044078005	Target gain	early + occipitotemporal
+15	0.4449294314207569	Target gain	early + occipitotemporal
+16	-0.4280278437188351	Target gain	early + occipitotemporal
+17	0.019920304709139896	Target gain	early + occipitotemporal
+18	0.23154391576776845	Target gain	early + occipitotemporal
+19	-0.25299399460489386	Target gain	early + occipitotemporal
+20	0.1373432411913802	Target gain	early + occipitotemporal
+21	0.41255916081970423	Target gain	early + occipitotemporal
+22	0.9935549331887213	Target gain	early + occipitotemporal
+23	0.2550246103229123	Target gain	early + occipitotemporal
+24	0.13249793783729358	Target gain	early + occipitotemporal
+25	-0.1336158102355228	Target gain	early + occipitotemporal
+26	-0.3681878516904696	Target gain	early + occipitotemporal
+27	0.8474293167783039	Target gain	early + occipitotemporal
+28	1.984000345418512	Target gain	early + occipitotemporal
+29	0.18553778783367686	Target gain	early + occipitotemporal
+30	0.12068994586253563	Target gain	early + occipitotemporal
+3	2.307492464275657	Distractor gain	all nine
+4	1.3198353995060266	Distractor gain	all nine
+5	0.14856241570374876	Distractor gain	all nine
+6	0.20620128023670772	Distractor gain	all nine
+7	0.10278120857035047	Distractor gain	all nine
+8	1.09762357775642	Distractor gain	all nine
+9	2.5169372513276755	Distractor gain	all nine
+10	0.28331281485593796	Distractor gain	all nine
+11	-0.5075551266003447	Distractor gain	all nine
+12	0.0010415403986961647	Distractor gain	all nine
+13	0.7538382705526955	Distractor gain	all nine
+14	0.357109606109478	Distractor gain	all nine
+15	0.10656346525614532	Distractor gain	all nine
+16	0.688243715137786	Distractor gain	all nine
+17	-0.11895296712216595	Distractor gain	all nine
+18	-0.1626765489618742	Distractor gain	all nine
+19	-0.3020614839081653	Distractor gain	all nine
+20	-0.29187917208135705	Distractor gain	all nine
+21	-0.012868867975263583	Distractor gain	all nine
+22	2.1078669716588925	Distractor gain	all nine
+23	0.12219325111765841	Distractor gain	all nine
+24	-0.21742518718224632	Distractor gain	all nine
+25	0.28451160320302976	Distractor gain	all nine
+26	-2.9274970484237857	Distractor gain	all nine
+27	-0.10474851806467117	Distractor gain	all nine
+28	0.8785568442186894	Distractor gain	all nine
+29	-0.5000160926274498	Distractor gain	all nine
+30	-0.2214513399590124	Distractor gain	all nine
+3	-0.014879392621807083	Distractor gain	early + dorsal
+4	2.8375627285812053	Distractor gain	early + dorsal
+5	-0.022816854530542875	Distractor gain	early + dorsal
+6	0.6816358610526906	Distractor gain	early + dorsal
+7	0.4979876394785296	Distractor gain	early + dorsal
+8	0.08033208223068398	Distractor gain	early + dorsal
+9	0.14848184979716472	Distractor gain	early + dorsal
+10	-0.02879674202058338	Distractor gain	early + dorsal
+11	-0.183151929501481	Distractor gain	early + dorsal
+12	-0.011610217950059284	Distractor gain	early + dorsal
+13	0.5261740592323759	Distractor gain	early + dorsal
+14	0.1515577010813173	Distractor gain	early + dorsal
+15	-0.021894991188947794	Distractor gain	early + dorsal
+16	1.1643907462146383	Distractor gain	early + dorsal
+17	-0.20404590933943104	Distractor gain	early + dorsal
+18	-0.037124775951864884	Distractor gain	early + dorsal
+19	-0.4016392145453177	Distractor gain	early + dorsal
+20	-0.9649420299767837	Distractor gain	early + dorsal
+21	0.09238653958921184	Distractor gain	early + dorsal
+22	4.78830506674822	Distractor gain	early + dorsal
+23	0.02726758127776422	Distractor gain	early + dorsal
+24	-0.30182842664130166	Distractor gain	early + dorsal
+25	0.22291015991278496	Distractor gain	early + dorsal
+26	-0.35444495643844887	Distractor gain	early + dorsal
+27	-0.17594663296334453	Distractor gain	early + dorsal
+28	0.07539243169424564	Distractor gain	early + dorsal
+29	-1.2646142471220596	Distractor gain	early + dorsal
+30	-0.3835142849977252	Distractor gain	early + dorsal
+3	3.5788228563676614	Distractor gain	early + occipitotemporal
+4	0.017754728136243843	Distractor gain	early + occipitotemporal
+5	0.31798860998042144	Distractor gain	early + occipitotemporal
+6	-0.118421171238982	Distractor gain	early + occipitotemporal
+7	-0.23745483395567066	Distractor gain	early + occipitotemporal
+8	2.4650548265203134	Distractor gain	early + occipitotemporal
+9	3.7812984444356896	Distractor gain	early + occipitotemporal
+10	-0.055489365908794004	Distractor gain	early + occipitotemporal
+11	-0.6415071444797082	Distractor gain	early + occipitotemporal
+12	0.02046413073852498	Distractor gain	early + occipitotemporal
+13	0.21560235253758167	Distractor gain	early + occipitotemporal
+14	0.4801669091463868	Distractor gain	early + occipitotemporal
+15	0.20398603743923657	Distractor gain	early + occipitotemporal
+16	-0.07887908938942507	Distractor gain	early + occipitotemporal
+17	0.05095932469565868	Distractor gain	early + occipitotemporal
+18	0.015235311842217138	Distractor gain	early + occipitotemporal
+19	-0.18091621529475277	Distractor gain	early + occipitotemporal
+20	-0.29187917208135705	Distractor gain	early + occipitotemporal
+21	0.04553796700317002	Distractor gain	early + occipitotemporal
+22	-0.07755464462194445	Distractor gain	early + occipitotemporal
+23	0.15888313777639687	Distractor gain	early + occipitotemporal
+24	-0.14172293757724788	Distractor gain	early + occipitotemporal
+25	0.5276477312914405	Distractor gain	early + occipitotemporal
+26	-3.386105681400537	Distractor gain	early + occipitotemporal
+27	0.0903564014974669	Distractor gain	early + occipitotemporal
+28	1.3985485490164964	Distractor gain	early + occipitotemporal
+29	0.14228960842472907	Distractor gain	early + occipitotemporal
+30	-0.028187265041394294	Distractor gain	early + occipitotemporal
+3	-6.411112685645266	Sustained field FWHM (°)	all nine
+4	-0.7947140918626104	Sustained field FWHM (°)	all nine
+5	-0.3660291044292408	Sustained field FWHM (°)	all nine
+6	-1.9974646735263701	Sustained field FWHM (°)	all nine
+7	-2.019913787429453	Sustained field FWHM (°)	all nine
+8	-0.46852161073346954	Sustained field FWHM (°)	all nine
+9	-9.005492841984594	Sustained field FWHM (°)	all nine
+10	-8.714938797405754	Sustained field FWHM (°)	all nine
+11	-1.7637184670091133	Sustained field FWHM (°)	all nine
+12	-0.9469362972123184	Sustained field FWHM (°)	all nine
+13	-5.630920692380752	Sustained field FWHM (°)	all nine
+14	-6.146507595226495	Sustained field FWHM (°)	all nine
+15	-5.223123887120533	Sustained field FWHM (°)	all nine
+16	-0.19165357328328722	Sustained field FWHM (°)	all nine
+17	-1.0072273259116995	Sustained field FWHM (°)	all nine
+18	-2.024556809699849	Sustained field FWHM (°)	all nine
+19	-4.421082186156968	Sustained field FWHM (°)	all nine
+20	-0.9909230327859292	Sustained field FWHM (°)	all nine
+21	-1.0284886594973068	Sustained field FWHM (°)	all nine
+22	-3.8056307099129953	Sustained field FWHM (°)	all nine
+23	-0.5464720983181804	Sustained field FWHM (°)	all nine
+24	-1.9180650699298027	Sustained field FWHM (°)	all nine
+25	-0.1666716470711621	Sustained field FWHM (°)	all nine
+26	-3.048720785258651	Sustained field FWHM (°)	all nine
+27	-1.3731513984819714	Sustained field FWHM (°)	all nine
+28	-0.7267372902663954	Sustained field FWHM (°)	all nine
+29	-0.8489501022929531	Sustained field FWHM (°)	all nine
+30	-3.3875002953289077	Sustained field FWHM (°)	all nine
+3	-7.755865977398095	Sustained field FWHM (°)	early + dorsal
+4	5.454519382926972	Sustained field FWHM (°)	early + dorsal
+5	0.1306287769273773	Sustained field FWHM (°)	early + dorsal
+6	0.7259288953659114	Sustained field FWHM (°)	early + dorsal
+7	-1.8897430750472242	Sustained field FWHM (°)	early + dorsal
+8	-1.4789152968494994	Sustained field FWHM (°)	early + dorsal
+9	-10.357307857131488	Sustained field FWHM (°)	early + dorsal
+10	-11.383389660455038	Sustained field FWHM (°)	early + dorsal
+11	-4.965270498876556	Sustained field FWHM (°)	early + dorsal
+12	-1.0136797160378257	Sustained field FWHM (°)	early + dorsal
+13	-5.46193049812893	Sustained field FWHM (°)	early + dorsal
+14	-3.7399563199469927	Sustained field FWHM (°)	early + dorsal
+15	-6.221305121542593	Sustained field FWHM (°)	early + dorsal
+16	-0.8650681489151775	Sustained field FWHM (°)	early + dorsal
+17	-1.2472921924462512	Sustained field FWHM (°)	early + dorsal
+18	-2.6276615537497645	Sustained field FWHM (°)	early + dorsal
+19	-4.995048132062909	Sustained field FWHM (°)	early + dorsal
+20	8.998027096537161	Sustained field FWHM (°)	early + dorsal
+21	-1.0325334673064008	Sustained field FWHM (°)	early + dorsal
+22	-4.47249278849353	Sustained field FWHM (°)	early + dorsal
+23	3.6309769859239136	Sustained field FWHM (°)	early + dorsal
+24	2.5921459985094173	Sustained field FWHM (°)	early + dorsal
+25	-0.024766288847342128	Sustained field FWHM (°)	early + dorsal
+26	-2.891640238924207	Sustained field FWHM (°)	early + dorsal
+27	-1.1803843504713043	Sustained field FWHM (°)	early + dorsal
+28	0.4776272847567755	Sustained field FWHM (°)	early + dorsal
+29	-0.21649385583783873	Sustained field FWHM (°)	early + dorsal
+30	-1.0503442132361502	Sustained field FWHM (°)	early + dorsal
+3	-6.995860265351788	Sustained field FWHM (°)	early + occipitotemporal
+4	-6.713185579545512	Sustained field FWHM (°)	early + occipitotemporal
+5	-0.9874391447053977	Sustained field FWHM (°)	early + occipitotemporal
+6	-2.050482443305477	Sustained field FWHM (°)	early + occipitotemporal
+7	-1.9224474860761593	Sustained field FWHM (°)	early + occipitotemporal
+8	0.6720312914044534	Sustained field FWHM (°)	early + occipitotemporal
+9	-9.21859513253626	Sustained field FWHM (°)	early + occipitotemporal
+10	-8.882352173230712	Sustained field FWHM (°)	early + occipitotemporal
+11	-0.21463964563864787	Sustained field FWHM (°)	early + occipitotemporal
+12	-1.0084485664063914	Sustained field FWHM (°)	early + occipitotemporal
+13	-5.555466585236476	Sustained field FWHM (°)	early + occipitotemporal
+14	-6.247290657619369	Sustained field FWHM (°)	early + occipitotemporal
+15	-5.989783875522243	Sustained field FWHM (°)	early + occipitotemporal
+16	4.023991391879347	Sustained field FWHM (°)	early + occipitotemporal
+17	-0.29171521836366165	Sustained field FWHM (°)	early + occipitotemporal
+18	-1.982534075791961	Sustained field FWHM (°)	early + occipitotemporal
+19	-5.409496041287619	Sustained field FWHM (°)	early + occipitotemporal
+20	-0.9909230327859292	Sustained field FWHM (°)	early + occipitotemporal
+21	-1.158765699215077	Sustained field FWHM (°)	early + occipitotemporal
+22	-3.96103081949511	Sustained field FWHM (°)	early + occipitotemporal
+23	-2.0831091373596133	Sustained field FWHM (°)	early + occipitotemporal
+24	-6.049339642036538	Sustained field FWHM (°)	early + occipitotemporal
+25	-0.33161252373367933	Sustained field FWHM (°)	early + occipitotemporal
+26	-2.405370221931556	Sustained field FWHM (°)	early + occipitotemporal
+27	-1.1603358628552902	Sustained field FWHM (°)	early + occipitotemporal
+28	-0.1703472040155016	Sustained field FWHM (°)	early + occipitotemporal
+29	-1.4254532924854941	Sustained field FWHM (°)	early + occipitotemporal
+30	-6.123592925538207	Sustained field FWHM (°)	early + occipitotemporal
+3	0.9322505124746223	Transient field FWHM (°)	all nine
+4	-4.536767757993952	Transient field FWHM (°)	all nine
+5	1.1863521127326129	Transient field FWHM (°)	all nine
+6	-3.155684906201227	Transient field FWHM (°)	all nine
+7	-1.1281616225411502	Transient field FWHM (°)	all nine
+8	-5.6552577734399545	Transient field FWHM (°)	all nine
+9	-8.248741607128526	Transient field FWHM (°)	all nine
+10	-0.9974497598352081	Transient field FWHM (°)	all nine
+11	-4.397904072529836	Transient field FWHM (°)	all nine
+12	-0.37837077280759046	Transient field FWHM (°)	all nine
+13	-5.726113083022025	Transient field FWHM (°)	all nine
+14	1.329346158273139	Transient field FWHM (°)	all nine
+15	-2.0543336048906964	Transient field FWHM (°)	all nine
+16	-1.6738571245719507	Transient field FWHM (°)	all nine
+17	-4.993583830744036	Transient field FWHM (°)	all nine
+18	-9.37406308151389	Transient field FWHM (°)	all nine
+19	4.301528036661068	Transient field FWHM (°)	all nine
+20	-2.4279408518733874	Transient field FWHM (°)	all nine
+21	-3.7506672901114038	Transient field FWHM (°)	all nine
+22	-0.8109623289338191	Transient field FWHM (°)	all nine
+23	2.8574022704706388	Transient field FWHM (°)	all nine
+24	3.991536458102768	Transient field FWHM (°)	all nine
+25	0.987510785653701	Transient field FWHM (°)	all nine
+26	-5.2723916498611025	Transient field FWHM (°)	all nine
+27	1.9754090415620407	Transient field FWHM (°)	all nine
+28	4.296668613156623	Transient field FWHM (°)	all nine
+29	-5.608001230948866	Transient field FWHM (°)	all nine
+30	-5.0032519964244395	Transient field FWHM (°)	all nine
+3	5.8124627932400035	Transient field FWHM (°)	early + dorsal
+4	-7.555637545039951	Transient field FWHM (°)	early + dorsal
+5	5.859809662105891	Transient field FWHM (°)	early + dorsal
+6	-2.8097379434804264	Transient field FWHM (°)	early + dorsal
+7	-1.9780318988501444	Transient field FWHM (°)	early + dorsal
+8	-3.323870573893273	Transient field FWHM (°)	early + dorsal
+9	-5.809488846572242	Transient field FWHM (°)	early + dorsal
+10	-1.5695386909663243	Transient field FWHM (°)	early + dorsal
+11	-0.715631665340664	Transient field FWHM (°)	early + dorsal
+12	1.3906371967799636	Transient field FWHM (°)	early + dorsal
+13	-3.5885460917578613	Transient field FWHM (°)	early + dorsal
+14	5.0605135012401385	Transient field FWHM (°)	early + dorsal
+15	2.647567836511334	Transient field FWHM (°)	early + dorsal
+16	-7.587892933691001	Transient field FWHM (°)	early + dorsal
+17	-7.1328331144261785	Transient field FWHM (°)	early + dorsal
+18	-12.25683140880976	Transient field FWHM (°)	early + dorsal
+19	3.820726274626565	Transient field FWHM (°)	early + dorsal
+20	39.2806941380986	Transient field FWHM (°)	early + dorsal
+21	-3.1347628971103028	Transient field FWHM (°)	early + dorsal
+22	-2.8907801496736254	Transient field FWHM (°)	early + dorsal
+23	6.231530015916622	Transient field FWHM (°)	early + dorsal
+24	7.806955136017592	Transient field FWHM (°)	early + dorsal
+25	3.820463885292193	Transient field FWHM (°)	early + dorsal
+26	-6.57737894319406	Transient field FWHM (°)	early + dorsal
+27	4.128041403764079	Transient field FWHM (°)	early + dorsal
+28	7.019529932628279	Transient field FWHM (°)	early + dorsal
+29	-6.120498158684417	Transient field FWHM (°)	early + dorsal
+30	-3.2608925536160025	Transient field FWHM (°)	early + dorsal
+3	-3.350191743846574	Transient field FWHM (°)	early + occipitotemporal
+4	-3.9711478825032587	Transient field FWHM (°)	early + occipitotemporal
+5	-3.637010318443109	Transient field FWHM (°)	early + occipitotemporal
+6	-1.507950156011229	Transient field FWHM (°)	early + occipitotemporal
+7	1.1279278085936488	Transient field FWHM (°)	early + occipitotemporal
+8	-12.559997966320585	Transient field FWHM (°)	early + occipitotemporal
+9	-11.182996626500238	Transient field FWHM (°)	early + occipitotemporal
+10	-3.7507506084928384	Transient field FWHM (°)	early + occipitotemporal
+11	-8.131934496999907	Transient field FWHM (°)	early + occipitotemporal
+12	-2.939856233781391	Transient field FWHM (°)	early + occipitotemporal
+13	-7.3624052974658705	Transient field FWHM (°)	early + occipitotemporal
+14	1.176387305352181	Transient field FWHM (°)	early + occipitotemporal
+15	-7.211373129100827	Transient field FWHM (°)	early + occipitotemporal
+16	6.3871523687464276	Transient field FWHM (°)	early + occipitotemporal
+17	-6.447514900265159	Transient field FWHM (°)	early + occipitotemporal
+18	-9.594983860526824	Transient field FWHM (°)	early + occipitotemporal
+19	3.426700718893209	Transient field FWHM (°)	early + occipitotemporal
+20	-2.4279408518733874	Transient field FWHM (°)	early + occipitotemporal
+21	-6.130542695227799	Transient field FWHM (°)	early + occipitotemporal
+22	-0.0707316364303434	Transient field FWHM (°)	early + occipitotemporal
+23	-0.24048634501894425	Transient field FWHM (°)	early + occipitotemporal
+24	-0.19709328390586495	Transient field FWHM (°)	early + occipitotemporal
+25	-2.017703071355998	Transient field FWHM (°)	early + occipitotemporal
+26	-6.208365938978907	Transient field FWHM (°)	early + occipitotemporal
+27	-0.9560068583058047	Transient field FWHM (°)	early + occipitotemporal
+28	0.7869396574882033	Transient field FWHM (°)	early + occipitotemporal
+29	-6.326986611354323	Transient field FWHM (°)	early + occipitotemporal
+30	-6.415539492363093	Transient field FWHM (°)	early + occipitotemporal
+3	-0.0378523304533959	dS (conditional)	all nine
+4	0.03767304404037795	dS (conditional)	all nine
+5	0.032952825478537104	dS (conditional)	all nine
+6	-0.1030880298585526	dS (conditional)	all nine
+7	0.25509774846199884	dS (conditional)	all nine
+8	0.042835279416097036	dS (conditional)	all nine
+9	-0.013296782094124548	dS (conditional)	all nine
+10	-0.8113986569060647	dS (conditional)	all nine
+11	0.0038337742398197473	dS (conditional)	all nine
+12	-0.02715633331522522	dS (conditional)	all nine
+13	-0.10580050672072774	dS (conditional)	all nine
+14	-0.06186371556973414	dS (conditional)	all nine
+15	-0.03640825750623508	dS (conditional)	all nine
+16	-0.0040589587811021306	dS (conditional)	all nine
+17	0.22739177649552816	dS (conditional)	all nine
+18	0.041719347780120826	dS (conditional)	all nine
+19	0.04074845213934556	dS (conditional)	all nine
+20	3.1001468611865315	dS (conditional)	all nine
+21	0.044820110303758084	dS (conditional)	all nine
+22	-1.3296530238403765	dS (conditional)	all nine
+23	-0.04822732231593354	dS (conditional)	all nine
+24	-0.00962745127791303	dS (conditional)	all nine
+25	-0.025672945497310133	dS (conditional)	all nine
+26	0.042976616236198216	dS (conditional)	all nine
+27	-0.0017265231398905566	dS (conditional)	all nine
+28	-0.1182840823810623	dS (conditional)	all nine
+29	-0.05084928977820341	dS (conditional)	all nine
+30	0.013415223042862325	dS (conditional)	all nine
+3	0.004040942344254751	dS (conditional)	early + dorsal
+4	0.0033617370184926346	dS (conditional)	early + dorsal
+5	0.04813137992184186	dS (conditional)	early + dorsal
+6	-0.11310606480908054	dS (conditional)	early + dorsal
+7	0.26474014229769566	dS (conditional)	early + dorsal
+8	0.018346918488347314	dS (conditional)	early + dorsal
+9	0.006267886652945102	dS (conditional)	early + dorsal
+10	-1.7834691217002177	dS (conditional)	early + dorsal
+11	-0.05287186529918895	dS (conditional)	early + dorsal
+12	-0.01704378028339594	dS (conditional)	early + dorsal
+13	-0.14244276036626877	dS (conditional)	early + dorsal
+14	0.0024868842171706976	dS (conditional)	early + dorsal
+15	0.0040299423915991775	dS (conditional)	early + dorsal
+16	-0.03848833487483102	dS (conditional)	early + dorsal
+17	0.43777393303760387	dS (conditional)	early + dorsal
+18	0.03183964721431618	dS (conditional)	early + dorsal
+19	0.043699710294083656	dS (conditional)	early + dorsal
+20	0.9430053916892199	dS (conditional)	early + dorsal
+21	0.01531125777231652	dS (conditional)	early + dorsal
+22	-2.8058694400959796	dS (conditional)	early + dorsal
+23	-0.07812226851492973	dS (conditional)	early + dorsal
+24	-0.005381959037386159	dS (conditional)	early + dorsal
+25	0.01022919129320545	dS (conditional)	early + dorsal
+26	0.030272636246488998	dS (conditional)	early + dorsal
+27	0.1760997511772668	dS (conditional)	early + dorsal
+28	-0.02689460151710797	dS (conditional)	early + dorsal
+29	-0.17476391383455384	dS (conditional)	early + dorsal
+30	0.3184176576001425	dS (conditional)	early + dorsal
+3	-0.05634700217297768	dS (conditional)	early + occipitotemporal
+4	0.054040580979361125	dS (conditional)	early + occipitotemporal
+5	0.015593741818341602	dS (conditional)	early + occipitotemporal
+6	-0.11216950295454506	dS (conditional)	early + occipitotemporal
+7	0.1923484982199105	dS (conditional)	early + occipitotemporal
+8	0.3615429409048415	dS (conditional)	early + occipitotemporal
+9	-0.01510854495922324	dS (conditional)	early + occipitotemporal
+10	0.014663798551216845	dS (conditional)	early + occipitotemporal
+11	0.04038875423345178	dS (conditional)	early + occipitotemporal
+12	-0.027625147234097508	dS (conditional)	early + occipitotemporal
+13	-0.0360342471810151	dS (conditional)	early + occipitotemporal
+14	-0.06821799422158799	dS (conditional)	early + occipitotemporal
+15	-0.06476337274165962	dS (conditional)	early + occipitotemporal
+16	0.04468019749211785	dS (conditional)	early + occipitotemporal
+17	0.036940842900655274	dS (conditional)	early + occipitotemporal
+18	0.024219142927573534	dS (conditional)	early + occipitotemporal
+19	0.03756150263679775	dS (conditional)	early + occipitotemporal
+20	3.1001468611865315	dS (conditional)	early + occipitotemporal
+21	0.020670880821984428	dS (conditional)	early + occipitotemporal
+22	-0.04904660406498022	dS (conditional)	early + occipitotemporal
+23	-0.05171563476569957	dS (conditional)	early + occipitotemporal
+24	-0.026090056456024562	dS (conditional)	early + occipitotemporal
+25	-0.06515871184989717	dS (conditional)	early + occipitotemporal
+26	0.06416035653051969	dS (conditional)	early + occipitotemporal
+27	-0.23946919696723018	dS (conditional)	early + occipitotemporal
+28	-0.1671858133185849	dS (conditional)	early + occipitotemporal
+29	0.01901783551959976	dS (conditional)	early + occipitotemporal
+30	-0.1235299171865872	dS (conditional)	early + occipitotemporal
+3	-0.44625592320903784	dD (conditional)	all nine
+4	0.21230777707214044	dD (conditional)	all nine
+5	-0.04016104379552655	dD (conditional)	all nine
+6	-0.03618864852305685	dD (conditional)	all nine
+7	0.5421519022093848	dD (conditional)	all nine
+8	-1.7425195364349113	dD (conditional)	all nine
+9	-0.4196521551079397	dD (conditional)	all nine
+10	0.016942393828022907	dD (conditional)	all nine
+11	0.12330915117213474	dD (conditional)	all nine
+12	-0.10087297630796288	dD (conditional)	all nine
+13	-0.08678548540474994	dD (conditional)	all nine
+14	-0.10013362899164496	dD (conditional)	all nine
+15	-0.10385524503021064	dD (conditional)	all nine
+16	0.1491870979343882	dD (conditional)	all nine
+17	0.06775239705562863	dD (conditional)	all nine
+18	0.010116655471160297	dD (conditional)	all nine
+19	0.13859858925387322	dD (conditional)	all nine
+20	0.18332109853204406	dD (conditional)	all nine
+21	0.07474467817965431	dD (conditional)	all nine
+22	-0.3208340112901822	dD (conditional)	all nine
+23	-0.052622095974376504	dD (conditional)	all nine
+24	0.13910103933621967	dD (conditional)	all nine
+25	-0.025583301864269558	dD (conditional)	all nine
+26	-6.180911144884568	dD (conditional)	all nine
+27	0.16470732809373295	dD (conditional)	all nine
+28	-0.07612909737530886	dD (conditional)	all nine
+29	-0.40527315757288923	dD (conditional)	all nine
+30	0.09151293287413972	dD (conditional)	all nine
+3	-0.027615923161818524	dD (conditional)	early + dorsal
+4	0.4600441944659767	dD (conditional)	early + dorsal
+5	-0.06053894669453111	dD (conditional)	early + dorsal
+6	-0.09206422112971001	dD (conditional)	early + dorsal
+7	1.1272491563564415	dD (conditional)	early + dorsal
+8	0.11648577218941984	dD (conditional)	early + dorsal
+9	-0.08775364478104054	dD (conditional)	early + dorsal
+10	-0.033165816060392816	dD (conditional)	early + dorsal
+11	0.19377275244563702	dD (conditional)	early + dorsal
+12	-0.11726282709733174	dD (conditional)	early + dorsal
+13	-0.18422310328700855	dD (conditional)	early + dorsal
+14	-0.10787645811378677	dD (conditional)	early + dorsal
+15	0.017656863201814317	dD (conditional)	early + dorsal
+16	0.20104656232562765	dD (conditional)	early + dorsal
+17	0.1493767171007234	dD (conditional)	early + dorsal
+18	0.002292000133252192	dD (conditional)	early + dorsal
+19	0.17441934253337574	dD (conditional)	early + dorsal
+20	-0.5148847891290231	dD (conditional)	early + dorsal
+21	-0.0032752129226365783	dD (conditional)	early + dorsal
+22	-1.14440745661798	dD (conditional)	early + dorsal
+23	-0.08652523250296269	dD (conditional)	early + dorsal
+24	0.1444807509364096	dD (conditional)	early + dorsal
+25	-0.04523422419089359	dD (conditional)	early + dorsal
+26	0.09478429315138237	dD (conditional)	early + dorsal
+27	0.07787973955680018	dD (conditional)	early + dorsal
+28	-0.033911713176642044	dD (conditional)	early + dorsal
+29	-0.8780624591320081	dD (conditional)	early + dorsal
+30	-0.031090744703998727	dD (conditional)	early + dorsal
+3	-0.6795636610623983	dD (conditional)	early + occipitotemporal
+4	-0.01961925478712275	dD (conditional)	early + occipitotemporal
+5	-0.03093314242702193	dD (conditional)	early + occipitotemporal
+6	0.025509436801033798	dD (conditional)	early + occipitotemporal
+7	0.033663542396041475	dD (conditional)	early + occipitotemporal
+8	-3.6372576582550122	dD (conditional)	early + occipitotemporal
+9	-0.6288332300612259	dD (conditional)	early + occipitotemporal
+10	-0.0006050089398646968	dD (conditional)	early + occipitotemporal
+11	0.036961599301931256	dD (conditional)	early + occipitotemporal
+12	-0.10277655588807534	dD (conditional)	early + occipitotemporal
+13	-0.18126525794080692	dD (conditional)	early + occipitotemporal
+14	-0.10036502836637604	dD (conditional)	early + occipitotemporal
+15	-0.18891800715315965	dD (conditional)	early + occipitotemporal
+16	0.07467738735835011	dD (conditional)	early + occipitotemporal
+17	-0.0307840566787786	dD (conditional)	early + occipitotemporal
+18	-0.009584551739976343	dD (conditional)	early + occipitotemporal
+19	0.12852265750345404	dD (conditional)	early + occipitotemporal
+20	0.18332109853204406	dD (conditional)	early + occipitotemporal
+21	0.059863387364721014	dD (conditional)	early + occipitotemporal
+22	0.2753905223381909	dD (conditional)	early + occipitotemporal
+23	-0.02879544976840168	dD (conditional)	early + occipitotemporal
+24	0.1504676364934826	dD (conditional)	early + occipitotemporal
+25	-0.2343808407293489	dD (conditional)	early + occipitotemporal
+26	-7.4468026935676646	dD (conditional)	early + occipitotemporal
+27	0.19936660567843656	dD (conditional)	early + occipitotemporal
+28	-0.09259500223419644	dD (conditional)	early + occipitotemporal
+29	0.010979138613494978	dD (conditional)	early + occipitotemporal
+30	0.14634499271700863	dD (conditional)	early + occipitotemporal
+3	0.002962310444111979	dS (joint m7)	all nine
+4	-0.2997900138967759	dS (joint m7)	all nine
+5	0.10282722611134594	dS (joint m7)	all nine
+6	-0.27214906571907355	dS (joint m7)	all nine
+7	1.3022450158437546	dS (joint m7)	all nine
+8	0.24963272008276643	dS (joint m7)	all nine
+9	-0.08288379550522548	dS (joint m7)	all nine
+10	-0.5119287461776559	dS (joint m7)	all nine
+11	-0.7004016778358884	dS (joint m7)	all nine
+12	-0.01331395187877328	dS (joint m7)	all nine
+13	-0.050161108686346205	dS (joint m7)	all nine
+14	-0.3940728140841346	dS (joint m7)	all nine
+15	-0.056921951796089845	dS (joint m7)	all nine
+16	0.014008110466411653	dS (joint m7)	all nine
+17	0.5580951374036054	dS (joint m7)	all nine
+18	0.045042141904730354	dS (joint m7)	all nine
+19	0.12089553850663273	dS (joint m7)	all nine
+20	4.589655243092182	dS (joint m7)	all nine
+21	0.10771130626856565	dS (joint m7)	all nine
+22	0.09024366698166494	dS (joint m7)	all nine
+23	0.04212365108447788	dS (joint m7)	all nine
+24	0.019112583038322542	dS (joint m7)	all nine
+25	0.5639474433758206	dS (joint m7)	all nine
+26	-0.25087611675999233	dS (joint m7)	all nine
+27	2.6858791130302904	dS (joint m7)	all nine
+28	-0.3588177214545652	dS (joint m7)	all nine
+29	-0.12051368673091921	dS (joint m7)	all nine
+30	-0.3502376744046142	dS (joint m7)	all nine
+3	0.08630278733922754	dS (joint m7)	early + dorsal
+4	-0.6377745598605912	dS (joint m7)	early + dorsal
+5	0.14808910701425276	dS (joint m7)	early + dorsal
+6	-0.06425864334812868	dS (joint m7)	early + dorsal
+7	0.7737023600065593	dS (joint m7)	early + dorsal
+8	0.0077383103412869475	dS (joint m7)	early + dorsal
+9	-0.0688270298906229	dS (joint m7)	early + dorsal
+10	-0.794454312696012	dS (joint m7)	early + dorsal
+11	-0.5438516015423083	dS (joint m7)	early + dorsal
+12	-0.013988773006900584	dS (joint m7)	early + dorsal
+13	-0.15989109830084827	dS (joint m7)	early + dorsal
+14	-0.7294177339174922	dS (joint m7)	early + dorsal
+15	-0.023411324893989695	dS (joint m7)	early + dorsal
+16	-0.12406995218731526	dS (joint m7)	early + dorsal
+17	1.078711505490148	dS (joint m7)	early + dorsal
+18	0.039571749339057875	dS (joint m7)	early + dorsal
+19	0.15272262042161225	dS (joint m7)	early + dorsal
+20	3.542609948972731	dS (joint m7)	early + dorsal
+21	0.10394006525773523	dS (joint m7)	early + dorsal
+22	0.339838915311518	dS (joint m7)	early + dorsal
+23	0.011817152375084537	dS (joint m7)	early + dorsal
+24	0.06583027541105113	dS (joint m7)	early + dorsal
+25	0.2532416442144221	dS (joint m7)	early + dorsal
+26	0.1201307326434348	dS (joint m7)	early + dorsal
+27	5.5752326534697065	dS (joint m7)	early + dorsal
+28	-0.01866102160412308	dS (joint m7)	early + dorsal
+29	-0.4141095077669529	dS (joint m7)	early + dorsal
+30	-0.18373377038975	dS (joint m7)	early + dorsal
+3	-0.02024357371188715	dS (joint m7)	early + occipitotemporal
+4	0.006459316134674719	dS (joint m7)	early + occipitotemporal
+5	0.07065703401610293	dS (joint m7)	early + occipitotemporal
+6	-0.8110192249761208	dS (joint m7)	early + occipitotemporal
+7	1.438570366528892	dS (joint m7)	early + occipitotemporal
+8	0.7324854622113381	dS (joint m7)	early + occipitotemporal
+9	-0.09245477454896289	dS (joint m7)	early + occipitotemporal
+10	0.11335240678839607	dS (joint m7)	early + occipitotemporal
+11	-0.7414364532430507	dS (joint m7)	early + occipitotemporal
+12	-0.013014166650689503	dS (joint m7)	early + occipitotemporal
+13	0.09219380812905116	dS (joint m7)	early + occipitotemporal
+14	-0.0872626801477096	dS (joint m7)	early + occipitotemporal
+15	-0.0926087976471075	dS (joint m7)	early + occipitotemporal
+16	0.34370624403743383	dS (joint m7)	early + occipitotemporal
+17	0.08608314049481304	dS (joint m7)	early + occipitotemporal
+18	0.031857024352827785	dS (joint m7)	early + occipitotemporal
+19	0.12669537238136777	dS (joint m7)	early + occipitotemporal
+20	4.589655243092182	dS (joint m7)	early + occipitotemporal
+21	0.0816136478340131	dS (joint m7)	early + occipitotemporal
+22	-0.16094919326274026	dS (joint m7)	early + occipitotemporal
+23	0.026572921613998168	dS (joint m7)	early + occipitotemporal
+24	-0.03358086578622111	dS (joint m7)	early + occipitotemporal
+25	-0.5420356333981683	dS (joint m7)	early + occipitotemporal
+26	-0.34977128407178054	dS (joint m7)	early + occipitotemporal
+27	-1.5523841798135443	dS (joint m7)	early + occipitotemporal
+28	-0.5718116162797693	dS (joint m7)	early + occipitotemporal
+29	0.050972352310888126	dS (joint m7)	early + occipitotemporal
+30	-0.2218618431596944	dS (joint m7)	early + occipitotemporal
+3	-0.4778671808107776	dD (joint m7)	all nine
+4	0.9019413487135087	dD (joint m7)	all nine
+5	-0.3356720741867705	dD (joint m7)	all nine
+6	-0.12846265342264296	dD (joint m7)	all nine
+7	1.0379168189042955	dD (joint m7)	all nine
+8	-5.672310631779237	dD (joint m7)	all nine
+9	-0.4739053593023377	dD (joint m7)	all nine
+10	-0.01607714985048115	dD (joint m7)	all nine
+11	0.2557215123400444	dD (joint m7)	all nine
+12	-0.26221506413417756	dD (joint m7)	all nine
+13	-0.49733536075129153	dD (joint m7)	all nine
+14	-0.1120397804326312	dD (joint m7)	all nine
+15	-0.156714836556129	dD (joint m7)	all nine
+16	0.6844957440457478	dD (joint m7)	all nine
+17	-0.006795498114390539	dD (joint m7)	all nine
+18	0.031576451043446904	dD (joint m7)	all nine
+19	-0.0031539152406404544	dD (joint m7)	all nine
+20	0.6107824884859985	dD (joint m7)	all nine
+21	-0.0235745781555158	dD (joint m7)	all nine
+22	-0.8362800617317343	dD (joint m7)	all nine
+23	-0.3121636467766557	dD (joint m7)	all nine
+24	0.502137136707895	dD (joint m7)	all nine
+25	-0.6260967782631777	dD (joint m7)	all nine
+26	-3.7688231210983973	dD (joint m7)	all nine
+27	0.8518473195752714	dD (joint m7)	all nine
+28	0.4189226153735872	dD (joint m7)	all nine
+29	-0.7481769373689428	dD (joint m7)	all nine
+30	0.006339300329217708	dD (joint m7)	all nine
+3	-0.1739362546158644	dD (joint m7)	early + dorsal
+4	1.9417288378737911	dD (joint m7)	early + dorsal
+5	-0.5310795358244588	dD (joint m7)	early + dorsal
+6	-1.154446952669134	dD (joint m7)	early + dorsal
+7	1.8040187259361704	dD (joint m7)	early + dorsal
+8	0.2068679129636234	dD (joint m7)	early + dorsal
+9	-0.2957458650243733	dD (joint m7)	early + dorsal
+10	-0.11265629747279232	dD (joint m7)	early + dorsal
+11	0.19924311150503546	dD (joint m7)	early + dorsal
+12	-0.2921406396795922	dD (joint m7)	early + dorsal
+13	-0.5904655060519678	dD (joint m7)	early + dorsal
+14	-0.2863702945387803	dD (joint m7)	early + dorsal
+15	-0.01113929044608994	dD (joint m7)	early + dorsal
+16	1.0689123882058211	dD (joint m7)	early + dorsal
+17	0.22005309253293678	dD (joint m7)	early + dorsal
+18	0.02031939402755585	dD (joint m7)	early + dorsal
+19	0.02638956252502387	dD (joint m7)	early + dorsal
+20	-5.684173467371906	dD (joint m7)	early + dorsal
+21	-0.15155964713452127	dD (joint m7)	early + dorsal
+22	-2.5184593211645985	dD (joint m7)	early + dorsal
+23	-0.351048564193655	dD (joint m7)	early + dorsal
+24	0.4965721702221654	dD (joint m7)	early + dorsal
+25	-0.39220998737386803	dD (joint m7)	early + dorsal
+26	0.2096303331031338	dD (joint m7)	early + dorsal
+27	0.23052966568817848	dD (joint m7)	early + dorsal
+28	-0.0719715132843913	dD (joint m7)	early + dorsal
+29	-1.5903395070045487	dD (joint m7)	early + dorsal
+30	-0.10965481241143875	dD (joint m7)	early + dorsal
+3	-0.6539523376133215	dD (joint m7)	early + occipitotemporal
+4	-0.046962345826670235	dD (joint m7)	early + occipitotemporal
+5	-0.22356901906369078	dD (joint m7)	early + occipitotemporal
+6	0.4231959833879107	dD (joint m7)	early + occipitotemporal
+7	0.49054500560166847	dD (joint m7)	early + occipitotemporal
+8	-11.566420052602146	dD (joint m7)	early + occipitotemporal
+9	-0.5321269039855495	dD (joint m7)	early + occipitotemporal
+10	-0.06553668477875108	dD (joint m7)	early + occipitotemporal
+11	0.23469063657790643	dD (joint m7)	early + occipitotemporal
+12	-0.27162210682415394	dD (joint m7)	early + occipitotemporal
+13	-0.5209397280180017	dD (joint m7)	early + occipitotemporal
+14	-0.023250292690630704	dD (joint m7)	early + occipitotemporal
+15	-0.2673002855023286	dD (joint m7)	early + occipitotemporal
+16	0.09483184267509945	dD (joint m7)	early + occipitotemporal
+17	-0.20367578105299727	dD (joint m7)	early + occipitotemporal
+18	-0.018121822700096088	dD (joint m7)	early + occipitotemporal
+19	-0.042174780455942064	dD (joint m7)	early + occipitotemporal
+20	0.6107824884859985	dD (joint m7)	early + occipitotemporal
+21	0.06900978447184292	dD (joint m7)	early + occipitotemporal
+22	0.9769075902817066	dD (joint m7)	early + occipitotemporal
+23	-0.25198370088219524	dD (joint m7)	early + occipitotemporal
+24	0.5861192941067938	dD (joint m7)	early + occipitotemporal
+25	-0.9560854784223235	dD (joint m7)	early + occipitotemporal
+26	-4.568574236873999	dD (joint m7)	early + occipitotemporal
+27	1.4853447121824783	dD (joint m7)	early + occipitotemporal
+28	0.753019980679853	dD (joint m7)	early + occipitotemporal
+29	0.04409019338938298	dD (joint m7)	early + occipitotemporal
+30	0.04288777402922125	dD (joint m7)	early + occipitotemporal

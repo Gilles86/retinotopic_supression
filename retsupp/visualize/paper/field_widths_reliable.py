@@ -238,6 +238,8 @@ def main(root, out_prefix):
         s.to_csv(f'{out_prefix}_widths_thr{thr}.tsv', sep='\t', index=False)
         t, pair = claims(d, thr)
         t.to_csv(f'{out_prefix}_claims_thr{thr}.tsv', sep='\t', index=False)
+        pd.DataFrame([{k: v for k, v in pair.items() if k != 'early_fits'}]).to_csv(
+            f'{out_prefix}_early_vs_higher_thr{thr}.tsv', sep='\t', index=False)
         res[thr] = (s, t, pair)
         print(f'\n== threshold {thr}')
         print(s.round(3).to_string(index=False))

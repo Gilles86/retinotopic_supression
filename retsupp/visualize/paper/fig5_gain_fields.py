@@ -31,6 +31,13 @@ GAIN_TABLE = None
 SUFFIX = ''      # --suffix: every output gets it (new names; the earlier files stay)
 FINAL = False    # --final: final fits; findings in the legends computed from the data, no provisional stamps
 WIDTHS_SUPP = False   # --widths-supplement: b is the to-scale sketch only; the FWHM plot goes to figS_field_widths
+OUTPUTS = None        # --outputs: only these figures (main, loso, hierarchy, size, pooled); the table is always written
+PERCENT = False       # --percent: the pooled and hierarchy supplements in % (gains × 100), labels without model codes
+FIT_LABEL = None      # --fit-label: how the parameter table and supplements name the fits
+
+
+def wanted(k):
+    return OUTPUTS is None or k in OUTPUTS
 
 
 def save(fig, name, legend):
@@ -85,7 +92,8 @@ def write_table(t, js):
     t.to_csv(OUT / f'table_parameters_2026-11{SUFFIX}.tsv', sep='\t', index=False)
     fmt = lambda r: f"{r['median']:+.3f} [{r.ci_low:+.3f}, {r.ci_high:+.3f}]"
     n_sub = t['n'].max() if 'n' in t else 30
-    lines = [f'**Table S. Gain-field parameters per ROI (gain-field model with all terms fitted jointly, n = {n_sub}).** '
+    lines = [f'**Table S. Gain-field parameters per ROI (gain-field model with all terms fitted jointly, n = {n_sub}'
+             + (f'; {FIT_LABEL}' if FIT_LABEL else '') + ').** '
              'Median [bootstrapped 95% CI], Wilcoxon p, BH q '
              'across 9 ROIs, JZS Bayes factor BF10 (r = .707), and for DoG the median of the estimate with each term added '
              'alone. Gains are the fractional change in drive at the centre of a field (+0.30: 30% more).', '']
@@ -201,7 +209,9 @@ def panel_roi(ax, cond, term='dS', color=HP, ylim=(-.12, .06), ylabel='dS: HP �
 
 
 def panel_pooled(ax, cond, js, term='dS', color=HP, ylim=(-.12, .06)):
-    sets = [('Conditional', cond.groupby('subject')[term].median()), ('Joint (m7)', js['dog'].groupby('subject')[term].median())]
+    k = 100. if PERCENT else 1.
+    labs = ('Estimated\nalone', 'Joint fit') if PERCENT else ('Conditional', 'Joint (m7)')
+    sets = [(labs[0], cond.groupby('subject')[term].median() * k), (labs[1], js['dog'].groupby('subject')[term].median() * k)]
     lo, hi = ylim
     for i, (lab, v) in enumerate(sets):
         v = v.dropna().to_numpy()
@@ -215,6 +225,11 @@ def panel_pooled(ax, cond, js, term='dS', color=HP, ylim=(-.12, .06)):
         ax.errorbar(i, m, yerr=[[m - a], [b - m]], fmt='o', ms=6, color=color, mec='w', mew=.8, lw=1.6, capsize=0, zorder=4)
         p = stats.wilcoxon(v).pvalue
         ptxt = 'p < .001' if p < .001 else f'p = {p:.3f}'.replace('0.', '.')
+        if PERCENT:     # exact p
+            ptxt = f'p = {p:.2g}'.replace('0.', '.').replace('e-0', ' × 10^-').replace('e-', ' × 10^-')
+            if '10^-' in ptxt:
+                m_, e_ = ptxt.split(' × 10^-')
+                ptxt = f'{m_} × 10' + ''.join('⁰¹²³⁴⁵⁶⁷⁸⁹'[int(c)] for c in e_).join(['⁻', ''])
         ax.text(i, hi + .03 * (hi - lo), f'{(v < 0).mean() * 100:.0f}% < 0\n{ptxt}', ha='center', va='bottom', fontsize=6, color=FG,
                 clip_on=False)
     ax.axhline(0, color='.6', lw=.8, ls='--', zorder=0)
@@ -222,8 +237,30 @@ def panel_pooled(ax, cond, js, term='dS', color=HP, ylim=(-.12, .06)):
     ax.set_xticklabels([s[0] for s in sets], fontsize=6.5)
     ax.set_xlim(-.5, len(sets) - .5)
     ax.set_ylim(lo, hi)
-    ax.set_ylabel(f'{term}, median over ROIs')
+    ax.set_ylabel(f'{term}, median over areas (%)' if PERCENT else f'{term}, median over ROIs')
     offset_spines(ax)
+
+
+def pooled_legend_pct(cond, js):
+    """figS_pooled_dS_dD legend in % with the numbers computed (estimated alone vs joint fit)."""
+    def one(v):
+        v = v.dropna() * 100
+        m, a, b = median_ci(v.to_numpy())
+        p = stats.wilcoxon(v).pvalue
+        return (f'{m:+.1f}% [{a:+.1f}, {b:+.1f}], {int((v < 0).sum())} of {len(v)} participants < 0, '
+                f'Wilcoxon p = {p:.2g}').replace('-', '−')
+    jd = js['dog']
+    txt = {f'{term}_{w}': one(df.groupby('subject')[term].median())
+           for term in ('dS', 'dD') for w, df in (('alone', cond), ('joint', jd))}
+    lab = f' ({FIT_LABEL})' if FIT_LABEL else ''
+    return (f"\n**Figure S. The HP − LP gain differences per participant, median over the nine areas.** Gain-field model "
+            f"fits with DoG pRFs{lab}; gains in % (differences in percentage points). Left in each panel, each term "
+            f"estimated alone (added alone to the model with item weight, target, distractor and sustained gain); right, "
+            f"the joint fit with all terms together. Dots, participants; points and bars, the median and bootstrapped "
+            f"95% CI; above, the share of participants below 0 and the Wilcoxon p. a, dS, the sustained gain at HP "
+            f"minus at the LP locations: estimated alone {txt['dS_alone']}; joint fit {txt['dS_joint']}. b, dD, the "
+            f"distractor gain at HP minus at LP: estimated alone {txt['dD_alone']}; joint fit {txt['dD_joint']}. "
+            f"n = {cond.subject.nunique()}.\n")
 
 
 def panel_power(ax, table, estimate=-.016):
@@ -447,14 +484,18 @@ def panel_hierarchy(ax, t, size, slopes):
     lx = np.log2(size.loc[ROI_ORDER].to_numpy())
     for k, (term, col, lab, name) in enumerate((('T', TARGET, 'Target gain', 'Target'),
                                                  ('D', DISTRACTOR, 'Distractor gain', 'Distractor'))):
-        r = t[(t.model == 'DoG') & (t.term == term)].set_index('roi').loc[ROI_ORDER]
+        r = t[(t.model == 'DoG') & (t.term == term)].set_index('roi').loc[ROI_ORDER].copy()
+        kk = 100. if PERCENT else 1.
+        r['median'] = r['median'] * kk
         ax.plot(lx, r['median'], 'o', ms=4.5, color=col, mec='w', mew=.6, zorder=3)
-        s = slopes.loc[lab]
+        s = slopes.loc[lab].copy()
+        s['median_slope'] = s.median_slope * kk
         x0, y0 = lx.mean(), r['median'].mean()
         xx = np.array([lx.min() - .1, lx.max() + .1])
         ax.plot(xx, y0 + s.median_slope * (xx - x0), color=col, lw=1., ls=(0, (3, 1.5)), zorder=2)
         st = '***' if s.q < .001 else '**' if s.q < .01 else '*' if s.q < .05 else 'n.s.'
-        ax.text(.03, .99 - k * .1, f'{name}: slope {s.median_slope:+.2f} {st}'.replace('-', '−'), transform=ax.transAxes, color=col,
+        sl_txt = f'{s.median_slope:+.0f}% per doubling' if PERCENT else f'{s.median_slope:+.2f}'
+        ax.text(.03, .99 - k * .1, f'{name}: slope {sl_txt} {st}'.replace('-', '−'), transform=ax.transAxes, color=col,
                 fontsize=6.5, va='top')
         if term == 'T':
             lab_pos = {'V1': (0, -.05), 'V2': (0, .045), 'V3': (0, .045), 'hV4': (0, .045), 'LO': (.17, -.01),
@@ -462,19 +503,25 @@ def panel_hierarchy(ax, t, size, slopes):
             for roi, xi, yi in zip(ROI_ORDER, lx, r['median']):
                 if roi in lab_pos:
                     dx, dy = lab_pos[roi]
-                    ax.text(xi + dx, yi + dy, roi, fontsize=5.5, color='.4', ha='center', va='center')
+                    ax.text(xi + dx, yi + dy * kk, roi, fontsize=6 if PERCENT else 5.5, color='.4', ha='center',
+                            va='center')
             xs = lx[[ROI_ORDER.index(q) for q in ('VO', 'TO', 'IPS')]]
-            ax.text(xs.max() + .02, .03, 'VO, TO, IPS', fontsize=5.5,
+            ax.text(xs.max() + .02, .03 * kk, 'VO, TO, IPS', fontsize=6 if PERCENT else 5.5,
                     color='.4', ha='right', va='center')
     ax.axhline(0, color='.7', lw=.7, ls='--', zorder=0)
     ticks = [.6, 1., 1.6]
     ax.set_xticks(np.log2(ticks))
     ax.set_xticklabels([f'{v:g}' for v in ticks])
     ax.set_xlim(np.log2(.5), np.log2(1.8))
-    ax.set_ylim(-.12, .58)
-    ax.set_yticks([0, .2, .4])
+    if PERCENT:
+        ax.set_ylim(-12, 68)
+        ax.set_yticks([0, 20, 40, 60])
+        ax.set_ylabel('Median gain (%)')
+    else:
+        ax.set_ylim(-.12, .58)
+        ax.set_yticks([0, .2, .4])
+        ax.set_ylabel('Median gain')
     ax.set_xlabel('pRF size, σ (°)')
-    ax.set_ylabel('Median gain')
     offset_spines(ax)
 
 
@@ -660,6 +707,10 @@ def hierarchy_figure(t, size, sl):
     panel_hierarchy(ax, t, size, sl)
     fmt_sl = lambda r: (f"{r.median_slope:+.2f} per doubling (95% CI [{r.ci_low:+.2f}, {r.ci_high:+.2f}], "
                         f"{r.pct_positive:.0f}% of subjects positive, p = {r.p:.2g}, q = {r.q:.2g})")
+    if PERCENT:
+        fmt_sl = lambda r: (f"{100 * r.median_slope:+.0f}% per doubling (95% CI [{100 * r.ci_low:+.0f}%, "
+                            f"{100 * r.ci_high:+.0f}%], {r.pct_positive:.0f}% of participants positive, p = {r.p:.2g}, "
+                            f"q = {r.q:.2g})").replace('-', '−')
     leg = LEGEND_HIERARCHY.format(t_slope=fmt_sl(sl.loc['Target gain']), d_slope=fmt_sl(sl.loc['Distractor gain']))
     if FINAL and GAIN_TABLE:
         from scipy.stats import spearmanr
@@ -670,6 +721,12 @@ def hierarchy_figure(t, size, sl):
         txt = lambda c: f'median ρ = {rho[c].median():+.2f}, p = {stats.wilcoxon(rho[c]).pvalue:.2g}'.replace('-', '−')
         leg = leg.replace('within subjects, the target gain correlates with the fitted weight of the items relative to the bar (ρ = .25, p = .011) and negatively with the size of the gain field (ρ = −.22, p = .049)',
                           f'within subjects (Spearman ρ over the nine ROIs, Wilcoxon across subjects), the target gain does not track the fitted weight of the items relative to the bar ({txt("item_scale")}) but falls with the width of the transient field ({txt("sigma_dyn")})')
+    if PERCENT:
+        leg = (leg.replace('(as in Fig. 5a)', '(as in Fig. 5b; gains in %)')
+               .replace('Median target and distractor gain per ROI', 'Median target and distractor gain per area')
+               .replace("the ROI's pRF size", "the area's pRF size").replace('nine ROIs', 'nine areas'))
+        if FIT_LABEL:
+            leg = leg.replace(' Median target and distractor gain per area', f' {FIT_LABEL[0].upper() + FIT_LABEL[1:]}. Median target and distractor gain per area', 1)
     save(fig, 'figS_gain_vs_prf_size', leg)
 
 
@@ -859,9 +916,12 @@ def main(gain_table, conditional_table, power_table, slope_table, sigma_table, n
         save(fig, name, leg.format(**fmt))
         widths_figure(d, fmt)
         return
-    save(fig, name, LEGEND.format(**fmt))
-    loso_figure()
-    hierarchy_figure(t, size, sl)
+    if wanted('main'):
+        save(fig, name, LEGEND.format(**fmt))
+    if wanted('loso'):
+        loso_figure()
+    if wanted('hierarchy'):
+        hierarchy_figure(t, size, sl)
     print('FWHM median', fw, 'per ROI', fw_roi.round(2).to_dict(), 'at bound', fw_bound)
     for term in ('T', 'D', 'dS', 'dD'):
         r = t[(t.model == 'DoG') & (t.term == term)]
@@ -872,16 +932,19 @@ def main(gain_table, conditional_table, power_table, slope_table, sigma_table, n
         print(term, 'conditional', ', '.join(f'{r} {m:+.3f} (q={q:.2g})' for r, m, q in
                                              zip(ROI_ORDER, meds, stats.false_discovery_control(ps))))
 
-    size_figure(d)
+    if wanted('size'):
+        size_figure(d)
     fig = plt.figure(figsize=(SINGLE, 2.3))
     gs = fig.add_gridspec(1, 2, wspace=.6, left=.17, right=.98, top=.8, bottom=.15)
     ax = fig.add_subplot(gs[0])
-    panel_pooled(ax, cond, js)
+    k = 100. if PERCENT else 1.
+    panel_pooled(ax, cond, js, ylim=(-.12 * k, .06 * k))
     letter(ax, 'a', x=-.35, y=1.12)
     ax = fig.add_subplot(gs[1])
-    panel_pooled(ax, cond, js, 'dD', DISTRACTOR, (-.3, .2))
+    panel_pooled(ax, cond, js, 'dD', DISTRACTOR, (-.3 * k, .2 * k))
     letter(ax, 'b', x=-.35, y=1.12)
-    save(fig, 'figS_pooled_dS_dD', POOLED_LEGEND)
+    if wanted('pooled'):
+        save(fig, 'figS_pooled_dS_dD', pooled_legend_pct(cond, js) if PERCENT else POOLED_LEGEND)
     if FINAL:      # the power simulation ran on the earlier fits; not redrawn
         return
     fig, ax = plt.subplots(figsize=(SINGLE, 2.2), gridspec_kw=dict(left=.17, right=.97, top=.92, bottom=.2))
@@ -908,8 +971,13 @@ if __name__ == '__main__':
     ap.add_argument('--loso-table', default=None, help='per-ROI LOSO table for figS_loso_per_roi (default fig45_common.LOSO_TABLE)')
     ap.add_argument('--widths-supplement', action='store_true',
                     help='b: the sustained field to scale only; the FWHM plot as figS_field_widths (fits at a bound counted)')
+    ap.add_argument('--outputs', nargs='+', default=None, choices=['main', 'loso', 'hierarchy', 'size', 'pooled'],
+                    help='only these figures (default all); the parameter table is always written')
+    ap.add_argument('--percent', action='store_true', help='pooled and hierarchy supplements in %%, no model codes')
+    ap.add_argument('--fit-label', default=None, help='how the table and supplements name the fits')
     a = ap.parse_args()
     SUFFIX, FINAL, WIDTHS_SUPP = a.suffix, a.final, a.widths_supplement
+    OUTPUTS, PERCENT, FIT_LABEL = a.outputs, a.percent, a.fit_label
     if a.loso_table:
         import retsupp.visualize.paper.fig45_common as _fc
         _fc.LOSO_TABLE = a.loso_table
