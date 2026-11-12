@@ -90,4 +90,4 @@ residual, one amplitude per subject × ROI shared by the voxels; estimated on al
 Then locally: collect the per-subject tables, pooled tests (per participant median over areas; Wilcoxon, bootstrapped
 CI, k of n; per area BH over nine), held-out ΔR² per design against the joint fit, the recovery confusion matrix, the
 supplementary figure (a schematic, b step-1 slopes, c held-out ΔR², d confusion matrix), key_numbers additions and
-wording, as update5_baseline.
+wording, added to notes/writing_package_2026-11-12_update5/ (shared with the per-area Fig. 3 update: add files, append sections to its key_numbers.md and UPDATE_NOTES.md, rezip notes/writing_package_2026-11-12_update5.zip).
