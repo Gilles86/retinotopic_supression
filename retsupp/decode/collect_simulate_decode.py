@@ -124,6 +124,49 @@ def collect_fitted_maps(bids, source, noise, out_dir, prefix='decode_simfit', jo
         print(f'{v}: {len(files)} runs, {len(subjects)} subjects -> {out}', flush=True)
 
 
+def collect_fitted_segments(bids, source, noise, out_dir, prefix='decode_simfit', jobs=4):
+    """Per subject × ROI (V1-V3) × variant: the bar-sweep segment differences of the outline decoder, as
+    ``figS_decoded_bars.collect_condition_per_roi`` computes them for the data (pooled orientation, the module's bins):
+    ``decoded_bars_segments_<prefix>_outline_b<N>_2026-11.tsv`` with a ``variant`` column."""
+    from multiprocessing import Pool
+
+    import numpy as np
+
+    from retsupp.visualize.paper import figS_decoded_bars as fb
+    out = Path(out_dir) / f'decoded_bars_segments_{prefix}_outline_b{fb.N_BINS}_2026-11.tsv'
+    if out.exists():
+        raise FileExistsError(f'{out} exists; not overwriting')
+    root = Path(bids) / 'derivatives' / 'decoded_sim_fitted_2026-11' / source / f'noise-{noise}'
+    tasks, keys = [], []
+    for v in ('model', 'control'):
+        for sd in sorted((root / v / 'outline').glob('sub-*')):
+            for roi in fb.ROIS:
+                fs = sorted(sd.glob(f'decoded_ses-*_run-*_roi-{roi}.npz'))
+                if fs:
+                    tasks.append(fs)
+                    keys.append((v, int(sd.name.split('-')[1]), roi))
+    grid = np.load(tasks[0][0])['grid']
+    X, Y = grid[:, 0].reshape(50, 50), grid[:, 1].reshape(50, 50)
+    inside = np.hypot(X, Y) <= fb.APERTURE
+    centres = (fb.EDGES[:-1] + fb.EDGES[1:]) / 2
+    rows = []
+    with Pool(jobs) as pool:
+        for (v, sub, roi), (_, s_, n_, nhp) in zip(keys, pool.imap(fb.one_subject_roi, tasks)):
+            with np.errstate(invalid='ignore'):
+                m = (s_ / n_[:, :, None, None]).reshape(2, fb.N_BINS, 3, 50, 50)
+            pooled = (m[0] + np.swapaxes(m[1], -1, -2)) / 2
+            for b in range(fb.N_BINS):
+                mm = pooled[b]
+                bar = (mm[2] > .5) & inside
+                if bar.sum() < 10:
+                    continue
+                for qn, val in fb._segments(mm[0], mm[1], bar, X, Y).items():
+                    rows.append(dict(variant=v, subject=sub, roi=roi, orientation='pooled', bin=b, centre=centres[b],
+                                     quadrant=qn, diff_pct=val, n_hp=nhp))
+    pd.DataFrame(rows).to_csv(out, sep='\t', index=False)
+    print(f'{len(tasks)} variant x subject x ROI -> {out}', flush=True)
+
+
 if __name__ == '__main__':
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
@@ -131,11 +174,15 @@ if __name__ == '__main__':
     p.add_argument('--noise', default='phase')
     p.add_argument('--out', default='notes/data/decode_sim_2026-11.tsv')
     p.add_argument('--fitted', action='store_true', help='collect simulate_decode.py --mode fitted (see collect_fitted)')
+    p.add_argument('--segments', action='store_true', help='with --fitted: per-ROI bar-sweep segments (V1-V3)')
     p.add_argument('--maps', action='store_true', help='with --fitted: only the HP-rotated maps (collect_fitted_maps)')
     p.add_argument('--out-dir', default='notes/data')
     p.add_argument('--prefix', default='decode_simfit')
     p.add_argument('-j', '--jobs', type=int, default=4)
     a = p.parse_args()
+    if a.fitted and a.segments:
+        collect_fitted_segments(a.bids_folder, a.source, a.noise, a.out_dir, a.prefix, a.jobs)
+        raise SystemExit
     if a.fitted and a.maps:
         collect_fitted_maps(a.bids_folder, a.source, a.noise, a.out_dir, a.prefix, a.jobs)
         raise SystemExit
