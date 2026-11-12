@@ -16,6 +16,10 @@ resolution 50 (0.2°/px), grid σ from 1.0°, sd_min 0.2.
 Truth families: 'gauss' (Gaussian pRF) and 'dog' (DoG, surround amplitude 0.07, surround 3 × centre: the median of
 the real V1 fits).
 
+Optional perturbations of the truth that the fit does not model: ``--eye-jitter`` (a random eye position per TR,
+the whole stimulus shifted on the retina) and ``--truth-delay/--truth-dispersion`` (an HRF other than the canonical
+one; the joint-HRF stage can absorb a change within the SPM family).
+
 Output (never overwritten): ``<out_dir>/sim_<family>_r2-<r2>_<condition>.tsv`` with one row per simulated voxel:
 true and recovered x, y, σ after m1, m2 and the joint-HRF stage, the fitted HRF, and R².
 
@@ -82,8 +86,20 @@ def ar1_noise(rng, n_t, n_v, phi=.3):
     return e / e.std(0, keepdims=True)
 
 
+def jitter_paradigm(par, res, sd, rng):
+    """Shift the stimulus of every TR by a random eye position (iid normal, SD ``sd`` degrees, whole pixels)."""
+    if sd <= 0:
+        return par
+    px = 10. / (res - 1)
+    out = par.reshape(-1, res, res).copy()
+    shifts = np.round(rng.normal(0, sd, (len(out), 2)) / px).astype(int)
+    for t, (dy, dx) in enumerate(shifts):
+        out[t] = np.roll(out[t], (dy, dx), axis=(0, 1))
+    return out.reshape(len(out), -1)
+
+
 def main(family, r2_target, condition, out_dir, subject=23, truth_res=200, n_rep=6, seed=0, n2=3000, n3=3000,
-         debug=False):
+         debug=False, eye_jitter=0., truth_delay=4.5, truth_dispersion=.75):
     from braincoder.hrf import SPMHRFModel
     from braincoder.models import DifferenceOfGaussiansPRF2DWithHRF, GaussianPRF2DWithHRF
     from braincoder.optimize import ParameterFitter
@@ -96,7 +112,9 @@ def main(family, r2_target, condition, out_dir, subject=23, truth_res=200, n_rep
     res, sd_low, sd_min = CONDITIONS[condition]
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    out = out_dir / f'sim_{family}_r2-{r2_target:g}_{condition}.tsv'
+    extra = (f'_eye-{eye_jitter:g}' if eye_jitter > 0 else '') + (
+        f'_hrf-{truth_delay:g}-{truth_dispersion:g}' if (truth_delay, truth_dispersion) != (4.5, .75) else '')
+    out = out_dir / f'sim_{family}_r2-{r2_target:g}_{condition}{extra}.tsv'
     if out.exists():
         print(f'{out} exists, nothing to do')
         return
@@ -109,8 +127,9 @@ def main(family, r2_target, condition, out_dir, subject=23, truth_res=200, n_rep
     # Truth: fine grid, canonical HRF, AR(1) noise at the target R².
     truth = true_parameters(family, 1 if debug else n_rep, seed)
     par_t, grid_t = paradigm(sub, runs, truth_res)
+    par_t = jitter_paradigm(par_t, truth_res, eye_jitter, np.random.default_rng(seed + 2))
     cls = DifferenceOfGaussiansPRF2DWithHRF if family == 'dog' else GaussianPRF2DWithHRF
-    hrf = SPMHRFModel(tr=1.6, delay=4.5, dispersion=0.75)
+    hrf = SPMHRFModel(tr=1.6, delay=truth_delay, dispersion=truth_dispersion)
     tm = cls(grid_coordinates=grid_t, paradigm=par_t, hrf_model=hrf)
     labels = list(tm.parameter_labels)
     signal = np.asarray(tm.predict(parameters=truth[labels].astype(np.float32)))
@@ -157,7 +176,7 @@ def main(family, r2_target, condition, out_dir, subject=23, truth_res=200, n_rep
     df['s3_r2_truth_signal'] = 1 - ((signal - np.asarray(ff(data, par).predict(parameters=s3))) ** 2).sum(0) / (
         (signal - signal.mean(0)) ** 2).sum(0)
     df['hrf_delay'], df['hrf_dispersion'] = s3.hrf_delay.to_numpy(), s3.hrf_dispersion.to_numpy()
-    df = df.assign(family=family, r2_target=r2_target, condition=condition, resolution=res, sd_grid_low=sd_low,
+    df = df.assign(eye_jitter=eye_jitter, truth_delay=truth_delay, truth_dispersion=truth_dispersion, family=family, r2_target=r2_target, condition=condition, resolution=res, sd_grid_low=sd_low,
                    sd_min=sd_min, subject=subject, seconds=time.time() - t0)
     df.to_csv(out, sep='\t', index=False)
     print(df.groupby('true_sd')[['m1_sd', 'm2_sd', 's3_sd']].median().round(3).to_string())
@@ -173,6 +192,10 @@ if __name__ == '__main__':
     ap.add_argument('--subject', type=int, default=23)
     ap.add_argument('--truth-res', type=int, default=200)
     ap.add_argument('--n-rep', type=int, default=6)
+    ap.add_argument('--eye-jitter', type=float, default=0., help='SD (deg) of a random eye position per TR in the truth')
+    ap.add_argument('--truth-delay', type=float, default=4.5)
+    ap.add_argument('--truth-dispersion', type=float, default=.75)
     ap.add_argument('--debug', action='store_true')
     a = ap.parse_args()
-    main(a.family, a.r2, a.condition, a.out_dir, a.subject, a.truth_res, a.n_rep, debug=a.debug)
+    main(a.family, a.r2, a.condition, a.out_dir, a.subject, a.truth_res, a.n_rep, debug=a.debug, eye_jitter=a.eye_jitter,
+         truth_delay=a.truth_delay, truth_dispersion=a.truth_dispersion)

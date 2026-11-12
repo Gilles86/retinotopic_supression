@@ -10,7 +10,7 @@
 #
 # Parameter recovery of small pRFs (cv/sim_prf_size_floor.py). One array task per (family, R², condition):
 # task id = 100*family_idx + 10*r2_idx + condition_idx, family_idx 0 = gauss, 1 = dog; r2_idx 0 = .35, 1 = .15;
-# condition_idx into CONDS below.
+# condition_idx into CONDS below. EYE (SD in deg), TDELAY, TDISP perturb the truth (default none).
 #   cd ~/retsupp_plan && sbatch --array=100,107 retsupp/modeling/cv/slurm_jobs/sim_prf_size_floor.sh   # canary
 
 set -eo pipefail
@@ -23,7 +23,7 @@ r2=${R2S[$(( (id / 10) % 10 ))]}
 cond=${CONDS[$(( id % 10 ))]}
 OUT="${OUT:-/shares/zne.uzh/gdehol/ds-retsupp/derivatives/sim_prf_size_floor_2026-11-12}"
 mkdir -p "$HOME/logs"
-exec >"$HOME/logs/sim_prf_size_floor_${fam}_r2-${r2}_${cond}_${SLURM_JOB_ID}.txt" 2>&1
+exec >"$HOME/logs/sim_prf_size_floor_${fam}_r2-${r2}_${cond}_eye-${EYE:-0}_hrf-${TDELAY:-4.5}-${TDISP:-.75}_${SLURM_JOB_ID}.txt" 2>&1
 CODE_DIR="${CODE_DIR:-$(cd "${SLURM_SUBMIT_DIR}" && git rev-parse --show-toplevel)}"
 echo "Host: $(hostname) | ${fam} r2 ${r2} ${cond} | job ${SLURM_JOB_ID} | $(date)"
 echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
@@ -32,5 +32,6 @@ export TF_NUM_INTRAOP_THREADS="${SLURM_CPUS_PER_TASK:-8}" TF_NUM_INTEROP_THREADS
 export TMPDIR="/scratch/$USER/tmp/${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID:-0}"
 mkdir -p "$TMPDIR"
 "$HOME/data/conda/envs/retsupp_cuda/bin/python" -u -m retsupp.modeling.cv.sim_prf_size_floor \
-    --family "$fam" --r2 "$r2" --condition "$cond" --out-dir "$OUT"
+    --family "$fam" --r2 "$r2" --condition "$cond" --out-dir "$OUT" \
+    --eye-jitter "${EYE:-0}" --truth-delay "${TDELAY:-4.5}" --truth-dispersion "${TDISP:-.75}"
 echo "Finished: $(date)"
