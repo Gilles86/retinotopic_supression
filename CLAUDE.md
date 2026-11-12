@@ -146,9 +146,9 @@ edits don't undo them:
   V100 32GB vs L4 24GB).
 - **`fit_prf_l4_chunked.sh` partition**: `lowprio` (NOT standard).
   Same physical L4/V100/A100 hardware as standard, but jobs dispatch
-  in seconds instead of hours of fairshare wait. Preemption risk
-  exists but is rare; the canary + fail-fast sentinels make
-  recovery cheap. See `[[project_lowprio_partition]]` memory.
+  in seconds instead of hours of fairshare wait (when lowprio is not
+  itself queued; check first). Not preempted under the current config
+  (see the lowprio section below). See `[[project_lowprio_partition]]` memory.
 - **`register_retinotopy.sh` (neuropythy)**: `--cpus-per-task=16`,
   not 4. The registration calls into Noah Benson's Java mesh code
   via JPype; the JVM side scales with threads — 16 CPUs cuts wall-
@@ -229,17 +229,17 @@ See global CLAUDE.md §"NIfTI dtype trap" — every `inverse_transform().to_file
 ### Lowprio partition for GPU PRF fits
 
 When `standard` partition is congested (our jobs sit `(Priority)` for
-hours due to fairshare), use `--partition=lowprio` instead. The
-`lowprio` partition uses the **same physical L4/A100/V100 nodes** as
-`standard` — it's not a separate hardware pool — but jobs dispatch
-near-instantly (5-10s in our tests) because lowprio uses a different
-priority bucket.
+hours due to fairshare), `--partition=lowprio` can dispatch faster. It uses
+the **same physical L4/A100 nodes** as `standard`, but with a lower
+PriorityTier (1 vs 5), so it is only faster when lowprio itself is not
+queued (on 2026-11-06 it was slower). Check before relying on it.
 
-Trade-off: a higher-priority `standard` job can preempt a running
-lowprio job at any moment. For our chunked PRF fits (15-30 min/task)
-preemption risk is low, and preempted tasks are cheap to resubmit
-(per-subject dependency chains isolate failures to that subject's
-downstream).
+**Same price, not preempted (checked 2026-11-12).** lowprio has the same
+`TRESBillingWeights` as `standard`, so it is not cheaper. `PreemptMode=OFF` on
+both partitions and cluster-wide, so running lowprio jobs are not preempted
+under the current settings. Re-check with
+`scontrol show partition lowprio | grep -i preempt` before relying on that.
+For CPU per-ROI fits, use `standard`.
 
 `fit_prf_l4_chunked.sh` already has `#SBATCH --partition=lowprio`
 baked in. Override via `sbatch --partition=standard ...` when you
