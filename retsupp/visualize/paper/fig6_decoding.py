@@ -419,8 +419,9 @@ def panel_quadrants(ax, s, st, pred=None):
             pm, pse = pred[c].mean(), pred[c].sem()
             ax.fill_between([i - .2, i + .45], pm - pse, pm + pse, color=FG, alpha=.15, lw=0, zorder=1)
             ax.plot([i - .2, i + .45], [pm, pm], color=FG, lw=1.1, zorder=3)
-        ax.text(2.5, pred['opposite'].mean() + 1.0, 'Gain-field\nmodel', fontsize=6, color=FG, ha='right', va='bottom',
-                linespacing=1.)
+        ax.plot([1.2, 1.5], [-5.2, -5.2], color=FG, lw=1.1)
+        ax.add_patch(plt_rect((1.2, -5.55), .3, .7, ax.transData, FG))
+        ax.text(1.55, -5.2, 'Gain-field model', fontsize=6, color=FG, ha='left', va='center')
     lo, hi = -6, 5
     ax.set_ylim(lo, hi)
     if st['p_adj'] < .05:
@@ -575,7 +576,7 @@ def panel_ecc(ax, be, pb, pred=None):
         ax.fill_between(x, pm - pse, pm + pse, color=FG, alpha=.15, lw=0, zorder=1)
         ax.plot(x, pm, color=FG, lw=1.1, zorder=2)
         ax.errorbar(x, m, yerr=se, fmt='o', ms=3, color=HP, mec='w', mew=.5, lw=.9, capsize=0, zorder=3)
-        ax.text(x[-1] - .05, pm[-1] + .55, 'Gain-field model', fontsize=6.5, color=FG, ha='right', va='bottom')
+        ax.text(.1, -.75, 'Gain-field model', fontsize=6.5, color=FG, ha='left', va='top')
     ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
     ax.set_xlim(0, ECC_MAX)
     ax.set_xticks([0, 1, 2, 3])
@@ -733,6 +734,11 @@ def bar_insets(fig, source, xy, W, H, size=.7, gap=.1, vmax=3., bins=(2, 3, 4), 
 SWEEP_TXT = """ Right of the map, the same contrast on single bar positions without any averaging over the visual field, as the bar sweeps across the aperture: the decoded bar (decoder with the bar outline given) minus the mean decoded bar at the same time point over the subject's runs, averaged within each HP location first and then over the four, so the stimulus is identical and only the HP location differs; each run scaled to a common mean intensity on the bar first, rotated so HP is at the upper right in 90° steps, horizontal bars reflected onto vertical ones across the diagonal through HP. Top, the difference image at each of the {nb} bar positions (bar centre on the axis below; negative, the side away from HP), smoothed (Gaussian, σ = 0.2°), same colour scale as the map, on the bar's footprint. Bottom, the difference on the bar's segment in the quadrant facing HP (red; only bars that reach it) and in the two quadrants next to HP (grey; mean of the segments present), in % of the mean decoded intensity on the bar; mean ± SEM over subjects; stars, two-sided Wilcoxon signed-rank test per position, uncorrected (* p < .05, ** p < .01). {sweep_stats}."""
 
 
+def plt_rect(xy, w, h, transform, color, alpha=.15):
+    from matplotlib.patches import Rectangle
+    return Rectangle(xy, w, h, transform=transform, facecolor=color, alpha=alpha, lw=0, clip_on=False)
+
+
 def sweep_segments(P, grid):
     """Per subject × bar position (P from ``pooled_condition``): the decoded − mean-over-HP difference on the bar's segment
     in the quadrant facing HP and in the quadrants next to it (mean of those present), % of the bar's mean."""
@@ -778,7 +784,12 @@ def load_prediction(prefix, decoder=DECODER, rois=EARLY):
     sweep['subjects'] = np.array(subs)
     qd = (q['model'] - q['control']).dropna()
     bd = (be['model'] - be['control']).dropna()
-    return qd, bd, sweep
+    r = d[(d.decoder == decoder) & d.roi.isin(rois)].drop_duplicates(['subject', 'session', 'run', 'roi', 'variant'])
+    qual = pd.read_csv(DATA / f'{prefix}_quality_2026-11.tsv', sep='\t')
+    qual = qual[qual.roi.isin(rois)].groupby(['variant', 'subject']).r.mean().groupby('variant').median()
+    extra = dict(coverage=float((r.n_voxels / r.n_decoder_voxels).median() * 100), r_model=float(qual['model']),
+                 r_control=float(qual['control']))
+    return qd, bd, sweep, extra
 
 
 def bar_sweep(fig, source, x0, x1, y_img, y_ax, h_ax, W, H, vmax=3., pred=None):
@@ -830,11 +841,13 @@ def bar_sweep(fig, source, x0, x1, y_img, y_ax, h_ax, W, H, vmax=3., pred=None):
                 ax.text(centres[b], m[b] + dy * (se[b] + .25), st, color=col, fontsize=7, ha='center',
                         va='bottom' if dy > 0 else 'top')
     if pred is not None:
-        ax.plot([.08, .15], [.1, .1], transform=ax.transAxes, color=FG_, lw=1.1)
-        ax.text(.17, .1, 'Gain-field model', transform=ax.transAxes, fontsize=6.5, color=FG_, va='center')
-        ax.errorbar([.62], [.1], yerr=[[.05], [.05]], fmt='o', ms=3, color=FG_, mec='w', mew=.5, lw=.9,
-                    transform=ax.transAxes, clip_on=False)
-        ax.text(.64, .1, 'Data', transform=ax.transAxes, fontsize=6.5, color=FG_, va='center')
+        tf = ax.transAxes
+        ax.add_patch(plt_rect((.03, .07), .06, .07, tf, FG_))
+        ax.plot([.03, .09], [.105, .105], transform=tf, color=FG_, lw=1.1, clip_on=False)
+        ax.text(.1, .105, 'Gain-field model', transform=tf, fontsize=6.5, color=FG_, va='center')
+        ax.plot([.3, .3], [.06, .15], transform=tf, color=FG_, lw=.9, clip_on=False)
+        ax.plot(.3, .105, 'o', transform=tf, ms=3, color=FG_, mec='w', mew=.5, clip_on=False)
+        ax.text(.315, .105, 'Data', transform=tf, fontsize=6.5, color=FG_, va='center')
     ax.axhline(0, color='.6', lw=.6, ls='--', zorder=0)
     ax.set_xlim(lo, hi)
     ax.set_xticks([-2.7, -1.8, -0.9, 0, 0.9, 1.8, 2.7])
@@ -1032,10 +1045,10 @@ def sweep_data(source):
                 centres=(z['edges'][:-1] + z['edges'][1:]) / 2)
 
 
-def prediction_text(pred, qe, be, sw):
+def prediction_text(pred, qe, be, sw, r_data=None):
     """Predicted vs observed: quadrant contrasts (HP − next, next − opposite), the sweep segments and the eccentricity
     profile; per-subject correlation of predicted and observed HP − next."""
-    qp, bp_, swp = pred
+    qp, bp_, swp, extra = pred
     mn = lambda x, sign='': format(x, sign + '.2f').replace('-', '−')   # noqa: E731
     fmt = lambda v: f'{mn(v.mean(), "+")} ± {v.sem():.2f}%'   # noqa: E731
     con = {}
@@ -1062,7 +1075,10 @@ def prediction_text(pred, qe, be, sw):
     sweep = 'Bar sweep (c): ' + '; '.join(rows) + f'; correlation of the observed and predicted group means over the ' \
         f'{len(obs_all)} segment × position points r = {mn(r_sw)}'
     ecc = f'Whole aperture (e): HP − other quadrants observed {fmt(be["all"])}, predicted {fmt(bp_["all"])}'
-    return PRED_TXT.format(n=len(qp), numbers=quad + '. ' + sweep + '. ' + ecc + '.')
+    cov = (f' The joint fit covers a median {extra["coverage"]:.0f}% of the decoder\'s voxels per run and area, and the '
+           f'simulated runs decode about as well as the real ones (frame-wise r, median over subjects of the V1–V3 mean: '
+           f'{extra["r_model"]:.2f} simulated' + (f', {r_data:.2f} measured' if r_data is not None else '') + ').')
+    return PRED_TXT.format(n=len(qp), numbers=quad + '. ' + sweep + '. ' + ecc + '.') + cov
 
 
 def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, source_note='', frames_style='magma', v3=False,
@@ -1222,7 +1238,8 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
                                   w0=BAR_WINDOW[0], w1=BAR_WINDOW[1], source=source_note,
                                   q_lr=qst['p_lr'], quad=qst['text'])
     if pred:
-        pt = prediction_text(pred, qe, be, sweep_data(source))
+        r_data = q[(q.decoder == decoder) & q.roi.isin(EARLY)].groupby('subject').r.mean().median()
+        pt = prediction_text(pred, qe, be, sweep_data(source), r_data)
         leg = leg.rstrip() + ' ' + pt + '\n'
         print('prediction', pt)
     if v3:
