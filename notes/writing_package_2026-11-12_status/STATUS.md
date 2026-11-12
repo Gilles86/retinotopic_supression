@@ -13,39 +13,45 @@ It applies on top of update 7.
 
 ## A. New Fig. 6, decoding (ready; replaces the current Fig. 6)
 
-Files: `figures/fig6_decoding_v9_n28.{pdf,png,md}`; the `.md` is the full caption with every number. The figure is
-180 mm wide and now 7.9 in tall, because panel f has its own row.
+Files: `figures/fig6_decoding_v10_n28.{pdf,png,md}`, 180 mm × 6.3 in. The `.md` is the full caption with every number.
+Row 3 has space on the right for a decoder on pooled dorsal and occipitotemporal voxels. That decoder runs tonight and
+will be added in a later version; the panels described here keep their letters.
 
-The figure's argument, panel by panel:
+The figure's argument, row by row:
 
-- **a, b (unchanged).** The bar can be decoded from held-out runs in every area.
-- **c, the main result (new layout).**
-  - **Left: two rotated maps.** The left map is the data, with the HP location at 12 o'clock and V1–V3 pooled. The
-    right map is new: what the fitted gain-field model predicts for the same readout. It has the same smooth pattern,
-    lower intensity toward HP. Spatial correlation of predicted and observed maps inside the aperture: r = 0.51.
-  - **Right: the bar sweep.**
-    - Top: the decoded-bar difference image at each of 7 bar positions.
-    - Below, aligned with them: the difference on each segment of the bar against bar centre, for three segments:
-      - the quadrant facing HP (red);
-      - the quadrants next to HP (dark grey);
-      - the opposite quadrant (light grey).
-    - Icons under the axis show which quadrants a bar crosses on each side of the centre. Left of centre it crosses
-      next to HP and opposite; right of centre it crosses HP and next to HP. That is why the red line exists only
-      right of 0.
-    - Wherever the bar enters the quadrant facing HP, that segment is decoded weaker: −1.3% at +0.9°, p < .05. The
-      segment next to HP is weaker nowhere.
-- **d (unchanged data, model added).** Quadrant readout.
-  - Observed: HP −1.02 ± 0.38%, next to HP +0.57 ± 0.17%, opposite −0.12 ± 0.24%; HP < next, one-sided p = .004.
-  - The gain-field model's prediction is drawn as horizontal bars.
-- **e (unchanged data, model added).** HP − other quadrants by eccentricity, with the model's prediction as a line. The
-  effect does not grow toward the items outside the aperture, and the model predicts the same smooth rise.
-- **f (new).** HP − other three quadrants beyond V1–V3, laid out like Fig. 5c (pooled estimates first, then each area).
-  - Pooled: all areas −1.14 ± 0.39% (p = .003); early −1.35 ± 0.51% (p = .010); occipitotemporal −1.06 ± 0.41%
-    (p = .006); dorsal −0.12 ± 0.75% (p = .56).
-  - Per area, only V2 and V3 survive BH correction across the nine areas: −1.68% and −1.62%, q = .033.
+- **Row 1, "Bar decoded from held-out runs" (a, b).** Example frames, then decoding quality per area. The bar is
+  recovered from held-out runs in every area.
+- **Row 2, "Lower intensity facing HP (V1–V3 pooled)".**
+  - **c, left: two rotated maps** (HP at 12 o'clock), the data next to what the fitted gain-field model predicts for
+    the same readout. Both show lower decoded intensity toward HP. The spatial correlation inside the aperture is
+    r = 0.51.
+  - **c, right: the bar sweep.** The difference on each segment of the bar against bar centre, for three segments:
+    - the quadrant facing HP (red);
+    - next to HP (dark grey);
+    - opposite (light grey, dashed).
+
+    Icons under the axis show which quadrants a bar crosses: left of centre it crosses next to HP and opposite; right
+    of centre it crosses HP and next to HP. Wherever the bar enters the quadrant facing HP, that segment is decoded
+    weaker (−1.3% at +0.9°, p < .05). The segment next to HP is weaker nowhere.
+  - **d: quadrant readout** with the model prediction. Observed: HP −1.02 ± 0.38%, next to HP +0.57 ± 0.17%,
+    opposite −0.12 ± 0.24% (mean ± SEM), HP < next one-sided p = .004. Predicted: HP −0.91%, next +0.19%,
+    opposite +0.53%.
+- **Row 3, "Beyond V1–V3: occipitotemporal, not dorsal" (e).** HP − other three quadrants, pooled per pathway.
+  - Early −1.35 ± 0.51% (p = .010)
+  - Occipitotemporal −1.06 ± 0.41% (p = .006)
+  - Dorsal −0.12 ± 0.75% (p = .56, n = 24)
+
+  All areas pooled: −1.14 ± 0.39%, p = .003. One-sided Wilcoxon tests, same normalisation as d.
+
+**Moved to the supplement:**
+
+- `figures/figS_decoding_eccentricity_n28`: the check against the items outside the aperture. The effect does not grow
+  toward the aperture edge, and the model predicts the same smooth rise. Cite it in one sentence.
+- `figures/figS_decoding_hp_per_area_v10_n28`: per-area values with BH correction across nine areas.
+  - V2 and V3 reach q = .033.
   - V3AB −1.59% (p = .080), hV4 −1.76% (p = .105) and VO −3.62% (p = .065, n = 10) are as large but noisier.
-  - All tests are one-sided Wilcoxon, same normalisation as d.
-  - f shows data only; the model was simulated for V1–V3.
+- `figures/figS_decoding_sweep_per_area_n28`: the sweep and maps for every area. The pattern is clear in V2 and V3;
+  higher areas are too noisy per area.
 
 **How the model prediction was made (Methods).** For every participant, run and area (V1–V3), we simulated BOLD from
 the participant's fitted joint model, with pRFs and gain fields fitted together and every term as fitted. We added that
@@ -68,13 +74,6 @@ participant, averaged like the data. The gain fit used all runs, including the d
 
   Do **not** add "the same split as for the HP-specific gain". After the pRF refit, the per-pathway dS (Fig. 5c) is not
   reliable in any single pathway once corrected (early q = .057, occipitotemporal q = .089); see section B."
-
-**Supplementary figures:**
-
-- `figures/figS_decoding_sweep_per_area_n28` (new): the panel-c readout for every area. The per-position pattern is
-  clear in V2 and V3 (HP segment at +0.9°: −1.75%, p = .005 and −2.21%, p = .001). Higher areas are too noisy per area:
-  9 of 135 position tests reach p < .05, where about 7 are expected by chance.
-- `figures/figS_decoding_hp_per_area_v9_n28`: the per-area test, unchanged.
 
 ---
 
@@ -139,11 +138,11 @@ Mark each in the text with **[PENDING: …]** so the numbers can be swapped in w
 **C2. Voxel selection, decoding** (just started; expected tonight).
 - **What runs:** the same two looser selections for the decoder, computed per fold on the training runs only, so the
   decoded run never chooses its own voxels. Readouts: decoding quality per area, the quadrant test (6d), the pooled
-  and per-area effects (6f) and the sweep.
+  and per-area effects (Fig. 6e and its per-area supplement), the sweep, and pooled-voxel decoders for the dorsal and occipitotemporal pathways (to fill the free slot in row 3).
 - **Same decision rule:** the main figure keeps the current selection unless a looser one clearly improves decoding
   quality and the precision of the HP effect.
 - **Main interest:** whether the higher areas (V3AB, hV4, VO), now large but noisy, become reliable with more voxels.
-- **Placeholder (Fig. 6f text, Supplement):** "[PENDING: decoding with a looser voxel selection]".
+- **Placeholder (Fig. 6e text, Supplement):** "[PENDING: decoding with a looser voxel selection]".
 
 **C3. The HP-specific gain along the visual hierarchy** (update 9; runs on the refitted fits).
 - **Question:** does each gain term grow or shrink along the hierarchy (pRF size, area rank)? Includes target vs dS,
