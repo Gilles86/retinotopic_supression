@@ -5,8 +5,8 @@
 #SBATCH --exclude=u24-chaihm0-633
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=16
-#SBATCH --mem=32G
-#SBATCH --time=03:00:00
+#SBATCH --mem=24G          # canary sub-23 fold 0: 16.8 GB (paper50), 10.9 GB (free100)
+#SBATCH --time=01:30:00    # canary: 18 min (paper50), 50 min (free100), 16 CPUs
 #
 # V1 pRFs refitted under one fitting condition (cv/refit_v1_prf_resolution.py). One array task per (subject, fold):
 # task id = 10*subject + fold; CONDITION (default paper50) names the condition in sim_prf_size_floor.CONDITIONS.
