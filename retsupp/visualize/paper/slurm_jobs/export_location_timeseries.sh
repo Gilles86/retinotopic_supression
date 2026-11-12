@@ -21,6 +21,9 @@ mkdir -p "$HOME/logs"
 exec >"$HOME/logs/loc_ts_sub-${subject}_${SLURM_JOB_ID}.txt" 2>&1
 echo "Host $(hostname)  sub-${subject}  started $(date)"
 
+export TMPDIR="/scratch/$USER/loc_ts_${SLURM_JOB_ID}"
+mkdir -p "$TMPDIR"
+trap 'rm -rf "$TMPDIR"' EXIT
 cd "$CODE_DIR"
 export CUDA_VISIBLE_DEVICES= PYTHONPATH="$CODE_DIR" PYTHONUNBUFFERED=1
 "$HOME/data/conda/envs/retsupp_cuda/bin/python" -m retsupp.visualize.paper.export_location_timeseries "$subject" ${EXTRA_ARGS:-}

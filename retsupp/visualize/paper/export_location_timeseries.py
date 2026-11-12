@@ -10,9 +10,19 @@ Writes to ``<out-dir>/location_timeseries/``:
 voxels' mean BOLD, bar = m0's prediction for the bar alone, mean over the same voxels; hp: the location is the run's HP) and
 ``sub-XX_trials.tsv`` (session, run, onset, loc, cls: target/distractor/neutral × hp/lp at that location).
 
+``--root <ladder root> [fallback roots]`` (another voxel selection, e.g. ``..._relnull_r0.2_roihrf_polished``, which has only m4_TDS
+and m7_full): voxels, pRF centres and the bar prediction all come from that root's m7_full (all-data fit), the bar
+prediction with every gain set to 0 (the m0_prf model with m7_full's pRFs and HRF table). ``--no-reliability-filter``
+drops the reliability > 0 criterion, for roots whose selection already is a reliability criterion. Without these
+options nothing changes.
+
 Usage::
 
     python -m retsupp.visualize.paper.export_location_timeseries 23
+    python -m retsupp.visualize.paper.export_location_timeseries 23 \
+        --root af_prf_cv_ladder_nested_full_bounded_maxsd20_relnull_r0.2_roihrf_polished --no-reliability-filter \
+        --hrf-table /shares/zne.uzh/gdehol/ds-retsupp/derivatives/paper_2026-11/roi_hrf_dog_final2.tsv \
+        --subdir location_timeseries_relnull_r0.2_2026-11-12
 """
 from __future__ import annotations
 
@@ -29,10 +39,10 @@ LOC = {1.0: 0, 3.0: 1, 5.0: 2, 7.0: 3}   # events' location codes -> ring channe
 
 
 def main(subject, rois, bids, out_dir, subdir='location_timeseries', distance_bins=None, nearest_item_bins=None,
-         ladder_roots=None, hrf_table=None):
+         ladder_roots=None, hrf_table=None, root=None, reliability_filter=True):
     from braincoder.hrf import SPMHRFModel
     from retsupp.modeling.fit_af_prf_cv_v2 import build_data_and_paradigm, build_model, get_ring_positions
-    from retsupp.modeling.fit_cv_ladder_nested import bar_paradigm, sign_pattern_of
+    from retsupp.modeling.fit_cv_ladder_nested import GAINS, bar_paradigm, sign_pattern_of
     from retsupp.utils.data import Subject
     deriv = Path(bids) / 'derivatives'
     sub = Subject(subject, bids)
@@ -46,9 +56,12 @@ def main(subject, rois, bids, out_dir, subdir='location_timeseries', distance_bi
     if hrf_table:
         from retsupp.modeling.roi_hrf import hrf_model as roi_hrf_model, load_table
         table = load_table(hrf_table)
-    rel_all = pd.concat([pd.read_csv(f, sep='\t') for f in sorted(
-        (deriv / 'prf_cv_roi_reliability' / f'sub-{subject:02d}').glob('*_reliability.tsv.gz'))])
-    rel_all = rel_all.groupby('voxel_index').reliability.mean()
+    if reliability_filter:
+        rel_all = pd.concat([pd.read_csv(f, sep='\t') for f in sorted(
+            (deriv / 'prf_cv_roi_reliability' / f'sub-{subject:02d}').glob('*_reliability.tsv.gz'))])
+        rel_all = rel_all.groupby('voxel_index').reliability.mean()
+    else:   # the root's own selection: every voxel it fitted
+        rel_all = pd.Series(dtype=float)
     out = Path(out_dir) / subdir
     out.mkdir(parents=True, exist_ok=True)
 
@@ -74,13 +87,22 @@ def main(subject, rois, bids, out_dir, subdir='location_timeseries', distance_bi
     rows = []
     for roi in rois:
         try:
-            fit = load_fit(deriv, 'm0_prf', subject, roi)[0]
-            p7 = load_fit(deriv, 'm7_full', subject, roi)[0]['fit_pars_per_fold'][0]
+            if root:
+                fit = load_root_fit(deriv, root, 'm7_full', subject, roi)
+                p7 = fit['fit_pars_per_fold'][0]
+            else:
+                fit = load_fit(deriv, 'm0_prf', subject, roi)[0]
+                p7 = load_fit(deriv, 'm7_full', subject, roi)[0]['fit_pars_per_fold'][0]
         except FileNotFoundError as e:
             print('skip', roi, e, flush=True)
             continue
         ids = np.asarray(fit['voxel_ids'])
         p = fit['fit_pars_per_fold'][0]
+        if root:   # bar alone: m7_full's pRFs, every gain at 0 (= the m0_prf model)
+            p = p.copy()
+            p[[g for g in GAINS if g in p.columns]] = 0.
+        if not reliability_filter:
+            rel_all = pd.Series(1., index=ids)
         if hrf_table:
             hrf = roi_hrf_model(sub, roi, table)
         model = build_model(grid_coords=grid, paradigm=par, condition_indicator=ci, dynamic_indicator=di, target_indicator=ti,
@@ -145,6 +167,19 @@ def main(subject, rois, bids, out_dir, subdir='location_timeseries', distance_bi
     print('Saved', out, flush=True)
 
 
+def load_root_fit(deriv, roots, model, subject, roi):
+    """The fit from the first of ``roots`` that has it."""
+    import pickle
+    for root in ([roots] if isinstance(roots, str) else roots):
+        pkl = Path(root if Path(root).is_absolute() else deriv / root) / model / f'sub-{subject:02d}' / \
+            f'sub-{subject:02d}_roi-{roi}_cv-fits.pkl'
+        if pkl.exists():
+            print(roi, 'from', root, flush=True)
+            with open(pkl, 'rb') as f:
+                return pickle.load(f)
+    raise FileNotFoundError(f'{model} sub-{subject} {roi} in {roots}')
+
+
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('subject', type=int)
@@ -159,6 +194,11 @@ if __name__ == '__main__':
     ap.add_argument('--ladder-root', nargs='+', default=None,
                     help='ladder roots for the m0/m7 fits (first hit wins); default the earlier canonical-HRF fits')
     ap.add_argument('--hrf-table', default=None, help='one HRF per subject x ROI for the bar prediction (with --ladder-root)')
+    ap.add_argument('--root', nargs='+', default=None,
+                    help='ladder root(s) (name under derivatives or path; first hit wins): voxels, pRFs and the bar '
+                         'prediction (gains at 0) from m7_full; replaces --ladder-root')
+    ap.add_argument('--no-reliability-filter', action='store_true',
+                    help='keep every voxel of the fit (no cross-run reliability > 0 criterion)')
     a = ap.parse_args()
     main(a.subject, a.rois, a.bids_folder, a.out_dir, a.subdir, a.distance_bins, a.nearest_item_bins, a.ladder_root,
-         a.hrf_table)
+         a.hrf_table, a.root, not a.no_reliability_filter)
