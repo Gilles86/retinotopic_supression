@@ -246,6 +246,7 @@ LADDER_ROOTS = ()   # set by --ladder-root: use the gain-model ladder's m7_full 
 HRF_TABLE = None    # one HRF per subject x ROI (roi_hrf.load_table) for the ladder fits
 VOXELS = 'ladder'   # --voxels signal: the signal voxels of each ROI instead of the ladder fit's own voxels
 MAX_BOLD_SD = 20.0  # with --voxels signal, as in the final ladder fits
+MIN_VOXELS = 0      # --min-voxels: leave out a subject x ROI whose ladder fit has fewer voxels (0: keep all)
 SIGNAL_TABLE = 'af_prf_cv_ladder_nested/cv_ladder_per_voxel.tsv'
 JOINT_STEM = 'dog_final2_stage-3'   # DoG fold fits with the joint per-ROI HRF (the HRF table's source)
 GROUPS = {'early': ['V1', 'V2', 'V3'], 'dorsal': ['V3AB', 'IPS'],
@@ -368,6 +369,8 @@ def load_ladder_fit(sub, roi, data):
     if VOXELS == 'signal':
         vox, pars, info = extend_to_signal_voxels(sub, roi, model, pars, af['voxel_mask_indices'], bold, paradigm)
         af.update(voxel_mask_indices=vox, r2=np.array([np.nan]), voxel_info=info)
+    elif len(af['voxel_mask_indices']) < MIN_VOXELS:
+        raise NoFit(f"{roi}: only {len(af['voxel_mask_indices'])} voxels in the m7_full fit (< {MIN_VOXELS})")
     return af, model, pars
 
 
@@ -886,9 +889,9 @@ def fit_group(sub, group, pieces, rois, out_dir, trials):
 
 
 def main(subject, bids_folder, rois, output_subdir='af_trialwise_gains', hp_neutral=False, ladder_roots=(),
-         hrf_table=None, voxels='ladder', groups=False):
-    global LADDER_ROOTS, HRF_TABLE, VOXELS
-    VOXELS = voxels
+         hrf_table=None, voxels='ladder', groups=False, min_voxels=0):
+    global LADDER_ROOTS, HRF_TABLE, VOXELS, MIN_VOXELS
+    VOXELS, MIN_VOXELS = voxels, min_voxels
     if voxels == 'signal' and not ladder_roots:
         raise ValueError('--voxels signal needs --ladder-root')
     from retsupp.modeling.roi_hrf import load_table
@@ -959,6 +962,9 @@ if __name__ == '__main__':
     parser.add_argument('--groups', action='store_true',
                         help='Also one set of gains per ROI group (early, dorsal, occipitotemporal): a shared '
                              'deviation from each ROI\'s canonical gains.')
+    parser.add_argument('--min-voxels', type=int, default=0,
+                        help='With --voxels ladder: leave out a subject x ROI whose m7_full fit has fewer voxels '
+                             '(--voxels signal always needs 10).')
     args = parser.parse_args()
     main(args.subject, args.bids_folder, args.rois, args.output_subdir, args.hp_neutral, args.ladder_root,
-         args.hrf_table, args.voxels, args.groups)
+         args.hrf_table, args.voxels, args.groups, args.min_voxels)

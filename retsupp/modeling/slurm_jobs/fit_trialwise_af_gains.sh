@@ -17,6 +17,7 @@
 # LADDER_ROOT=<ladder root> HRF_TABLE=<tsv>: gains on top of the ladder's m7_full fits (final DoG inputs).
 # VOXELS=signal: each ROI's signal voxels instead of the ladder fit's voxels; POOL_GROUPS=1 adds early / dorsal /
 # occipitotemporal gains (shared deviations from each ROI's canonical gains). REPO=<clone> picks the code.
+# MIN_VOXELS=10 (with the ladder fit's own voxels): leave out subject x ROI fits with fewer voxels, as VOXELS=signal does.
 # Output: derivatives/af_trialwise_gains/sub-XX/
 
 set -eo pipefail
@@ -51,6 +52,6 @@ cd "${REPO:-$HOME/git/retsupp}"
     -m retsupp.modeling.fit_trialwise_af_gains "$subject" \
     --bids-folder /shares/zne.uzh/gdehol/ds-retsupp $ROI_ARGS $EXTRA \
     ${LADDER_ROOT:+--ladder-root $LADDER_ROOT} ${HRF_TABLE:+--hrf-table $HRF_TABLE} \
-    ${VOXELS:+--voxels $VOXELS} ${POOL_GROUPS:+--groups}
+    ${VOXELS:+--voxels $VOXELS} ${POOL_GROUPS:+--groups} ${MIN_VOXELS:+--min-voxels $MIN_VOXELS}
 
 echo "Finished: $(date)"
