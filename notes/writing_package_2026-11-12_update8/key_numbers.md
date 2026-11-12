@@ -120,7 +120,6 @@ Sources (new):
 See UPDATE_NOTES.md, "Not regenerated".
 
 ## Behaviour: accuracy per condition (new, final; same text as in the status update)
-## Accuracy per condition (fills the TODO in the behaviour paragraph)
 
 Source: `notes/data/behaviour_accuracy_n28_2026-11-12.tsv`, from `retsupp/visualize/paper/behaviour_accuracy.py`.
 
