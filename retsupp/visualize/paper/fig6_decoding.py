@@ -1641,7 +1641,7 @@ Gain-field model: per subject and run, the BOLD of V1–V3 was simulated from th
 
 
 def plot_v10(name='fig6_decoding_v10', source='jointhrf', decoder=DECODER, prediction='decode_simfit', supp_suffix='',
-             ecc_name=None):
+             ecc_name=None, v11=False):
     """Condensed Fig. 6: a (4 frames) | b; c maps (data | model) + slim sweep | d quadrants; e pathway-pooled contrast.
     Eccentricity panel and per-area values go to supplementary figures (``figS_decoding_eccentricity``,
     ``figS_decoding_hp_per_area`` with BH q of the d-normalised contrast)."""
@@ -1672,46 +1672,71 @@ def plot_v10(name='fig6_decoding_v10', source='jointhrf', decoder=DECODER, predi
     per, pw = pathway_effects(d, decoder)
     ast = area_stats(per, pw)
 
-    W, H = DOUBLE, 6.3
+    # v11: row 3 spans the width (pathways pooled, then every area); axes bottoms aligned within rows 1 and 2
+    L = (dict(H=6.5, t1=6.37, fr=(.62, 4.75, 2.3, 1.42), b=(3.75, 4.75, 3.25, 1.2), t2=4.22, c=2.95, cb=2.72, t3=2.0,
+              e=(.72, .52, 6.28, 1.15)) if v11 else
+         dict(H=6.3, t1=6.17, fr=(.62, 4.38, 2.3, 1.52), b=(3.75, 4.72, 3.25, 1.15), t2=4.12, c=None, cb=2.42, t3=1.78,
+              e=(.72, .5, 2.4, 1.05)))
+    W, H = DOUBLE, L['H']
     fig = plt.figure(figsize=(W, H))
     # Row 1
-    fig.text(.02 / W, 6.17 / H, 'a', fontsize=8, fontweight='bold', va='center')
-    fig.text(.2 / W, 6.17 / H, 'Bar decoded from held-out runs', fontsize=7.5, color=STIM, va='center')
-    panel_frames(fig, (.62, 4.38, 2.3, 1.52), frames, W, H, style='magma', times=[15, 28, 72, 89],
+    fig.text(.02 / W, L['t1'] / H, 'a', fontsize=8, fontweight='bold', va='center')
+    fig.text(.2 / W, L['t1'] / H, 'Bar decoded from held-out runs', fontsize=7.5, color=STIM, va='center')
+    frame_axes = panel_frames(fig, L['fr'], frames, W, H, style='magma', times=[15, 28, 72, 89],
                  labels=('Bar', f'Best run\nr = {ex_r:.2f}'.replace('0.', '.'), f'Mean\n(n = {n_group})'))
-    ax = fig.add_axes([3.75 / W, 4.72 / H, 3.25 / W, 1.15 / H])
+    bx, by, bw, bh = L['b']
+    ax = fig.add_axes([bx / W, by / H, bw / W, bh / H])
     panel_quality_v10(ax, qs, pq, rois)
+    ax_b = ax
     letter(ax, 'b', x=-.14, y=1.04)
     # Row 2
-    fig.text(.02 / W, 4.12 / H, 'c', fontsize=8, fontweight='bold', va='center')
-    fig.text(.2 / W, 4.12 / H, 'Lower intensity facing HP (V1–V3 pooled)', fontsize=7.5, color=HP, va='center')
-    ax = fig.add_axes([.05 / W, 2.62 / H, 1.05 / W, 1.05 / H])
+    fig.text(.02 / W, L['t2'] / H, 'c', fontsize=8, fontweight='bold', va='center')
+    fig.text(.2 / W, L['t2'] / H, 'Lower intensity facing HP (V1–V3 pooled)', fontsize=7.5, color=HP, va='center')
+    yc = L['c'] if v11 else 2.62
+    ax = fig.add_axes([.05 / W, yc / H, 1.05 / W, 1.05 / H])
+    row2 = [ax]
     im = panel_map(ax, rm, tag=False, cmap=MAP_CMAP, diag=('.3', .6, ':'), lp_label=True)
     ax.text(.5, 1.0, 'Data', transform=ax.transAxes, fontsize=6.5, color='.3', ha='center', va='bottom')
-    ax2 = fig.add_axes([1.17 / W, 2.62 / H, 1.05 / W, 1.05 / H])
+    ax2 = fig.add_axes([1.17 / W, yc / H, 1.05 / W, 1.05 / H])
+    row2.append(ax2)
     panel_map(ax2, pred[3]['rm'], label='', tag=False, cmap=MAP_CMAP, diag=('.3', .6, ':'))
     ax2.text(.5, 1.0, 'Gain-field model', transform=ax2.transAxes, fontsize=6.5, color=FG, ha='center', va='bottom')
     mo, ins_ = smoothed_map(rm)
     mm = smoothed_map(pred[3]['rm'])[0]
     ok = ins_ & np.isfinite(mo) & np.isfinite(mm)
     map_r = float(np.corrcoef(mo[ok], mm[ok])[0, 1])
-    cax = fig.add_axes([.62 / W, 2.42 / H, 1.0 / W, .06 / H])
+    cax = fig.add_axes([.62 / W, L['cb'] / H, 1.0 / W, .06 / H])
     cb = fig.colorbar(im, cax=cax, orientation='horizontal', ticks=[-3, 0, 3])
     cb.ax.set_xticklabels(['−3', '0', '3'], fontsize=6)
     cb.ax.tick_params(length=2, width=.5, pad=1)
     cb.outline.set_linewidth(.4)
     cb.ax.set_xlabel('Decoded intensity (% vs mean)', fontsize=6.5, labelpad=2)
-    ax = fig.add_axes([2.95 / W, 2.98 / H, 2.1 / W, .72 / H])
+    ax = fig.add_axes([2.95 / W, (L['c'] if v11 else 2.98) / H, 2.1 / W, .72 / H])
+    row2.append(ax)
     sweep_stats = panel_sweep_slim(ax, source, pred[2])
     glyph_key(ax, [('Gain-field model', 'line', FG, '-'), ('Data', 'point', FG, None)], x=.0, y=1.13, dx=.42)
-    ax = fig.add_axes([5.62 / W, 3.0 / H, 1.42 / W, .7 / H])
+    ax = fig.add_axes([5.62 / W, (L['c'] if v11 else 3.0) / H, 1.42 / W, .72 / H])
+    row2.append(ax)
     panel_quadrants_v10(ax, qe, qst, pred[0])
     letter(ax, 'd', x=-.36, y=1.08)
     # Row 3
-    fig.text(.02 / W, 1.78 / H, 'e', fontsize=8, fontweight='bold', va='center')
-    fig.text(.2 / W, 1.78 / H, 'Beyond V1–V3: occipitotemporal, not dorsal', fontsize=7.5, color=HP, va='center')
-    ax = fig.add_axes([.72 / W, .5 / H, 2.4 / W, 1.05 / H])
-    panel_pathways_v10(ax, per, ast)
+    fig.text(.02 / W, L['t3'] / H, 'e', fontsize=8, fontweight='bold', va='center')
+    fig.text(.2 / W, L['t3'] / H, ('Pooled beyond V1–V3: occipitotemporal, not dorsal' if v11 else
+                                    'Beyond V1–V3: occipitotemporal, not dorsal'), fontsize=7.5, color=HP, va='center')
+    ex_, ey_, ew_, eh_ = L['e']
+    ax = fig.add_axes([ex_ / W, ey_ / H, ew_ / W, eh_ / H])
+    if v11:
+        panel_areas_v11(ax, per, ast)
+    else:
+        panel_pathways_v10(ax, per, ast)
+    if v11:   # check: bottoms of the axes boxes within rows 1 and 2 (inches)
+        fig.canvas.draw()
+        bot = lambda a_: a_.get_window_extent().y0 / fig.dpi   # noqa: E731
+        print('row 1 bottoms a / b', round(min(bot(a_) for a_ in frame_axes), 3), round(bot(ax_b), 3))
+        print('row 2 bottoms', [round(bot(a_), 3) for a_ in row2])
+        for a_ in [ax_b, row2[3], ax]:
+            bb = a_.get_window_extent()
+            print('box w x h', round(bb.width / fig.dpi, 2), round(bb.height / fig.dpi, 2))
     boxes = {}
     for a_ in fig.axes:
         bb = a_.get_window_extent()
@@ -1735,6 +1760,14 @@ def plot_v10(name='fig6_decoding_v10', source='jointhrf', decoder=DECODER, predi
                             n_runs=len(qf), r_med=qf.r.median(), ap=APERTURE, quality=quality, map_r=f2(map_r).lstrip('+'),
                             sweep_stats=sweep_stats, q_lr=qst['p_lr'], quad=qst['text'], pathways=pw_txt,
                             n_dorsal=ast['pooled']['Dorsal']['n'], pred_numbers=pt)
+    if v11:
+        old = (' Per-area values with Benjamini-Hochberg q are in Supplementary Fig. S (decoded intensity at HP per area); '
+               'individually, only V2 and V3 reach q < .05.')
+        assert old in leg
+        leg = leg.replace(old, ' Right, every area (mean ± SEM over the subjects that have it), grouped by pathway; the '
+                          'same test, Benjamini-Hochberg across the nine areas, stars and q only where q < .05: '
+                          + area_text(per, ast).split('Per area: ')[1] + '.')
+        leg = leg.replace(' e, The contrast of d (HP minus', ' e, Left, the contrast of d (HP minus')
     save(fig, name, leg)
     print('map r', round(map_r, 3))
     print('pathways', pw_txt)
@@ -1756,6 +1789,59 @@ def plot_v10(name='fig6_decoding_v10', source='jointhrf', decoder=DECODER, predi
     test_figure(e, t, rois, decoder, t_out, d_text, f'figS_decoding_hp_per_area{supp_suffix}')
     plot_eccentricity(ecc_name or f'figS_decoding_eccentricity{supp_suffix}', source, decoder, pred[1])
     return fig
+
+
+def panel_areas_v11(ax, per, ast):
+    """Row 3 (v11), full width: the pathways pooled (Early, Occipitotemporal, Dorsal; subject dots, mean ± SEM, stars and
+    exact one-sided p), then every area grouped by pathway (mean ± SEM; stars and q for BH q < .05). One data colour."""
+    from retsupp.visualize.paper.paper_style import FG, HP, ROI_X, offset_spines, roi_axis
+    rng = np.random.default_rng(5)
+    lo, hi = -8, 9.5
+    pooled_x = {'Early': -8.2, 'Occipitotemporal': -5.6, 'Dorsal': -3.0}
+    for k, x in pooled_x.items():
+        d = ast['pooled'][k]
+        ax.scatter(x - .35 + rng.uniform(-.3, .3, d['n']), d['v'], s=6, color=HP, alpha=.35, lw=0, zorder=2)
+        ax.errorbar(x + .4, d['m'], yerr=d['se'], fmt='o', ms=4.5, color=HP, mec='w', mew=.7, lw=1.3, capsize=0,
+                    zorder=4)
+        lab = (stars(d['p']) + '\n' if d['p'] < .05 else '\n') + f'p = {d["p"]:.3f}'.replace('0.', '.')
+        ax.text(x, hi, lab, ha='center', va='top', fontsize=6.5, color=FG, linespacing=1.)
+    ax.axvline(-1.3, color='.85', lw=.6, zorder=0)
+    sig = []
+    for r, d in ast['area'].items():
+        ax.errorbar(ROI_X[r], d['m'], yerr=d['se'], fmt='o', ms=4, color=HP, mec='w', mew=.6, lw=1.1, capsize=0,
+                    zorder=4)
+        if d['q'] < .05:
+            sig.append((r, d))
+            ax.text(ROI_X[r], hi, stars(d['q']), ha='center', va='top', fontsize=7, color=FG)
+    if sig:
+        qs_ = sorted({f'{d["q"]:.3f}' for _, d in sig})
+        ax.text(np.mean([ROI_X[r] for r, _ in sig]), hi - 1.7, ('q = ' + ', '.join(qs_)).replace('0.', '.'),
+                ha='center', va='top', fontsize=6.5, color=FG)
+    ax.axhline(0, color='.85', lw=.6, zorder=0)
+    ax.set_ylim(lo, hi)
+    ax.set_yticks([-6, -3, 0, 3])
+    ax.set_yticklabels(['−6', '−3', '0', '3'])
+    ax.set_ylabel(EFFECT_LABEL, fontsize=7)
+    roi_axis(ax, rotate=False, fontsize=6.5, group_fontsize=6.5)
+    xs = list(pooled_x.values()) + [ROI_X[r] for r in ROI_ORDER_ALL]
+    ax.set_xticks(xs)
+    ax.set_xticklabels(['Early', 'Occipitotemporal', 'Dorsal'] + ROI_ORDER_ALL, fontsize=6.5)
+    ax.set_xlim(-9.6, ROI_X['TO'] + .6)
+    import matplotlib.transforms as mtrans
+    from retsupp.visualize.paper.paper_style import MUTED
+    # same bracket as roi_axis's pathway names, at the height of those names
+    gt = [t_ for t_ in ax.texts if t_.get_text() == 'Early' and t_.get_color() in ('.4', (0.4, 0.4, 0.4, 1.0))]
+    fig = ax.figure
+    fig.canvas.draw()
+    inv = ax.transAxes.inverted()
+    bottom = min(inv.transform((0, t_.get_window_extent().y0))[1] for t_ in ax.get_xticklabels() if t_.get_text())
+    tr = mtrans.blended_transform_factory(ax.transData, ax.transAxes)
+    off = mtrans.offset_copy(tr, fig=fig, y=-3, units='points')
+    ax.plot([-9.0, -2.2], [bottom] * 2, transform=off, color=MUTED, lw=.7, clip_on=False, solid_capstyle='butt')
+    ax.text(-5.6, bottom, 'Pathways pooled', transform=mtrans.offset_copy(tr, fig=fig, y=-4.5, units='points'),
+            ha='center', va='top', fontsize=6.5, color='.4', clip_on=False)
+    ax.tick_params(axis='x', length=0)
+    offset_spines(ax)
 
 
 def plot_eccentricity(name, source='jointhrf', decoder=DECODER, pred=None):
@@ -2054,6 +2140,7 @@ if __name__ == '__main__':
                     help="f: the HP − other quadrants contrast of d per pathway; '--pathways areas': pooled columns "
                          "first, then every area (BH across the nine)")
     ap.add_argument('--v10', action='store_true', help='condensed Fig. 6 (plot_v10) and its supplements')
+    ap.add_argument('--v11', action='store_true', help='with --v10: row 3 full width, row bottoms aligned')
     ap.add_argument('--ecc-name', default=None, help='v10: name of the eccentricity supplement')
     ap.add_argument('--sweep-opposite', action='store_true',
                     help='c: the opposite-quadrant segment as a third line and icons of the quadrants each half crosses')
@@ -2073,7 +2160,7 @@ if __name__ == '__main__':
         plot_bar_crossing(name='figS_bar_crossing_response' + a.supp_suffix, source_note='')
     elif a.v10:
         plot_v10(a.name, a.source, a.decoder, prediction=a.prediction or 'decode_simfit', supp_suffix=a.supp_suffix,
-                 ecc_name=a.ecc_name)
+                 ecc_name=a.ecc_name, v11=a.v11)
     else:
         plot(a.name, a.source, a.rois, a.decoder, source_note=f'pRFs: {a.source} fold fits.', frames_style=a.frames_style, v3=a.v3, sweep=a.sweep,
              prediction=a.prediction, pathways=a.pathways, sweep_opposite=a.sweep_opposite)
