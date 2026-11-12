@@ -540,9 +540,10 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
     d = js['dog']
     n = d.subject.nunique()
     layout = layout or ('v7' if compact else 'v6')
-    compact = layout in ('v7', 'v8', 'v9')
-    v9 = layout == 'v9'
-    v8 = layout in ('v8', 'v9')        # v9: the v8 layout and parameters, in percent, sustained block as HP − LP maps
+    compact = layout in ('v7', 'v8', 'v9', 'v10')
+    v10 = layout == 'v10'      # v10: v9 with panel c led by the all-areas pooled estimate
+    v9 = layout in ('v9', 'v10')
+    v8 = layout in ('v8', 'v9', 'v10')        # v9: the v8 layout and parameters, in percent, sustained block as HP − LP maps
     p = map_parameters(gain_table, cond=cond if v8 else None)
 
     from retsupp.visualize.paper.fig7_behaviour import icons, row
@@ -634,6 +635,8 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
     if v9:
         F.dot_panel(ax, [(cond.assign(dS=cond.dS * 100), 'dS', HP, None)], (-12, 6), 'HP − LP (%)')
         ax.set_yticks([-10, -5, 0, 5])
+        if v10:
+            pooled_c = pooled_all_areas(ax, cond, (-12, 6))
     else:
         F.dot_panel(ax, [(cond, 'dS', HP, None)], (-.12, .06), 'Gain, HP − LP')
         ax.set_yticks([-.1, 0, .05])
@@ -722,17 +725,76 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
     legend = legend.replace('-0.', '−0.')
     if v9:
         legend = percent_legend(legend, p, n, dmin)
+    if v10:
+        legend = pooled_legend(legend, pooled_c)
     save(fig, f'fig5_gain_fields_{layout}' + suffix, legend)
     print('scales:', scales, 'per-area sustained:', per_area_sustained)
     print(p.loc[AREAS].round(4).to_string())
     if not compact:
         search_figure(p, n, suffix)
-    if v9:
+    if layout == 'v9':
         search_figure_v2(p, n, suffix)
     (p if v8 else p.drop(columns='dS_map')).to_csv(
         f'notes/data/fig5_gain_field_map_parameters{suffix}_2026-11-12{"_" + layout if v8 else ""}.tsv', sep='\t',
              float_format='%.5f')
     return p
+
+
+POOL_X = -1.85      # x position of the all-areas estimate in panel c (left of V1, past a divider)
+
+
+def pooled_all_areas(ax, cond, ylim):
+    """Panel c (v10): the all-areas pooled estimate first and larger. Per participant the median dS over the nine areas
+    (as sensitivity_excl_subjects.pooled and key_numbers), then the median over participants with its bootstrapped 95%
+    CI, subject dots, Wilcoxon; the nine areas stay as they are, to the right of a thin divider."""
+    from retsupp.visualize.paper.fig7_behaviour import XP, XMAX
+    from retsupp.visualize.paper.fig45_common import median_ci
+    lo, hi = ylim
+    s = cond.groupby('subject').dS.median().dropna() * 100
+    m, a, b = median_ci(s.to_numpy())
+    p = stats.wilcoxon(s).pvalue
+    k = int((s < 0).sum())
+    v = s.to_numpy()
+    xx = POOL_X + np.random.default_rng(99).uniform(-.22, .22, len(v))
+    ok = (v >= lo) & (v <= hi)
+    ax.scatter(xx[ok], v[ok], s=7, color=HP, alpha=.35, lw=0, zorder=1)
+    ax.scatter(xx[v < lo], np.full((v < lo).sum(), lo), s=8, marker='v', color=HP, alpha=.5, lw=0, clip_on=False)
+    ax.scatter(xx[v > hi], np.full((v > hi).sum(), hi), s=8, marker='^', color=HP, alpha=.5, lw=0, clip_on=False)
+    ax.errorbar(POOL_X, m, yerr=[[m - a], [b - m]], fmt='o', ms=7, color=HP, mec='w', mew=.8, lw=2.0, capsize=0,
+                zorder=5)
+    ax.text(POOL_X, hi + .02 * (hi - lo), F.stars(p), ha='center', va='bottom', fontsize=8.5, color=HP, clip_on=False)
+    ax.text(POOL_X + .38, m, f'{k}/{len(v)}', fontsize=6, color=HP, ha='left', va='center', zorder=6,
+            path_effects=[pe.withStroke(linewidth=1.5, foreground='w')])
+    ax.axvline(-.95, color='.85', lw=.6, zorder=0)
+    ax.hlines(0, POOL_X - .6, -.6, color='.75', lw=.6, ls='--', zorder=0)
+    ax.set_xlim(POOL_X - .6, XMAX + .6)
+    ticks = [POOL_X] + list(ax.get_xticks())
+    labels = ['All\nareas'] + [t.get_text() for t in ax.get_xticklabels()]
+    ax.set_xticks(ticks)
+    ax.set_xticklabels(labels, fontsize=6)
+    ax.get_xticklabels()[0].set_fontweight('bold')
+    ax.get_xticklabels()[0].set_color(HP)
+    return dict(median=m, lo=a, hi=b, k=k, n=len(v), p=p)
+
+
+def pooled_legend(legend, pc):
+    """v10 legend: panel c's sentence led by the all-areas pooled estimate, plus the groups (dS_pooled_by_pathway)."""
+    g = pd.read_csv('notes/data/dS_pooled_by_pathway_n28_2026-11-12.tsv', sep='\t').set_index('group')
+    def grp(name, lab):
+        r = g.loc[name]
+        return f"{lab} {r.median_pct:+.1f}% (q = {r.q_BH3:.3f})".replace('-', '−').replace('= 0.', '= .')
+    mant, ex = f"{pc['p']:.1e}".split('e-')
+    pexp = f"{mant} × 10" + ''.join('⁰¹²³⁴⁵⁶⁷⁸⁹'[int(c)] for c in str(int(ex))).join(['⁻', ''])
+    txt = (f"c, leftmost and larger: all areas pooled (per participant the median dS over the nine areas; median over "
+           f"participants {pc['median']:+.1f}% [{pc['lo']:+.1f}, {pc['hi']:+.1f}], negative in {pc['k']} of {pc['n']} "
+           f"participants, Wilcoxon p = {pexp}); the claim rests on this pooled effect, consistent across "
+           f"participants, rather than on any single area. Present in early and occipitotemporal areas, not reliable "
+           f"in dorsal areas (the same pooling per pathway, BH across the three: "
+           f"{grp('Early', 'early')}, {grp('Dorsal', 'dorsal')}, {grp('Occipitotemporal', 'occipitotemporal')}). "
+           f"Right of the divider, the nine areas as before: ").replace('+-', '−').replace('-', '−')
+    i = legend.find(' c, ')
+    assert i >= 0, 'panel c sentence not found'
+    return legend[:i + 1] + txt + legend[i + 4:]
 
 
 def to_pct(m):
@@ -949,7 +1011,7 @@ if __name__ == '__main__':
     ap.add_argument('--sustained-scale', choices=['auto', 'shared', 'per-area'], default='auto')
     ap.add_argument('--compact', action='store_true', help='v7: panel a in two rows (sustained; target + distractor '
                     'transient fields in one map), smaller panels; writes fig5_gain_fields_v7')
-    ap.add_argument('--layout', choices=['v6', 'v7', 'v8', 'v9'], default=None, help='v8: panel a as one row of six maps '
+    ap.add_argument('--layout', choices=['v6', 'v7', 'v8', 'v9', 'v10'], default=None, help='v8: panel a as one row of six maps '
                     'over the full width, keys under the blocks, sustained HP − LP = dS estimated alone (panel c); '
                     'writes fig5_gain_fields_v8 and the parameter table with suffix _v8')
     a = ap.parse_args()
