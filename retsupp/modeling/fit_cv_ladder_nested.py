@@ -838,8 +838,15 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
         stages = [('clamped', n) for n in needed]
         if warm_polish_root:
             # Only the all-free fits of the named models, each started from the earlier polished fit (no clamped
-            # chain): see warm_polish_init.
-            stages = []
+            # chain): see warm_polish_init. Where that root has no fit of this subject and area (no voxels in its
+            # selection), the full chain is run instead, from the whole-brain pRFs as without the option.
+            have = [(Path(warm_polish_root) / n / f'sub-{subject:02d}' / f'sub-{subject:02d}_roi-{roi}_cv-fits.pkl'
+                     ).exists() for n in polish_models]
+            if all(have):
+                stages = []
+            else:
+                print(f'No warm-start fit of {roi} in {warm_polish_root}: running the full chain')
+        use_warm = warm_polish_root and not stages
         if polish:
             # --polish-models restricts the all-free pass to these models (each from its own clamped optimum)
             stages += [('polish', n) for n in needed if not polish_models or n in polish_models]
@@ -967,7 +974,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                     free_pv = [p for p in labels
                                if p not in shared and p not in fixed]
                     warm_info = None
-                    if warm_polish_root:
+                    if use_warm:
                         init, warm_info = warm_polish_init(name, k, m_tr, y_tr, train['paradigm'], sp, item_scale)
                     else:
                         init = fits[name][k].reindex(columns=labels)
@@ -1158,7 +1165,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                                 gd_iterations=gd_iterations, stage=stage,
                                 bounded=bounded, loss=loss, hp_rotation=hp_rotation,
                                 selection_table=selection_table, min_r=min_r, max_p=max_p,
-                                warm_polish_root=warm_polish_root,
+                                warm_polish_root=warm_polish_root if use_warm else None,
                                 optimizer_info=infos))
             with open(pkl, 'wb') as f:
                 pickle.dump(dict(fit_pars_per_fold=fold_pars, parent=parent,
