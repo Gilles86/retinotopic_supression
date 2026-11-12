@@ -13,9 +13,9 @@ It applies on top of update 7.
 
 ## A. New Fig. 6, decoding (ready; replaces the current Fig. 6)
 
-Files: `figures/fig6_decoding_v10_n28.{pdf,png,md}`, 180 mm × 6.3 in. The `.md` is the full caption with every number.
-Row 3 has space on the right for a decoder on pooled dorsal and occipitotemporal voxels. That decoder runs tonight and
-will be added in a later version; the panels described here keep their letters.
+Files: `figures/fig6_decoding_v11_n28.{pdf,png,md}`, 180 mm × 6.5 in. The `.md` is the full caption with every number.
+Decoders on pooled dorsal and occipitotemporal voxels run tonight. If they are worth showing, row 3 will be laid out
+again; the letters a–e stay.
 
 The figure's argument, row by row:
 
@@ -36,20 +36,22 @@ The figure's argument, row by row:
   - **d: quadrant readout** with the model prediction. Observed: HP −1.02 ± 0.38%, next to HP +0.57 ± 0.17%,
     opposite −0.12 ± 0.24% (mean ± SEM), HP < next one-sided p = .004. Predicted: HP −0.91%, next +0.19%,
     opposite +0.53%.
-- **Row 3, "Beyond V1–V3: occipitotemporal, not dorsal" (e).** HP − other three quadrants, pooled per pathway.
+- **Row 3, "Pooled beyond V1–V3: occipitotemporal, not dorsal" (e).** HP − other three quadrants. Left: pooled per
+  pathway. Right: each of the nine areas, grouped by pathway.
   - Early −1.35 ± 0.51% (p = .010)
   - Occipitotemporal −1.06 ± 0.41% (p = .006)
   - Dorsal −0.12 ± 0.75% (p = .56, n = 24)
 
-  All areas pooled: −1.14 ± 0.39%, p = .003. One-sided Wilcoxon tests, same normalisation as d.
+  All areas pooled: −1.14 ± 0.39%, p = .003. Per area (BH across the nine areas), only V2 (−1.68 ± 0.73%) and V3
+  (−1.62 ± 0.59%) reach q = .033; all other areas have q ≥ .18. V3AB, hV4 and VO are as large as V2 and V3 but noisier.
+  One-sided Wilcoxon tests, same normalisation as d.
 
 **Moved to the supplement:**
 
 - `figures/figS_decoding_eccentricity_n28`: the check against the items outside the aperture. The effect does not grow
   toward the aperture edge, and the model predicts the same smooth rise. Cite it in one sentence.
-- `figures/figS_decoding_hp_per_area_v10_n28`: per-area values with BH correction across nine areas.
-  - V2 and V3 reach q = .033.
-  - V3AB −1.59% (p = .080), hV4 −1.76% (p = .105) and VO −3.62% (p = .065, n = 10) are as large but noisier.
+- `figures/figS_decoding_hp_per_area_v10_n28`: the per-area test with both decoders, and the per-area values with
+  their exact p and q (the same values as in e, right).
 - `figures/figS_decoding_sweep_per_area_n28`: the sweep and maps for every area. The pattern is clear in V2 and V3;
   higher areas are too noisy per area.
 
