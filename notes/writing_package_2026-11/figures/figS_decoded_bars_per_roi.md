@@ -1,9 +1,0 @@
-**Figure S. Decoded bars minus their mean over HP locations, per ROI.** As the decoded-bars figure (decoder with the bar
-outline given; pRFs: jointhrf fold fits; HP rotated to the upper right in 90° steps), per ROI, with horizontal bars
-reflected across the diagonal through HP onto vertical ones (a symmetry of the rotated display that keeps HP in place),
-for the bar positions with the bar inside the aperture (11 bins in total); difference in % of the mean decoded
-intensity on the bar, on the bar's footprint, smoothed (σ = 0.2°), mean over subjects (n per ROI at the left; an ROI
-was skipped for a subject with fewer than 20 usable voxels). Right: per ROI, for bars on HP's side (centre 0.4–1.5°) the
-difference on the half of the bar in the quadrant facing HP minus that on the other half, and for bars on the far side
-(centre −1.5 to −0.4°) the half in the quadrant next to HP (upper left) minus the half in the opposite quadrant; mean and 95% CI over subjects; two-sided Wilcoxon signed-rank test,
-Benjamini-Hochberg across the nine ROIs per contrast (* q < .05). HP-quadrant / next-to-HP: V1 -0.78% (95% CI ± 1.48, p = 0.477, q = 0.957) / +0.81% (± 1.40, p = 0.237, q = 0.355); V2 -1.68% (95% CI ± 1.36, p = 0.023, q = 0.105) / +0.69% (± 1.21, p = 0.309, q = 0.397); V3 -2.71% (95% CI ± 1.54, p = 0.001, q = 0.011) / +1.62% (± 1.62, p = 0.028, q = 0.250); V3AB -1.64% (95% CI ± 1.99, p = 0.164, q = 0.493) / +0.89% (± 2.04, p = 0.220, q = 0.355); IPS -1.19% (95% CI ± 4.23, p = 0.860, q = 0.967) / +2.23% (± 2.28, p = 0.113, q = 0.340); hV4 -0.92% (95% CI ± 2.56, p = 0.579, q = 0.957) / -0.18% (± 2.52, p = 0.898, q = 0.898); VO +2.64% (95% CI ± 6.43, p = 0.638, q = 0.957) / +2.55% (± 2.76, p = 0.083, q = 0.340); LO +0.26% (95% CI ± 1.99, p = 0.798, q = 0.967) / +0.13% (± 2.10, p = 0.882, q = 0.898); TO +0.46% (95% CI ± 2.30, p = 0.991, q = 0.991) / +1.56% (± 2.61, p = 0.194, q = 0.355).

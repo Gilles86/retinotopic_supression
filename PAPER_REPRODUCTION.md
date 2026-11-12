@@ -1,6 +1,6 @@
 # Reproducing the retsupp paper
 
-Paper result → code map for the n = 28 manuscript (writing package `notes/writing_package_2026-11-12/`; sub-01 and
+Paper result → code map for the n = 28 manuscript (numbers in `notes/writing_package_2026-11-12_update4_final/key_numbers.md`, figures in `notes/figures/paper_2026-11/`; sub-01 and
 sub-02 are left out). Every number in that package's `key_numbers.md` names its source table; this file names the
 code. Code and notes that the paper does not need were moved to `archive/paper_cleanup_2026-11-12/` (see its README).
 
