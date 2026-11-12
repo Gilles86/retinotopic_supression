@@ -5,8 +5,8 @@
 #SBATCH --exclude=u24-chaihm0-633
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=8G
-#SBATCH --time=03:00:00
+#SBATCH --mem=16G           # canary sub-03 (LO, hippocampus, 1444-1500 voxels): OOM at 8 GB after 2 of 3 folds
+#SBATCH --time=02:30:00      # canary: ~25 min per fold, CPU efficiency 70 % on 8 CPUs
 #
 # Side project (hippocampus): cross-validated pRFs in one region, one task per subject (array id = subject).
 #   cd ~/retsupp_side_hpc && REGION=hippocampus VARIANT=true sbatch --array=3-30 retsupp/side_hippocampus/slurm_jobs/fit_prf_cv_region.sh
