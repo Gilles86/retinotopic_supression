@@ -42,3 +42,34 @@ areas."
 
 Source: `notes/data/fig3_location_per_area_n28_2026-11-12.tsv` (per-participant values in
 `notes/data/fig3_location_per_area_values_n28_2026-11-12.tsv`); code `retsupp/visualize/paper/fig3_location_per_area.py`.
+
+## Fig. 3 robustness and the ordered test (2026-11-12; n = 28)
+
+Sources: `notes/fig3_robustness_2026-11-12.md`, `notes/data/fig3_robustness_n28_2026-11-12.tsv`,
+`notes/data/fig3_location_ordered_tests_n28_2026-11-12.tsv`. New supplementary figure
+`figures/figS_item_locations_per_area_abs_n28` (absolute units, one panel, shared axis) — prefer it over
+`figS_item_locations_per_area_n28` (relative units) for the per-area supplement.
+
+- **Ordered test (predicted gradient HP < next to HP < opposite; Page's L).** Early visual cortex p = .0016; per area
+  q < .05 in V1 (.017), V2 (.015) and TO (.020) (BH over nine areas); all areas p = .008. The unordered location-type
+  ANOVA was significant only in V1. Describe the order as the predicted gradient (a gain field centred on HP falls off
+  with distance; Richter et al. found the same gradient); the test is carried mainly by HP vs opposite (only 9–12 of 28
+  participants show the full order).
+- **Absolute units (% signal change, no division by the participant's mean response, nobody excluded).** HP − opposite:
+  early −0.11% [−0.13, −0.06], 20/28, p = .005 (Page p = .0016); V1 −0.08 (q = .030), V2 −0.06 (q = .030), TO −0.13
+  (q = .041). No single participant decides the result (leave-one-out max p = .025).
+- **Next − opposite** is weaker in absolute units (early p = .038, q = .11) and not reliable in any single area: present
+  it as a trend supported by the ordered test, not as a finding on its own.
+- **Few voxels in higher areas.** Voxels are selected by a pRF centre within 2° of an item location (and reliable
+  across runs). Few pRFs are centred on the small item locations, especially in higher areas with large pRFs: the
+  median count at a participant's sparsest location is 7–12 voxels in V1–V3 but 1–2 in IPS, hV4, VO, LO and TO. So
+  per-area results in higher areas (incl. TO) rest on very few voxels; claim early visual cortex (and V1, V2), mention
+  TO with this caveat. Early visual cortex survives a floor of ≥ 5 and ≥ 10 voxels per location (≥ 5: p = .001).
+
+**Suggested wording.**
+- Results (Fig. 3): "Tested for the predicted gradient (HP < next to HP < opposite; Page's L), the location effect was
+  reliable in early visual cortex (p = .0016) and in V1 and V2 separately (q ≤ .02). In absolute units the effect was
+  the same (early visual cortex, HP − opposite −0.11% signal change, p = .005)."
+- Methods or Results caveat: "Because voxels were selected by a pRF centred within 2° of an item location, and few
+  pRFs in higher visual areas are centred on these small locations, per-area estimates outside early visual cortex
+  rest on few voxels (median 1–2 per location) and are reported for completeness only."

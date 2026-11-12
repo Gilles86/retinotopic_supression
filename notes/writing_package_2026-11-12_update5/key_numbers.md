@@ -522,3 +522,10 @@ non-spatial per-trial amplitude changes, so the target and distractor gains inde
 ## Counts (k of n) for every pooled share (2026-11-12)
 
 See `counts_k_of_n_n28.md` in this package: k / n for every share above, from the per-participant tables (`notes/data/update2_numbers_n28_2026-11-12.tsv`). One correction: the Gaussian joint dS is 19/28 = 68% < 0 (was written 67%).
+
+
+## Fig. 3 robustness and ordered test (2026-11-12; n = 28; `notes/fig3_robustness_2026-11-12.md`)
+- Page's L (HP < next < opposite): early p = .0016 (q = .005 over three pathways); V1 p = .0038 (q = .017), V2 .0016 (.015), TO .0068 (.020), V3 .031 (.069); all areas p = .008 (`notes/data/fig3_location_ordered_tests_n28_2026-11-12.tsv`).
+- Absolute units, HP − opposite (% signal change, median [95% CI], k/n < 0, Wilcoxon p (BH q over nine areas)): V1 −0.081 [−0.128, −0.053], 21/28, .0065 (.030); V2 −0.064, 20/28, .0037 (.030); TO −0.131, 17/23, .014 (.041); early −0.106 [−0.133, −0.057], 20/28, .0048; all areas −0.098, 23/28, .0076 (Page p = .0001). Leave-one-participant-out max p: V1 .012, V2 .007, TO .025, early .009 (`notes/data/fig3_robustness_n28_2026-11-12.tsv`).
+- Next − opposite, absolute units: early p = .038 (q = .11); not reliable in any single area.
+- Voxels per location (median at a participant's sparsest location): V1 8, V2 12, V3 7; IPS, hV4, VO, LO, TO 1–2. Early visual cortex with ≥ 5 voxels per location: n = 26, HP − opposite −0.113, p = .0013, Page p = .0011; with ≥ 10: n = 23, p = .012, Page p = .006.
