@@ -929,6 +929,127 @@ def bar_sweep(fig, source, x0, x1, y_img, y_ax, h_ax, W, H, vmax=3., pred=None, 
     return len(centres), '; '.join(stats_txt).replace('-', '−')
 
 
+SWEEP_AREA_LEGEND = """
+**Figure S. The readouts of Fig. 6c for every area.** Per area (rows of the pathway columns; n, subjects with that area: an area was skipped for a subject when fewer than 20 voxels passed the criteria), left: each run's visual field rotated so that the HP location lies at 12 o'clock, the decoded intensity on the bar's pixels minus its average over the four rotations, in % of that average, averaged over runs and subjects and smoothed (σ = 0.4°), as in Fig. 6c (unconstrained decoder; same colour scale in every area). Right: as the bar sweeps across the aperture, the decoded bar (decoder with the bar outline given) minus the mean decoded bar at the same time point over the subject's runs (balanced over HP locations), on the bar's segment in the quadrant facing HP (red), in the quadrants next to HP (dark grey) and in the quadrant opposite HP (light grey, dashed line), in % of the mean decoded intensity on the bar; rotated so that HP is at the upper right, horizontal bars reflected onto vertical ones; bars left of the centre cross the quadrants next to HP and opposite it, bars right of the centre the quadrant facing HP and the other quadrant next to it. Points and bars, mean ± SEM over subjects; stars, two-sided Wilcoxon signed-rank test per position, uncorrected (* p < .05, ** p < .01). Lines and bands in V1–V3: the gain-field model's prediction (simulation from the joint fit minus the paired simulation with the gains at 0, decoded as the data, as in Fig. 6); it was simulated for V1–V3 only. {stats}
+"""
+
+
+def sweep_area_series(seg, roi):
+    """Per subject × bar position for one area (pooled orientation): HP, next to HP (mean of the two) and opposite."""
+    g = seg[(seg.roi == roi) & (seg.orientation == 'pooled')]
+    t = g.pivot_table(index=['subject', 'bin'], columns='quadrant', values='diff_pct')
+    nxt = t[[c for c in ('next_ul', 'next_lr') if c in t]].mean(1)
+    out = {}
+    for k, col in (('hp', t.get('hp')), ('next', nxt), ('opp', t.get('opposite'))):
+        out[k] = col.unstack('bin') if col is not None else None
+    return out
+
+
+def plot_sweep_per_area(name='figS_decoding_sweep_per_area', source='jointhrf', decoder=DECODER, bins=7):
+    import matplotlib.pyplot as plt
+    from retsupp.visualize.paper.paper_style import DOUBLE, FG, HP, ROI_GROUPS, offset_spines, save
+    seg = pd.read_csv(DATA / f'decoded_bars_segments_{source}_outline_b{bins}_2026-11.tsv', sep='\t')
+    sim_f = DATA / f'decoded_bars_segments_decode_simfit_outline_b{bins}_2026-11.tsv'
+    sim = pd.read_csv(sim_f, sep='\t') if sim_f.exists() else None
+    maps = np.load(DATA / f'decoding_maps_{source}_2026-11.npz')
+    edges = np.linspace(-APERTURE, APERTURE, bins + 1)
+    centres = (edges[:-1] + edges[1:]) / 2
+    cols = {'hp': (HP, '-', 'HP'), 'next': (LOC_COLORS['adjacent'], '-', 'Next to HP'),
+            'opp': (LOC_COLORS['opposite'], '--', 'Opposite')}
+    W, H = DOUBLE, 5.2
+    fig = plt.figure(figsize=(W, H))
+    colw, rowh, top = W / 3, 1.18, H - .32
+    stats_txt, im = [], None
+    for gi, (gname, rois) in enumerate(ROI_GROUPS):
+        x0 = gi * colw
+        fig.text((x0 + colw / 2) / W, (H - .12) / H, gname, ha='center', va='center', fontsize=7.5, color='.3')
+        for ri, roi in enumerate(rois):
+            y0 = top - (ri + 1) * rowh
+            # map (free decoder), subjects with this area only
+            rm = rel_maps(maps, decoder, [roi])
+            rm = rm[np.isfinite(rm).any((1, 2))]
+            n_map = len(rm)
+            ax = fig.add_axes([(x0 + .02) / W, (y0 + .2) / H, .78 / W, .78 / H])
+            im = panel_map(ax, rm, label='', tag=False)
+            # sweep
+            ser = sweep_area_series(seg, roi)
+            n = int(seg[seg.roi == roi].subject.nunique())
+            ax = fig.add_axes([(x0 + 1.07) / W, (y0 + .32) / H, colw - 1.22, .7 / H] if False else
+                              [(x0 + 1.17) / W, (y0 + .32) / H, (colw - 1.3) / W, .66 / H])
+            prd = None
+            if sim is not None and roi in set(sim.roi):
+                sm = {v: sweep_area_series(sim[sim.variant == v], roi) for v in ('model', 'control')}
+                prd = {k: (sm['model'][k] - sm['control'][k]) for k in cols if sm['model'][k] is not None}
+            for k, (col, ls, lab) in cols.items():
+                v = ser[k]
+                if v is None:
+                    continue
+                v = v.reindex(columns=range(bins))
+                ok = v.notna().sum(0).to_numpy() >= 5
+                m, se = v.mean().to_numpy(), v.sem().to_numpy()
+                xs = centres + {'hp': .06, 'next': 0, 'opp': -.06}[k]
+                if prd is not None and k in prd:
+                    pv = prd[k].reindex(columns=range(bins))
+                    pm, pse = pv.mean().to_numpy(), pv.sem().to_numpy()
+                    ax.fill_between(centres[ok], (pm - pse)[ok], (pm + pse)[ok], color=col, alpha=.18, lw=0, zorder=1)
+                    ax.plot(centres[ok], pm[ok], ls, color=col, lw=1., zorder=2)
+                ax.errorbar(xs[ok], m[ok], yerr=se[ok], fmt='o', ms=2.6, color=col, mec='w', mew=.4, lw=.8, capsize=0,
+                            zorder=3)
+                for b in np.flatnonzero(ok):
+                    vv = v[b].dropna()
+                    p_ = stats.wilcoxon(vv).pvalue
+                    stats_txt.append((roi, lab, centres[b], vv.mean(), vv.sem(), p_, len(vv)))
+                    st = stars(p_)
+                    if st:
+                        up = m[b] > 0
+                        ax.text(xs[b], m[b] + (se[b] + .3) * (1 if up else -1), st, color=col, fontsize=6.5,
+                                ha='center', va='bottom' if up else 'top')
+            ax.axhline(0, color='.6', lw=.6, ls='--', zorder=0)
+            ax.set_xlim(-3.15, 3.15)
+            ax.set_ylim(-5, 5)
+            ax.set_yticks([-4, 0, 4])
+            ax.set_yticklabels(['−4', '0', '4'])
+            ax.set_xticks([-2.7, 0, 2.7])
+            ax.set_xticklabels(['−2.7', '0', '+2.7'])
+            ax.tick_params(labelsize=6)
+            if ri == len(rois) - 1:
+                ax.set_xlabel('Bar centre (°)', fontsize=6.5, labelpad=1)
+            if gi == 0:
+                ax.set_ylabel('Difference (%)', fontsize=6.5, labelpad=1)
+            ax.text(.02, 1.0, f'{roi} (n = {n})', transform=ax.transAxes, fontsize=7, color=FG, va='bottom',
+                    fontweight='bold')
+            if n_map != n:
+                print(roi, 'map n', n_map, 'sweep n', n)
+            offset_spines(ax)
+    # glyph key and colour bar in the empty cell under the dorsal column
+    kx, ky = colw + .25, top - 3 * rowh + .55
+    kax = fig.add_axes([kx / W, (ky - .45) / H, 1.9 / W, .75 / H])
+    kax.set_axis_off()
+    kax.set_xlim(0, 1)
+    kax.set_ylim(0, 1)
+    for i, (k, (col, ls, lab)) in enumerate(cols.items()):
+        y = .9 - i * .2
+        kax.errorbar([.06], [y], yerr=[[.06], [.06]], fmt='o', ms=2.6, color=col, mec='w', mew=.4, lw=.8)
+        kax.text(.12, y, lab, fontsize=6.5, color=col, va='center')
+        kax.plot([.5, .62], [y, y], ls, color=col, lw=1.)
+    kax.text(.66, .9, 'Gain-field model\n(V1–V3)', fontsize=6.5, color=FG, va='top', linespacing=1.)
+    cax = fig.add_axes([(kx + .1) / W, (ky - .55) / H, .9 / W, .06 / H])
+    cb = fig.colorbar(im, cax=cax, orientation='horizontal', ticks=[-3, 0, 3])
+    cb.ax.set_xticklabels(['−3%', '0', '3%'], fontsize=6)
+    cb.ax.tick_params(length=2, width=.5, pad=1)
+    cb.outline.set_linewidth(.4)
+    cb.ax.text(-.06, .5, 'Less', transform=cb.ax.transAxes, ha='right', va='center', fontsize=6, color='#2166AC')
+    cb.ax.text(1.06, .5, 'More', transform=cb.ax.transAxes, ha='left', va='center', fontsize=6, color='#B2182B')
+    names = {'HP': 'HP-quadrant segment', 'Next to HP': 'next-to-HP segment', 'Opposite': 'opposite segment'}
+    sig = [f'{r} {names[lab]} at {c:+.1f}°: {m_:+.2f} ± {se_:.2f}%, p = {p_:.3f} (n = {n_})'.replace('-', '−')
+           for r, lab, c, m_, se_, p_, n_ in stats_txt if p_ < .05]
+    txt = (f'Of the {len(stats_txt)} position tests (all areas, uncorrected), {len(sig)} reach p < .05 '
+           f'(about {.05 * len(stats_txt):.0f} expected by chance): ' + '; '.join(sig) + '.') if sig else \
+        'No position reaches p < .05.'
+    save(fig, name, SWEEP_AREA_LEGEND.format(stats=txt))
+    return stats_txt
+
+
 def plot_all_rois(name='figS_decoding_all_rois', source='jointhrf'):
     """Supplementary figure: the group-mean decoded frames per ROI at the time points of Fig. 6a (unconstrained decoder)."""
     import matplotlib.colors as mcolors
@@ -1546,7 +1667,7 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('step', choices=['collect', 'plot', 'plot_bar_crossing', 'plot_all_rois',
+    ap.add_argument('step', choices=['collect', 'plot', 'plot_bar_crossing', 'plot_all_rois', 'plot_sweep_per_area',
                                      'plot_all_rois_examples'])
     ap.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
     ap.add_argument('--source', default='jointhrf', help='jointhrf (main Fig. 6) or canonical (figS_decoding_canonical)')
@@ -1572,6 +1693,8 @@ if __name__ == '__main__':
         collect(a.bids_folder, a.source, a.out)
     elif a.step == 'plot_all_rois_examples':
         plot_all_rois_examples(name='figS_decoding_all_rois_examples' + a.supp_suffix)
+    elif a.step == 'plot_sweep_per_area':
+        plot_sweep_per_area(name=a.name, source=a.source)
     elif a.step == 'plot_all_rois':
         plot_all_rois(name='figS_decoding_all_rois' + a.supp_suffix)
     elif a.step == 'plot_bar_crossing':

@@ -47,9 +47,10 @@ an `--exclude-subjects` option take `--exclude-subjects 1 2` directly.
 | Fig. 3 item locations, `tableS_item_locations_n28` | `fig3_item_locations.py` |
 | Fig. 4 model | `fig4_model.py` |
 | Fig. 5 gain fields, `table_parameters_2026-11_n28`, `figS_field_widths`, `figS_gain_fields_dn`, `figS_gain_fields_gauss`, `figS_gain_vs_prf_size`, `figS_loso_per_roi`, `figS_pooled_dS_dD`, `tableS_loso` | `fig5_gain_fields.py` (LOSO tables: `fig3_collect_loso.py`, `table1_ladder.py`; hierarchy: `hierarchy_regression.py`) |
-| Fig. 6 decoding (`fig6_decoding_v5_n28`: `--v3 --sweep --prediction decode_simfit`), `figS_bar_crossing_response`, `figS_decoding_all_rois(_examples)`, `figS_decoding_canonical`, `figS_decoding_hp_per_area` | `fig6_decoding.py` |
+| Fig. 6 decoding (`fig6_decoding_v9_n28`: `--v3 --sweep --prediction decode_simfit --pathways areas --sweep-opposite`; v5: without the last two), `figS_bar_crossing_response`, `figS_decoding_all_rois(_examples)`, `figS_decoding_canonical`, `figS_decoding_hp_per_area` | `fig6_decoding.py` |
 | `figS_decoding_prf_models` | `compare_decoding_prf_models.py` |
 | `figS_decoded_bars_per_roi`, `figS_decoded_bars_rotated` | `figS_decoded_bars.py` |
+| `figS_decoding_sweep_per_area_n28` (Fig. 6c readouts per area) | `fig6_decoding.py plot_sweep_per_area` (inputs: `figS_decoded_bars.py collect_per_roi --n-bins 7 --exclude-subjects 1 2` → `decoded_bars_segments_jointhrf_outline_b7_2026-11.tsv`; `decoding_maps_jointhrf_2026-11.npz`; model: `collect_simulate_decode.py --fitted --segments`) |
 | `figS_decode_simulation` | `figS_decode_simulation.py` |
 | Fig. 7 gains and behaviour | `fig7_compact.py --compact` (input: `trialwise_meta_bayes.py` output) |
 | `figS_dn_gain_locus`, `figS_dn_params_by_hp` | `figS_dn_gain_locus.py`, `figS_dn_params_by_hp.py` |
