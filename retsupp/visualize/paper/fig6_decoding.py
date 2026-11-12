@@ -1057,7 +1057,7 @@ def prediction_text(pred, qe, be, sw, r_data=None):
         o, m = qe[a] - qe[b], qp[a] - qp[b]
         both = o.index.intersection(m.index)
         r, pr = stats.pearsonr(o[both], m[both])
-        con[nm] = f'{nm}: observed {fmt(o)}, predicted {fmt(m)} (per-subject r = {mn(r)}, p = {pr:.2f})'
+        con[nm] = f'{nm}: observed {fmt(o)}, predicted {fmt(m)} (per-subject r = {mn(r)}, p = {pr:.3f}; observed − predicted, two-sided Wilcoxon p = {stats.wilcoxon((o - m).dropna()).pvalue:.3f})'
     quad = 'Quadrants (d): ' + '; '.join(con.values()) + '; predicted per quadrant HP ' + fmt(qp.hp) + ', next to HP ' + \
         fmt(qp.adjacent) + ', opposite ' + fmt(qp.opposite)
     # Sweep: observed and predicted segment differences per bar position.

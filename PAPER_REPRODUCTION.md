@@ -28,6 +28,7 @@ goes through `retsupp/utils/data.py` (`Subject`). Cluster scripts: account `hare
 | Hierarchical meta-analysis of the trial-wise effects | `retsupp/visualize/paper/trialwise_meta_bayes.py` | local |
 | Decoding (bar stimulus, held-out runs) | `retsupp/decode/decode_final.py`, `retsupp/visualize/paper/fig6_collect.py`, `group_decoded_frames.py` | `retsupp/decode/slurm_jobs/decode_final.sh` |
 | Decoder simulation | `retsupp/decode/simulate_decode.py`, `collect_simulate_decode.py` | `retsupp/decode/slurm_jobs/simulate_decode.sh` |
+| Fig. 6 prediction of the fitted gain-field model (model − gains at 0, decoded as the data) | `retsupp/decode/simulate_decode.py --mode fitted`, `collect_simulate_decode.py --fitted` (→ `notes/data/decode_simfit_*`), `fig6_decoding.py --prediction decode_simfit` | `retsupp/decode/slurm_jobs/simulate_decode_fitted.sh` |
 | Item-location responses (Fig. 3) | `retsupp/visualize/paper/export_location_timeseries.py`, `deconvolve_location_responses.py`, `deconvolve_bar_items.py` | `retsupp/visualize/paper/slurm_jobs/export_location_timeseries.sh`, `deconvolve_location_responses.sh` |
 | Model predictions through the Fig. 3 pipeline | `retsupp/visualize/paper/predict_location_timeseries_kappa.py`, `predict_location_timeseries_terms.py` | `retsupp/visualize/paper/slurm_jobs/predict_location_timeseries_*.sh` |
 | Leaving out sub-01, sub-02 | `retsupp/visualize/paper/run_excluding.py` (`--exclude 1 2 -- <figure module>`), `sensitivity_excl_subjects.py`, `n28_extra_numbers.py` | — |
@@ -46,7 +47,7 @@ an `--exclude-subjects` option take `--exclude-subjects 1 2` directly.
 | Fig. 3 item locations, `tableS_item_locations_n28` | `fig3_item_locations.py` |
 | Fig. 4 model | `fig4_model.py` |
 | Fig. 5 gain fields, `table_parameters_2026-11_n28`, `figS_field_widths`, `figS_gain_fields_dn`, `figS_gain_fields_gauss`, `figS_gain_vs_prf_size`, `figS_loso_per_roi`, `figS_pooled_dS_dD`, `tableS_loso` | `fig5_gain_fields.py` (LOSO tables: `fig3_collect_loso.py`, `table1_ladder.py`; hierarchy: `hierarchy_regression.py`) |
-| Fig. 6 decoding, `figS_bar_crossing_response`, `figS_decoding_all_rois(_examples)`, `figS_decoding_canonical`, `figS_decoding_hp_per_area` | `fig6_decoding.py` |
+| Fig. 6 decoding (`fig6_decoding_v5_n28`: `--v3 --sweep --prediction decode_simfit`), `figS_bar_crossing_response`, `figS_decoding_all_rois(_examples)`, `figS_decoding_canonical`, `figS_decoding_hp_per_area` | `fig6_decoding.py` |
 | `figS_decoding_prf_models` | `compare_decoding_prf_models.py` |
 | `figS_decoded_bars_per_roi`, `figS_decoded_bars_rotated` | `figS_decoded_bars.py` |
 | `figS_decode_simulation` | `figS_decode_simulation.py` |
