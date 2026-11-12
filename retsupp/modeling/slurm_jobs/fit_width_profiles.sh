@@ -13,6 +13,10 @@
 #
 #   cd ~/retsupp_plan && sbatch --exclude=u24-chaihm0-633 --array=3 retsupp/modeling/slurm_jobs/fit_width_profiles.sh   # canary
 #   cd ~/retsupp_plan && sbatch --exclude=u24-chaihm0-633 --array=4-30 retsupp/modeling/slurm_jobs/fit_width_profiles.sh
+#
+# On the polished joint fits (pRFs refitted together with the gain fields), into their own folder:
+#   OVERLAY_ROOT=af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf_polished \
+#   OUTPUT_SUBDIR=field_widths_reliable_polished_2026-11-12 sbatch --exclude=u24-chaihm0-633 --array=3-30 ...
 
 set -eo pipefail
 subject=${SLURM_ARRAY_TASK_ID}
@@ -31,4 +35,5 @@ export PYTHONPATH="${CODE_DIR}${PYTHONPATH:+:$PYTHONPATH}"
 echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
 
 exec "$HOME/data/conda/envs/retsupp_cuda/bin/python" -u -m retsupp.modeling.fit_width_profiles \
-    "$subject" ${ROIS:+--rois $ROIS}
+    "$subject" ${ROIS:+--rois $ROIS} ${OVERLAY_ROOT:+--overlay-root $OVERLAY_ROOT} \
+    ${OUTPUT_SUBDIR:+--output-subdir $OUTPUT_SUBDIR}

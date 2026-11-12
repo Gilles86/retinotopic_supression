@@ -12,6 +12,14 @@ Run on a compute node (thousands of small files)::
         --root gauss=af_prf_cv_ladder_nested_full_bounded_maxsd20_gauss_reliable_roihrf \\
         --root dn=af_prf_cv_ladder_nested_full_bounded_maxsd20_dn_reliable_roihrf \\
         --out <tsv>
+
+``--base-table`` starts from an earlier table and replaces its (family, model) rows by those found under the roots, e.g.
+the polished m4_TDS and m7_full (pRFs refitted together with the gain fields) over the final table::
+
+    python -m retsupp.visualize.paper.collect_gain_parameters \\
+        --root dog=af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf_polished \\
+        --base-table notes/data/gain_field_parameters_final2_2026-11.tsv \\
+        --out notes/data/gain_field_parameters_polished_2026-11-12.tsv
 """
 from __future__ import annotations
 
@@ -25,7 +33,7 @@ SHARED = ['g_HP', 'g_LP', 'g_HP_dyn', 'g_LP_dyn', 'g_T_dyn', 'sigma_AF', 'sigma_
           'g_T_HP_dyn', 'g_adj_minus_opp', 'neural_baseline', 'surround_baseline']
 
 
-def main(bids, roots, out):
+def main(bids, roots, out, base_table=None):
     rows = []
     for spec in roots:
         family, root = spec.split('=', 1)
@@ -45,6 +53,13 @@ def main(bids, roots, out):
                 rows.append(row)
         print(family, root, sum(r['family'] == family for r in rows), flush=True)
     t = pd.DataFrame(rows)
+    if base_table:
+        b = pd.read_csv(base_table, sep='\t')
+        new = set(zip(t.family, t.model))
+        b = b[[(f, m) not in new for f, m in zip(b.family, b.model)]]
+        print('replaced from', base_table, sorted(new), flush=True)
+        t = pd.concat([b, t[[c for c in t.columns if c in b.columns] + [c for c in t.columns if c not in b.columns]]],
+                      ignore_index=True)
     t.to_csv(out, sep='\t', index=False)
     print(t.groupby(['family', 'model']).size().to_string())
 
@@ -54,5 +69,7 @@ if __name__ == '__main__':
     ap.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
     ap.add_argument('--root', action='append', required=True, help='family=derivatives folder (repeatable)')
     ap.add_argument('--out', required=True)
+    ap.add_argument('--base-table', default=None,
+                    help='earlier table; its (family, model) rows found under the roots are replaced')
     a = ap.parse_args()
-    main(a.bids_folder, a.root, a.out)
+    main(a.bids_folder, a.root, a.out, a.base_table)
