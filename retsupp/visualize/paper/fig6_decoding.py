@@ -583,7 +583,7 @@ def panel_ecc(ax, be, pb, pred=None):
         ax.fill_between(x, pm - pse, pm + pse, color=FG, alpha=.15, lw=0, zorder=1)
         ax.plot(x, pm, color=FG, lw=1.1, zorder=2)
         ax.errorbar(x, m, yerr=se, fmt='o', ms=3, color=HP, mec='w', mew=.5, lw=.9, capsize=0, zorder=3)
-        ax.text(.1, -.75, 'Gain-field model', fontsize=6.5, color=FG, ha='left', va='top')
+        ax.text(.05, -2.7, 'Gain-field model', fontsize=6.5, color=FG, ha='left', va='top')
     ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
     ax.set_xlim(0, ECC_MAX)
     ax.set_xticks([0, 1, 2, 3])
@@ -1100,8 +1100,75 @@ def prediction_text(pred, qe, be, sw, r_data=None):
     return PRED_TXT.format(map_txt=map_txt, n=len(qp), numbers=quad + '. ' + sweep + '. ' + ecc + '.') + cov
 
 
+PATHWAYS = {'Early': ['V1', 'V2', 'V3'], 'Dorsal': ['V3AB', 'IPS'], 'Occipitotemporal': ['hV4', 'VO', 'LO', 'TO']}
+PATHWAY_TXT = """ f, The same contrast as d for every area, by pathway: per subject and area, the decoded intensity on the bar's pixels per quadrant averaged over runs and expressed in % of the mean of the four quadrants (as in d), HP minus the mean of the three other quadrants; then the mean over the areas of a pathway that the subject has (an area was skipped for a subject when fewer than 20 voxels passed the criteria). Dots are subjects, points and bars the mean ± SEM; small labelled markers, the per-area means. One-sided Wilcoxon signed-rank test (HP < other quadrants), uncorrected: {pw}. Data only: the gain-field model was simulated for V1–V3 alone."""
+
+
+def pathway_effects(d, decoder=DECODER):
+    """Per subject × area: HP − mean of the other three quadrants, in % of the mean of the four (``quadrant_effects``
+    with one area), and per subject × pathway the mean over the areas present."""
+    per = {}
+    for roi in sum(PATHWAYS.values(), []):
+        if roi in set(d.roi):
+            q = quadrant_effects(d, decoder, [roi])
+            per[roi] = q.hp - (q.left + q.right + q.opposite) / 3
+    per = pd.DataFrame(per)
+    pw = pd.DataFrame({k: per[[r for r in rs if r in per]].mean(1, skipna=True) for k, rs in PATHWAYS.items()})
+    return per, pw
+
+
+def pathway_stats(per, pw):
+    out = {}
+    for k in pw:
+        v = pw[k].dropna()
+        out[k] = dict(m=v.mean(), se=v.sem(), n=len(v), p=stats.wilcoxon(v, alternative='less').pvalue,
+                      below=(v < 0).mean() * 100)
+    hi = per[PATHWAYS['Dorsal'] + PATHWAYS['Occipitotemporal']].mean(1, skipna=True).dropna()
+    out['Higher'] = dict(m=hi.mean(), se=hi.sem(), n=len(hi), p=stats.wilcoxon(hi, alternative='less').pvalue,
+                         below=(hi < 0).mean() * 100)
+    return out
+
+
+def panel_pathways(ax, per, pw, st):
+    from retsupp.visualize.paper.paper_style import FG, HP, offset_spines
+    rng = np.random.default_rng(5)
+    lo, hi = -8, 8.5
+    for i, k in enumerate(pw):
+        v = pw[k].dropna()
+        x = i * 1.25
+        ax.scatter(x + rng.uniform(-.14, .14, len(v)), v, s=5, color=HP, alpha=.35, lw=0, zorder=2)
+        ax.errorbar(x + .26, v.mean(), yerr=v.sem(), fmt='o', ms=4.5, color=HP, mec='w', mew=.6, lw=1.3, capsize=0,
+                    zorder=4)
+        # per-area means: small open markers with their names, labels pushed apart vertically
+        rois = [r for r in PATHWAYS[k] if r in per]
+        ms = per[rois].mean()
+        ax.scatter(np.full(len(ms), x + .5), ms, s=9, facecolor='w', edgecolor='.35', lw=.6, zorder=3)
+        ys = ms.sort_values()
+        lab = ys.to_numpy().astype(float)
+        gap = .9
+        for j in range(1, len(lab)):
+            lab[j] = max(lab[j], lab[j - 1] + gap)
+        lab -= max(0, (lab.mean() - ys.mean()))
+        for (r, y0), yl in zip(ys.items(), lab):
+            ax.plot([x + .55, x + .6], [y0, yl], color='.6', lw=.4)
+            ax.text(x + .62, yl, r, fontsize=6, color='.35', va='center', ha='left')
+        p_ = st[k]['p']
+        ax.text(x + .13, hi - .3, (stars(p_) + '\n' if p_ < .05 else '\n') + f'p = {p_:.3f}'.replace('0.', '.'),
+                ha='center', va='top', fontsize=6, color=HP if p_ < .05 else '.4', linespacing=1.)
+    ax.axhline(0, color='.6', lw=.7, ls='--', zorder=0)
+    ax.set_xlim(-.35, 2 * 1.25 + .95)
+    ax.set_ylim(lo, hi)
+    ax.set_yticks([-6, -3, 0, 3])
+    ax.set_yticklabels(['−6', '−3', '0', '3'])
+    ax.set_xticks(np.arange(3) * 1.25 + .13)
+    ax.set_xticklabels(['Early', 'Dorsal', 'Occipito-\ntemporal'], fontsize=6.5)
+    ax.tick_params(axis='x', length=0)
+    ax.set_ylabel('HP − other\nquadrants (%)')
+    offset_spines(ax)
+
+
 def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, source_note='', frames_style='magma', v3=False,
-         sweep=False, prediction=None):
+         sweep=False, prediction=None, pathways=False):
     """v3: 180 mm wide; the per-area test (old d) goes to its own supplementary figure, the rest re-lettered a-e."""
     import matplotlib.pyplot as plt
     from retsupp.visualize.paper.paper_style import FG, HP, STIM, letter, save
@@ -1221,10 +1288,23 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
     panel_quadrants(ax, qe, qst, pred=pred[0] if pred else None)
     area_tag(ax, x=1.0, y=1.0, ha='right')
     fig.text(.02 / W, 1.93 / H, 'd' if v3 else 'e', fontsize=8, fontweight='bold', va='center', ha='left')
-    ax = fig.add_axes([2.95 / W, .42 / H, (3.9 if v3 else 3.95) / W, 1.2 / H])
+    ax = fig.add_axes([2.95 / W, .42 / H, (2.25 if pathways else 3.9 if v3 else 3.95) / W, 1.2 / H])
     panel_ecc(ax, be, pb, pred=pred[1] if pred else None)
     area_tag(ax, x=.02, y=.3)
-    letter(ax, 'e' if v3 else 'f', x=-.17, y=1.02)
+    letter(ax, 'e' if v3 else 'f', x=-.17 * (3.9 / 2.25 if pathways else 1), y=1.02)
+    pw_txt = ''
+    if pathways:
+        per, pw = pathway_effects(d, decoder)
+        pst = pathway_stats(per, pw)
+        ax = fig.add_axes([5.75 / W, .42 / H, 1.25 / W, 1.2 / H])
+        panel_pathways(ax, per, pw, pst)
+        letter(ax, 'f', x=-.45, y=1.02)
+        fmt_pw = lambda k: (f'{k} {pst[k]["m"]:+.2f} ± {pst[k]["se"]:.2f}%, p = {pst[k]["p"]:.3f}, '   # noqa: E731
+                            f'{pst[k]["below"]:.0f}% of subjects below 0, n = {pst[k]["n"]}').replace('-', '−')
+        pw_txt = '; '.join(fmt_pw(k) for k in ('Early', 'Dorsal', 'Occipitotemporal')) + '; all higher areas (dorsal and ' \
+            'occipitotemporal) ' + fmt_pw('Higher').split(' ', 1)[1] + '; per area ' + ', '.join(
+                f'{r} {per[r].mean():+.2f}% (n = {per[r].count()})' for r in per).replace('-', '−')
+        print('pathways', pw_txt)
 
     nq = qs.groupby('roi').r.median()
     quality = '; '.join(f'{r} median r = {nq[r]:.2f} vs {qs[qs.roi == r].r_shuffle.median():.3f}, {fmt_p(pq[r])}'
@@ -1272,6 +1352,8 @@ def plot(name='fig6_decoding', source='canonical', rois=ROIS, decoder=DECODER, s
                                   ap=APERTURE, item_r=ITEM_R, insets=(SWEEP_TXT.format(nb=sweep_out[0], sweep_stats=sweep_out[1]) if sweep_out else INSET_TXT.format(ins_far=ins_lab[0][0], ins_mid=ins_lab[0][1], ins_hp=ins_lab[0][2], ins_seg='; '.join(f'{k} segment {m:+.2f} ± {se:.2f}%, two-sided Wilcoxon p = {p:.3f}' for k, m, se, p in ins_lab[1])) if ins_lab else ''), item_in=ITEM_ECC - ITEM_R, bar=bar_txt, bar_base=bar_base,
                                   w0=BAR_WINDOW[0], w1=BAR_WINDOW[1], source=source_note,
                                   q_lr=qst['p_lr'], quad=qst['text'])
+    if pathways:
+        leg = leg.rstrip() + PATHWAY_TXT.format(pw=pw_txt) + '\n'
     if pred:
         r_data = q[(q.decoder == decoder) & q.roi.isin(EARLY)].groupby('subject').r.mean().median()
         pt = prediction_text(pred, qe, be, sweep_data(source), r_data)
@@ -1313,6 +1395,7 @@ if __name__ == '__main__':
     ap.add_argument('--frames-style', default='magma', choices=['blue', 'magma'], help='decoded rows of a: magma on black or blue')
     ap.add_argument('--v3', action='store_true', help='180 mm wide; the per-area test to a supplementary figure; a-e')
     ap.add_argument('--sweep', action='store_true', help='c: every bar position with its segment differences, not three insets')
+    ap.add_argument('--pathways', action='store_true', help='f: the HP − other quadrants contrast of d per pathway, all areas')
     ap.add_argument('--prediction', default=None,
                     help='file prefix of the gain-field model prediction (collect_simulate_decode.py --fitted), e.g. '
                          'decode_simfit: drawn over c (sweep), d and e')
@@ -1327,4 +1410,4 @@ if __name__ == '__main__':
         plot_bar_crossing(name='figS_bar_crossing_response' + a.supp_suffix, source_note='')
     else:
         plot(a.name, a.source, a.rois, a.decoder, source_note=f'pRFs: {a.source} fold fits.', frames_style=a.frames_style, v3=a.v3, sweep=a.sweep,
-             prediction=a.prediction)
+             prediction=a.prediction, pathways=a.pathways)
