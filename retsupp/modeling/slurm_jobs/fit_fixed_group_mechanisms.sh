@@ -34,7 +34,7 @@ echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
 
 "$HOME/data/conda/envs/retsupp_cuda/bin/python" -u -m retsupp.modeling.fit_fixed_group_mechanisms \
     "$subject" --bids-folder /shares/zne.uzh/gdehol/ds-retsupp ${ROIS:+--rois $ROIS} \
-    ${OVERLAY_ROOT:+--overlay-root "$OVERLAY_ROOT"} ${OUTPUT_SUBDIR:+--output-subdir "$OUTPUT_SUBDIR"} \
+    ${OVERLAY_ROOT:+--overlay-root "$OVERLAY_ROOT"} ${OVERLAY_PER_MODEL:+--overlay-per-model} ${OUTPUT_SUBDIR:+--output-subdir "$OUTPUT_SUBDIR"} \
     ${BASE_ROOT:+--base-root "$BASE_ROOT"} ${FAMILY:+--family "$FAMILY"} ${STEP:+--step "$STEP"} ${EXACT:+--exact} \
     ${MECHANISMS:+--mechanisms $MECHANISMS} ${HP_ROTATION:+--hp-rotation $HP_ROTATION} ${SESSIONS:+--sessions $SESSIONS} ${RUN_PARITY:+--run-parity $RUN_PARITY} \
     ${HRF_TABLE:+--hrf-table $HRF_TABLE}

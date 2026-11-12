@@ -114,6 +114,9 @@ def exact_grid(lo, hi):
     return np.where(u < 0, -u * lo, u * hi)
 
 
+OVERLAY_PER_MODEL = False   # --overlay-per-model
+
+
 def fit_path(bids_folder, model, subject, roi, overlay_root=None):
     """The fit in ``overlay_root`` if that subject x ROI finished there, else in BASE_ROOT.
 
@@ -122,7 +125,11 @@ def fit_path(bids_folder, model, subject, roi, overlay_root=None):
     """
     tail = (f'sub-{subject:02d}', f'sub-{subject:02d}_roi-{roi}_cv-fits.pkl')
     deriv = Path(bids_folder) / 'derivatives'
-    if overlay_root and (deriv / overlay_root / 'm7_full').joinpath(*tail).exists():
+    if overlay_root and OVERLAY_PER_MODEL:
+        # e.g. the polished root (pRFs refitted with the gain fields) holds only some models: use it per model
+        if (deriv / overlay_root / model).joinpath(*tail).exists():
+            return (deriv / overlay_root / model).joinpath(*tail)
+    elif overlay_root and (deriv / overlay_root / 'm7_full').joinpath(*tail).exists():
         return (deriv / overlay_root / model).joinpath(*tail)
     return (deriv / BASE_ROOT / model).joinpath(*tail)
 
@@ -347,6 +354,9 @@ if __name__ == '__main__':
     ap.add_argument('--output-subdir', default='af_fixed_group_mechanisms')
     ap.add_argument('--overlay-root', default=None,
                     help='Derivatives folder whose finished subject x ROI fits replace BASE_ROOT')
+    ap.add_argument('--overlay-per-model', action='store_true',
+                    help='Use --overlay-root for a model wherever that model exists there (e.g. a polished root '
+                         'with only m4_TDS / m7_full), BASE_ROOT otherwise')
     ap.add_argument('--base-root', default=None, help='Fits to use instead of BASE_ROOT')
     ap.add_argument('--family', choices=['dog', 'dn', 'gauss'], default='dog',
                     help='gauss: the Gaussian ladder fits (DoG classes with the surround amplitude fixed at 0)')
@@ -368,6 +378,7 @@ if __name__ == '__main__':
     ap.add_argument('--hrf-table', default=None,
                     help='TSV of one HRF per subject x ROI (build_roi_hrf_table.py); must match the fits used')
     args = ap.parse_args()
+    OVERLAY_PER_MODEL = args.overlay_per_model
     main(args.subject, args.bids_folder, args.rois, args.output_subdir, args.overlay_root,
          args.base_root, args.family, args.step, args.exact, args.hp_rotation,
          args.mechanisms, args.sessions, hrf_table=args.hrf_table, run_parity=args.run_parity)
