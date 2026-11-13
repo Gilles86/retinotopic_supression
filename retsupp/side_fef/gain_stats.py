@@ -40,7 +40,7 @@ def summarise(x):
     return dict(n=len(x), median_pct=100 * med, ci_lo_pct=100 * lo, ci_hi_pct=100 * hi, k=k, p_wilcoxon=p)
 
 
-def main(shared, cond, out):
+def main(shared, cond, out, wide_out=None):
     sh = pd.read_csv(shared, sep='\t')
     sh = sh[sh.subject.between(3, 30)]
     j = sh[(sh.model == 'm7_full') & (sh.fit == 'polished')].copy()
@@ -58,6 +58,11 @@ def main(shared, cond, out):
             rows.append(dict(roi=roi, term=lab, **summarise(x)))
         rows.append(dict(roi=roi, term='n_voxels (median)', median_pct=np.nan,
                          n=int(j.loc[j.roi == roi, 'n_voxels'].median()) if (j.roi == roi).any() else 0))
+    if wide_out:
+        w = j.set_index(['subject', 'roi'])[['dS', 'target', 'distractor', 'g_HP', 'g_LP', 'item_scale']].rename(
+            columns={'dS': 'dS joint', 'target': 'target joint', 'distractor': 'distractor joint'})
+        w = w.join(c.set_index(['subject', 'roi']).estimate.rename('dS alone'), how='outer').reset_index()
+        w.to_csv(wide_out, sep='\t', index=False)
     t = pd.DataFrame(rows)
     t.to_csv(out, sep='\t', index=False)
     pd.set_option('display.width', 200)
@@ -69,5 +74,6 @@ if __name__ == '__main__':
     ap.add_argument('--shared', required=True)
     ap.add_argument('--cond', required=True)
     ap.add_argument('--out', required=True)
+    ap.add_argument('--wide-out', default=None, help='per participant x ROI estimates (for the figure)')
     a = ap.parse_args()
-    main(a.shared, a.cond, a.out)
+    main(a.shared, a.cond, a.out, a.wide_out)

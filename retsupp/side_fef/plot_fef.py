@@ -27,7 +27,7 @@ from statsmodels.stats.multitest import multipletests
 REGIONS = ['sPCSloso', 'iPCSloso', 'sPCSind', 'FEFatlas', 'precentral', 'lateral_occipital']
 FRONTAL = ['sPCSloso', 'iPCSloso', 'sPCSind', 'FEFatlas']
 EXTRA = ['sPCS', 'iPCS']   # group ROIs including the tested participant (table only; selection is circular)
-LABEL = {'sPCSloso': 'sPCS', 'iPCSloso': 'iPCS', 'sPCSind': 'Frontal, per\nparticipant',
+LABEL = {'sPCSloso': 'sPCS', 'iPCSloso': 'iPCS', 'sPCSind': 'Frontal indiv.',
          'FEFatlas': 'FEF atlas', 'precentral': 'Precentral', 'lateral_occipital': 'Lateral occ.',
          'sPCS': 'sPCS (group, all 28)', 'iPCS': 'iPCS (group, all 28)'}
 COLOR = {r: '#D62828' for r in FRONTAL} | {'precentral': '#9AA5B1', 'lateral_occipital': '#2A9D8F'}
@@ -95,8 +95,6 @@ def main(summary, voxels, out_dir, gain_wide=None, model='dog_roihrf', fsaverage
         if col == 'd_cvr2':
             lo, hi = np.nanpercentile(s.loc[s.region.isin(FRONTAL + ['precentral']), col], [1, 99])
             ax.set_ylim(min(lo, -.002) * 1.3, max(hi, .002) * 1.3)
-            ax.text(.98, .97, 'Lateral occipital\nmostly above axis', transform=ax.transAxes, ha='right', va='top',
-                    fontsize=5.5, color='#2A9D8F')
         ax.text(-.3, 1.05, 'abc'[k], transform=ax.transAxes, fontsize=8, fontweight='bold', va='bottom')
 
     # d: visual-field centres of sPCS pRF voxels
@@ -140,32 +138,38 @@ def main(summary, voxels, out_dir, gain_wide=None, model='dog_roihrf', fsaverage
             ax.text(np.median(yy[m]) + 4, np.median(zz[m]) + 8, r, color=c, fontsize=6, ha='left')
         ax.set_aspect('equal')
         ax.set_axis_off()
-        cb = fig.colorbar(sc, ax=ax, fraction=.04, pad=.01, shrink=.6)
+        cb = fig.colorbar(sc, ax=ax, orientation='horizontal', fraction=.05, pad=.02, shrink=.6)
         cb.set_label('Group median CV R²', fontsize=6)
         cb.ax.tick_params(labelsize=5.5)
-        ax.set_title('Right hemisphere, lateral (inflated); anterior right', fontsize=6)
+        ax.set_title('Right hemisphere, lateral; anterior right', fontsize=6, pad=8)
     ax.text(-.1, 1.05, 'e', transform=ax.transAxes, fontsize=8, fontweight='bold', va='bottom')
 
-    ax = fig.add_subplot(gs[1, 2])
+    sub = gs[1, 2].subgridspec(1, 2, width_ratios=[1, 1], wspace=.9)
     if gain_wide is not None:
         g = pd.read_csv(gain_wide, sep='\t')
         g = g[g.roi == 'sPCSloso']
-        for i, (term, lab) in enumerate(GAIN_TERMS):
-            x = 100 * g[term].dropna().to_numpy()
-            ax.scatter(i + rng.uniform(-.18, .18, len(x)), x, s=5, color=GAIN_COLOR[term], alpha=.35, lw=0)
-            b = np.median(np.random.default_rng(0).choice(x, (10000, len(x))), 1)
-            ax.errorbar(i, np.median(x), [[np.median(x) - np.percentile(b, 2.5)], [np.percentile(b, 97.5) - np.median(x)]],
-                        fmt='o', ms=4, color=GAIN_COLOR[term], mec='#1F2933', mew=.8, elinewidth=1, capsize=0, zorder=3)
-        ax.axhline(0, color='#1F2933', lw=.6)
-        ax.set_xticks(range(len(GAIN_TERMS)))
-        ax.set_xticklabels([lab for _, lab in GAIN_TERMS], rotation=45, ha='right', rotation_mode='anchor', fontsize=6)
-        ax.set_ylabel('Gain in sPCS (%)')
-        lim = np.nanpercentile(np.abs(100 * g[[t for t, _ in GAIN_TERMS]].to_numpy()), 95) * 1.2
-        ax.set_ylim(-lim, lim)
+        for k, terms in enumerate((GAIN_TERMS[:2], GAIN_TERMS[2:])):
+            ax = fig.add_subplot(sub[0, k])
+            for i, (term, lab) in enumerate(terms):
+                x = 100 * g[term].dropna().to_numpy()
+                ax.scatter(i + rng.uniform(-.18, .18, len(x)), x, s=5, color=GAIN_COLOR[term], alpha=.35, lw=0)
+                b = np.median(np.random.default_rng(0).choice(x, (10000, len(x))), 1)
+                m = np.median(x)
+                ax.errorbar(i, m, [[m - np.percentile(b, 2.5)], [np.percentile(b, 97.5) - m]], fmt='o', ms=4,
+                            color=GAIN_COLOR[term], mec='#1F2933', mew=.8, elinewidth=1, capsize=0, zorder=3)
+            ax.axhline(0, color='#1F2933', lw=.6)
+            ax.set_xticks(range(len(terms)))
+            ax.set_xticklabels([lab for _, lab in terms], rotation=45, ha='right', rotation_mode='anchor', fontsize=6)
+            ax.set_xlim(-.6, len(terms) - .4)
+            lim = np.nanpercentile(np.abs(100 * g[[t for t, _ in terms]].to_numpy()), 90) * 1.3
+            ax.set_ylim(-lim, lim)
+            ax.set_ylabel('sPCS gain (%)' if k == 0 else '')
+            if k == 0:
+                ax.text(-.9, 1.05, 'f', transform=ax.transAxes, fontsize=8, fontweight='bold', va='bottom')
     else:
+        ax = fig.add_subplot(gs[1, 2])
         ax.axis('off')
         ax.text(.5, .5, 'Gain fields not fitted', ha='center', va='center', transform=ax.transAxes)
-    ax.text(-.3, 1.05, 'f', transform=ax.transAxes, fontsize=8, fontweight='bold', va='bottom')
     for ext in ('pdf', 'png'):
         fig.savefig(out_dir / f'fig_fef.{ext}', bbox_inches='tight', pad_inches=.02)
     print('wrote', out_dir / 'fig_fef.pdf')
