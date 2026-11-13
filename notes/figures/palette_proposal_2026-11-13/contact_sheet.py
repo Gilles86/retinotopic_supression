@@ -5,7 +5,7 @@ from pathlib import Path
 
 SUF = sys.argv[1] if len(sys.argv) > 1 else '_palA'
 D = Path('notes/figures/paper_2026-11')
-NAMES = ['fig1_paradigm_behaviour_v4_n28', 'fig2_prf_fits_n28', 'fig3_item_locations_n28', 'fig4_model_hp_blocks',
+NAMES = ['fig1_paradigm_behaviour_v5_n28', 'fig1_paradigm_behaviour_v4_n28', 'fig2_prf_fits_n28', 'fig3_item_locations_n28', 'fig4_model_hp_blocks',
          'fig5_gain_fields_v11_n28', 'fig6_decoding_v13_n28', 'fig7_compact_polished_n28', 'figS_priming_rt_v4_n28',
          'figS_rt_by_location_n28', 'figS_item_locations_per_area_n28', 'figS_item_locations_voxel_selection_n28',
          'figS_field_widths_v3_n28', 'figS_gain_field_map_search_v3_n28', 'figS_gain_vs_prf_size_polished_2026-11-12_n28',
