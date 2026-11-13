@@ -37,6 +37,6 @@ echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
     ${OVERLAY_ROOT:+--overlay-root "$OVERLAY_ROOT"} ${OVERLAY_PER_MODEL:+--overlay-per-model} ${OUTPUT_SUBDIR:+--output-subdir "$OUTPUT_SUBDIR"} \
     ${BASE_ROOT:+--base-root "$BASE_ROOT"} ${FAMILY:+--family "$FAMILY"} ${STEP:+--step "$STEP"} ${EXACT:+--exact} \
     ${MECHANISMS:+--mechanisms $MECHANISMS} ${HP_ROTATION:+--hp-rotation $HP_ROTATION} ${SESSIONS:+--sessions $SESSIONS} ${RUN_PARITY:+--run-parity $RUN_PARITY} \
-    ${HRF_TABLE:+--hrf-table $HRF_TABLE}
+    ${HRF_TABLE:+--hrf-table $HRF_TABLE} ${ZERO_SUM:+--zero-sum}
 
 echo "Finished: $(date)"

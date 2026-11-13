@@ -311,10 +311,20 @@ def fit_roi_exact(sub, roi, data, out_path, overlay_root=None):
     np.savez_compressed(out_path, subject=sub.subject_id, roi=roi, **saved)
 
 
+# --zero-sum: the reference fits have a zero-sum sustained field (fit_cv_ladder_nested m4_TDS_zs / m7_full_zs, read
+# as m4_TDS / m7_full from the reference root). dS alone then moves g_HP and g_LP together along the zero-sum
+# direction (g_HP += ¾·δ, g_LP −= ¼·δ, so g_HP − g_LP = δ and the field averages to 1 over the HP conditions), at the
+# median σ_AF of the other subjects' zero-sum joint fits (m4_TDS_zs has no sustained field, so no width of its own).
+ZERO_SUM_DS = ('m4_TDS', ['g_HP', 'g_LP'], ('sigma_AF', 'm7_full'))
+
+
 def main(subject, bids_folder, rois, output_subdir='af_fixed_group_mechanisms',
          overlay_root=None, base_root=None, family='dog', step=None, exact=False, hp_rotation=0,
-         mechanisms=None, sessions=None, hrf_table=None, run_parity=None):
+         mechanisms=None, sessions=None, hrf_table=None, run_parity=None, zero_sum=False):
     global BASE_ROOT, FAMILY, H, MECHANISMS, HRF_TABLE
+    if zero_sum:
+        MECHANISMS['dS'] = ZERO_SUM_DS
+        PERTURB_SIGN['dS'] = [0.75, -0.25]
     HRF_TABLE = load_hrf_table(hrf_table)
     # The m8 terms (kappa, dnw, dnratio) are family-specific and run only when listed.
     mechanisms = mechanisms or [m for m in MECHANISMS if m not in MECH_MODEL]
@@ -375,10 +385,14 @@ if __name__ == '__main__':
                     help='Save ΔSSE on a grid of δ from the actual predictions')
     ap.add_argument('--mechanisms', nargs='+', default=None, choices=list(MECHANISMS),
                     help='Only these mechanisms (default all but the m8 terms kappa, dnw, dnratio)')
+    ap.add_argument('--zero-sum', action='store_true',
+                    help='Reference fits with the zero-sum sustained field: dS alone moves g_HP (+3/4 δ) and g_LP '
+                         '(-1/4 δ) together, at the other subjects\' median σ_AF of m7_full (ZERO_SUM_DS)')
     ap.add_argument('--hrf-table', default=None,
                     help='TSV of one HRF per subject x ROI (build_roi_hrf_table.py); must match the fits used')
     args = ap.parse_args()
     OVERLAY_PER_MODEL = args.overlay_per_model
     main(args.subject, args.bids_folder, args.rois, args.output_subdir, args.overlay_root,
          args.base_root, args.family, args.step, args.exact, args.hp_rotation,
-         args.mechanisms, args.sessions, hrf_table=args.hrf_table, run_parity=args.run_parity)
+         args.mechanisms, args.sessions, hrf_table=args.hrf_table, run_parity=args.run_parity,
+         zero_sum=args.zero_sum)
