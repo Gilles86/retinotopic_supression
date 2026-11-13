@@ -44,10 +44,11 @@ from scipy import stats
 import retsupp.visualize.paper.fig5_gain_fields as F
 from retsupp.visualize.paper.fig45_common import conditional, joint
 from retsupp.visualize.paper.fig5b_gain_field_map import APERTURE, ECC, EXTENT, RING, gauss
-from retsupp.visualize.paper.paper_style import DISTRACTOR, DOUBLE, FG, HP, MUTED, OUT, ROI_ORDER, TARGET, save
+from retsupp.visualize.paper.paper_style import (DISTRACTOR, DOUBLE, FG, HP, IMAGE_CMAP, MUTED, OUT, ROI_ORDER,
+                                                 SUSTAINED_CMAP, TARGET, save)
 
 AREAS = ['V3', 'hV4', 'TO']
-ZERO = '#2A9D8F'
+ZERO = '#FFFFFF'   # the no-change contour on the (magma) combined-field maps
 STROKE = [pe.withStroke(linewidth=1.8, foreground='w')]
 FWHM = 2 * np.sqrt(2 * np.log(2))
 TR_FWHM = 3.2                     # display width of the transient fields (deg), the same for every area
@@ -215,7 +216,7 @@ def panel_maps(fig, p, x_lab, x0, y_top, cw, gap, rgap, per_area_sustained):
         y -= cw
         vals = np.concatenate([maps[a][r].ravel() for a in AREAS])
         if r == 0:
-            cmap = mpl.colormaps['magma']
+            cmap = IMAGE_CMAP
             lo = np.floor(vals.min() / .05) * .05
             norm_shared = mpl.colors.Normalize(vmin=lo, vmax=0.)
         else:
@@ -321,7 +322,7 @@ def panel_maps_v7(fig, p, x0, y_top, cw, gap, rgap, x_key):
         lo_a = np.floor(sus.min() / .01) * .01
         hi_a = max(np.ceil(sus.max() / .01) * .01, 0.)
         hi_a = hi_a if hi_a > lo_a else lo_a + .01
-        ax.imshow(sus, extent=(-EXTENT, EXTENT, -EXTENT, EXTENT), origin='lower', cmap='magma',
+        ax.imshow(sus, extent=(-EXTENT, EXTENT, -EXTENT, EXTENT), origin='lower', cmap=IMAGE_CMAP,
                   norm=mpl.colors.Normalize(lo_a, hi_a), interpolation='bilinear')
         if sus.min() < 0 < sus.max():
             ax.contour(xx, yy, sus, levels=[0.], colors=[ZERO], linewidths=.8)
@@ -352,7 +353,7 @@ def panel_maps_v7(fig, p, x0, y_top, cw, gap, rgap, x_key):
     # keys at the right
     kx = x_key
     cax = fig.add_axes([kx / W, (y1 + .15) / H, .07 / W, (cw - .3) / H])
-    cb = fig.colorbar(mpl.cm.ScalarMappable(norm=mpl.colors.Normalize(0, 1), cmap='magma'), cax=cax)
+    cb = fig.colorbar(mpl.cm.ScalarMappable(norm=mpl.colors.Normalize(0, 1), cmap=IMAGE_CMAP), cax=cax)
     cb.set_ticks([0, 1])
     cb.set_ticklabels(['Lower', 'Higher'])
     cb.outline.set_linewidth(.4)
@@ -398,7 +399,7 @@ def panel_maps_v8(fig, p, x0, y_top, cw, gap, bgap, under):
         hi_a = max(np.ceil(sus.max() / .01) * .01, 0.)
         hi_a = hi_a if hi_a > lo_a else lo_a + .01
         norm = mpl.colors.Normalize(lo_a, hi_a)
-        ax.imshow(sus, extent=(-EXTENT, EXTENT, -EXTENT, EXTENT), origin='lower', cmap='magma', norm=norm,
+        ax.imshow(sus, extent=(-EXTENT, EXTENT, -EXTENT, EXTENT), origin='lower', cmap=IMAGE_CMAP, norm=norm,
                   interpolation='bilinear')
         if sus.min() < 0 < sus.max():
             ax.contour(xx, yy, sus, levels=[0.], colors=[ZERO], linewidths=.8)
@@ -408,7 +409,7 @@ def panel_maps_v8(fig, p, x0, y_top, cw, gap, bgap, under):
                 va='top', color=FG)
         bw = .56 * cw
         cax = fig.add_axes([(xa + (cw - bw) / 2) / W, (y - .24 - bar_h) / H, bw / W, bar_h / H])
-        cb = fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap='magma'), cax=cax, orientation='horizontal')
+        cb = fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=IMAGE_CMAP), cax=cax, orientation='horizontal')
         cb.set_ticks([lo_a, hi_a])
         cb.set_ticklabels([fmt(lo_a), '0' if hi_a == 0 else fmt(hi_a)])
         cb.outline.set_linewidth(.4)
@@ -470,14 +471,14 @@ def pct(v, dec=None):
     return (f'{x:+.{dec}f}%' if round(abs(x), dec) else f'0%').replace('-', '−')
 
 
-HP_CMAP = mpl.colors.LinearSegmentedColormap.from_list('hp', ['#ffffff', '#F4A6A6', HP, '#7A1010'])
+HP_CMAP = SUSTAINED_CMAP
 
 
 def panel_maps_v9(fig, p, x0, y_top, cw, gap, bgap, under, bars=True):
     """As v8, in percent, with the sustained block as HP − LP DIFFERENCE maps: only the HP-specific part of the
-    sustained field (dS estimated alone × the field's Gaussian at HP), white → HP red on one scale shared by the three
-    areas whose deepest value is the deepest area's dS (no headroom); a thin red contour at the field's FWHM around HP;
-    the HP − LP value in bold next to HP; a small inset per map with the sustained gain at LP (grey) and at HP (red)."""
+    sustained field (dS estimated alone × the field's Gaussian at HP), white → HP purple on one scale shared by the three
+    areas whose deepest value is the deepest area's dS (no headroom); a thin purple contour at the field's FWHM around HP;
+    the HP − LP value in bold next to HP; a small inset per map with the sustained gain at LP (grey) and at HP (purple)."""
     W, H = fig.get_size_inches()
     g = np.linspace(-EXTENT, EXTENT, 361)
     xx, yy = np.meshgrid(g, g)
@@ -495,7 +496,7 @@ def panel_maps_v9(fig, p, x0, y_top, cw, gap, bgap, under, bars=True):
         _, tgt, dis = maps[a]
         xa = xs + c * (cw + gap)
         ax = fig.add_axes([xa / W, y / H, cw / W, cw / H])
-        # reversed so that 0 is white and the deepest value is dark red; faded to white towards a circular edge so
+        # reversed so that 0 is white and the deepest value is deep purple; faded to white towards a circular edge so
         # the field does not end in a hard cut at the square border
         rgba = HP_CMAP(mpl.colors.Normalize(0, -dmin)(-diff[a]))
         rgba[..., :3] = rgba[..., :3] * fade[..., None] + (1 - fade[..., None])
@@ -623,7 +624,7 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
     if v9:
         y_bottom, dmin, vmax = panel_maps_v9(fig, p, x0, Y(.58), cw, gap, bgap, under)
         scales = [f'sustained maps: HP − LP, one scale for the three areas, from 0 (white) to the deepest area\'s '
-                  f'HP − LP, {dmin:+.1f}% (red; no headroom, so that area saturates)'.replace('-', '−'),
+                  f'HP − LP, {dmin:+.1f}% (purple; no headroom, so that area saturates)'.replace('-', '−'),
                   f'transient maps: target (orange) and distractor (blue) on one scale, 0 to +{100 * vmax:.0f}%, for both '
                   'and all three areas (the two bars of the key share their ticks)']
         ranges = []
@@ -731,7 +732,7 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
         "a, The fitted parametric gain field over the search display, not data: for each area, the median over "
         f"participants (n = {n}) of each participant's joint-fit parameter (all terms fitted together), put through the "
         "model's field equations; value, the fractional change in gain on the stimulus drive (−0.10: 10% less). The "
-        "display is rotated so that the HP location is at the top (red dashed ring); small circles, the eight item "
+        "display is rotated so that the HP location is at the top (purple dashed ring); small circles, the eight item "
         "positions on the 4° ring (dotted; stronger: the four possible target and distractor locations); grey circle, "
         "the 3.17° aperture of the mapping bar; +, fixation. "
         + ("Left three maps, the sustained field, present throughout the block: a Gaussian field at each of the four "
@@ -751,11 +752,11 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
         f"fit (0.5° or 8°), so it is set for display to the same FWHM of {TR_FWHM:.1f}° in every area and is not "
         "interpreted (field widths per subject: Supplementary Fig. S, field widths). Colour scales: "
         + '; '.join(scales)
-        + (' (magma for the sustained field, teal line and tick at no change; the transient rows from white, no '
+        + (' (magma for the sustained field, white line and tick at no change; the transient rows from white, no '
            'change, to the component colour)' if not compact else
            ' (magma for the sustained field; the transient fields from white, no change, to orange, target, and '
            'blue, distractor)' if v8 else
-           ' (magma for the sustained field, teal line at no change; the transient fields from white, no change, to '
+           ' (magma for the sustained field, white line at no change; the transient fields from white, no change, to '
            'orange, target, and blue, distractor)')
         + '. Values used: ' + vals + '. V3, hV4 and TO are the areas where the sustained gain is reliably lower at HP '
         'than at LP in the joint fit (q < .05; V1, V2 and the other areas are in the parameter table)'
@@ -905,13 +906,13 @@ def percent_legend(legend, p, n, dmin, data_driven=None):
     a_txt = (
         " a, The fitted parametric gain field over the search display, not data: for each area, the median over "
         f"participants (n = {n}) of each participant's fitted parameters, put through the model's field equations. The "
-        "display is rotated so that the HP location is at the top (red dashed ring); small circles, the eight item "
+        "display is rotated so that the HP location is at the top (purple dashed ring); small circles, the eight item "
         "positions on the 4° ring (dotted; stronger: the four possible target and distractor locations); grey circle, "
         "the 3.17° aperture of the mapping bar; +, fixation. Left three maps, the sustained field at HP minus at the "
         "low-probability (LP) locations: only the HP-specific part of the sustained field, the area's median HP − LP "
         "difference estimated alone (dS, the value panel c plots, printed in bold next to HP) times the field's "
-        + width_txt + "; thin red line, the half-maximum (FWHM) contour of that field. "
-        "One scale for the three areas, white (no difference) to dark red at the deepest area's HP − LP "
+        + width_txt + "; thin purple line, the half-maximum (FWHM) contour of that field. "
+        "One scale for the three areas, white (no difference) to deep purple at the deepest area's HP − LP "
         f"({dmin:+.1f}%; no headroom, so that area saturates). ".replace("-", "−") + "The sustained field itself is a suppression at all four "
         "possible locations in most areas "
         f"({len(neg)} of 9: {', '.join(neg)}); the grey lines under each map give the sustained gain at LP and at HP "
@@ -934,7 +935,7 @@ def percent_legend(legend, p, n, dmin, data_driven=None):
 
 
 SEARCH_LEGEND = """
-**Supplementary Figure S. The fitted gain field during a search display: distractor at the HP location vs at an LP location.** The fitted parametric field, not data, as in Fig. 5a: for each area (V3, hV4, TO), the median over participants (n = {n}) of each participant's joint-fit parameter, put through the model's field equations; value, the fractional change in gain on the stimulus drive. Each map is the sum of the sustained field and the transient target and distractor fields of Fig. 5a, as in the model's forward pass, during a search display with the target (orange diamond) opposite the HP location and the distractor (blue dot) at HP (top row) or at the LP location next to HP (bottom row); only the distractor's location differs between the two rows. Sustained field as in Fig. 5a (median LP gain; HP gain = median LP gain + median joint dS). Distractor gain: at an LP location the median g_LP_dyn, at HP that plus the median joint transient HP − LP difference (dD), the same rule as for the sustained field; target gain, the median g_T_dyn. Transient width set for display to FWHM {fwhm:.1f}° in every area, not interpreted. The joint transient HP − LP difference is not reliable in any area (Fig. 5d legend: smallest q = 0.29), so the transient part of the HP − LP difference drawn here is not an effect. The line under each column gives the gain at the distractor with the distractor at HP minus with the distractor at LP: the sustained HP − LP difference plus the transient HP − LP difference. Colour: magma, one scale per area shared by the two rows (colour bar under each column); teal line and tick, no change. HP at the top (red dashed ring); small circles, the eight item positions on the 4° ring; grey circle, the 3.17° bar aperture. Values: {values}.
+**Supplementary Figure S. The fitted gain field during a search display: distractor at the HP location vs at an LP location.** The fitted parametric field, not data, as in Fig. 5a: for each area (V3, hV4, TO), the median over participants (n = {n}) of each participant's joint-fit parameter, put through the model's field equations; value, the fractional change in gain on the stimulus drive. Each map is the sum of the sustained field and the transient target and distractor fields of Fig. 5a, as in the model's forward pass, during a search display with the target (orange diamond) opposite the HP location and the distractor (blue dot) at HP (top row) or at the LP location next to HP (bottom row); only the distractor's location differs between the two rows. Sustained field as in Fig. 5a (median LP gain; HP gain = median LP gain + median joint dS). Distractor gain: at an LP location the median g_LP_dyn, at HP that plus the median joint transient HP − LP difference (dD), the same rule as for the sustained field; target gain, the median g_T_dyn. Transient width set for display to FWHM {fwhm:.1f}° in every area, not interpreted. The joint transient HP − LP difference is not reliable in any area (Fig. 5d legend: smallest q = 0.29), so the transient part of the HP − LP difference drawn here is not an effect. The line under each column gives the gain at the distractor with the distractor at HP minus with the distractor at LP: the sustained HP − LP difference plus the transient HP − LP difference. Colour: black–red–yellow (magma without its purple range), one scale per area shared by the two rows (colour bar under each column); white line and tick, no change. HP at the top (purple dashed ring); small circles, the eight item positions on the 4° ring; grey circle, the 3.17° bar aperture. Values: {values}.
 """
 
 
@@ -958,7 +959,7 @@ def search_figure(p, n, suffix):
         for r, (m, key) in enumerate(((at_hp, 'hp'), (at_lp, 'left'))):
             y = H - .32 - (r + 1) * cw - r * .12
             ax = fig.add_axes([xa / W, y / H, cw / W, cw / H])
-            ax.imshow(m, extent=(-EXTENT, EXTENT, -EXTENT, EXTENT), origin='lower', cmap='magma', norm=norm,
+            ax.imshow(m, extent=(-EXTENT, EXTENT, -EXTENT, EXTENT), origin='lower', cmap=IMAGE_CMAP, norm=norm,
                       interpolation='bilinear')
             if m.min() < 0 < m.max():
                 ax.contour(xx, yy, m, levels=[0.], colors=[ZERO], linewidths=.8)
@@ -970,7 +971,7 @@ def search_figure(p, n, suffix):
             if r == 0:
                 ax.set_title(a, fontsize=7.5, pad=3)
         cax = fig.add_axes([(xa + .15) / W, (H - .32 - 2 * cw - .12 - .14) / H, (cw - .3) / W, .055 / H])
-        cb = fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap='magma'), cax=cax, orientation='horizontal')
+        cb = fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=IMAGE_CMAP), cax=cax, orientation='horizontal')
         ticks = sorted({round(norm.vmin, 2), 0., round(norm.vmax, 2)})
         cb.set_ticks(ticks)
         cb.set_ticklabels([fmt(t) if t else '0' for t in ticks])
@@ -1007,7 +1008,7 @@ def search_figure(p, n, suffix):
 
 
 SEARCH_LEGEND_V2 = """
-**Supplementary Figure. The fitted gain field during a search display: distractor at the HP location vs at an LP location.** The fitted parametric field, not data, as in Fig. 5a: for each area (V3, hV4, TO), the median over participants (n = {n}) of each participant's fitted parameters, put through the model's field equations; value, the change in gain on the stimulus drive in % (differences between gains in percentage points, written as %). Each map is the sum of the sustained field and the transient target and distractor fields, as in the model's forward pass, during a search display with the target (orange diamond) opposite the HP location and the distractor (blue dot) at HP (top row) or at the LP location next to HP (bottom row); only the distractor's location differs between the two rows. Sustained field: median joint-fit gain at the LP locations; at HP, that plus the area's median HP − LP difference estimated alone (dS), exactly as in Fig. 5a. Distractor gain: at an LP location the median joint-fit LP distractor gain; at HP, that plus the median joint-fit transient HP − LP difference (dD); target gain, the median joint-fit target gain. Transient width set for display to FWHM {fwhm:.1f}° in every area, not interpreted. The transient HP − LP difference is not reliable in any area, jointly fitted or estimated alone (Fig. 5d legend), so the transient part of the HP − LP difference drawn here is not an effect. The line under each column gives the gain at the distractor with the distractor at HP minus with the distractor at LP: the sustained plus the transient HP − LP difference. Colour: magma, one scale per area shared by the two rows (colour bar under each column); teal line and tick, no change. HP at the top (red dashed ring); small circles, the eight item positions on the 4° ring; grey circle, the 3.17° bar aperture. Values: {values}.
+**Supplementary Figure. The fitted gain field during a search display: distractor at the HP location vs at an LP location.** The fitted parametric field, not data, as in Fig. 5a: for each area (V3, hV4, TO), the median over participants (n = {n}) of each participant's fitted parameters, put through the model's field equations; value, the change in gain on the stimulus drive in % (differences between gains in percentage points, written as %). Each map is the sum of the sustained field and the transient target and distractor fields, as in the model's forward pass, during a search display with the target (orange diamond) opposite the HP location and the distractor (blue dot) at HP (top row) or at the LP location next to HP (bottom row); only the distractor's location differs between the two rows. Sustained field: median joint-fit gain at the LP locations; at HP, that plus the area's median HP − LP difference estimated alone (dS), exactly as in Fig. 5a. Distractor gain: at an LP location the median joint-fit LP distractor gain; at HP, that plus the median joint-fit transient HP − LP difference (dD); target gain, the median joint-fit target gain. Transient width set for display to FWHM {fwhm:.1f}° in every area, not interpreted. The transient HP − LP difference is not reliable in any area, jointly fitted or estimated alone (Fig. 5d legend), so the transient part of the HP − LP difference drawn here is not an effect. The line under each column gives the gain at the distractor with the distractor at HP minus with the distractor at LP: the sustained plus the transient HP − LP difference. Colour: black–red–yellow (magma without its purple range), one scale per area shared by the two rows (colour bar under each column); white line and tick, no change. HP at the top (purple dashed ring); small circles, the eight item positions on the 4° ring; grey circle, the 3.17° bar aperture. Values: {values}.
 """
 
 
@@ -1033,7 +1034,7 @@ def search_figure_v2(p, n, suffix, name='figS_gain_field_map_search_v2', dd=None
         for r, (m, key) in enumerate(((at_hp, 'hp'), (at_lp, 'left'))):
             y = H - .32 - (r + 1) * cw - r * .12
             ax = fig.add_axes([xa / W, y / H, cw / W, cw / H])
-            ax.imshow(m, extent=(-EXTENT, EXTENT, -EXTENT, EXTENT), origin='lower', cmap='magma', norm=norm,
+            ax.imshow(m, extent=(-EXTENT, EXTENT, -EXTENT, EXTENT), origin='lower', cmap=IMAGE_CMAP, norm=norm,
                       interpolation='bilinear')
             if m.min() < 0 < m.max():
                 ax.contour(xx, yy, m, levels=[0.], colors=[ZERO], linewidths=.8)
@@ -1045,7 +1046,7 @@ def search_figure_v2(p, n, suffix, name='figS_gain_field_map_search_v2', dd=None
             if r == 0:
                 ax.set_title(a, fontsize=7.5, pad=3)
         cax = fig.add_axes([(xa + .15) / W, (H - .32 - 2 * cw - .12 - .14) / H, (cw - .3) / W, .055 / H])
-        cb = fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap='magma'), cax=cax, orientation='horizontal')
+        cb = fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=IMAGE_CMAP), cax=cax, orientation='horizontal')
         ticks = sorted({round(norm.vmin), 0., round(norm.vmax)})
         cb.set_ticks(ticks)
         cb.set_ticklabels([f'{t:+.0f}%'.replace('-', '−') if t else '0' for t in ticks])

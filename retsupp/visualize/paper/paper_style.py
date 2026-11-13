@@ -48,13 +48,11 @@ DIV_CMAP = _cmap('less_more', [HP_DEEP, HP, '#C2A5CF', '#F7F7F7', '#A6DBA0', '#5
 
 
 def _image_cmap():
-    """Magma for images of the stimulus drive and decoded frames (on black), with its purple range compressed into the
-    first 12% so the images read black -> red -> yellow and not as the sustained-field purple."""
+    """Magma for images of the stimulus drive and decoded frames (on black), with its purple range replaced by dark
+    red: black -> red -> orange -> magma's pale yellow, so the images do not read as the sustained-field purple."""
     import matplotlib as mpl
-    import numpy as np
     mg = mpl.colormaps['magma']
-    t = np.linspace(.12, 1, 40)
-    stops = [(0., mg(0.))] + [(float(x), mg(.4 + .6 * (x - .12) / .88)) for x in t]
+    stops = [(0., mg(0.)), (.25, '#4A0C1E'), (.5, '#B5263F'), (.7, mg(.75)), (.85, mg(.88)), (1., mg(1.))]
     return mpl.colors.LinearSegmentedColormap.from_list('magma_img', stops)
 
 
