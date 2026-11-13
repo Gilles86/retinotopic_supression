@@ -68,10 +68,15 @@ def main(subject, rois, bids, out_dir, subdir, root, hrf_table, trials_from, dt_
     for roi in rois:
         try:
             m7 = load(root, 'm7_full', subject, roi)
-            m8 = load(dt_root, 'm8_full_dT', subject, roi) if dt_root else None
         except FileNotFoundError as e:
             print('skip', roi, e, flush=True)
             continue
+        m8 = None
+        if dt_root:   # m8_full_dT is not complete: SDT / SDT0 only where it exists
+            try:
+                m8 = load(dt_root, 'm8_full_dT', subject, roi)
+            except FileNotFoundError as e:
+                print('no SDT for', roi, e, flush=True)
         ids = np.asarray(m7['voxel_ids'])
         hrf = roi_hrf_model(sub, roi, table)
         kw = dict(grid_coords=grid, paradigm=par, condition_indicator=ci, dynamic_indicator=di, target_indicator=ti,
@@ -90,7 +95,7 @@ def main(subject, rois, bids, out_dir, subdir, root, hrf_table, trials_from, dt_
         row = dict(subject=subject, roi=roi, w_d=w_d, w_t=w_t, dS=g(p7, 'g_HP') - g(p7, 'g_LP'),
                    dD=g(p7, 'g_HP_dyn') - g(p7, 'g_LP_dyn'), g_T=g(p7, 'g_T_dyn'), g_D_lp=g(p7, 'g_LP_dyn'),
                    item_scale=g(p7, 'item_scale'))
-        if dt_root:
+        if m8 is not None:
             if not np.array_equal(ids, np.asarray(m8['voxel_ids'])):
                 raise ValueError(f'{roi}: m8_full_dT voxels differ from the polished m7_full')
             m8_model = TargetSplitDoG(grid_coordinates=grid, paradigm=par, condition_indicator=ci, dynamic_indicator=di,
@@ -121,7 +126,7 @@ def main(subject, rois, bids, out_dir, subdir, root, hrf_table, trials_from, dt_
             if not len(vox):
                 continue
             bar_m = bar[:, vox].mean(1)
-            for v in variants:
+            for v in pred:
                 raw = pred[v][:, vox].mean(1)
                 for r in meta:
                     tr = sub.get_tr(r.session, r.run)
@@ -133,6 +138,8 @@ def main(subject, rois, bids, out_dir, subdir, root, hrf_table, trials_from, dt_
         print(roi, 'done', flush=True)
 
     for v in variants:
+        if not rows[v]:
+            continue
         pd.concat(rows[v]).to_csv(outs[v] / f'sub-{subject:02d}_timeseries.tsv.gz', sep='\t', index=False,
                                   float_format='%.6g')
     pd.DataFrame(info).to_csv(outs['SD'] / f'sub-{subject:02d}_terms.tsv', sep='\t', index=False)

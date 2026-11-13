@@ -35,6 +35,7 @@ PY="$HOME/data/conda/envs/retsupp_cuda/bin/python"
     --dt-root "$D/af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf" \
     --hrf-table "$P/roi_hrf_dog_final2.tsv" --trials-from "$P/$MEAS" --subdir "$SUB"
 for v in nohp S SD SDT SDT0; do
+    [ -f "$P/${SUB}_$v/sub-${S2}_timeseries.tsv.gz" ] || { echo "no $v series"; continue; }
     for mode in relative hplp; do
         o="$P/${DEC}_${mode}_$v"; mkdir -p "$o"
         "$PY" -m retsupp.visualize.paper.deconvolve_location_responses $([ $mode = relative ] && echo --relative) \
