@@ -375,10 +375,18 @@ def report(args):
             rows.append(dict(fit=tag, **hdi_row(b[j], rt_bar, f'slope_{k}')))
         tau_s = stack('tau')                                # (S, 3, draws)
         b_s = stack('b')
+        # The reverse direction, comparable to Fig. 7b: latent gain change per SD of log RT (beyond the design), in
+        # raw gain units × 100: Cov(z_j, y) / SD(y) = τ_j (R b)_j / sqrt(b'Rb + σ²), per participant, mean over them.
+        Rd = stack('R')                                     # (3, 3, draws)
+        sig = stack('sigma')                                # (S, draws)
+        Rb = np.einsum('ijd,sjd->sid', Rd, b_s)             # (S, 3, draws)
+        var_y = np.einsum('sid,sid->sd', b_s, Rb) + sig ** 2
+        sd_g = np.array(json.loads(idata.attrs['gain_sd']))
         for j, k in enumerate(KINDS):
-            # log RT per unit of latent gain, in units of the observed gain's SD over all trials (b_sj / τ_sj,
-            # averaged over participants): the quantity the data pin down when τ is weakly identified
-            rows.append(dict(fit=tag, **hdi_row((b_s[:, j] / tau_s[:, j]).mean(0), rt_bar, f'slope_per_obsSD_{k}')))
+            kap = (tau_s[:, j] * Rb[:, j] / np.sqrt(var_y)).mean(0) * sd_g[j] * 100
+            lo, hi = az.hdi(kap, hdi_prob=0.95)
+            rows.append(dict(fit=tag, term=f'gain_x100_per_SD_logRT_{k}', mean_log=kap.mean(), hdi_lo_log=lo,
+                             hdi_hi_log=hi, p_neg=(kap < 0).mean(), p_pos=(kap > 0).mean()))
         beta = stack('beta')
         fx = list(post['beta'].coords['fixed'].values)
         B = {n: beta[fx.index(n)] for n in fx}
