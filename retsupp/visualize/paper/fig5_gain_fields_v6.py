@@ -190,11 +190,11 @@ ROWS_V6 = ("Middle row, the target's transient field alone (target, orange diamo
            "dot, drawn at an LP location next to HP); value, the distractor gain averaged over its locations, as in "
            "panel b (the transient HP − LP difference is in panel d).")
 ROWS_V7 = ("Bottom row, the transient fields of the target (orange, around the orange diamond, at an LP location, here "
-           "opposite HP) and of the distractor (blue, around the blue dot, drawn at an LP location next to HP) in one "
+           "opposite HP) and of the distractor (green, around the green dot, drawn at an LP location next to HP) in one "
            "map; values, the target gain of panel b and the distractor gain averaged over its locations, as in panel b "
            "(the transient HP − LP difference is in panel d); both on one scale, so their colours compare directly.")
 ROWS_V8 = ("Right three maps, the transient fields of the target (orange, around the orange diamond, at an LP location, "
-           "here opposite HP) and of the distractor (blue, around the blue dot, drawn at an LP location next to HP) in "
+           "here opposite HP) and of the distractor (green, around the green dot, drawn at an LP location next to HP) in "
            "one map; values, the target gain of panel b and the distractor gain averaged over its locations, as in "
            "panel b (the transient HP − LP difference is in panel d); both on one scale, so their colours compare "
            "directly.")
@@ -293,7 +293,7 @@ def panel_maps(fig, p, x_lab, x0, y_top, cw, gap, rgap, per_area_sustained):
 
 
 def transient_rgb(tgt, dis, vmax):
-    """Target (orange) and distractor (blue) fields in one map, both on the same scale 0..vmax (white = no change)."""
+    """Target (orange) and distractor (green) fields in one map, both on the same scale 0..vmax (white = no change)."""
     def rgb(c):
         return np.array(mpl.colors.to_rgb(c))
     at = np.clip(tgt / vmax, 0, 1)[..., None]
@@ -443,7 +443,7 @@ def panel_maps_v8(fig, p, x0, y_top, cw, gap, bgap, under):
             t = fig.text(xe / W, yh / H, txt, fontsize=6.5, color=cc, va='center', ha='left')
             fig.canvas.draw()
             xe = t.get_window_extent().x1 / fig.dpi
-    # one key for the transient block: target (orange) over distractor (blue), touching, on the same ticks
+    # one key for the transient block: target (orange) over distractor (green), touching, on the same ticks
     bw = 1.5
     xk = xt + (3 * cw + 2 * gap - bw) / 2
     kh = .09                                  # each bar high enough for its 6 pt label
@@ -625,18 +625,18 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
         y_bottom, dmin, vmax = panel_maps_v9(fig, p, x0, Y(.58), cw, gap, bgap, under)
         scales = [f'sustained maps: HP − LP, one scale for the three areas, from 0 (white) to the deepest area\'s '
                   f'HP − LP, {dmin:+.1f}% (purple; no headroom, so that area saturates)'.replace('-', '−'),
-                  f'transient maps: target (orange) and distractor (blue) on one scale, 0 to +{100 * vmax:.0f}%, for both '
+                  f'transient maps: target (orange) and distractor (green) on one scale, 0 to +{100 * vmax:.0f}%, for both '
                   'and all three areas (the two bars of the key share their ticks)']
         ranges = []
     elif v8:
         y_bottom, ranges, vmax = panel_maps_v8(fig, p, x0, Y(.58), cw, gap, bgap, under)
         scales = [f'sustained maps: each area on its own scale, colour bar under each map ({"; ".join(ranges)})',
-                  f'transient maps: target (orange) and distractor (blue) on one scale, 0 to {fmt(vmax)}, for both '
+                  f'transient maps: target (orange) and distractor (green) on one scale, 0 to {fmt(vmax)}, for both '
                   'and all three areas (the two bars of the key share their ticks)']
     elif compact:
         y_bottom, ranges, vmax = panel_maps_v7(fig, p, x0, Y(.34 + .15), cw, gap, rgap, x_key=x0 + 3 * cw + 2 * gap + .3)
         scales = [f'sustained row: each area on its own scale ({"; ".join(ranges)})',
-                  f'transient row: target (orange) and distractor (blue) on one scale, 0 to {fmt(vmax)}, for both '
+                  f'transient row: target (orange) and distractor (green) on one scale, 0 to {fmt(vmax)}, for both '
                   'and all three areas']
     else:
         y_bottom, scales = panel_maps(fig, p, x_lab, x0, Y(.34), cw, gap, rgap, per_area_sustained)
@@ -918,7 +918,7 @@ def percent_legend(legend, p, n, dmin, data_driven=None):
         f"({len(neg)} of 9: {', '.join(neg)}); the grey lines under each map give the sustained gain at LP and at HP "
         "(median joint-fit LP gain; at HP, that plus the HP − LP difference drawn). Right three maps, the transient "
         "fields of the target (orange, around the orange diamond, at an LP location, here opposite HP) and of the "
-        "distractor (blue, around the blue dot, drawn at an LP location next to HP) in one map; values, the target gain "
+        "distractor (green, around the green dot, drawn at an LP location next to HP) in one map; values, the target gain "
         "of panel b and the distractor gain averaged over its locations, as in panel b (the transient HP − LP "
         "difference is in panel d); both on one scale, 0 to the largest value, so their colours compare directly. The "
         "transient fields exist only while a search display is on; their fitted width is often at a bound of the fit "
@@ -935,7 +935,7 @@ def percent_legend(legend, p, n, dmin, data_driven=None):
 
 
 SEARCH_LEGEND = """
-**Supplementary Figure S. The fitted gain field during a search display: distractor at the HP location vs at an LP location.** The fitted parametric field, not data, as in Fig. 5a: for each area (V3, hV4, TO), the median over participants (n = {n}) of each participant's joint-fit parameter, put through the model's field equations; value, the fractional change in gain on the stimulus drive. Each map is the sum of the sustained field and the transient target and distractor fields of Fig. 5a, as in the model's forward pass, during a search display with the target (orange diamond) opposite the HP location and the distractor (blue dot) at HP (top row) or at the LP location next to HP (bottom row); only the distractor's location differs between the two rows. Sustained field as in Fig. 5a (median LP gain; HP gain = median LP gain + median joint dS). Distractor gain: at an LP location the median g_LP_dyn, at HP that plus the median joint transient HP − LP difference (dD), the same rule as for the sustained field; target gain, the median g_T_dyn. Transient width set for display to FWHM {fwhm:.1f}° in every area, not interpreted. The joint transient HP − LP difference is not reliable in any area (Fig. 5d legend: smallest q = 0.29), so the transient part of the HP − LP difference drawn here is not an effect. The line under each column gives the gain at the distractor with the distractor at HP minus with the distractor at LP: the sustained HP − LP difference plus the transient HP − LP difference. Colour: black–red–yellow (magma without its purple range), one scale per area shared by the two rows (colour bar under each column); white line and tick, no change. HP at the top (purple dashed ring); small circles, the eight item positions on the 4° ring; grey circle, the 3.17° bar aperture. Values: {values}.
+**Supplementary Figure S. The fitted gain field during a search display: distractor at the HP location vs at an LP location.** The fitted parametric field, not data, as in Fig. 5a: for each area (V3, hV4, TO), the median over participants (n = {n}) of each participant's joint-fit parameter, put through the model's field equations; value, the fractional change in gain on the stimulus drive. Each map is the sum of the sustained field and the transient target and distractor fields of Fig. 5a, as in the model's forward pass, during a search display with the target (orange diamond) opposite the HP location and the distractor (green dot) at HP (top row) or at the LP location next to HP (bottom row); only the distractor's location differs between the two rows. Sustained field as in Fig. 5a (median LP gain; HP gain = median LP gain + median joint dS). Distractor gain: at an LP location the median g_LP_dyn, at HP that plus the median joint transient HP − LP difference (dD), the same rule as for the sustained field; target gain, the median g_T_dyn. Transient width set for display to FWHM {fwhm:.1f}° in every area, not interpreted. The joint transient HP − LP difference is not reliable in any area (Fig. 5d legend: smallest q = 0.29), so the transient part of the HP − LP difference drawn here is not an effect. The line under each column gives the gain at the distractor with the distractor at HP minus with the distractor at LP: the sustained HP − LP difference plus the transient HP − LP difference. Colour: black–red–yellow (magma without its purple range), one scale per area shared by the two rows (colour bar under each column); white line and tick, no change. HP at the top (purple dashed ring); small circles, the eight item positions on the 4° ring; grey circle, the 3.17° bar aperture. Values: {values}.
 """
 
 
@@ -1008,7 +1008,7 @@ def search_figure(p, n, suffix):
 
 
 SEARCH_LEGEND_V2 = """
-**Supplementary Figure. The fitted gain field during a search display: distractor at the HP location vs at an LP location.** The fitted parametric field, not data, as in Fig. 5a: for each area (V3, hV4, TO), the median over participants (n = {n}) of each participant's fitted parameters, put through the model's field equations; value, the change in gain on the stimulus drive in % (differences between gains in percentage points, written as %). Each map is the sum of the sustained field and the transient target and distractor fields, as in the model's forward pass, during a search display with the target (orange diamond) opposite the HP location and the distractor (blue dot) at HP (top row) or at the LP location next to HP (bottom row); only the distractor's location differs between the two rows. Sustained field: median joint-fit gain at the LP locations; at HP, that plus the area's median HP − LP difference estimated alone (dS), exactly as in Fig. 5a. Distractor gain: at an LP location the median joint-fit LP distractor gain; at HP, that plus the median joint-fit transient HP − LP difference (dD); target gain, the median joint-fit target gain. Transient width set for display to FWHM {fwhm:.1f}° in every area, not interpreted. The transient HP − LP difference is not reliable in any area, jointly fitted or estimated alone (Fig. 5d legend), so the transient part of the HP − LP difference drawn here is not an effect. The line under each column gives the gain at the distractor with the distractor at HP minus with the distractor at LP: the sustained plus the transient HP − LP difference. Colour: black–red–yellow (magma without its purple range), one scale per area shared by the two rows (colour bar under each column); white line and tick, no change. HP at the top (purple dashed ring); small circles, the eight item positions on the 4° ring; grey circle, the 3.17° bar aperture. Values: {values}.
+**Supplementary Figure. The fitted gain field during a search display: distractor at the HP location vs at an LP location.** The fitted parametric field, not data, as in Fig. 5a: for each area (V3, hV4, TO), the median over participants (n = {n}) of each participant's fitted parameters, put through the model's field equations; value, the change in gain on the stimulus drive in % (differences between gains in percentage points, written as %). Each map is the sum of the sustained field and the transient target and distractor fields, as in the model's forward pass, during a search display with the target (orange diamond) opposite the HP location and the distractor (green dot) at HP (top row) or at the LP location next to HP (bottom row); only the distractor's location differs between the two rows. Sustained field: median joint-fit gain at the LP locations; at HP, that plus the area's median HP − LP difference estimated alone (dS), exactly as in Fig. 5a. Distractor gain: at an LP location the median joint-fit LP distractor gain; at HP, that plus the median joint-fit transient HP − LP difference (dD); target gain, the median joint-fit target gain. Transient width set for display to FWHM {fwhm:.1f}° in every area, not interpreted. The transient HP − LP difference is not reliable in any area, jointly fitted or estimated alone (Fig. 5d legend), so the transient part of the HP − LP difference drawn here is not an effect. The line under each column gives the gain at the distractor with the distractor at HP minus with the distractor at LP: the sustained plus the transient HP − LP difference. Colour: black–red–yellow (magma without its purple range), one scale per area shared by the two rows (colour bar under each column); white line and tick, no change. HP at the top (purple dashed ring); small circles, the eight item positions on the 4° ring; grey circle, the 3.17° bar aperture. Values: {values}.
 """
 
 

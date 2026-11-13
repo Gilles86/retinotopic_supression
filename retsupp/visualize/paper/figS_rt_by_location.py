@@ -18,7 +18,8 @@ import pandas as pd
 from retsupp.visualize.paper import richter_followup as rf
 from retsupp.visualize.paper.discussion_checks import CONTRASTS, TRIALS
 from retsupp.visualize.paper.fig1_paradigm_behaviour import cond_icons, rt_panel, stars
-from retsupp.visualize.paper.paper_style import DISTRACTOR, DOUBLE, FG, HP, MUTED, TARGET, letter, offset_spines, save
+from retsupp.visualize.paper.paper_style import (DISTRACTOR, DOUBLE, FG, HP, LP_NEXT, LP_OPP, MUTED, TARGET, letter,
+                                                 offset_spines, save)
 
 NAME = 'figS_rt_by_location_n28'
 RT_LIM = (680, 1160)
@@ -93,7 +94,7 @@ def main():
                     .rename(columns={'dist_rel': 'condition', 'target_rel': 'condition'}))
             long = long.rename(columns={long.columns[1]: 'condition'})
             ax = fig.add_axes([cx / W, y0 / H, cw / W, h / H])
-            rt_panel(ax, long, [LABELS[c] for c in conds], [HP, color, color, MUTED][:len(conds)], [], RT_LIM)
+            rt_panel(ax, long, [LABELS[c] for c in conds], [HP, LP_NEXT, LP_OPP, MUTED][:len(conds)], [], RT_LIM)
             cond_icons(ax, [[(LOC[c], item, True)] if c in LOC else [] for c in conds], y0=-.5, h=.4)
             ax.tick_params(axis='x', pad=36, labelsize=6.5)
             ax.set_yticks([800, 900, 1000, 1100])
@@ -160,7 +161,7 @@ def main():
         'location had yet been the HP location, so no response can reflect an earlier HP location. a, c, response time with '
         'the distractor at the HP location, at a location next to it, at the location opposite it, or absent. b, d, response '
         'time with the target at the HP location, next to it or opposite it, on trials with a distractor. Icons: the four '
-        'possible locations, HP ringed in red, and the item. Left of each pair, response times: dots are participants (mean '
+        'possible locations, HP ringed in purple, and the item. Left of each pair, response times: dots are participants (mean '
         'over correct trials), large points and bars the mean ± within-participant SEM (Cousineau-Morey). Right of each pair, '
         'within-participant differences: dots are participants (triangles beyond the axis, drawn at its edge), diamonds the '
         'median and bars its bootstrapped 95% CI (10 000 resamples); above each strip the median (ms) and the Wilcoxon '

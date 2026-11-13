@@ -30,7 +30,7 @@ import pandas as pd
 from scipy.stats import friedmanchisquare, wilcoxon
 from statsmodels.stats.multitest import multipletests
 
-from retsupp.visualize.paper.paper_style import (DOUBLE, FG, HP, MUTED, OUT, ROI_GROUPS, ROI_ORDER, ROI_X,
+from retsupp.visualize.paper.paper_style import (DIV_CMAP, DOUBLE, FG, HP, LP_NEXT, LP_OPP, MUTED, OUT, ROI_GROUPS, ROI_ORDER, ROI_X,
                                                  letter)
 
 APERTURE, MERIDIAN, MIN_VOXELS = 3.17, .25, 10
@@ -38,7 +38,7 @@ ECC_HP = 4.0
 PIXEL_AREA = (10 / 49) ** 2          # resolution 50 on ±5°
 QUAD = {'upper_right': (1, 1), 'upper_left': (-1, 1), 'lower_left': (-1, -1), 'lower_right': (1, -1)}
 RELATIONS = ['HP', 'Next', 'Opposite']
-REL_COLORS = {'HP': HP, 'Next': '#E9A0A0', 'Opposite': MUTED}
+REL_COLORS = {'HP': HP, 'Next': LP_NEXT, 'Opposite': LP_OPP}
 # (column, label, log): log -> within-voxel log ratio, else difference
 PARAMS = [('sd', 'σ centre', True), ('a_peak', 'Peak gain a', True), ('srf_amplitude', 'Surround amplitude c', True),
           ('srf_size', 'Size ratio σ2/σ1', True), ('neural_baseline', 'Activation constant b', True),
@@ -297,7 +297,7 @@ def plot_maps(c, out, fwhm_gain):
             for sp in ax.spines.values():
                 sp.set_visible(False)
             if (name, col) in maps:
-                im = ax.imshow(maps[name, col][0], origin='lower', extent=[-MAP_ECC, MAP_ECC] * 2, cmap='RdBu_r',
+                im = ax.imshow(maps[name, col][0], origin='lower', extent=[-MAP_ECC, MAP_ECC] * 2, cmap=DIV_CMAP,
                                vmin=-lim, vmax=lim, interpolation='nearest')
             ax.plot(3.17 * np.cos(th), 3.17 * np.sin(th), color=FG, lw=.4, ls=':')
             ax.plot(ECC_HP * np.cos(th), ECC_HP * np.sin(th), color=MUTED, lw=.3)

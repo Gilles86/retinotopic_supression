@@ -112,6 +112,7 @@ def figure(v, t, name='figS_item_locations_per_area_n28'):
     import matplotlib.pyplot as plt
     from retsupp.visualize.paper.fig2_prf_fits import PATHWAY
     from retsupp.visualize.paper.fig3_item_locations import LOC_COLORS, LOC_TYPES, loc_icon
+    from retsupp.visualize.paper.paper_style import LOC_EDGE, LOC_TEXT
     from retsupp.visualize.paper.paper_style import DOUBLE, FG, MUTED, offset_spines, save
     W, H = DOUBLE, 2.05
     fig = plt.figure(figsize=(W, H))
@@ -132,7 +133,7 @@ def figure(v, t, name='figS_item_locations_per_area_n28'):
             norm = rel.sub(rel.mean(1), axis=0)
             se = norm.std(ddof=1) / np.sqrt(len(rel)) * np.sqrt(3 / 2)
             for c, _ in LOC_TYPES:
-                ax.errorbar(off[c], rel[c].mean(), yerr=se[c], fmt='o', ms=3.6, color=LOC_COLORS[c], mec='w', mew=.5,
+                ax.errorbar(off[c], rel[c].mean(), yerr=se[c], fmt='o', ms=3.6, color=LOC_COLORS[c], mec=LOC_EDGE[c], mew=.5,
                             lw=1., capsize=0, zorder=3)
             top = (rel.mean() + se).max()
             low = (rel.mean() - se).min()
@@ -178,13 +179,13 @@ def figure(v, t, name='figS_item_locations_per_area_n28'):
     for j, (c, lab) in enumerate(LOC_TYPES):
         xx = j * 1.25
         loc_icon(keyax, (xx / 4.5, 0, .18 / 4.5 * (1.0), 1), {c})
-        keyax.text(xx + .24, .5, lab, fontsize=6.5, color=LOC_COLORS[c] if c != 'opposite' else '.5', va='center')
+        keyax.text(xx + .24, .5, lab, fontsize=6.5, color=LOC_TEXT[c], va='center')
     legend = LEGEND.format(table=markdown(t).split('\n', 2)[2])
     save(fig, name, legend)
     return fig
 
 
-LEGEND = """**Figure S. Item responses by location relative to HP, per area (n = 28).** As Fig. 3e, for each of the nine areas separately: each location type (HP, red; next to HP, the two neighbouring locations pooled, dark grey; opposite HP, light grey) relative to the mean of the four item locations over the window 3.2–6.4 s after search onset, item types pooled, in % of each participant's mean response over the twelve item × location cells in that area; mean ± within-subject SEM. Each panel has its own y-scale: in a single area the mean response is small for some participants, so the percentages spread widely (TO, IPS, VO); medians are in the table below. n per panel: participants with voxels at every item location and a positive mean response in that area (the pilots sub-01 and sub-02 are left out of the paper). Under each panel: repeated-measures ANOVA on location type (one-way, items pooled), F and Benjamini-Hochberg q across the nine areas. Brackets: contrasts (HP vs next to HP, next to HP vs opposite, HP vs opposite) with q < .05, Wilcoxon signed-rank test, Benjamini-Hochberg across the nine areas per contrast; * q < .05, ** q < .01. Exploratory per area; the inference is at the pathway level (Fig. 3e).
+LEGEND = """**Figure S. Item responses by location relative to HP, per area (n = 28).** As Fig. 3e, for each of the nine areas separately: each location type (HP, purple; next to HP, the two neighbouring locations pooled, mid purple; opposite HP, light purple) relative to the mean of the four item locations over the window 3.2–6.4 s after search onset, item types pooled, in % of each participant's mean response over the twelve item × location cells in that area; mean ± within-subject SEM. Each panel has its own y-scale: in a single area the mean response is small for some participants, so the percentages spread widely (TO, IPS, VO); medians are in the table below. n per panel: participants with voxels at every item location and a positive mean response in that area (the pilots sub-01 and sub-02 are left out of the paper). Under each panel: repeated-measures ANOVA on location type (one-way, items pooled), F and Benjamini-Hochberg q across the nine areas. Brackets: contrasts (HP vs next to HP, next to HP vs opposite, HP vs opposite) with q < .05, Wilcoxon signed-rank test, Benjamini-Hochberg across the nine areas per contrast; * q < .05, ** q < .01. Exploratory per area; the inference is at the pathway level (Fig. 3e).
 
 {table}
 """

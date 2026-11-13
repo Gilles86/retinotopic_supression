@@ -27,13 +27,14 @@ import numpy as np
 import pandas as pd
 from matplotlib.patches import Circle, FancyBboxPatch
 
-from retsupp.visualize.paper.paper_style import (DOUBLE, FG, HP, MUTED, ROI_ORDER, ROI_X, letter, pending,
+from retsupp.visualize.paper.paper_style import (DOUBLE, FG, HP, LP_NEXT, LP_OPP, MUTED, ROI_ORDER, ROI_X, letter, pending,
                                                  roi_axis, save)
 
 D = Path('notes/data')
-INPUT, BFIELD, DFIELD, BOTH = '#3D5A80', '#2A9D8F', '#7209B7', '#52606D'
+# input gain = the sustained field of Fig. 5 (purple); the DN-specific loci in hues no condition uses
+INPUT, BFIELD, DFIELD, BOTH = HP, '#B8860B', '#2F4B5C', '#9AA5B1'
 MODELS = [('m8_full_dnb', 'b-field', BFIELD), ('m8_full_dnd', 'd-field', DFIELD), ('m8_full_dnbd', 'b and d', BOTH)]
-LOC = [('HP', HP), ('next', '#52606D'), ('opposite', '#9AA5B1')]
+LOC = [('HP', HP), ('next', LP_NEXT), ('opposite', LP_OPP)]
 TRUTHS = [('input', 'Input gain', INPUT), ('b', 'b-field', BFIELD), ('d', 'd-field', DFIELD)]
 
 
@@ -243,7 +244,7 @@ def observed(dec):
 
 
 def panel_obs(ax, obs):
-    for k, ((lab, t), col) in enumerate(zip(obs.items(), (FG, '#E07A5F'))):
+    for k, ((lab, t), col) in enumerate(zip(obs.items(), (FG, '#9AA5B1'))):
         ax.errorbar(np.arange(3) + (k - .5) * .22, t.m.values, yerr=t.se.values, fmt='o', color=col, ms=3, lw=.9,
                     capsize=0, label=lab)
     ax.axhline(0, color=FG, lw=.6)
@@ -277,8 +278,8 @@ LEGEND = """
 **Figure S?. Where in the divisive-normalization (DN) pRF model does the sustained HP effect act?** a, DN response
 of a voxel (Aqil et al., 2021) with the three places a sustained field can act, each one field per subject × ROI
 (shared parameters, fitted on all voxels of the ROI; each voxel sees the field over its own pRF): the stimulus drive,
-in numerator and denominator (input gain, the model of Fig. 5, blue); the neural baseline b (teal); the surround
-baseline d (purple). The b- and d-fields share one shape (width σ_AF, HP/LP pattern θ) with separate weights w_b, w_d;
+in numerator and denominator (input gain, the model of Fig. 5, purple); the neural baseline b (gold); the surround
+baseline d (steel blue). The b- and d-fields share one shape (width σ_AF, HP/LP pattern θ) with separate weights w_b, w_d;
 at w = 0 each equals the input-gain model exactly. Scaling b and d together equals scaling the amplitude a, so only
 w_b − w_d (b/d) is specific to DN. b, Top: held-out R² of each variant minus the input-gain model, mean ± SEM over
 subjects (run3 folds; per-voxel pRFs frozen at the all-runs fit in every model, shared terms refitted per fold).

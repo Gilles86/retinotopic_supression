@@ -116,6 +116,7 @@ def band_table(b, source):
 def figure(per_sub, sources, name='figS_decoding_prf_models'):
     import matplotlib.pyplot as plt
     from retsupp.visualize.paper.fig6_decoding import LOC_COLORS
+    from retsupp.visualize.paper.paper_style import LOC_TEXT
     from retsupp.visualize.paper.paper_style import DOUBLE, FG, letter, offset_spines, save
 
     classes = [('hp', 'HP'), ('adjacent', 'Next to HP'), ('opposite', 'Opposite')]
@@ -148,7 +149,7 @@ def figure(per_sub, sources, name='figS_decoding_prf_models'):
         letter(ax, lab)
     axes[0].set_ylabel('Decoded on bar, V1–V3\n(% of quadrant mean)')
     for j, (c, t) in enumerate(classes):
-        axes[1].text(.99, .2 - j * .085, t, color=LOC_COLORS[c] if c != 'opposite' else '.45',
+        axes[1].text(.99, .2 - j * .085, t, color=LOC_TEXT[c],
                      transform=axes[1].transAxes, ha='right', fontsize=6.5)
     legend = ("**Figure S. Quadrant contrasts of the decoded bar with different pRF models.** Decoded intensity on the "
               "bar's pixels per quadrant relative to the run's HP location (HP, the two quadrants next to it pooled, "

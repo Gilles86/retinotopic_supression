@@ -42,7 +42,7 @@ field, coloured as mapped on the contralateral hemisphere. b, Share of pRF centr
 voxels with R² ≥ .1 inside the bar aperture; dots are subjects, lines medians; numbers give the subjects per ROI. c, pRF size
 (σ) against eccentricity for six ROIs: per subject, the median σ of voxels with R² ≥ .1 inside the bar aperture in 0.5°
 eccentricity bins (bins with ≥ 5 voxels); lines and bands, mean ± SEM across subjects (bins with ≥ 10 subjects). d, Held-out
-R² gained per ROI over a Gaussian pRF with the canonical HRF by a difference-of-Gaussians pRF (dark teal, the pRF colour), by one HRF per subject
+R² gained per ROI over a Gaussian pRF with the canonical HRF by a difference-of-Gaussians pRF (teal), by one HRF per subject
 × ROI on top of the DoG pRF (grey; the HRF's delay and dispersion fitted jointly with all pRFs of the ROI, the HRF
 used in the gain fits), and by both together, the pRF model used for the gain fits (black): three folds of runs,
 voxels with cross-run reliability > 0 in the training runs, median over voxels, mean over folds; points and bars, median
@@ -178,7 +178,7 @@ def panel_contra(ax):
     roi_axis(ax)
 
 
-PRF_TEAL = PRF
+PRF_TEAL = '#00796B'   # Fig. 2 shows no condition colour: the DoG step keeps teal (elsewhere the pRF is charcoal)
 STEPS = [('DoG pRF', 'dog', PRF_TEAL), ('HRF per ROI', 'hrf', '#8D99A6'), ('Both', 'both', FG)]
 
 

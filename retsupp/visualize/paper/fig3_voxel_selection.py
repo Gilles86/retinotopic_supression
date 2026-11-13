@@ -107,7 +107,7 @@ def main(arms, out_prefix):
 
 # ---------------------------------------------------------------- supplementary figure
 
-SEL_STYLE = {'current': ('Current', '#1F2933'), 'r0.2': ('r > 0.2', '#3D5A80'), 'r0.1': ('r > 0.1', '#98C1D9')}
+SEL_STYLE = {'current': ('Current', '#1F2933'), 'r0.2': ('r > 0.2', '#616E7C'), 'r0.1': ('r > 0.1', '#A3ACB5')}   # selections are not conditions: greys
 GROUPS = ['Early', 'Dorsal', 'Occipitotemporal', 'All areas']
 GROUP_LAB = {'Early': 'Early', 'Dorsal': 'Dorsal', 'Occipitotemporal': 'Occ.-temporal', 'All areas': 'All areas'}
 
@@ -117,6 +117,7 @@ def figure(out_prefix, blur_root, name='figS_item_locations_voxel_selection_n28'
     from retsupp.visualize.paper.item_location_blur import voxel_table
     from retsupp.visualize.paper.paper_style import DOUBLE, FG, HP, letter, offset_spines, save
     from retsupp.visualize.paper.fig3_item_locations import LOC_COLORS
+    from retsupp.visualize.paper.paper_style import LOC_TEXT
     res = pd.read_csv(f'{out_prefix}_stats.tsv', sep='\t').set_index(['selection', 'grp'])
     vox = pd.read_csv(f'{out_prefix}_voxels.tsv', sep='\t')
     blur = voxel_table(blur_root, range(3, 31), ROIS, .75, centre_only=True)
@@ -136,7 +137,7 @@ def figure(out_prefix, blur_root, name='figS_item_locations_voxel_selection_n28'
         lab, col = SEL_STYLE[s]
         m = vox[vox.selection == s].groupby('roi')['median'].median().reindex(ROIS)
         ax.plot(xr + (k - 1) * .12, m.values, 'o-', color=col, ms=3.5, lw=1, mec='w', mew=.4)
-        ax.text(1.0, .97 - k * .12, lab, transform=ax.transAxes, color=col if s != 'r0.1' else '#5B8FB9',
+        ax.text(1.0, .97 - k * .12, lab, transform=ax.transAxes, color=col if s != 'r0.1' else '#7B8794',
                 fontsize=6.5, ha='right', va='top')
     ax.set_yscale('log')
     ax.set_yticks([3, 10, 30, 60])
@@ -155,7 +156,7 @@ def figure(out_prefix, blur_root, name='figS_item_locations_voxel_selection_n28'
     ax = at(5.0, top, 1.95, hh)
     for k, c in enumerate(('next', 'opposite')):
         ax.plot(xr + (k - .5) * .2, 100 * b[c].reindex(ROIS).values, 'o', color=LOC_COLORS[c], ms=3.5, mec='w', mew=.4)
-    ax.text(.03, .97, 'To next (5.7°)', transform=ax.transAxes, color=LOC_COLORS['next'], fontsize=6.5, va='top')
+    ax.text(.03, .97, 'To next (5.7°)', transform=ax.transAxes, color=LOC_TEXT['next'], fontsize=6.5, va='top')
     ax.text(.03, .85, 'To opposite (8°)', transform=ax.transAxes, color='.5', fontsize=6.5, va='top')
     ax.set_xticks(xr)
     ax.set_xticklabels(ROIS, fontsize=6, rotation=90)
@@ -192,7 +193,7 @@ def figure(out_prefix, blur_root, name='figS_item_locations_voxel_selection_n28'
             ax.set_ylabel('Difference (% signal)')
             for k, s in enumerate(sels):
                 lab, col = SEL_STYLE[s]
-                ax.text(.02 + k * .2, .06, lab, transform=ax.transAxes, color=col if s != 'r0.1' else '#5B8FB9',
+                ax.text(.02 + k * .2, .06, lab, transform=ax.transAxes, color=col if s != 'r0.1' else '#7B8794',
                         fontsize=6.5, va='bottom')
         offset_spines(ax)
         ax.text(0, 1.06, title, transform=ax.transAxes, fontsize=7, color=HP, va='bottom')

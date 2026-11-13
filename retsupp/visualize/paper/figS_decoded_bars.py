@@ -18,6 +18,7 @@ Usage::
 """
 from __future__ import annotations
 
+from retsupp.visualize.paper.paper_style import DIV_CMAP, DIV_MORE, HP as HP_  # noqa: E402
 import argparse
 from multiprocessing import Pool
 from pathlib import Path
@@ -326,7 +327,7 @@ def plot(source, name='figS_decoded_bars_rotated', decoder='free'):
                     foot = ndimage.binary_dilation(grp[o, b, 1] > .5, iterations=1) & (np.hypot(X, Y) <= APERTURE)
                     foot &= (Y > 0) if o == 0 else (X > 0)          # the half nearer HP (the other is its negative)
                     img = np.where(foot, md[o, b], np.nan)
-                    im = ax.imshow(img, origin='lower', extent=[-5.1, 5.1, -5.1, 5.1], cmap='RdBu_r', vmin=-dvm,
+                    im = ax.imshow(img, origin='lower', extent=[-5.1, 5.1, -5.1, 5.1], cmap=DIV_CMAP, vmin=-dvm,
                                    vmax=dvm, interpolation='nearest')
                     dim = im
                 clip = Circle((0, 0), APERTURE, transform=ax.transData, fc='none', ec='none')
@@ -357,8 +358,8 @@ def plot(source, name='figS_decoded_bars_rotated', decoder='free'):
     cb.ax.tick_params(length=2, width=.5, pad=1)
     cb.outline.set_linewidth(.4)
     cb.ax.text(.5, 1.04, 'Stronger\nthan mirror', transform=cb.ax.transAxes, ha='center', va='bottom', fontsize=6,
-               color='#B2182B')
-    cb.ax.text(.5, -.04, 'Weaker', transform=cb.ax.transAxes, ha='center', va='top', fontsize=6, color='#2166AC')
+               color=DIV_MORE)
+    cb.ax.text(.5, -.04, 'Weaker', transform=cb.ax.transAxes, ha='center', va='top', fontsize=6, color=HP_)
     fig.text(.02 / W, (H - .2) / H, 'a', fontsize=8, fontweight='bold', va='center')
     fig.text(.2 / W, (H - .2) / H, f'Decoded bars, HP location rotated to the upper right (V1–V3, mean of {mean.shape[0]} subjects)',
              fontsize=7.5, color=STIM, va='center')
@@ -405,7 +406,7 @@ def plot(source, name='figS_decoded_bars_rotated', decoder='free'):
     legend = f"""
 **Figure S. The decoded bars, averaged per bar position with the HP location rotated to the upper right.** Every run's
 decoded frames ({dec_txt}, V1, V2 and V3; pRFs: {source} fold fits) and its true bar frames were rotated in
-90° steps so that the HP location (red dashed circle) lies upper right; 90° steps keep the bars vertical or horizontal.
+90° steps so that the HP location (purple dashed circle) lies upper right; 90° steps keep the bars vertical or horizontal.
 Frames with a bar inside the aperture (grey circle, {APERTURE}°) were grouped by bar orientation and by the position of
 the bar centre along its motion ({N_BINS} bins; centres above row 1), averaged over runs and ROIs per subject, then over
 subjects (n = {mean.shape[0]}). Dotted outline, the true bar. Frames per bin, all subjects and ROIs: vertical
@@ -413,8 +414,8 @@ subjects (n = {mean.shape[0]}). Dotted outline, the true bar. Frames per bin, al
 subject's decoded image minus its mirror image (vertical bars flipped top to bottom, horizontal bars left to right, so the
 bar maps onto itself and the HP quadrant onto a neighbouring one), in % of the mean decoded intensity on the bar,
 smoothed (Gaussian, σ = 0.4°), averaged over subjects, and shown on the bar's footprint (one pixel of margin) in the half
-nearer HP only, the other half being its negative: blue, weaker than the mirror image. Where the bar crosses the
-quadrant facing HP (upper right) the near half is blue; on the other side of the aperture the near half (a quadrant next
+nearer HP only, the other half being its negative: purple, weaker than the mirror image. Where the bar crosses the
+quadrant facing HP (upper right) the near half is purple; on the other side of the aperture the near half (a quadrant next
 to HP) is red against the opposite quadrant. b, Decoded intensity on the
 bar's pixels in the half of the bar nearer HP (upper half of a vertical bar, right half of a horizontal one) minus the
 half farther away, in % of the bar's mean, vertical and horizontal bars pooled; positive positions are on HP's side of the
@@ -489,7 +490,7 @@ def plot_condition(source, name='figS_decoded_bars_rotated', decoder='free'):
                     d = np.where(foot, 100 * P[s_, b, 1] / bm, 0)
                     rel.append(ndimage.gaussian_filter(d, 1) / np.maximum(ndimage.gaussian_filter(foot * 1., 1), 1e-6))
                 img = np.where(foot, np.mean(rel, 0), np.nan)
-                im = ax.imshow(img, origin='lower', extent=[-5.1, 5.1, -5.1, 5.1], cmap='RdBu_r', vmin=-dvm, vmax=dvm,
+                im = ax.imshow(img, origin='lower', extent=[-5.1, 5.1, -5.1, 5.1], cmap=DIV_CMAP, vmin=-dvm, vmax=dvm,
                                interpolation='nearest')
                 dim = im
                 ax.contour(X, Y, (P[:, b, 2].mean(0) > .5) & inside, levels=[.5], colors=['.5'], linewidths=.4)
@@ -522,8 +523,8 @@ def plot_condition(source, name='figS_decoded_bars_rotated', decoder='free'):
     cb.ax.set_yticklabels([f'−{dvm:.0f}%', '0', f'+{dvm:.0f}%'], fontsize=6)
     cb.ax.tick_params(length=2, width=.5, pad=1)
     cb.outline.set_linewidth(.4)
-    cb.ax.text(.5, 1.06, 'Stronger', transform=cb.ax.transAxes, ha='center', va='bottom', fontsize=6, color='#B2182B')
-    cb.ax.text(.5, -.06, 'Weaker', transform=cb.ax.transAxes, ha='center', va='top', fontsize=6, color='#2166AC')
+    cb.ax.text(.5, 1.06, 'Stronger', transform=cb.ax.transAxes, ha='center', va='bottom', fontsize=6, color=DIV_MORE)
+    cb.ax.text(.5, -.06, 'Weaker', transform=cb.ax.transAxes, ha='center', va='top', fontsize=6, color=HP_)
     fig.text(.2 / W, (H - .18) / H, 'The same bar is decoded weaker where it passes the quadrant facing HP '
              '(V1–V3, mean of 30 subjects)', fontsize=7.5, color=HP, va='center')
     dec_txt = {'free': 'unconstrained decoder, every pixel decoded',
@@ -537,7 +538,7 @@ sequence is the same in every run, so each decoded frame ({dec_txt}; V1, V2 and 
 compared with the mean decoded frame at the same time point over the subject's runs, averaged within each HP location
 first and then over the four (three for sub-01 and sub-02, whose runs cover three HP locations): the stimulus is the same
 on both sides of the subtraction and only the HP location differs. Each run's frames were then rotated in 90° steps so
-that the HP location (red dashed circle) lies upper right, grouped by bar position (bins of {edges[1] - edges[0]:.1f}°;
+that the HP location (purple dashed circle) lies upper right, grouped by bar position (bins of {edges[1] - edges[0]:.1f}°;
 the positions where the whole bar lies inside the {APERTURE}° aperture are shown), and horizontal bars were reflected
 across the diagonal through HP onto vertical ones (a symmetry of the rotated display that keeps HP in place). Top, the
 decoded bar; bottom, the difference, in % of the subject's mean decoded intensity on the bar, smoothed (Gaussian, σ =
@@ -657,7 +658,7 @@ def plot_split(source='jointhrf', decoder='outline', n_bins=11, name='figS_decod
                 else:
                     dimg = z['early_diff'][o, b]
                     dimg = dimg - np.nanmean(dimg[bar > .5])               # centred on the bar's own mean difference
-                    im = _disc(ax, _smooth_masked(dimg, foot), 'RdBu_r', -dvm, dvm, outline=bar > .5)
+                    im = _disc(ax, _smooth_masked(dimg, foot), DIV_CMAP, -dvm, dvm, outline=bar > .5)
                     p = _half_test(e_o, b, oname, cb_)
                     if p is not None and p < .05:
                         st = '***' if p < .001 else '**' if p < .01 else '*'
@@ -675,8 +676,8 @@ def plot_split(source='jointhrf', decoder='outline', n_bins=11, name='figS_decod
     cbar.ax.set_yticklabels([f'−{dvm:.0f}%', '0', f'+{dvm:.0f}%'], fontsize=5.5)
     cbar.ax.tick_params(length=2, width=.5, pad=1)
     cbar.outline.set_linewidth(.4)
-    cbar.ax.text(.5, 1.05, 'Stronger', transform=cbar.ax.transAxes, ha='center', va='bottom', fontsize=5.5, color='#B2182B')
-    cbar.ax.text(.5, -.05, 'Weaker', transform=cbar.ax.transAxes, ha='center', va='top', fontsize=5.5, color='#2166AC')
+    cbar.ax.text(.5, 1.05, 'Stronger', transform=cbar.ax.transAxes, ha='center', va='bottom', fontsize=5.5, color=DIV_MORE)
+    cbar.ax.text(.5, -.05, 'Weaker', transform=cbar.ax.transAxes, ha='center', va='top', fontsize=5.5, color=HP_)
     fig.text(.2 / W, (H - .17) / H, 'The same bar is decoded weaker where it passes the quadrant facing HP, for vertical and '
              'horizontal bars (V1–V3)', fontsize=7.5, color=HP, va='center')
     summ = {}
@@ -696,7 +697,7 @@ def plot_split(source='jointhrf', decoder='outline', n_bins=11, name='figS_decod
 and for horizontal bars.** The bar sequence is the same in every run, so each decoded frame ({dec_txt}; pRFs: {source}
 fold fits) was compared with the mean decoded frame at the same time point over the subject's runs, averaged within each
 HP location first and then over the four (three for sub-01 and sub-02); the stimulus is identical on both sides of the
-subtraction. Each run's frames were rotated in 90° steps so that the HP location (red dashed circle) lies upper right;
+subtraction. Each run's frames were rotated in 90° steps so that the HP location (purple dashed circle) lies upper right;
 vertical bars (rows 1, 2) and horizontal bars (rows 3, 4) are shown separately, grouped by the position of the bar centre
 ({n_bins} bins of {centres[1] - centres[0]:.2f}° across the {APERTURE}° aperture; bars at the edge are clipped by the
 aperture). Each run's decoded frames were first scaled to a common mean intensity on the bar. Rows 1 and 3: the decoded
@@ -753,7 +754,7 @@ def plot_per_roi(source='jointhrf', decoder='outline', n_bins=11, name='figS_dec
         for j, b in enumerate(show):
             ax = fig.add_axes([(x0 + j * (size + gap)) / W, rowpos[roi] / H, size / W, size / H])
             foot = ndimage.binary_dilation(bars[b] > .5, iterations=1) & inside
-            im = _disc(ax, _smooth_masked(z['roi_diff'][i, b], foot), 'RdBu_r', -dvm, dvm, outline=bars[b] > .5)
+            im = _disc(ax, _smooth_masked(z['roi_diff'][i, b], foot), DIV_CMAP, -dvm, dvm, outline=bars[b] > .5)
             if roi == rois[0]:
                 ax.text(.5, 1.03, f'{centres[b]:+.1f}°'.replace('-', '−').replace('+0.0', '0').replace('−0.0', '0'), transform=ax.transAxes,
                         ha='center', va='bottom', fontsize=6, color='.4')
@@ -792,8 +793,8 @@ def plot_per_roi(source='jointhrf', decoder='outline', n_bins=11, name='figS_dec
     cbar.ax.set_xticklabels([f'−{dvm:.0f}%', '0', f'+{dvm:.0f}%'], fontsize=6)
     cbar.ax.tick_params(length=2, width=.5, pad=1)
     cbar.outline.set_linewidth(.4)
-    cbar.ax.text(-.04, .5, 'Weaker', transform=cbar.ax.transAxes, ha='right', va='center', fontsize=6, color='#2166AC')
-    cbar.ax.text(1.04, .5, 'Stronger', transform=cbar.ax.transAxes, ha='left', va='center', fontsize=6, color='#B2182B')
+    cbar.ax.text(-.04, .5, 'Weaker', transform=cbar.ax.transAxes, ha='right', va='center', fontsize=6, color=HP_)
+    cbar.ax.text(1.04, .5, 'Stronger', transform=cbar.ax.transAxes, ha='left', va='center', fontsize=6, color=DIV_MORE)
     fig.text(.2 / W, (H - .17) / H, 'Decoded bar minus the mean over HP locations, per ROI (HP upper right; vertical and '
              'horizontal bars pooled)', fontsize=7.5, color=HP, va='center')
     txt = '; '.join(f'{r} {rows[r][0][0]:+.2f}% (95% CI ± {rows[r][0][1]:.2f}, p = {rows[r][0][2]:.3f}, q = {q[0][i]:.3f}) / '

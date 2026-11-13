@@ -41,7 +41,7 @@ SELECTIONS = [('current', 'jointhrf', 'Training R² > 0 (Fig. 6)'),
 POOLED_ROOTS = [('current', 'jointhrf_pooled'), ('r0.2', 'jointhrf_relnull_r0.2_pooled')]
 POOLED_SETS = [('mid', 'V3AB + hV4'), ('high', 'LO + TO + VO + IPS'), ('dorsal', 'V3AB + IPS'),
                ('occtemp', 'hV4 + VO + LO + TO')]
-COLORS = {'current': '#1F2933', 'r0.2': '#3D7EB8', 'r0.1': '#7DAAD6'}
+COLORS = {'current': '#1F2933', 'r0.2': '#616E7C', 'r0.1': '#A3ACB5'}   # selections are not conditions: greys
 CAP = 2000
 
 
@@ -406,7 +406,7 @@ e, Per area, mean ± SEM over subjects; one-sided Wilcoxon, Benjamini-Hochberg a
 (row per selection). {sig}
 f, One decoder on the pooled voxels of several areas (each voxel with its own fold pRF, selection per voxel as in the
 per-area decodes, at most {CAP} voxels per set): mid-level V3AB + hV4, higher LO + TO + VO + IPS, dorsal V3AB + IPS,
-occipitotemporal hV4 + VO + LO + TO; Fig. 6 selection (black) and r > 0.2 (blue); one-sided Wilcoxon, uncorrected;
+occipitotemporal hV4 + VO + LO + TO; Fig. 6 selection (black) and r > 0.2 (grey); one-sided Wilcoxon, uncorrected;
 values beyond the axis are drawn as open triangles at its edge (also in c and d). {sets}
 g, The bar sweep of Fig. 6c (decoder with the bar outline given, V1–V3): per bar position on the HP side of the
 aperture, the decoded − mean-over-HP-locations difference on the bar's segment in the quadrant facing HP minus that in

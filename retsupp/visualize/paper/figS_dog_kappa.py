@@ -21,12 +21,12 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from retsupp.visualize.paper.paper_style import (DOUBLE, FG, HP, MUTED, ROI_COLORS, ROI_ORDER, ROI_X, offset_spines,
+from retsupp.visualize.paper.paper_style import (DOUBLE, FG, HP, MUTED, PRF, ROI_COLORS, ROI_ORDER, ROI_X, offset_spines,
                                                  roi_axis, save)
 
 FULL = 'notes/data/dog_cs_field_full_2026-11.tsv'
 RUN3 = 'notes/data/dog_cs_field_2026-11.tsv'
-SUR = '#8A6FB0'          # surround (suppressive pooling) in the schematic
+SUR = PRF                # surround (suppressive pooling) in the schematic: the pRF colour
 N_BOOT = 10_000
 
 
@@ -69,14 +69,14 @@ def dots_panel(ax, d, col, st, ylim, scale=1., seed=1):
         v = d.loc[d.roi == r.roi, col].dropna().to_numpy() * scale
         jit = rng.uniform(-.2, .2, len(v))
         inside = (v >= lo_lim) & (v <= hi_lim)
-        ax.scatter(x0 - .08 + jit[inside], v[inside], s=5, color=ROI_COLORS[r.roi], alpha=.55, lw=0, zorder=2)
+        ax.scatter(x0 - .08 + jit[inside], v[inside], s=5, color=PRF, alpha=.55, lw=0, zorder=2)
         for y, m in ((lo_lim, 'v'), (hi_lim, '^')):
             sel = (v < lo_lim) if m == 'v' else (v > hi_lim)
             if sel.any():
-                ax.scatter(x0 - .08 + jit[sel], np.full(sel.sum(), y), s=7, marker=m, color=ROI_COLORS[r.roi],
+                ax.scatter(x0 - .08 + jit[sel], np.full(sel.sum(), y), s=7, marker=m, color=PRF,
                            alpha=.7, lw=0, zorder=2, clip_on=False)
         ax.plot([x0 + .28] * 2, [r.ci_lo * scale, r.ci_hi * scale], color=FG, lw=1.1, solid_capstyle='butt', zorder=4)
-        ax.plot(x0 + .28, r['median'] * scale, 'D', ms=3.6, color=ROI_COLORS[r.roi], mec=FG, mew=.6, zorder=5)
+        ax.plot(x0 + .28, r['median'] * scale, 'D', ms=3.6, color=PRF, mec=FG, mew=.6, zorder=5)
         ax.text(x0 + .1, hi_lim + .04 * (hi_lim - lo_lim), stars(r.q), ha='center', va='bottom', fontsize=8,
                 color=FG, clip_on=False)
     ax.axhline(0, color='.8', lw=.6, zorder=0)

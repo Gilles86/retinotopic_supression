@@ -9,6 +9,31 @@ Files:
 - All pairwise ΔE values: `/Users/gdehol/git/retsupp/notes/figures/palette_proposal_2026-11-13/cvd_pairs.tsv`
 - Code: `make_palette_proposal.py` and `cvd_check.py` (Machado et al. 2009 matrices at severity 1, CIEDE2000 via scikit-image) in the same folder.
 
+## Applied palette (2026-11-13, after the author's decisions)
+
+This palette was applied to `retsupp/visualize/paper/paper_style.py` and to every figure script. The figures were rendered as new `_palA` files
+(`notes/figures/palette_proposal_2026-11-13/render_palA.sh`; contact sheet `notes/figures/palette_proposal_2026-11-13/contact_sheet_palA.png`).
+Where it differs from the proposal below, this section wins.
+
+| Meaning | Colour | Constant |
+|---|---|---|
+| HP, sustained field, HP − LP | purple `#7B3294` | `HP` |
+| LP next to HP (generic LP) | `#9970AB` | `LP_NEXT` = `LP` |
+| LP opposite HP | `#D1BBDC`: one step darker than proposed (ΔE vs next 22/21/22/21, vs grey 18/10/10/21 N/D/P/T). Opposite lines are dashed, markers have a `#40004B` edge, and text uses `#8C6B9E`. | `LP_OPP`, `OPP_LS`, `LOC_TEXT` |
+| Target | orange `#F77F00` | `TARGET` |
+| Distractor | **bluish green `#009E73`** (Okabe–Ito), the author's choice over sky blue after a side-by-side comparison (`distractor_colour_comparison.png`). ΔE vs grey 28/18/21/19, vs target 53/25/16/62, vs the LP tints ≥ 25 in deuteranopia. The literal display green `#00A900` is not used: it has ΔE 0 against the display orange in protanopia. | `DISTRACTOR` |
+| pRF | charcoal `#3E4C59`. Fig. 2, which shows no condition colour, keeps teal `#00796B` for the DoG step. | `PRF` |
+| Decoding maps (signed) | purple (less) – white – gold (more) | `DIV_CMAP`, `DIV_MORE` |
+| Image panels (Fig. 4a model input and effective drive, Fig. 6a decoded frames, combined-field maps) | magma with its purple range replaced by dark red (black → red → yellow). The author asked to keep magma there. | `IMAGE_CMAP` |
+| Sustained / target / distractor field maps | white → the term's colour | `SUSTAINED_CMAP`, `TARGET_CMAP`, `DISTRACTOR_CMAP` |
+| Neutral item, absent, null/shuffled, "no change" | grey `#9AA5B1`; grey is used only where there is no term | `NEUTRAL` |
+| Pathways | line styles (solid / dashed / dotted) in the quantity's colour | `PATH_LS` |
+| Areas | **Fig. 2 only** (and supplements that show areas on the cortex), where no condition colour appears: early blues `#08519C` `#3182BD` `#7FB8E0`, dorsal greens `#1A7F3C` `#7BC77E`, occipitotemporal warm `#C2185B` `#E8590C` `#F2A60D` `#B04FB5`. ΔE between neighbouring areas ≥ 12 under all three CVD types. Elsewhere areas are x positions only (e.g. the dots in `figS_dog_kappa` are now the pRF colour). | `ROI_COLORS`, `render_fig1_prf.AREA_COLORS` |
+| Fig. 2e distance from the item | viridis, ends truncated (.05–.85) | — |
+| Model vs data | model lines and bands in the condition's own colour (Fig. 6e sweep, Fig. 6f quadrants); generic model key in FG | — |
+| Significance | stars in the tested quantity's colour; Fig. 3e prints the exact p for HP − next and HP − opposite in every pathway | — |
+| Supplement-only categories | voxel-selection variants as greys (not conditions); DN loci in `figS_dn_gain_locus`: input gain purple (it is the sustained field), b-field gold `#B8860B`, d-field steel `#2F4B5C`; LOSO table cells BrBG | — |
+
 ## 1. Principles
 
 1. **One colour, one meaning, in every figure.** A hue that stands for a condition (HP, target, distractor) is never reused for a grouping (pathway, area), a sign (more or less) or significance.

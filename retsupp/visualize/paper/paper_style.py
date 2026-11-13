@@ -10,7 +10,7 @@ OUT = Path('notes/figures/paper_2026-11')
 DOUBLE, SINGLE = 180 / 25.4, 88 / 25.4
 # Palette, option A (notes/palette_proposal_2026-11-13.md): one colour = one meaning in every figure.
 # HP and the sustained field are purple; LP locations are tints of the same purple (lighter = farther from HP);
-# target orange, distractor sky blue; anything without a model term (neutral item, absent, null, stimulus) achromatic.
+# target orange, distractor bluish green; anything without a model term (neutral item, absent, null, stimulus) achromatic.
 FG, MUTED = '#1F2933', '#9AA5B1'
 HP = '#7B3294'                      # HP location, sustained field, HP − LP effects
 LP_NEXT = '#9970AB'                 # LP next to HP; generic LP
@@ -18,11 +18,11 @@ LP_OPP = '#D1BBDC'                  # LP opposite HP (lines dashed, markers with
 LP = LP_NEXT
 HP_DEEP = '#40004B'                 # edges of tint markers, dark end of the sustained-field map
 LP_OPP_TEXT = '#8C6B9E'             # text in the opposite tint's place (the tint itself is too light for text)
-TARGET, DISTRACTOR = '#F77F00', '#4AA3DF'
+TARGET, DISTRACTOR = '#F77F00', '#009E73'   # distractor: Okabe-Ito bluish green (the display's distractor is green)
 NEUTRAL = MUTED                     # neutral item, distractor absent, shuffled / null
 STIM = '#3E4C59'                    # bar stimulus (achromatic, like the checkerboard)
-PRF = '#00796B'                     # pRF outline / fill / DoG pRF
-DIV_MORE = '#1B7837'                # "more" end of signed decoding maps (purple = less, as HP suppression)
+PRF = '#3E4C59'                     # pRF outline / fill (charcoal; Fig. 2, which shows no condition colour, keeps teal)
+DIV_MORE = '#8C6D1F'                # "more" end of signed decoding maps (purple = less, as HP suppression; gold = more)
 LOC_COLORS = {'hp': HP, 'next': LP_NEXT, 'adjacent': LP_NEXT, 'opposite': LP_OPP}
 LOC_TEXT = {'hp': HP, 'next': LP_NEXT, 'adjacent': LP_NEXT, 'opposite': LP_OPP_TEXT}
 LOC_EDGE = {'hp': HP_DEEP, 'next': HP_DEEP, 'adjacent': HP_DEEP, 'opposite': HP_DEEP}
@@ -44,7 +44,7 @@ def _cmap(name, cols):
 SUSTAINED_CMAP = _cmap('sustained', ['#FFFFFF', '#C9A9D6', HP, HP_DEEP])     # white -> deep purple
 TARGET_CMAP = _cmap('target', ['#FFFFFF', TARGET])
 DISTRACTOR_CMAP = _cmap('distractor', ['#FFFFFF', DISTRACTOR])
-DIV_CMAP = _cmap('less_more', [HP_DEEP, HP, '#C2A5CF', '#F7F7F7', '#A6DBA0', '#5AAE61', DIV_MORE])  # PRGn-like: less purple, more green
+DIV_CMAP = _cmap('less_more', [HP_DEEP, HP, '#C2A5CF', '#F7F7F7', '#F0D98C', '#D4A92A', DIV_MORE])  # less purple, more gold
 
 
 def _image_cmap():

@@ -220,7 +220,7 @@ def main(rt_table, bids, trial_table, exclude, suffix):
     legend = legend.replace(
         'e, f, Response time when the target (e) or the distractor (f) appears at the same location as on the previous trial, or at another location; distractor repeats are compared within HP and within LP trials and averaged.',
         'e, Intertrial priming as within-subject differences: response time when the target (orange) or the distractor '
-        '(blue) appears at the same location as on the previous trial minus when it appears at another location; '
+        '(green) appears at the same location as on the previous trial minus when it appears at another location; '
         'distractor repeats are compared within HP and within LP trials and averaged. Target repeat − switch '
         f"{fmt(vals[TKEY])}; distractor repeat − switch {fmt(vals[DKEY])} "
         '(median [bootstrapped 95% CI], subjects on the side of the median, Wilcoxon signed-rank). The raw response times '

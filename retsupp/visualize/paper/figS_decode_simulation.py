@@ -31,7 +31,7 @@ SUFFIX = ''
 QUAD_ANGLE = {'upper_right': 45, 'upper_left': 135, 'lower_left': 225, 'lower_right': 315}
 POS = {0: 'hp', 90: 'left', 180: 'opposite', 270: 'right'}
 ROIS = ['V1', 'V2', 'V3']
-COLS = {'hp': '#D62828', 'adjacent': '#52606D', 'opposite': '#9AA5B1'}
+from retsupp.visualize.paper.paper_style import LOC_COLORS as COLS  # noqa: E402  (palette A: HP and its LP tints)
 LABELS = {'hp': 'HP', 'adjacent': 'Next to HP', 'opposite': 'Opposite'}
 
 
