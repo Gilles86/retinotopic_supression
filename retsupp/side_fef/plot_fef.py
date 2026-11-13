@@ -6,7 +6,7 @@ cvR² true − scramble > 0; fraction of voxels above the scramble 95th percenti
 those voxels > 0.5.
 
 Figure (180 mm): a-c the three map tests per ROI; d visual-field centres of the pRF voxels of the leave-one-out sPCS
-(all participants, by hemisphere); e (with ``--gain-wide``) per-participant gain-field estimates in sPCS.
+(all participants, by hemisphere); e group CV R² on the inflated right hemisphere with the group ROIs; f (with ``--gain-wide``) per-participant gain-field estimates in sPCS.
 
     python -m retsupp.side_fef.plot_fef --summary notes/side_fef/data/prf_cv_summary.tsv \\
         --voxels notes/side_fef/data/prf_cv_voxels_prf.tsv.gz [--gain-wide notes/side_fef/data/gain_wide.tsv] \\
@@ -27,8 +27,8 @@ from statsmodels.stats.multitest import multipletests
 REGIONS = ['sPCSloso', 'iPCSloso', 'sPCSind', 'FEFatlas', 'precentral', 'lateral_occipital']
 FRONTAL = ['sPCSloso', 'iPCSloso', 'sPCSind', 'FEFatlas']
 EXTRA = ['sPCS', 'iPCS']   # group ROIs including the tested participant (table only; selection is circular)
-LABEL = {'sPCSloso': 'sPCS (group)', 'iPCSloso': 'iPCS (group)', 'sPCSind': 'Frontal CV pRFs\n(per participant)',
-         'FEFatlas': 'FEF (Wang atlas)', 'precentral': 'Precentral\n(whole label)', 'lateral_occipital': 'Lateral occipital',
+LABEL = {'sPCSloso': 'sPCS', 'iPCSloso': 'iPCS', 'sPCSind': 'Frontal, per\nparticipant',
+         'FEFatlas': 'FEF atlas', 'precentral': 'Precentral', 'lateral_occipital': 'Lateral occ.',
          'sPCS': 'sPCS (group, all 28)', 'iPCS': 'iPCS (group, all 28)'}
 COLOR = {r: '#D62828' for r in FRONTAL} | {'precentral': '#9AA5B1', 'lateral_occipital': '#2A9D8F'}
 TESTS = [('d_cvr2', 0, 'Held-out R², true − scramble'), ('frac_above_thr', .05, 'Fraction above scramble 95th pct'),
@@ -63,7 +63,7 @@ def run_tests(s):
     return t
 
 
-def main(summary, voxels, out_dir, gain_wide=None, model='dog_roihrf'):
+def main(summary, voxels, out_dir, gain_wide=None, model='dog_roihrf', fsaverage=None, sums=None, roi_npz=None):
     s = pd.read_csv(summary, sep='\t')
     s = s[s.model == model].copy()
     s['d_cvr2'] = s.median_cvr2_true - s.median_cvr2_scramble
@@ -117,15 +117,34 @@ def main(summary, voxels, out_dir, gain_wide=None, model='dog_roihrf'):
     ax.legend(frameon=False, fontsize=5.5, loc='upper left', bbox_to_anchor=(-.05, 1.22), handletextpad=.1)
     ax.text(-.3, 1.05, 'd', transform=ax.transAxes, fontsize=8, fontweight='bold', va='bottom')
 
-    # e: eccentricity of pRF voxels, sPCS vs lateral occipital
+    # e: where the group ROIs are: right hemisphere, inflated fsaverage, lateral view
     ax = fig.add_subplot(gs[1, 1])
-    for r in ('sPCSloso', 'lateral_occipital'):
-        d = s[s.region == r]
-        ax.hist(d.ecc_prf.dropna(), bins=np.linspace(0, 5, 21), color=COLOR[r], alpha=.6, label=LABEL[r])
-    ax.set_xlabel('Median pRF eccentricity per participant (°)')
-    ax.set_ylabel('Participants')
-    ax.legend(frameon=False, fontsize=5.5)
-    ax.text(-.3, 1.05, 'e', transform=ax.transAxes, fontsize=8, fontweight='bold', va='bottom')
+    if fsaverage is not None:
+        import nibabel as nib
+        fsd = Path(fsaverage)
+        vi = nib.freesurfer.read_geometry(str(fsd / 'surf' / 'rh.inflated'))[0]
+        sulc = nib.freesurfer.read_morph_data(str(fsd / 'surf' / 'rh.sulc'))
+        q = np.load(sums)['median_cv_r2'][1]
+        rois = np.load(roi_npz)
+        lat = vi[:, 0] > np.percentile(vi[:, 0], 30)          # lateral-facing half of the inflated surface
+        o = np.argsort(vi[lat, 0])
+        yy, zz = vi[lat, 1][o], vi[lat, 2][o]
+        ax.scatter(yy, zz, c=np.where(sulc[lat][o] > 0, '#C8CED6', '#E8EBEF'), s=.3, lw=0, rasterized=True)
+        qq = q[lat][o]
+        hot = qq > .0025
+        sc = ax.scatter(yy[hot], zz[hot], c=np.clip(qq[hot], 0, .02), cmap='magma_r', vmin=0, vmax=.02, s=.6, lw=0,
+                        rasterized=True)
+        for r, c in (('sPCS', '#D62828'), ('iPCS', '#0077B6')):
+            m = rois[r][1][lat][o]
+            ax.scatter(yy[m], zz[m], s=.6, color=c, lw=0, alpha=.25, rasterized=True)
+            ax.text(np.median(yy[m]) + 4, np.median(zz[m]) + 8, r, color=c, fontsize=6, ha='left')
+        ax.set_aspect('equal')
+        ax.set_axis_off()
+        cb = fig.colorbar(sc, ax=ax, fraction=.04, pad=.01, shrink=.6)
+        cb.set_label('Group median CV R²', fontsize=6)
+        cb.ax.tick_params(labelsize=5.5)
+        ax.set_title('Right hemisphere, lateral (inflated); anterior right', fontsize=6)
+    ax.text(-.1, 1.05, 'e', transform=ax.transAxes, fontsize=8, fontweight='bold', va='bottom')
 
     ax = fig.add_subplot(gs[1, 2])
     if gain_wide is not None:
@@ -159,5 +178,8 @@ if __name__ == '__main__':
     ap.add_argument('--gain-wide', default=None)
     ap.add_argument('--out-dir', default='notes/side_fef')
     ap.add_argument('--model', default='dog_roihrf')
+    ap.add_argument('--fsaverage', default=None)
+    ap.add_argument('--sums', default=None, help='group_sums_fsaverage_v3.npz')
+    ap.add_argument('--roi-npz', default='notes/side_fef/data/fsaverage_rois.npz')
     a = ap.parse_args()
-    main(a.summary, a.voxels, a.out_dir, a.gain_wide, a.model)
+    main(a.summary, a.voxels, a.out_dir, a.gain_wide, a.model, a.fsaverage, a.sums, a.roi_npz)
