@@ -104,7 +104,13 @@ class JointProblem:
             t = np.zeros(raw.shape, dtype=np.float32)
             t[:, k] = 1.0          # a shared term sits in every row (the model reads it from row 0 or from each row)
             j_s[:, :, i] = np.asarray(self._jvp(raw, tf.constant(t)))
-        return pred, j_pv, j_s @ self.A
+        bad = ~np.isfinite(j_pv)
+        self.n_nonfinite = int(bad.sum())
+        if self.n_nonfinite:   # e.g. d/dx of a voxel whose surround width underflowed: hold that entry this step
+            j_pv[bad] = 0.0
+        j_phi = j_s @ self.A
+        j_phi[~np.isfinite(j_phi)] = 0.0
+        return pred, j_pv, j_phi
 
 
 def normal_blocks(y, pred, j_pv, j_phi):
@@ -121,6 +127,7 @@ def _damped_inv(U, lam):
     p = U.shape[-1]
     d = np.diagonal(U, axis1=1, axis2=2)
     floor = 1e-9 * max(float(d.max()), 1e-30)
+    d = np.maximum(d, 1e-6 * np.median(d, axis=0)[np.newaxis, :])   # column floor: flat directions still damped
     Ud = U + lam * np.einsum('vi,ij->vij', np.maximum(d, floor), np.eye(p)) + floor * np.eye(p)
     return np.linalg.inv(Ud)
 
@@ -149,8 +156,11 @@ def schur_hessian(U, W, Vs):
     return Vs - np.einsum('vji,vjk,vkl->il', W, Ui, W)
 
 
+PV_BOUNDS = {'sd': (-15.0, None), 'srf_amplitude': (-15.0, None), 'srf_size': (-15.0, None)}
+
+
 def lm_fit(prob, x_pv=None, phi=None, bounds=None, max_iter=300, ftol=1e-10, n_small=3, lam0=1e-3,
-           max_seconds=None, verbose=True, log_every=10, debug=False):
+           max_seconds=None, verbose=True, log_every=10, debug=False, pv_bounds=PV_BOUNDS, max_step=0.25):
     """Levenberg-Marquardt over all free parameters of ``prob``.
 
     ``bounds``: list of (lo, hi) per φ (raw space) or None. Stops after ``n_small`` consecutive accepted steps that
@@ -160,6 +170,12 @@ def lm_fit(prob, x_pv=None, phi=None, bounds=None, max_iter=300, ftol=1e-10, n_s
         x0, p0 = prob.start()
         x_pv = x0 if x_pv is None else x_pv
         phi = p0 if phi is None else phi
+    # Per-voxel raw floors (softplus(-15) = 3e-7: a surround amplitude or width that small is zero for the prediction,
+    # but lower raw values make its derivatives underflow to NaN). Steps larger than max(1, max_step·|value|) per raw
+    # parameter (max(0.5, max_step·|φ|) for shared terms) are treated as rejected (a trust region through λ).
+    pv_lo = np.array([(pv_bounds or {}).get(c, (None, None))[0] for c in prob.per_voxel], dtype=float)
+    pv_lo = np.where(np.isnan(pv_lo), -np.inf, pv_lo)
+    x_pv = np.maximum(x_pv, pv_lo[np.newaxis, :])
     lo = hi = None
     if bounds is not None:
         lo = np.array([-np.inf if b is None or b[0] is None else b[0] for b in bounds])
@@ -183,10 +199,16 @@ def lm_fit(prob, x_pv=None, phi=None, bounds=None, max_iter=300, ftol=1e-10, n_s
         accepted = False
         while lam < 1e10:
             d_pv, d_s = schur_step(U, W, Vs, g_pv, g_s, lam, hold)
+            if (np.abs(d_pv) > np.maximum(1.0, max_step * np.abs(x_pv))).any() or \
+                    (np.abs(d_s) > np.maximum(0.5, max_step * np.abs(phi))).any() or not np.isfinite(d_s).all():
+                if debug:
+                    print(f'      trial λ {lam:.2e}: step too large', flush=True)
+                lam *= 4.0
+                continue
             phi_new = phi + d_s
             if lo is not None:
                 phi_new = np.clip(phi_new, lo, hi)
-            x_new = x_pv + d_pv
+            x_new = np.maximum(x_pv + d_pv, pv_lo[np.newaxis, :])
             f_new = prob.sse(x_new, phi_new)
             n_evals += 1
             if debug:
@@ -216,7 +238,7 @@ def lm_fit(prob, x_pv=None, phi=None, bounds=None, max_iter=300, ftol=1e-10, n_s
     # gradient at the end point (for the record)
     pred, j_pv, j_phi = prob.jacobians(x_pv, phi)
     U, W, Vs, g_pv, g_s = normal_blocks(prob.y, pred, j_pv, j_phi)
-    info = dict(optimizer='lm_schur', sse_start=f0, sse_final=f, nit=it, n_evals=n_evals, reason=reason,
+    info = dict(optimizer='lm_schur', n_nonfinite_jac=getattr(prob, 'n_nonfinite', 0), sse_start=f0, sse_final=f, nit=it, n_evals=n_evals, reason=reason,
                 seconds=time.time() - t0, lam_final=lam, grad_norm=float(2 * np.sqrt((g_pv ** 2).sum() + (g_s ** 2).sum())),
                 grad_norm_shared=float(2 * np.linalg.norm(g_s)), log=log)
     if verbose:
