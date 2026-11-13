@@ -221,6 +221,43 @@ def add_rt_bins(trials: pd.DataFrame) -> pd.DataFrame:
     trials['mod_target_repeat'] = (
         (t >= 0) & (t == trials['prev_target_ch'])).astype(float)
     trials['mod_target_at_prev_dist'] = ((t >= 0) & (t == pd_)).astype(float)
+    if RT_MODULATOR == 'residual':
+        trials = residual_rt(trials, logrt)
+    return trials
+
+
+def residual_rt(trials, logrt):
+    """--rt-modulator residual (notes/rt_power_plan_2026-11-13.md, step 1): log RT of the participant's correct trials
+    regressed (OLS) on distractor condition (HP / LP / absent), target location relative to HP (HP / LP), target repeat,
+    distractor repeat, trial number within run (linear and quadratic) and run (one level per session × run, which
+    includes session); the residual, z-scored within participant, replaces ``mod_rt`` (0 on other trials). Also its
+    quintiles within participant as ``bin_rq5`` (other trials: ``other``)."""
+    trials = trials.copy()
+    ok = trials['valid_rt'].to_numpy(bool)
+    pos = trials.groupby(['session', 'run']).cumcount().astype(float)
+    pos = (pos - pos.mean()) / pos.std()
+    X = pd.concat([
+        pd.get_dummies(trials['trial_type'], prefix='dist', drop_first=True, dtype=float),
+        pd.Series((trials['target_ch'] == trials['hp_ch']).astype(float), name='target_at_hp'),
+        trials[['mod_target_repeat', 'mod_dist_repeat']].astype(float),
+        pos.rename('trial'), (pos ** 2).rename('trial2'),
+        pd.get_dummies('ses-' + trials['session'].astype(str) + '_run-' + trials['run'].astype(str),
+                       prefix='run', drop_first=True, dtype=float),
+    ], axis=1)
+    X.insert(0, 'const', 1.0)
+    Xo, yo = X.to_numpy(float)[ok], logrt.to_numpy(float)[ok]
+    keep = Xo.std(0) > 0
+    keep[0] = True
+    beta, *_ = np.linalg.lstsq(Xo[:, keep], yo, rcond=None)
+    res = yo - Xo[:, keep] @ beta
+    z = (res - res.mean()) / res.std()
+    r2 = 1 - res.var() / yo.var()
+    print(f'Residual RT: {ok.sum()} correct trials, {keep.sum()} design columns, R² of the design {r2:.3f}', flush=True)
+    trials['mod_rt'] = 0.0
+    trials.loc[ok, 'mod_rt'] = z
+    trials['bin_rq5'] = 'other'
+    trials.loc[ok, 'bin_rq5'] = pd.qcut(pd.Series(z).rank(method='first'), 5,
+                                        labels=[f'q{i}' for i in range(1, 6)]).astype(str).to_numpy()
     return trials
 
 
@@ -246,6 +283,7 @@ LADDER_ROOTS = ()   # set by --ladder-root: use the gain-model ladder's m7_full 
 HRF_TABLE = None    # one HRF per subject x ROI (roi_hrf.load_table) for the ladder fits
 VOXELS = 'ladder'   # --voxels signal: the signal voxels of each ROI instead of the ladder fit's own voxels
 MAX_BOLD_SD = 20.0  # with --voxels signal, as in the final ladder fits
+RT_MODULATOR = 'zlogrt'   # --rt-modulator residual: residual log RT (see residual_rt)
 MIN_VOXELS = 0      # --min-voxels: leave out a subject x ROI whose ladder fit has fewer voxels (0: keep all)
 SIGNAL_TABLE = 'af_prf_cv_ladder_nested/cv_ladder_per_voxel.tsv'
 JOINT_STEM = 'dog_final2_stage-3'   # DoG fold fits with the joint per-ROI HRF (the HRF table's source)
@@ -756,10 +794,11 @@ def estimate(trials, meta, g0, eqs, run_eqs, param_runs=None):
         trial_rows.append(est)
 
     # ---- RT-binned OLS ----
-    meta_b = meta.merge(trials[['trial_idx', 'bin_all', 'bin_rt2', 'bin_rt3',
+    extra_bins = ['bin_rq5'] if 'bin_rq5' in trials else []
+    meta_b = meta.merge(trials[['trial_idx', 'bin_all', 'bin_rt2', 'bin_rt3', *extra_bins,
                                 'bin_run', 'bin_dprime', 'bin_tprime']],
                         on='trial_idx')
-    for scheme in ('all', 'rt2', 'rt3', 'run', 'dprime', 'tprime'):
+    for scheme in ('all', 'rt2', 'rt3', 'run', 'dprime', 'tprime', *[b[4:] for b in extra_bins]):
         for with_global in (False, True):
             keep = (meta_b['kind'] != 'G').values | with_global
             groups = (meta_b['kind'] + '|' + meta_b[f'bin_{scheme}'])[keep]
@@ -889,9 +928,9 @@ def fit_group(sub, group, pieces, rois, out_dir, trials):
 
 
 def main(subject, bids_folder, rois, output_subdir='af_trialwise_gains', hp_neutral=False, ladder_roots=(),
-         hrf_table=None, voxels='ladder', groups=False, min_voxels=0):
-    global LADDER_ROOTS, HRF_TABLE, VOXELS, MIN_VOXELS
-    VOXELS, MIN_VOXELS = voxels, min_voxels
+         hrf_table=None, voxels='ladder', groups=False, min_voxels=0, rt_modulator='zlogrt'):
+    global LADDER_ROOTS, HRF_TABLE, VOXELS, MIN_VOXELS, RT_MODULATOR
+    VOXELS, MIN_VOXELS, RT_MODULATOR = voxels, min_voxels, rt_modulator
     if voxels == 'signal' and not ladder_roots:
         raise ValueError('--voxels signal needs --ladder-root')
     from retsupp.modeling.roi_hrf import load_table
@@ -965,6 +1004,9 @@ if __name__ == '__main__':
     parser.add_argument('--min-voxels', type=int, default=0,
                         help='With --voxels ladder: leave out a subject x ROI whose m7_full fit has fewer voxels '
                              '(--voxels signal always needs 10).')
+    parser.add_argument('--rt-modulator', choices=['zlogrt', 'residual'], default='zlogrt',
+                        help='residual: log RT residualised on the design within participant, z-scored '
+                             '(notes/rt_power_plan_2026-11-13.md); adds residual-RT quintile bins (scheme rq5).')
     args = parser.parse_args()
     main(args.subject, args.bids_folder, args.rois, args.output_subdir, args.hp_neutral, args.ladder_root,
-         args.hrf_table, args.voxels, args.groups, args.min_voxels)
+         args.hrf_table, args.voxels, args.groups, args.min_voxels, args.rt_modulator)
