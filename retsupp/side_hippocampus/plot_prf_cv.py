@@ -6,7 +6,8 @@ Input: the per-(subject, region, model) summary of ``collect_prf_cv.py``. Tests,
 - cvR² true − scramble (median over the region's voxels) > 0;
 - fraction of voxels above the scramble 95th percentile > 0.05;
 - contralateral fraction among those voxels > 0.5;
-- fold-to-fold agreement of the pRF x-coordinate among those voxels > 0.
+- fold-to-fold agreement of the pRF x-coordinate (all voxels), true − scramble > 0 (table only; the folds share half
+  their training runs, so the agreement is not zero even without signal, and the negative control shows it too).
 
 Usage::
 
@@ -32,7 +33,9 @@ LABEL = {'hippocampus': 'Hippocampus', 'entorhinal': 'Entorhinal', 'parahippocam
          'amygdala': 'Amygdala', 'precentral': 'Precentral', 'lateral_occipital': 'Lateral occipital'}
 COLOR = {r: '#3B5BA5' for r in MTL} | {'precentral': '#7F7F7F', 'lateral_occipital': '#2A9D8F'}
 TESTS = [('d_cvr2', 0, 'cvR² true − scramble'), ('frac_above_thr', .05, 'Fraction above scramble 95th pct'),
-         ('contra_prf', .5, 'Contralateral fraction'), ('x_agree', 0, 'Fold-to-fold r of x')]
+         ('contra_prf', .5, 'Contralateral fraction'),
+         ('d_xagree', 0, 'Fold-to-fold r of x, true − scramble')]   # table only: folds share training runs
+PLOTTED = TESTS[:3]
 
 
 def style():
@@ -64,6 +67,7 @@ def main(summary, out_dir, model='dog_roihrf'):
     s = pd.read_csv(summary, sep='\t')
     s = s[s.model == model].copy()
     s['d_cvr2'] = s.median_cvr2_true - s.median_cvr2_scramble
+    s['d_xagree'] = s.x_agree_all - s.x_agree_all_scramble
     out_dir = Path(out_dir)
     (out_dir / 'data').mkdir(parents=True, exist_ok=True)
     t = run_tests(s)
@@ -71,9 +75,9 @@ def main(summary, out_dir, model='dog_roihrf'):
     print(t.round(4).to_string(index=False))
 
     style()
-    fig, axes = plt.subplots(1, 4, figsize=(180 / 25.4, 52 / 25.4), constrained_layout=True)
+    fig, axes = plt.subplots(1, 3, figsize=(180 / 25.4, 58 / 25.4), constrained_layout=True)
     rng = np.random.default_rng(0)
-    for ax, (col, null, lab) in zip(axes, TESTS):
+    for ax, (col, null, lab) in zip(axes, PLOTTED):
         for i, r in enumerate(REGIONS):
             v = s.loc[s.region == r, col].dropna().to_numpy()
             ax.scatter(i + rng.uniform(-.18, .18, len(v)), v, s=5, color=COLOR[r], alpha=.35, lw=0)
@@ -83,17 +87,20 @@ def main(summary, out_dir, model='dog_roihrf'):
             if p < .05:
                 ax.text(i, 1.0, '*', transform=ax.get_xaxis_transform(), ha='center', va='top', fontsize=8)
         ax.axhline(null, color='0.6', lw=.6, ls='--', zorder=0)
-        ax.set_xticks(range(len(REGIONS)), [LABEL[r] for r in REGIONS], rotation=40, ha='right')
+        ax.set_xticks(range(len(REGIONS)))
+        ax.set_xticklabels([LABEL[r] for r in REGIONS], rotation=40, ha='right', rotation_mode='anchor')
         ax.set_ylabel(lab)
         sns.despine(ax=ax, offset=4, trim=False)
+        for lab_ in ax.get_xticklabels():
+            lab_.set(rotation=40, ha='right', rotation_mode='anchor')
         if col == 'd_cvr2':
-            ax.set_yscale('symlog', linthresh=.002)
+            ax.set_ylabel('Held-out R², true − scramble')
     axes[0].text(.03, .97, 'MTL', color=COLOR['hippocampus'], transform=axes[0].transAxes, va='top', fontsize=6.5)
     axes[0].text(.03, .89, 'Negative control', color=COLOR['precentral'], transform=axes[0].transAxes, va='top',
                  fontsize=6.5)
     axes[0].text(.03, .81, 'Visual control', color=COLOR['lateral_occipital'], transform=axes[0].transAxes, va='top',
                  fontsize=6.5)
-    for ax, letter in zip(axes, 'abcd'):
+    for ax, letter in zip(axes, 'abc'):
         ax.text(-.32, 1.04, letter, transform=ax.transAxes, fontsize=8, fontweight='bold', va='bottom')
     for ext in ('pdf', 'png'):
         fig.savefig(out_dir / f'fig_prf_evidence_{model}.{ext}', bbox_inches='tight', pad_inches=.02)
