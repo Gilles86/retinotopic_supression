@@ -94,7 +94,7 @@ def area_estimates(sub, roi, data, trials, u, offsets, n_vol):
         for r in range(n_runs):
             sl = slice(r * n_vol, (r + 1) * n_vol)
             for i, o in enumerate(offs):
-                rs[i, sl] = np.roll(rw[sl], int(o), axis=0)
+                rs[i, sl] = np.roll(rw[sl], int(o[r]), axis=0)
         Xtr = np.zeros((len(offs), len(g)))
         for k, (si, win) in enumerate(regs):
             Xtr[:, k] = np.einsum('wv,bwv->b', win, rs[:, si:si + win.shape[0]])
