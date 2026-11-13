@@ -153,7 +153,10 @@ def pooled_check(param):
     return out
 
 
-def main(meta, name, param, compact=False):
+FIT_LABEL = "each subject's final joint gain-field fit (m7: DoG pRFs, one HRF per subject × area, each area's signal voxels)"
+
+
+def main(meta, name, param, compact=False, fit_label=FIT_LABEL):
     """compact: narrower panels (5.9 in wide), shorter titles and keys; same content."""
     meta = Path(meta)
     summary = pd.read_csv(meta / 'summary.tsv', sep='\t')
@@ -193,9 +196,11 @@ def main(meta, name, param, compact=False):
     if credible['G_rt']:
         title_b = ([('Lower ', FG), ('distractor', DISTRACTOR), (' and global gains on slower trials', FG)] if compact else
                    [('On slower trials the ', FG), ('distractor', DISTRACTOR), (' and global gains are lower', FG)])
-    else:
+    elif credible['D_rt']:
         title_b = ([('Lower ', FG), ('distractor', DISTRACTOR), (' gain on slower trials', FG)] if compact else
                    [('On slower trials the ', FG), ('distractor', DISTRACTOR), (' gain is lower', FG)])
+    else:   # no credible RT effect over all nine areas
+        title_b = [('Gains on slower trials', FG)]
     heading(fig, xb, yh, 'b', title_b, W, H)
     key(fig, xb, yk, [([lambda a: draw_source(a, 'target')], TARGET, 'Target'),
                       ([lambda a: draw_source(a, 'distractor')], DISTRACTOR, 'Distractor'),
@@ -227,14 +232,21 @@ def main(meta, name, param, compact=False):
         rt_sentence = ('On slower trials the distractor gain ({Drt_all}, P = {Drt_all_p}) and the global gain over the whole '
                        'display ({Grt_all}, P = {Grt_all_p}) are lower; the target gain does not change credibly '
                        '({Trt_all}, P = {Trt_all_p}).')
+    elif max(g('D_rt', 'abs').p_gt0, g('D_rt', 'abs').p_lt0) <= .975:
+        rt_sentence = ('Over all nine areas no gain changes credibly with response time: distractor gain {Drt_all} '
+                       '(P = {Drt_all_p}), global gain over the whole display {Grt_all} (P = {Grt_all_p}), target gain '
+                       '{Trt_all} (P = {Trt_all_p}); group estimates in the table below.')
     else:
         rt_sentence = ('On slower trials the distractor gain is lower ({Drt_all}, P = {Drt_all_p}); the global gain over the '
                        'whole display points the same way but not credibly ({Grt_all}, P = {Grt_all_p}), and the target gain '
                        'does not change credibly ({Trt_all}, P = {Trt_all_p}).')
     n_sub, n_obs = int(diag.n_subjects.max()), int(diag.n_obs.max())
     tn = g('T_target_repeat', 'rel_nose')
-    T_nose_phrase = ('the target-repeat effect remains (P = {T_nose_p})' if max(tn.p_gt0, tn.p_lt0) > .975 else
-                     'the target-repeat effect keeps its direction but falls just short of the threshold (P = {T_nose_p}), and')
+    tn_p = max(tn.p_gt0, tn.p_lt0)
+    T_nose_phrase = ('the target-repeat effect remains (P = {T_nose_p})' if tn_p > .975 else
+                     'the target-repeat effect keeps its direction but falls just short of the threshold (P = {T_nose_p}), and'
+                     if tn_p > .95 else
+                     'the target-repeat effect keeps its direction but is not credible (P = {T_nose_p}), and')
     legend = LEGEND.replace('{T_nose_phrase} but the RT', '{T_nose_phrase} the RT' if T_nose_phrase.endswith(', and') else '{T_nose_phrase} but the RT').replace('{rt_sentence}', rt_sentence).replace('{T_nose_phrase}', T_nose_phrase).replace(
         'n = 30 subjects (247 subject × area estimates', f'n = {n_sub} subjects ({n_obs} subject × area estimates').format(
         conv=conv,
@@ -273,6 +285,9 @@ def main(meta, name, param, compact=False):
             r = s.loc[(q, v, 'area', ar)]
             cells.append(f'{fmt(r, sc, un)}, P = {pdir(r)}')
         tab.append(f'| {lab} | ' + ' | '.join(cells) + ' |')
+    legend = legend.replace(FIT_LABEL, fit_label)
+    if 'own voxels' in fit_label:
+        legend = legend.replace('fewer than 10 signal voxels', 'fewer than 10 voxels')
     save(fig, name, legend.strip() + '\n' + '\n'.join(tab))
     print(pd.concat([ra, rb]).round(4).to_string(index=False))
 
@@ -284,5 +299,6 @@ if __name__ == '__main__':
     ap.add_argument('--param', default='notes/data/trialwise_signal_se_2026-11/trialwise_af_signal_se_2026-11_parametric.tsv',
                     help='Collected parametric table (for the pooled-group check in the legend)')
     ap.add_argument('--compact', action='store_true', help='narrower panels, shorter titles and keys (same content)')
+    ap.add_argument('--fit-label', default=FIT_LABEL, help='how the legend names the base fits')
     a = ap.parse_args()
-    main(a.meta, a.name, a.param, a.compact)
+    main(a.meta, a.name, a.param, a.compact, a.fit_label)
