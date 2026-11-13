@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 from PIL import Image
 
-from retsupp.visualize.paper.paper_style import (DOUBLE, FG, MUTED, ROI_COLORS, ROI_GROUPS, ROI_ORDER, ROI_X, letter, offset_spines,
+from retsupp.visualize.paper.paper_style import (DOUBLE, FG, MUTED, PATH_LS, PRF, ROI_COLORS, ROI_GROUPS, ROI_ORDER, ROI_X, letter, offset_spines,
                                                  provisional, roi_axis, save)
 from retsupp.visualize.paper.plot_fig1 import COVER_FINAL_TSV, COVER_TSV, SIGMA_FINAL_TSV, SIGMA_TSV, contralateral
 
@@ -36,19 +36,19 @@ MAP_DIR = Path('notes/figures/fig1_r2low')
 LEGEND = """
 **Figure 2. The pRF fits.** a, Visual areas (neuropythy atlas), polar angle and eccentricity of the pRF fit on the flattened
 cortex of one subject (sub-23; left hemisphere on the left; colour fades in from R² = .05 to .20). Left: the inflated
-surface turned to show its lateral and medial walls, visual areas in their colours; black lines mark the edge of the
+surface turned to show its lateral and medial walls, visual areas in their colours (one family per pathway: early, blues; dorsal, greens; occipitotemporal, warm hues); black lines mark the edge of the
 flattened window and, in the medial view, the cut along the calcarine sulcus made to flatten the surface. Polar-angle key: the visual
 field, coloured as mapped on the contralateral hemisphere. b, Share of pRF centres in the contralateral visual field per ROI,
 voxels with R² ≥ .1 inside the bar aperture; dots are subjects, lines medians; numbers give the subjects per ROI. c, pRF size
 (σ) against eccentricity for six ROIs: per subject, the median σ of voxels with R² ≥ .1 inside the bar aperture in 0.5°
 eccentricity bins (bins with ≥ 5 voxels); lines and bands, mean ± SEM across subjects (bins with ≥ 10 subjects). d, Held-out
-R² gained per ROI over a Gaussian pRF with the canonical HRF by a difference-of-Gaussians pRF (teal), by one HRF per subject
+R² gained per ROI over a Gaussian pRF with the canonical HRF by a difference-of-Gaussians pRF (dark teal, the pRF colour), by one HRF per subject
 × ROI on top of the DoG pRF (grey; the HRF's delay and dispersion fitted jointly with all pRFs of the ROI, the HRF
 used in the gain fits), and by both together, the pRF model used for the gain fits (black): three folds of runs,
 voxels with cross-run reliability > 0 in the training runs, median over voxels, mean over folds; points and bars, median
 over subjects (n = 30) and bootstrapped 95% CI. e, Deconvolved response to the onset of the search display (nideconv,
 Fourier basis), after subtracting each voxel's predicted response to the bar: voxels with cross-run reliability > 0, binned
-by the distance of the pRF centre from the nearest of the eight items (0.5° bins, ≥ 5 voxels; colour), pooled per pathway
+by the distance of the pRF centre from the nearest of the eight items (0.5° bins, ≥ 5 voxels; colour, viridis from near to far), pooled per pathway
 weighted by voxel count, each subject's pre-onset mean (−4 to 0 s) subtracted; lines, mean over subjects (n = 30). Icon:
 the eight items with pRFs stepping from an item towards fixation, coloured as the lines. Pathways: early, V1–V3; dorsal,
 V3AB and IPS; occipitotemporal, hV4, VO, LO and TO.
@@ -98,6 +98,16 @@ def show_flat(ax, path):
     ax.set_axis_off()
 
 
+def _light(c):
+    r, g, b = mpl.colors.to_rgb(c)
+    return .2126 * r + .7152 * g + .0722 * b > .45
+
+
+def _text_color(c):
+    """The area colour, darkened for text when it is a light one."""
+    return tuple(.6 * v for v in mpl.colors.to_rgb(c)) if _light(c) else c
+
+
 def panel_flat_window(fig, gs, subject=23):
     """Where the flat maps come from: the inflated surface with the flat-map window outlined, lateral and medial."""
     sub = gs.subgridspec(2, 1, hspace=.25)
@@ -130,8 +140,9 @@ def panel_maps(fig, gs, subject=23, view='flat'):
             if roi not in ROI_COLORS or 'lh' not in pos:
                 continue
             u, v = pos['lh']
-            ax.text(u * w, (1 - v) * h, roi, color='w', fontsize=6, fontweight='bold', ha='center', va='center',
-                    rotation=90 if roi in ('V1', 'V2', 'V3') else 0,
+            light = _light(ROI_COLORS[roi])
+            ax.text(u * w, (1 - v) * h, roi, color=FG if light else 'w', fontsize=6, fontweight='bold', ha='center',
+                    va='center', rotation=90 if roi in ('V1', 'V2', 'V3') else 0,
                     path_effects=[pe.withStroke(linewidth=1.4, foreground=ROI_COLORS[roi])])
     else:
         ax = axes[0]
@@ -167,7 +178,7 @@ def panel_contra(ax):
     roi_axis(ax)
 
 
-PRF_TEAL = '#2A9D8F'
+PRF_TEAL = PRF
 STEPS = [('DoG pRF', 'dog', PRF_TEAL), ('HRF per ROI', 'hrf', '#8D99A6'), ('Both', 'both', FG)]
 
 
@@ -206,7 +217,7 @@ def panel_r2(ax, d):
 
 DIST_DIR = 'notes/data/event_deconv_distance_2026-11'
 PATHWAY = {'Early': ('V1', 'V2', 'V3'), 'Dorsal': ('V3AB', 'IPS'), 'Occipitotemporal': ('hV4', 'VO', 'LO', 'TO')}
-PATHWAY_COL = {'Early': ROI_COLORS['V1'], 'Dorsal': ROI_COLORS['V3AB'], 'Occipitotemporal': ROI_COLORS['LO']}
+PATHWAY_COL = {'Early': FG, 'Dorsal': FG, 'Occipitotemporal': FG}   # pathways take no hue: line style (PATH_LS)
 
 
 def panel_distance(ax, folder=DIST_DIR, cls='neutral_lp'):
@@ -226,7 +237,7 @@ def panel_distance(ax, folder=DIST_DIR, cls='neutral_lp'):
         m, se = g.mean(), g.sem()
         xs = m.index + .5
         ax.fill_between(xs, m - se, m + se, color=col, alpha=.2, lw=0)
-        ax.plot(xs, m, 'o-', color=col, ms=3, lw=1.3)
+        ax.plot(xs, m, 'o', color=col, ms=3, ls=PATH_LS[grp_name], lw=1.3)
         dy = {'Early': 0, 'Dorsal': -.06, 'Occipitotemporal': .07}[grp_name]
         ax.text(xs[-1] + .2, m.iloc[-1] + dy, grp_name if grp_name != 'Occipitotemporal' else 'Occ.-temp.', color=col,
                 fontsize=6, va='center', ha='left')
@@ -254,7 +265,7 @@ def panel_size(ax, rois=('V1', 'V2', 'V3', 'V3AB', 'hV4', 'LO')):
     for i in range(1, len(ends)):  # keep end labels at least 0.12 deg apart
         ends[i][0] = max(ends[i][0], ends[i - 1][0] + .15)
     for y, x, roi in ends:
-        ax.text(x + .07, y, roi, color=ROI_COLORS[roi], fontsize=6, va='center')
+        ax.text(x + .07, y, roi, color=_text_color(ROI_COLORS[roi]), fontsize=6, va='center')
     ax.set_xlim(0, 3.6)
     ax.set_xticks([0, 1, 2, 3])
     ax.set_ylim(0, 2)
@@ -283,8 +294,8 @@ def panel_distance_tc(fig, gs, folder=NEAREST_DIR):
     base = p[p.t < 0].groupby(['subject', 'grp', 'dbin']).r.mean()
     p['r'] -= p.set_index(['subject', 'grp', 'dbin']).index.map(base)
     bins = sorted(p.dbin.unique())
-    cmap = mpl.colormaps['viridis']
-    cols = {b: cmap(.9 * i / max(len(bins) - 1, 1)) for i, b in enumerate(bins)}
+    cmap = mpl.colormaps['viridis']   # perceptually uniform; ends truncated so every line reads on white
+    cols = {b: cmap(.05 + .8 * i / max(len(bins) - 1, 1)) for i, b in enumerate(bins)}
     axes = []
     for j, grp_name in enumerate(PATHWAY):
         ax = fig.add_subplot(sub[j], sharey=axes[0] if axes else None)
@@ -326,7 +337,7 @@ def distance_icon(fig, x0, y0, size, n_bins=8):
     cmap = mpl.colormaps['viridis']
     u = np.array([np.cos(np.pi / 4), np.sin(np.pi / 4)])
     for k, dist in enumerate((0., 1.35, 2.7, 4.)):
-        ins.add_patch(Circle((4 - dist) * u, 1.05, facecolor=cmap(.9 * k / 3), ec='none', alpha=.75, zorder=2 if k else 4))
+        ins.add_patch(Circle((4 - dist) * u, 1.05, facecolor=cmap(.05 + .8 * k / 3), ec='none', alpha=.75, zorder=2 if k else 4))
     ins.plot(0, 0, '+', color=FG, ms=3, mew=.5, zorder=5)
     ins.set_xlim(-5, 5)
     ins.set_ylim(-5, 5)
@@ -389,5 +400,7 @@ if __name__ == '__main__':
     ap.add_argument('--final-prfs', action='store_true', help='b, c from the final joint-HRF fold fits (collect-final tables)')
     ap.add_argument('--nearest-dir', default='notes/data/event_deconv_nearest_final2_2026-11',
                     help='deconvolved search-onset responses by pRF distance from the nearest item (e)')
+    ap.add_argument('--map-dir', default=str(MAP_DIR), help='flat-map renders (render_fig3_flat.py), e.g. notes/figures/fig1_r2low_palA')
     a = ap.parse_args()
+    MAP_DIR = Path(a.map_dir)
     main(a.cv_table, a.hrf_table, a.name, a.nearest_dir, a.final_prfs)

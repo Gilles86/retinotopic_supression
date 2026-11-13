@@ -34,12 +34,11 @@ mpl.rcParams.update({
     'pdf.fonttype': 42, 'ps.fonttype': 42, 'savefig.pad_inches': .02,
 })
 
-FG, MUTED, HP = '#1F2933', '#9AA5B1', '#D62828'
-TARGET_C, DISTRACTOR_C = '#F77F00', '#0077B6'   # paper_style TARGET, DISTRACTOR
-HEMI = {'L': '#5E3C99', 'R': '#E66101'}
+from retsupp.visualize.paper.paper_style import (DISTRACTOR as DISTRACTOR_C, FG, HP, LP, MUTED, ROI_COLORS,  # noqa: E402
+                                                 TARGET as TARGET_C)
+HEMI = {'L': FG, 'R': MUTED}
 SCREEN, ITEM_A, ITEM_B = '#808080', '#E39100', '#00A900'   # as displayed: psychopy (.78, .14, -1), (-1, .33, -1)
-AREAS = {'V1': '#3D5A80', 'V2': '#2A9D8F', 'V3': '#8AB17D', 'hV4': '#E9C46A', 'V3AB': '#7209B7',
-         'VO': '#F4A261', 'LO': '#E76F51', 'TO': '#B5179E', 'IPS': '#0077B6', 'FEF': '#D62828'}
+AREAS = {**ROI_COLORS, 'FEF': FG}
 ROIS = ['V1', 'V2', 'V3', 'V3AB', 'hV4', 'LO', 'TO', 'VO', 'IPS', 'SPL1', 'FEF']
 LINE_ROIS = ['V1', 'V2', 'V3', 'hV4', 'V3AB']
 STRIP_ROIS = ['V1', 'V2', 'V3', 'hV4', 'VO', 'LO', 'TO', 'V3AB', 'IPS']
@@ -201,11 +200,12 @@ def panel_display(ax, margin=9.3):
     ax.add_patch(Circle(pos[7], 1.12, fill=False, ec=HP, lw=1.1, ls=(0, (2.5, 1.5)), zorder=6, clip_on=False))
     kw = dict(fontsize=7, color=FG, annotation_clip=False,
               arrowprops=dict(arrowstyle='-|>', color=FG, lw=.8, mutation_scale=6, shrinkA=1, shrinkB=2))
-    # Item names in the paper's item colours (target orange, distractor blue), their descriptions in the text colour.
+    # Item names in the text colour: on screen every item is orange and the distractor green (real colours), so the
+    # model colours (target orange, distractor blue) are kept off this depiction of the display.
     ax.annotate('Target', xy=pos[3] + [.3, .85], xytext=(-3.3, 7.3), ha='center', va='center',
-                **{**kw, 'color': TARGET_C, 'fontweight': 'bold'})
+                **{**kw, 'color': FG, 'fontweight': 'bold'})
     ax.annotate('Distractor', xy=pos[7] + [0, -1.2], xytext=(margin, -7.2), ha='right', va='center',
-                **{**kw, 'color': DISTRACTOR_C, 'fontweight': 'bold'})
+                **{**kw, 'color': FG, 'fontweight': 'bold'})
     ax.annotate('Bar in 3.17°\naperture', xy=(-.5, -3.25), xytext=(-margin, -7.2), ha='left', va='center', **kw)
     # Anchors: the ring and aperture eccentricities, and a 1° scale bar.
     ax.add_patch(Circle((0, 0), RING, fill=False, ec='w', lw=.5, ls=(0, (1.5, 1.5)), zorder=2.5))
@@ -222,7 +222,7 @@ def panel_display(ax, margin=9.3):
     ax.text(6.15, pos[7][1], 'HP\n50%', color=HP, fontsize=7, fontweight='bold', va='center', ha='left')
     for j, x, ha in ((1, 6.15, 'left'), (3, -6.15, 'right'), (5, -6.15, 'right')):
         ax.add_patch(Circle(pos[j], 1.12, fill=False, ec='w', lw=.8, ls=(0, (2.5, 1.5)), zorder=6))
-        ax.text(x, pos[j][1], 'LP\n10%', color=FG, fontsize=7, va='center', ha=ha)
+        ax.text(x, pos[j][1], 'LP\n10%', color=LP, fontsize=7, va='center', ha=ha)
 
 
 def panel_trial(fig, ax):

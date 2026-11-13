@@ -17,11 +17,11 @@ import pandas as pd
 from matplotlib.patches import Circle
 from scipy import stats
 
-from retsupp.visualize.paper.paper_style import DISTRACTOR, DOUBLE, FG, HP, MUTED, TARGET, letter, offset_spines, save
+from retsupp.visualize.paper.paper_style import DISTRACTOR, DOUBLE, FG, HP, LP, MUTED, NEUTRAL, TARGET, letter, offset_spines, save
 from retsupp.visualize.paper.plot_fig1 import APERTURE, RING, item_positions, panel_display
 
 LEGEND = """
-**Figure 1. Paradigm and behaviour.** a, Search display with the bar in its 3.17° aperture: 8 items on a ring at 4°, with target and distractor at the four diagonal positions; percentages are over all trials. The target has the odd orientation (participants report the dot on it) and never appears at the distractor's location; there is no distractor on 20% of trials. b, Two trials to scale, with the bar position every 2 s below; the bar sweeps the aperture in four directions (rightward, leftward, downward, upward; 42 s each with 4.8 s rest, the sequence twice per run), and the HP location across blocks of runs (example order). c, Response time with the distractor at the HP location, at an LP location, or absent. d, Response time with the target at the HP or an LP location, on trials with a distractor. e, f, Response time when the target (e) or the distractor (f) appears at the same location as on the previous trial, or at another location; distractor repeats are compared within HP and within LP trials and averaged. Icons below each condition: the four possible locations, with HP ringed in red where the condition is defined by it (c, d); filled, the item on this trial, hollow, on the previous trial (e, f). c-f, n = 30, correct trials. Dots are subjects, triangles are subjects beyond the axis limits; large points and bars are the mean ± within-subject SEM (Cousineau-Morey). Wilcoxon signed-rank tests: ** p < .01, *** p < .001.
+**Figure 1. Paradigm and behaviour.** a, Search display with the bar in its 3.17° aperture: 8 items on a ring at 4°, with target and distractor at the four diagonal positions; percentages are over all trials. The target has the odd orientation (participants report the dot on it) and never appears at the distractor's location; there is no distractor on 20% of trials. b, Two trials to scale, with the bar position every 2 s below; the bar sweeps the aperture in four directions (rightward, leftward, downward, upward; 42 s each with 4.8 s rest, the sequence twice per run), and the HP location across blocks of runs (example order). c, Response time with the distractor at the HP location, at an LP location, or absent. d, Response time with the target at the HP or an LP location, on trials with a distractor. e, f, Response time when the target (e) or the distractor (f) appears at the same location as on the previous trial, or at another location; distractor repeats are compared within HP and within LP trials and averaged. Icons below each condition: the four possible locations, with HP ringed in purple where the condition is defined by it (c, d); filled, the item on this trial, hollow, on the previous trial (e, f). c-f, n = 30, correct trials. Dots are subjects, triangles are subjects beyond the axis limits; large points and bars are the mean ± within-subject SEM (Cousineau-Morey). Wilcoxon signed-rank tests: ** p < .01, *** p < .001.
 """
 
 
@@ -207,7 +207,7 @@ def repeats_raw(trial_table):
 
 
 def cond_icons(ax, specs, y0=-.66, h=.5, hp=True):
-    """Under each condition, a small display: the four diagonal locations, the HP one ringed in red, and the item(s).
+    """Under each condition, a small display: the four diagonal locations, the HP one ringed in purple, and the item(s).
 
     specs: one list per x position of (location index, kind, filled) with kind 'target' or 'distractor'; a hollow
     marker is the previous trial's item (repeat / switch panels).
@@ -257,7 +257,7 @@ def main(rt_table, bids, name='fig1_paradigm_behaviour', trial_table='notes/data
     rt_axes = []
     ax = fig.add_subplot(low[0])
     rt_axes.append(ax)
-    rt_panel(ax, d[d.contrast == 'distractor'], ['HP', 'LP', 'Absent'], [HP, FG, MUTED], [('HP', 'LP'), ('LP', 'Absent')], ylim)
+    rt_panel(ax, d[d.contrast == 'distractor'], ['HP', 'LP', 'Absent'], [HP, LP, NEUTRAL], [('HP', 'LP'), ('LP', 'Absent')], ylim)
     cond_icons(ax, [[(7, 'distractor', True)], [(3, 'distractor', True)], []])
     ax.set_xlabel('Distractor')
     ax.set_ylabel('Response time (ms)')
@@ -267,7 +267,7 @@ def main(rt_table, bids, name='fig1_paradigm_behaviour', trial_table='notes/data
     ax.text(.09, 1.5, 'Off scale', transform=ax.transAxes, fontsize=6, color=FG, va='center')
     ax = fig.add_subplot(low[1])
     rt_axes.append(ax)
-    rt_panel(ax, d[d.contrast == 'target'], ['HP', 'LP'], [HP, FG], [('HP', 'LP')], ylim)
+    rt_panel(ax, d[d.contrast == 'target'], ['HP', 'LP'], [HP, LP], [('HP', 'LP')], ylim)
     cond_icons(ax, [[(7, 'target', True)], [(3, 'target', True)]])
     ax.set_xlabel('Target')
     ax.set_yticklabels([])
@@ -298,7 +298,7 @@ def main(rt_table, bids, name='fig1_paradigm_behaviour', trial_table='notes/data
         RT, RD = w(rep[rep.contrast == 'target']), w(rep[rep.contrast == 'distractor'])
         # One strip per bracket, under its panel; every strip the same physical width (the narrow panels') and x scale.
         sw, sh = rt_axes[1].get_position().width, .17 / H
-        rows = [[('HP − LP', D.HP - D.LP, HP), ('LP − absent', D.LP - D.Absent, FG)], [('HP − LP', T.HP - T.LP, HP)],
+        rows = [[('HP − LP', D.HP - D.LP, HP), ('LP − absent', D.LP - D.Absent, LP)], [('HP − LP', T.HP - T.LP, HP)],
                 [('Repeat − switch', RT.Repeat - RT.Switch, TARGET)], [('Repeat − switch', RD.Repeat - RD.Switch, DISTRACTOR)]]
         out = []
         for a, specs in zip(rt_axes, rows):

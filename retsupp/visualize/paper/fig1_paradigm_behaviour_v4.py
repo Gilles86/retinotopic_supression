@@ -25,7 +25,7 @@ from scipy import stats
 
 from retsupp.visualize.paper.fig1_paradigm_behaviour import (DIFF_LIM, LEGEND as LEGEND_V3, build_rt, cond_icons,
                                                              panel_timeline, repeats_raw, rt_panel, stars)
-from retsupp.visualize.paper.paper_style import (DISTRACTOR, DOUBLE, FG, HP, MUTED, SINGLE, TARGET, letter, offset_spines,
+from retsupp.visualize.paper.paper_style import (DISTRACTOR, DOUBLE, FG, HP, LP, MUTED, NEUTRAL, SINGLE, TARGET, letter, offset_spines,
                                                  save)
 from retsupp.visualize.paper.plot_fig1 import RING, item_positions, panel_display
 
@@ -160,7 +160,7 @@ def main(rt_table, bids, trial_table, exclude, suffix):
     pos = [low[i].get_position(fig) for i in range(4)]
     ylim = (770, 1020)
     ax_c = fig.add_axes(pos[0].bounds)
-    rt_panel(ax_c, d[d.contrast == 'distractor'], ['HP', 'LP', 'Absent'], [HP, FG, MUTED], [('HP', 'LP'), ('LP', 'Absent')], ylim)
+    rt_panel(ax_c, d[d.contrast == 'distractor'], ['HP', 'LP', 'Absent'], [HP, LP, NEUTRAL], [('HP', 'LP'), ('LP', 'Absent')], ylim)
     cond_icons(ax_c, [[(7, 'distractor', True)], [(3, 'distractor', True)], []])
     ax_c.set_xlabel('Distractor')
     ax_c.set_ylabel('Response time (ms)')
@@ -169,7 +169,7 @@ def main(rt_table, bids, trial_table, exclude, suffix):
     ax_c.scatter([.05], [1.5], s=10, marker='v', color=MUTED, lw=0, transform=ax_c.transAxes, clip_on=False)
     ax_c.text(.09, 1.5, 'Off scale', transform=ax_c.transAxes, fontsize=6, color=FG, va='center')
     ax_d = fig.add_axes(pos[1].bounds)
-    rt_panel(ax_d, d[d.contrast == 'target'], ['HP', 'LP'], [HP, FG], [('HP', 'LP')], ylim)
+    rt_panel(ax_d, d[d.contrast == 'target'], ['HP', 'LP'], [HP, LP], [('HP', 'LP')], ylim)
     cond_icons(ax_d, [[(7, 'target', True)], [(3, 'target', True)]])
     ax_d.set_xlabel('Target')
     ax_d.set_yticklabels([])
@@ -182,7 +182,7 @@ def main(rt_table, bids, trial_table, exclude, suffix):
     RT, RD = wide(rep[rep.contrast == 'target']), wide(rep[rep.contrast == 'distractor'])
     sw, sh = pos[1].width, .17 / H
     out = []
-    for a, specs in zip((ax_c, ax_d), [[('HP − LP', D.HP - D.LP, HP), ('LP − absent', D.LP - D.Absent, FG)],
+    for a, specs in zip((ax_c, ax_d), [[('HP − LP', D.HP - D.LP, HP), ('LP − absent', D.LP - D.Absent, LP)],
                                        [('HP − LP', T.HP - T.LP, HP)]]):
         for k, (lab, v, col) in enumerate(specs):
             s_ax = fig.add_axes([a.get_position().x0, (.82 - k * .42) / H, sw, sh])

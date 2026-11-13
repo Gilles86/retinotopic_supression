@@ -74,10 +74,11 @@ VIEWS = {
 }
 IMAGE_SIZE = (2400, 1800)
 # Visual areas of the neuropythy atlas, grouped as in the analyses.
-AREA_COLORS = {'V1': ((1,), '#3D5A80'), 'V2': ((2,), '#2A9D8F'), 'V3': ((3,), '#8AB17D'),
-               'hV4': ((4,), '#E9C46A'), 'VO': ((5, 6), '#F4A261'), 'LO': ((7, 8), '#E76F51'),
-               'TO': ((9, 10), '#B5179E'), 'V3AB': ((11, 12), '#7209B7'),
-               'IPS': ((101,), '#0077B6'), 'FEF': ((102,), '#D62828')}
+# Colours: paper_style.ROI_COLORS (Fig. 2 only: early blues, dorsal greens, occipitotemporal warm hues).
+AREA_COLORS = {'V1': ((1,), '#08519C'), 'V2': ((2,), '#3182BD'), 'V3': ((3,), '#7FB8E0'),
+               'hV4': ((4,), '#C2185B'), 'VO': ((5, 6), '#E8590C'), 'LO': ((7, 8), '#F2A60D'),
+               'TO': ((9, 10), '#B04FB5'), 'V3AB': ((11, 12), '#1A7F3C'),
+               'IPS': ((101,), '#7BC77E'), 'FEF': ((102,), '#1F2933')}
 # Wang 2015 labels added to the neuropythy areas; the neuropythy label wins on overlap,
 # as in the analyses. Output codes as in AREA_COLORS.
 WANG = {101: (18, 19, 20, 21, 22, 23), 102: (25,)}
