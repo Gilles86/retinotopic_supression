@@ -1,0 +1,61 @@
+pair	view	dE_old	dE_new
+HP – Target	Normal	27.0	58.5
+HP – Target	Deuteranopia	16.3	63.0
+HP – Target	Protanopia	24.5	60.5
+HP – Target	Tritanopia	14.4	32.5
+HP – Distractor	Normal	49.5	45.3
+HP – Distractor	Deuteranopia	52.1	25.5
+HP – Distractor	Protanopia	44.2	33.8
+HP – Distractor	Tritanopia	55.8	60.5
+Target – Distractor	Normal	52.8	50.3
+Target – Distractor	Deuteranopia	60.6	55.6
+Target – Distractor	Protanopia	52.5	51.2
+Target – Distractor	Tritanopia	65.7	58.2
+LP next – Distractor	Normal	15.7	33.1
+LP next – Distractor	Deuteranopia	16.1	10.0
+LP next – Distractor	Protanopia	17.2	13.4
+LP next – Distractor	Tritanopia	16.0	50.5
+LP opposite – Distractor	Normal	23.6	32.6
+LP opposite – Distractor	Deuteranopia	25.7	20.4
+LP opposite – Distractor	Protanopia	21.2	14.5
+LP opposite – Distractor	Tritanopia	20.5	45.6
+HP – LP next	Normal	37.2	18.6
+HP – LP next	Deuteranopia	35.7	17.4
+HP – LP next	Protanopia	26.9	18.2
+HP – LP next	Tritanopia	42.2	18.0
+LP next – LP opposite	Normal	26.4	24.6
+LP next – LP opposite	Deuteranopia	26.6	23.5
+LP next – LP opposite	Protanopia	25.9	24.6
+LP next – LP opposite	Tritanopia	26.4	23.6
+LP opposite – Neutral	Normal	9.9	18.9
+LP opposite – Neutral	Deuteranopia	10.0	11.5
+LP opposite – Neutral	Protanopia	9.8	11.0
+LP opposite – Neutral	Tritanopia	9.9	21.4
+LP next – Neutral	Normal	15.6	21.1
+LP next – Neutral	Deuteranopia	15.5	14.7
+LP next – Neutral	Protanopia	15.5	18.0
+LP next – Neutral	Tritanopia	15.6	27.9
+pRF – Distractor	Normal	28.8	31.2
+pRF – Distractor	Deuteranopia	21.6	26.1
+pRF – Distractor	Protanopia	26.0	30.2
+pRF – Distractor	Tritanopia	10.3	19.1
+pRF – Neutral	Normal	22.2	29.8
+pRF – Neutral	Deuteranopia	3.4	22.3
+pRF – Neutral	Protanopia	10.8	20.9
+pRF – Neutral	Tritanopia	16.5	24.5
+pRF – LP next	Normal	28.5	38.0
+pRF – LP next	Deuteranopia	17.4	16.5
+pRF – LP next	Protanopia	22.9	22.6
+pRF – LP next	Tritanopia	24.4	45.8
+Stim – Distractor	Normal	13.2	35.0
+Stim – Distractor	Deuteranopia	10.4	33.2
+Stim – Distractor	Protanopia	12.6	37.3
+Stim – Distractor	Tritanopia	12.9	37.0
+HP – Stim	Normal	42.1	17.1
+HP – Stim	Deuteranopia	46.5	13.7
+HP – Stim	Protanopia	36.3	16.0
+HP – Stim	Tritanopia	51.5	29.4
+pRF – Target	Normal	49.2	51.5
+pRF – Target	Deuteranopia	34.8	39.5
+pRF – Target	Protanopia	24.3	26.3
+pRF – Target	Tritanopia	60.4	59.2
