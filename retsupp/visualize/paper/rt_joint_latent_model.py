@@ -353,6 +353,12 @@ def report(args):
         b = stack('b_mu')
         for j, k in enumerate(KINDS):
             rows.append(dict(fit=tag, **hdi_row(b[j], rt_bar, f'slope_{k}')))
+        tau_s = stack('tau')                                # (S, 3, draws)
+        b_s = stack('b')
+        for j, k in enumerate(KINDS):
+            # log RT per unit of latent gain, in units of the observed gain's SD over all trials (b_sj / τ_sj,
+            # averaged over participants): the quantity the data pin down when τ is weakly identified
+            rows.append(dict(fit=tag, **hdi_row((b_s[:, j] / tau_s[:, j]).mean(0), rt_bar, f'slope_per_obsSD_{k}')))
         beta = stack('beta')
         fx = list(post['beta'].coords['fixed'].values)
         B = {n: beta[fx.index(n)] for n in fx}

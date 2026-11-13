@@ -52,7 +52,9 @@ def subject_rows(sub_dir):
             w[j] = 1.0 / np.median(se[sel] ** 2)
             summ.append(dict(subject=s, roi=roi, kind=k, n=int(sel.sum()), median_se=float(np.median(se[sel])),
                              sd_estimate=float(np.std(a['dev'][sel])),
-                             reliability=float(1 - np.median(se[sel] ** 2) / np.var(a['dev'][sel]))))
+                             sd_z=float(np.std(a['dev'][sel] / se[sel])),
+                             robust_sd_z=float(1.4826 * np.median(np.abs(a['dev'][sel] / se[sel]
+                                                                        - np.median(a['dev'][sel] / se[sel]))))))
         areas[roi] = (est, dr, w)
     rows = []
     for pool, members in POOLS.items():
@@ -93,7 +95,7 @@ def main(bids_folder, folder, out):
     tab.to_csv(out, sep='\t', index=False)
     summ = pd.concat(summs)
     summ.to_csv(str(out).replace('.tsv', '_area_summary.tsv'), sep='\t', index=False)
-    print(summ.groupby(['roi', 'kind'])[['median_se', 'sd_estimate', 'reliability']].median().round(3).to_string())
+    print(summ.groupby(['roi', 'kind'])[['median_se', 'sd_estimate', 'sd_z', 'robust_sd_z']].median().round(3).to_string())
     print(f'Saved {out}')
 
 
