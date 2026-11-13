@@ -199,12 +199,14 @@ def lm_fit(prob, x_pv=None, phi=None, bounds=None, max_iter=300, ftol=1e-10, n_s
         accepted = False
         while lam < 1e10:
             d_pv, d_s = schur_step(U, W, Vs, g_pv, g_s, lam, hold)
-            if (np.abs(d_pv) > np.maximum(1.0, max_step * np.abs(x_pv))).any() or \
-                    (np.abs(d_s) > np.maximum(0.5, max_step * np.abs(phi))).any() or not np.isfinite(d_s).all():
+            if (np.abs(d_s) > np.maximum(0.5, max_step * np.abs(phi))).any() or not np.isfinite(d_s).all():
                 if debug:
-                    print(f'      trial λ {lam:.2e}: step too large', flush=True)
+                    print(f'      trial λ {lam:.2e}: shared step too large ({np.abs(d_s).max():.3g})', flush=True)
                 lam *= 4.0
                 continue
+            cap = np.maximum(1.0, max_step * np.abs(x_pv))
+            n_capped = int((np.abs(d_pv) > cap).sum())
+            d_pv = np.clip(d_pv, -cap, cap)   # nearly flat per-voxel directions (e.g. surround of a voxel without one)
             phi_new = phi + d_s
             if lo is not None:
                 phi_new = np.clip(phi_new, lo, hi)
@@ -212,7 +214,7 @@ def lm_fit(prob, x_pv=None, phi=None, bounds=None, max_iter=300, ftol=1e-10, n_s
             f_new = prob.sse(x_new, phi_new)
             n_evals += 1
             if debug:
-                print(f'      trial λ {lam:.2e}: ΔSSE {f_new - f:.4f} | hold {None if hold is None else np.where(hold)[0]}'
+                print(f'      trial λ {lam:.2e}: ΔSSE {f_new - f:.4f} | capped {n_capped} | hold {None if hold is None else np.where(hold)[0]}'
                       f' | clipped {np.where(phi_new != phi + d_s)[0]} | max|d_s| {np.abs(d_s).max():.3g}', flush=True)
             if np.isfinite(f_new) and f_new < f:
                 accepted = True

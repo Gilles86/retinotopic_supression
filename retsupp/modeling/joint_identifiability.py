@@ -305,7 +305,7 @@ def check(subject, roi, name, bids):
             print(f'sh {nm} eps {eps}: max|fd-J|/max|fd| = {np.abs(fd - j_phi[:, :, i]).max() / den:.2e} '
                   f'(max|fd| {den:.3g})')
     print('bounds', dict(zip(prob.phi_names, bnds)))
-    x3, p3, _ = lm_fit(prob, bounds=bnds, max_iter=3, debug=True)
+    x3, p3, _ = lm_fit(prob, bounds=bnds, max_iter=12, debug=True)
     pr3, jp3, js3 = prob.jacobians(x3, p3)
     pars3 = prob.pars(x3, p3)
     print('non-finite pred:', int((~np.isfinite(pr3)).sum()))
