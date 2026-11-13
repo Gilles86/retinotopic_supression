@@ -4,9 +4,9 @@
 #SBATCH --partition=standard
 #SBATCH --exclude=u24-chaihm0-633,u24-chaiam0-613
 #SBATCH --output=/dev/null
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=16G
-#SBATCH --time=02:30:00
+#SBATCH --cpus-per-task=4   # canary sub-03 sPCS (119 voxels): 7 min, 57% of 8 CPUs, 6.6 GB
+#SBATCH --mem=12G
+#SBATCH --time=01:00:00
 #
 # Side project (FEF / sPCS): cross-validated pRFs in one ROI, one task per subject (array id = subject).
 #   cd ~/retsupp_side_fef && REGION=sPCS VARIANT=true sbatch --array=3-30 retsupp/side_fef/slurm_jobs/fit_prf_cv_roi.sh
