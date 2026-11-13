@@ -4,8 +4,8 @@
 #SBATCH --partition=standard
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=2
-#SBATCH --time=01:00:00
-#SBATCH --mem=20G
+#SBATCH --time=00:30:00   # sub-03 canary, 20 draws: 4 min (3.3 min data loading), 21 GB peak
+#SBATCH --mem=28G
 #SBATCH --exclude=u24-chaihm0-633,u24-chaiam0-613
 #
 # Leave-one-run-out held-out prediction and power simulation of the transient HP − LP terms

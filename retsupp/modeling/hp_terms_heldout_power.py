@@ -21,7 +21,7 @@ squares on regressors X_k = ∂P/∂θ_k at the base (central difference, H = 0.
 Estimators (both from the residual R = Y − P_base):
 - "alone" (the paper's route for dS, dD, dT): refit the four base terms, then each HP term alone with the base fixed
   at that refit, δ_k = X_k'(R − X_b β_b) / X_k'X_k. On the real data the base is at its optimum (β_b ≈ 0), so this is
-  exactly ``collect_conditional_estimates`` (Σb / Σa);
+  close to ``collect_conditional_estimates`` (Σb / Σa, the base not refitted; also saved, ``*_alone_fixedbase``);
 - "joint": one least squares on base + dS + dD (the HP terms of the joint fit, m7_full) and on base + dS + dD + dT
   (the joint fit with the target split, m8_full_dT).
 
@@ -88,6 +88,7 @@ def estimates(G, c):
     for k in ('dS', 'dD', 'dT'):
         j = NAMES.index(k)
         out[f'{k}_alone'] = (c[j] - G[j, b] @ beta_b) / G[j, j]
+        out[f'{k}_alone_fixedbase'] = c[j] / G[j, j]   # base not refitted: on real data = the reported Σb / Σa
     for m in ('dS_dD', 'dS_dD_dT'):
         sel = ix(MODELS[m])
         beta = np.linalg.solve(G[np.ix_(sel, sel)], c[sel])
