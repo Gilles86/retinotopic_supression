@@ -1,0 +1,4 @@
+analysis	term	level	unit	mean	hdi_lo	hdi_hi	p_gt0	p_lt0	credible	n_obs	n_subjects	divergences	rhat_max	ess_bulk_min	ppc_obs_coverage95	zeta
+4: residual-RT quintiles, monotonic trend	target	overall	all	0.03500867334249	-0.19684375108850252	0.24879138756656727	0.634125	0.365875	False	1150	28	0	1.01	833.0	0.9469565217391305	0.16 0.30 0.19 0.35
+4: residual-RT quintiles, monotonic trend	distractor	overall	all	0.016607937827457998	-0.14225353735677387	0.16734325824154492	0.582	0.418	False	1150	28	0	1.01	728.0	0.9426086956521739	0.83 0.05 0.05 0.07
+4: residual-RT quintiles, monotonic trend	global	overall	all	-0.06748045146607955	-0.1957107688108397	0.07030727016694573	0.16725	0.83275	False	1150	28	0	1.0	1048.0	0.9452173913043478	0.10 0.10 0.18 0.62

@@ -14,6 +14,7 @@ group's mean and of the mean over all nine areas; small hollow points: the nine 
 from __future__ import annotations
 
 import argparse
+import re
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -116,8 +117,13 @@ LEGEND = """
 """
 
 
+PRECISE_ZERO = False   # set with --rt-summary: an HDI bound that rounds to ±0.000 gets 4 decimals
+
+
 def fmt(r, scale=1., unit=''):
     d = 3 if scale == 1 else 0
+    if PRECISE_ZERO and d == 3 and any(0 < abs(v) < 5e-4 for v in (r.hdi_lo, r.hdi_hi)):
+        d = 4                                 # an HDI bound that would print as ±0.000
 
     def f(x):
         x = round(x * scale, d) + 0.0      # no "−0"
@@ -156,10 +162,30 @@ def pooled_check(param):
 FIT_LABEL = "each subject's final joint gain-field fit (m7: DoG pRFs, one HRF per subject × area, each area's signal voxels)"
 
 
-def main(meta, name, param, compact=False, fit_label=FIT_LABEL):
-    """compact: narrower panels (5.9 in wide), shorter titles and keys; same content."""
+RT_QUESTION = {'target': 'T_rt', 'distractor': 'D_rt', 'global': 'G_rt'}
+
+
+def rt_rows(path, analysis):
+    """Panel b from ``rt_power_meta`` (summary.tsv rows of one analysis) in the trialwise_meta_bayes layout."""
+    r = pd.read_csv(path, sep='\t')
+    r = r[r.analysis == analysis].copy()
+    r['question'], r['variant'] = r.term.map(RT_QUESTION), 'abs'
+    return r[['question', 'variant', 'level', 'unit', 'mean', 'hdi_lo', 'hdi_hi', 'p_gt0', 'p_lt0']]
+
+
+def main(meta, name, param, compact=False, fit_label=FIT_LABEL, rt_summary=None, rt_analysis=None, rt_legend=None):
+    """compact: narrower panels (5.9 in wide), shorter titles and keys; same content. rt_summary / rt_analysis:
+    panel b (and its legend numbers) from that ``rt_power_meta`` analysis; rt_legend replaces the legend's panel-b
+    model description and its robustness clause."""
     meta = Path(meta)
     summary = pd.read_csv(meta / 'summary.tsv', sep='\t')
+    global PRECISE_ZERO
+    PRECISE_ZERO = bool(rt_summary)
+    if rt_summary:
+        new = rt_rows(rt_summary, rt_analysis)
+        key_cols = ['question', 'variant', 'level', 'unit']
+        drop = summary.set_index(key_cols).index.isin(new.set_index(key_cols).index)
+        summary = pd.concat([summary[~drop], new], ignore_index=True)
     chk = pooled_check(param)
     diag = pd.read_csv(meta / 'diagnostics.tsv', sep='\t')
     if compact:
@@ -273,6 +299,9 @@ def main(meta, name, param, compact=False, fit_label=FIT_LABEL):
         for u in UNITS:
             cells = []
             for vv in (v, f'{v}_t', f'{v}_nose'):
+                if rt_summary and q in RT_QUESTION.values() and vv != v:
+                    cells.append('—')
+                    continue
                 r = g(q, vv, u)
                 cells.append(f'{fmt(r, sc, un)}, P = {pdir(r)}')
             ul = UNIT_LABELS[u].replace('-\n', '').replace('\n', ' ')
@@ -286,6 +315,15 @@ def main(meta, name, param, compact=False, fit_label=FIT_LABEL):
             cells.append(f'{fmt(r, sc, un)}, P = {pdir(r)}')
         tab.append(f'| {lab} | ' + ' | '.join(cells) + ' |')
     legend = legend.replace(FIT_LABEL, fit_label)
+    if rt_legend:
+        b0 = ('b, Response time: change in each gain per SD of log RT (z within run and trial type; positive: higher '
+              'gain on slower trials).')
+        assert b0 in legend
+        legend = legend.replace(b0, rt_legend)
+        # The no-SE-weighting clause on panel b refers to the earlier model: keep only the panel-a part.
+        legend = re.sub(r',? (and|but) the RT effects of panel b do not \(distractor P = [.0-9]+, global P = [.0-9]+\)',
+                        '', legend)
+        legend = legend.replace('Robustness (table below):', 'Robustness of panel a (table below):')
     if 'own voxels' in fit_label:
         legend = legend.replace('fewer than 10 signal voxels', 'fewer than 10 voxels')
     save(fig, name, legend.strip() + '\n' + '\n'.join(tab))
@@ -300,5 +338,8 @@ if __name__ == '__main__':
                     help='Collected parametric table (for the pooled-group check in the legend)')
     ap.add_argument('--compact', action='store_true', help='narrower panels, shorter titles and keys (same content)')
     ap.add_argument('--fit-label', default=FIT_LABEL, help='how the legend names the base fits')
+    ap.add_argument('--rt-summary', default=None, help='rt_power_meta summary.tsv for panel b')
+    ap.add_argument('--rt-analysis', default='main (1 + 2 + 3)')
+    ap.add_argument('--rt-legend', default=None, help='panel-b model description that opens the legend\'s b part')
     a = ap.parse_args()
-    main(a.meta, a.name, a.param, a.compact, a.fit_label)
+    main(a.meta, a.name, a.param, a.compact, a.fit_label, a.rt_summary, a.rt_analysis, a.rt_legend)

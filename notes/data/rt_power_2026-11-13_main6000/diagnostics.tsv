@@ -1,0 +1,7 @@
+analysis	term	ppc_obs_coverage95	ppc_area_means_inside	n_areas	n_obs	n_subjects	divergences	rhat_max	ess_bulk_min	ess_tail_min
+main (1 + 2 + 3)	target	0.9565217391304348	9	9	230	28	0	1.0	1386.0	795.0
+main (1 + 2 + 3)	distractor	0.9521739130434783	9	9	230	28	0	1.0	1386.0	795.0
+main (1 + 2 + 3)	global	0.9782608695652174	9	9	230	28	0	1.0	1386.0	795.0
+5: main on r > 0.2 (own voxels)	target	0.9495798319327731	9	9	238	28	0	1.0	2019.0	1862.0
+5: main on r > 0.2 (own voxels)	distractor	0.9663865546218487	9	9	238	28	0	1.0	2019.0	1862.0
+5: main on r > 0.2 (own voxels)	global	0.9747899159663865	9	9	238	28	0	1.0	2019.0	1862.0

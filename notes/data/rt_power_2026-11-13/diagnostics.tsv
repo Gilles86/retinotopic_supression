@@ -1,0 +1,19 @@
+analysis	term	ppc_obs_coverage95	ppc_area_means_inside	n_areas	n_obs	n_subjects	divergences	rhat_max	ess_bulk_min	ess_tail_min
+baseline (refit): z(log RT), separate, SE-weighted	target	0.9608695652173913	9	9	230	28	0	1.01	847.0	1228.0
+baseline (refit): z(log RT), separate, SE-weighted	distractor	0.9565217391304348	9	9	230	28	0	1.0	2155.0	1760.0
+baseline (refit): z(log RT), separate, SE-weighted	global	0.9695652173913043	9	9	230	28	0	1.0	955.0	1308.0
+step 1 only: residual RT	target	0.9478260869565217	9	9	230	28	0	1.0	1196.0	1423.0
+step 1 only: residual RT	distractor	0.9478260869565217	9	9	230	28	0	1.0	1640.0	1440.0
+step 1 only: residual RT	global	0.9782608695652174	9	9	230	28	1	1.01	903.0	1528.0
+step 2 only: joint model (LKJ)	target	0.9652173913043478	9	9	230	28	0	1.01	782.0	1005.0
+step 2 only: joint model (LKJ)	distractor	0.9521739130434783	9	9	230	28	0	1.01	782.0	1005.0
+step 2 only: joint model (LKJ)	global	0.9695652173913043	9	9	230	28	0	1.01	782.0	1005.0
+step 3 only: measurement error	target	0.9608695652173913	9	9	230	28	0	1.0	1628.0	1725.0
+step 3 only: measurement error	distractor	0.9565217391304348	9	9	230	28	0	1.0	1581.0	1722.0
+step 3 only: measurement error	global	0.9695652173913043	9	9	230	28	0	1.0	1105.0	1985.0
+main (1 + 2 + 3)	target	0.9565217391304348	9	9	230	28	0	1.02	285.0	143.0
+main (1 + 2 + 3)	distractor	0.9434782608695652	9	9	230	28	0	1.02	285.0	143.0
+main (1 + 2 + 3)	global	0.9782608695652174	9	9	230	28	0	1.02	285.0	143.0
+5: main on r > 0.2 (own voxels)	target	0.9495798319327731	9	9	238	28	0	1.01	644.0	777.0
+5: main on r > 0.2 (own voxels)	distractor	0.9663865546218487	9	9	238	28	0	1.01	644.0	777.0
+5: main on r > 0.2 (own voxels)	global	0.9789915966386554	9	9	238	28	0	1.01	644.0	777.0
