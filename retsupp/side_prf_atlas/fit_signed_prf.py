@@ -275,6 +275,11 @@ def main(subject, bids_folder, canary_voxels=None):
         sig = (res['cv_p'][sel] < .05) & (res['cv_r'][sel] > 0)
         print(f'  cv-reliable: {sig.mean():.3f}; negative among them: {(res["amplitude"][sel][sig] < 0).mean():.3f}; '
               f'rel_p<.05: {(res["rel_p"][sel] < .05).mean():.3f}')
+        sampler = FsaverageSampler(sub, bids_folder, mask_img, mask_bool)
+        m4x = np.asarray(nib.load(str(der / 'prf' / 'model4' / f'sub-{subject:02d}'
+                                      / f'sub-{subject:02d}_desc-x.nii.gz')).dataobj, np.float32)[mask_bool]
+        sx = sampler(m4x)
+        print(f'  fsaverage sampling ({sampler.fs_dir}): finite vertices per hemi {np.isfinite(sx).sum(1)}')
         print(f'canary done in {time.time()-t0:.0f}s')
         return
 
