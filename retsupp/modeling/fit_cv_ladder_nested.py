@@ -525,14 +525,17 @@ def polish_fit(model, bold_train, paradigm, init_pars, free_shared,
 
 
 def polish_alternating(model, bold_train, paradigm, init_pars, free_shared, fixed, shared_all,
-                       bounded=False, rounds=2, learning_rate=1e-3, max_iter=3000, checkpoint=None):
+                       bounded=False, rounds=2, learning_rate=1e-3, max_iter=3000, checkpoint=None, tol=0.0):
     """Block-coordinate polish, robust to float32 gradient noise (where one L-BFGS over all parameters can stall
     with an ABNORMAL line search): per-voxel pRFs by Adam gradient descent with the shared terms fixed, then the
     shared terms by bounded L-BFGS with the pRFs fixed, ``rounds`` times. Each step is kept only if it lowers the
     training SSE, so the result is never above the clamped start.
 
     ``checkpoint``: a pickle path written after every round (best parameters so far); a rerun resumes from the
-    round after the last one saved, so a task that hits its time limit loses at most one round."""
+    round after the last one saved, so a task that hits its time limit loses at most one round.
+
+    ``tol`` > 0: stop once a round lowers the training SSE by less than ``tol`` (relative); ``converged`` in the
+    returned info says whether that happened before ``rounds``."""
     y = np.asarray(bold_train, dtype=np.float64)
 
     def sse(p):
@@ -550,7 +553,11 @@ def polish_alternating(model, bold_train, paradigm, init_pars, free_shared, fixe
         start_round = ck['round'] + 1
         print(f'    resuming after alt round {ck["round"]} from {checkpoint} (SSE {fbest:.2f})')
     freeze = list(dict.fromkeys([p for p in (fixed or []) + list(shared_all) if p in labels]))
+    converged = bool(log) and tol > 0 and log[-1].get('rel_change', np.inf) < tol
     for r in range(start_round, rounds):
+        if converged:
+            break
+        f_round_start = fbest
         fitter = ParameterFitter(model, pd.DataFrame(bold_train), paradigm)
         pv = fitter.fit(init_pars=best, max_n_iterations=max_iter, min_n_iterations=200, lag=100, r2_atol=1e-8,
                         fixed_pars=freeze, learning_rate=learning_rate, progressbar=False)
@@ -563,14 +570,17 @@ def polish_alternating(model, bold_train, paradigm, init_pars, free_shared, fixe
         f_sh = sse(sh)
         if f_sh < fbest:
             best, fbest = sh, f_sh
-        log.append(dict(round=r, sse_after_prf=f_pv, sse_after_shared=f_sh, seconds=time.time() - t0))
+        rel = (f_round_start - fbest) / f_round_start
+        converged = tol > 0 and rel < tol
+        log.append(dict(round=r, sse_after_prf=f_pv, sse_after_shared=f_sh, sse_best=fbest, rel_change=rel,
+                        seconds=time.time() - t0))
         print(f'    alt round {r}: SSE pRF step {f_pv:.2f}, shared step {f_sh:.2f} (start {f0:.2f}) '
-              f'| {time.time() - t0:.0f}s', flush=True)
+              f'| rel change {rel:.2e} | {time.time() - t0:.0f}s', flush=True)
         if checkpoint is not None:
             _atomic_pickle(checkpoint, dict(round=r, best=best, fbest=fbest, f0=f0, log=log))
     return best, dict(optimizer='alt_gd_lbfgs', seconds=time.time() - t0, sse_clamped=f0, sse_final=fbest,
                       nit=0, rounds=rounds, status=0, message='alternating', grad_norm=float('nan'),
-                      grad_norm_shared=float('nan'), log=log)
+                      grad_norm_shared=float('nan'), log=log, converged=converged, tol=tol)
 
 
 def _atomic_pickle(path, obj):
@@ -634,7 +644,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
          loss='sse', base_roots=(), family='dog', hp_rotation=0, reliable_only=False,
          warm_roots=(), gd_min_iterations=1000, sigma_starts=SIGMA_STARTS, lbfgs_rounds=LBFGS_ROUNDS,
          hrf_table=None, frozen_prf=False, polish_models=None, polish_method='lbfgs',
-         polish_suffix='_polished', polish_rounds=2, polish_max_iter=3000,
+         polish_suffix='_polished', polish_rounds=2, polish_max_iter=3000, polish_tol=0.0,
          selection_table=None, min_r=None, max_p=0.01, warm_polish_root=None):
     if cv_scheme not in SCHEMES:
         raise ValueError(f'cv_scheme must be in {SCHEMES}')
@@ -982,7 +992,8 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                         pars, info = polish_alternating(m_tr, y_tr, train['paradigm'], init, free_sh, fixed,
                                                         shared, bounded=bounded, rounds=polish_rounds,
                                                         max_iter=polish_max_iter,
-                                                        checkpoint=ckpt_path(name, k, 'polish-ckpt'))
+                                                        checkpoint=ckpt_path(name, k, 'polish-ckpt'),
+                                                        tol=polish_tol)
                         if warm_info is not None:
                             info['warm_start'] = warm_info
                     else:
@@ -1208,7 +1219,9 @@ if __name__ == '__main__':
                     help='lbfgs: one L-BFGS over all parameters; alt: alternate Adam on the pRFs and L-BFGS on the '
                          'shared terms (robust to float32 gradient noise).')
     ap.add_argument('--polish-suffix', default='_polished', help='Suffix of the polish root (tests).')
-    ap.add_argument('--polish-rounds', type=int, default=2, help='Alternating polish: rounds.')
+    ap.add_argument('--polish-rounds', type=int, default=2, help='Alternating polish: rounds (maximum with --polish-tol).')
+    ap.add_argument('--polish-tol', type=float, default=0.0,
+                    help='Alternating polish: stop when a round lowers training SSE by less than this (relative).')
     ap.add_argument('--polish-max-iter', type=int, default=3000, help='Alternating polish: Adam iterations per round.')
     ap.add_argument('--selection-table', default=None,
                     help='Directory of cv/voxel_reliability_null.py tables (derivatives/prf_cv_roi_reliability_null): '
@@ -1259,6 +1272,6 @@ if __name__ == '__main__':
          hp_rotation=a.hp_rotation, reliable_only=a.reliable_only, warm_roots=a.warm_root,
          gd_min_iterations=a.gd_min_iterations, sigma_starts=starts, lbfgs_rounds=a.lbfgs_rounds,
          hrf_table=a.hrf_table, frozen_prf=a.frozen_prf, polish_models=a.polish_models,
-         polish_method=a.polish_method, polish_suffix=a.polish_suffix,
+         polish_method=a.polish_method, polish_suffix=a.polish_suffix, polish_tol=a.polish_tol,
          polish_rounds=a.polish_rounds, polish_max_iter=a.polish_max_iter,
          selection_table=a.selection_table, min_r=a.min_r, max_p=a.max_p, warm_polish_root=a.warm_polish_root)

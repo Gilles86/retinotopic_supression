@@ -16,7 +16,8 @@
 #   CV_SCHEME=run3 sbatch --array=1-330 ...
 #   POLISH=1 sbatch --array=1-330 ...    # + all-free polish pass
 #   POLISH_MODELS="m4_TDS m7_full" restricts the polish pass to these models; POLISH_METHOD=alt alternates Adam (pRFs)
-#   and L-BFGS (shared terms); POLISH_SUFFIX=_x writes the polish to <root>_x (tests)
+#   and L-BFGS (shared terms); POLISH_SUFFIX=_x writes the polish to <root>_x; POLISH_TOL=1e-5 stops
+#   the alternating polish when a round lowers training SSE by less than that (POLISH_ROUNDS is then the cap)
 #   CV_SCHEME=full POLISH=1 sbatch --array=1-330 ...  # main fits
 #   BOUNDED=1 boxes the shared terms (root gets a _bounded suffix)
 #   LOSS=nll fits the shared terms by likelihood (root gets a _nll suffix)
@@ -104,7 +105,7 @@ echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
     ${WARM_ROOT:+--warm-root $WARM_ROOT} ${GD_ITER:+--gd-iterations $GD_ITER} \
     ${GD_MIN_ITER:+--gd-min-iterations $GD_MIN_ITER} ${SIGMA_STARTS:+--sigma-starts $SIGMA_STARTS} \
     ${LBFGS_ROUNDS:+--lbfgs-rounds $LBFGS_ROUNDS} ${OUTPUT_ROOT:+--output-root $OUTPUT_ROOT} \
-    ${HRF_TABLE:+--hrf-table $HRF_TABLE} ${POLISH_MODELS:+--polish-models $POLISH_MODELS} ${POLISH_METHOD:+--polish-method $POLISH_METHOD} ${POLISH_SUFFIX:+--polish-suffix $POLISH_SUFFIX} ${POLISH_ROUNDS:+--polish-rounds $POLISH_ROUNDS} ${POLISH_MAX_ITER:+--polish-max-iter $POLISH_MAX_ITER} \
+    ${HRF_TABLE:+--hrf-table $HRF_TABLE} ${POLISH_MODELS:+--polish-models $POLISH_MODELS} ${POLISH_METHOD:+--polish-method $POLISH_METHOD} ${POLISH_SUFFIX:+--polish-suffix $POLISH_SUFFIX} ${POLISH_ROUNDS:+--polish-rounds $POLISH_ROUNDS} ${POLISH_TOL:+--polish-tol $POLISH_TOL} ${POLISH_MAX_ITER:+--polish-max-iter $POLISH_MAX_ITER} \
     ${SELECTION_TABLE:+--selection-table $SELECTION_TABLE} ${MIN_R:+--min-r $MIN_R} ${MAX_P:+--max-p $MAX_P} \
     ${WARM_POLISH_ROOT:+--warm-polish-root $WARM_POLISH_ROOT}
 
