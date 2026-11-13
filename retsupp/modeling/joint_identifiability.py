@@ -239,11 +239,16 @@ def fit(subject, roi, name, bids, max_iter, ftol, kinds=('warm', 'cold')):
     print(f'-> {p}')
 
 
-def profile(subject, roi, name, param, bids, max_iter, ftol, split_labels=None, grid=None):
+def profile(subject, roi, name, param, bids, max_iter, ftol, split_labels=None, grid=None, from_start=False):
+    """``from_start``: begin at the reference polished fit (warm start) instead of the LM end point of ``fit``; the
+    'optimum' row is then the free LM fit from there after ``max_iter`` iterations."""
     c = load_cache(bids, subject, roi)
-    with open(out_dir(bids) / 'fits' / f'sub-{subject:02d}_roi-{roi}_{name}_lm{tag()}.pkl', 'rb') as f:
-        fitres = pickle.load(f)
-    best_pars = fitres[fitres['best']]['pars']
+    if from_start:
+        best_pars = c['starts'][(name, 'warm')]
+    else:
+        with open(out_dir(bids) / 'fits' / f'sub-{subject:02d}_roi-{roi}_{name}_lm{tag()}.pkl', 'rb') as f:
+            fitres = pickle.load(f)
+        best_pars = fitres[fitres['best']]['pars']
     grid = np.asarray(GRID[param] if grid is None else grid, dtype=float)
     if param == 'g_LP' and GAIN_LO is not None:
         grid = grid[grid >= GAIN_LO]
@@ -287,7 +292,7 @@ def profile(subject, roi, name, param, bids, max_iter, ftol, split_labels=None, 
                       f'{info["reason"]}) | {time.time() - t0:.0f}s', flush=True)
                 start = pars
     df = pd.DataFrame(rows).sort_values(['split', 'value'])
-    stag = '' if not split_labels else '_' + '-'.join(split_labels)
+    stag = ('' if not split_labels else '_' + '-'.join(split_labels)) + ('_fromstart' if from_start else '')
     p = out_dir(bids) / 'profiles' / f'sub-{subject:02d}_roi-{roi}_{name}_profile-{param}{tag()}{stag}.tsv'
     p.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(p, sep='\t', index=False)
@@ -400,6 +405,7 @@ if __name__ == '__main__':
     ap.add_argument('--param', default='g_LP', choices=['g_LP', 'dS'])
     ap.add_argument('--splits', nargs='*', default=None, help='profile: only these splits (all, run3-0, ...)')
     ap.add_argument('--grid', nargs='*', type=float, default=None)
+    ap.add_argument('--from-start', action='store_true', help='profile: start at the reference fit, not at fit\'s end')
     ap.add_argument('--bids-folder', default=str(BIDS))
     ap.add_argument('--max-iter', type=int, default=300)
     ap.add_argument('--ftol', type=float, default=1e-10)
@@ -416,4 +422,5 @@ if __name__ == '__main__':
             elif a.stage == 'fit':
                 fit(a.subject, roi, a.model, a.bids_folder, a.max_iter, a.ftol)
             else:
-                profile(a.subject, roi, a.model, a.param, a.bids_folder, a.max_iter, a.ftol, a.splits, a.grid)
+                profile(a.subject, roi, a.model, a.param, a.bids_folder, a.max_iter, a.ftol, a.splits, a.grid,
+                        a.from_start)
