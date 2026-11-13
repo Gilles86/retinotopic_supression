@@ -281,9 +281,46 @@ def profile(subject, roi, name, param, bids, max_iter, ftol, split_labels=None, 
     print(f'-> {p}')
 
 
+def check(subject, roi, name, bids):
+    """Diagnostics: Jacobian vs central differences per column, and predicted vs actual SSE change of damped steps."""
+    from retsupp.modeling.joint_lm import schur_step
+    c = load_cache(bids, subject, roi)
+    whole = splits(c)[0][1]
+    m = make_model(c, name, whole)
+    prob, bnds = problem(m, name, whole['bold'], whole['paradigm'], c['starts'][(name, 'warm')])
+    x, phi = prob.start()
+    pred, j_pv, j_phi = prob.jacobians(x, phi)
+    for i, nm in enumerate(prob.per_voxel):
+        for eps in (1e-2, 1e-3):
+            e = np.zeros_like(x)
+            e[:, i] = eps
+            fd = (prob.predict(x + e, phi) - prob.predict(x - e, phi)) / (2 * eps)
+            print(f'pv {nm} eps {eps}: max|fd-J|/max|fd| = {np.abs(fd - j_pv[:, :, i]).max() / np.abs(fd).max():.2e}')
+    for i, nm in enumerate(prob.phi_names):
+        for eps in (1e-2, 1e-3):
+            e = np.zeros_like(phi)
+            e[i] = eps
+            fd = (prob.predict(x, phi + e) - prob.predict(x, phi - e)) / (2 * eps)
+            den = max(np.abs(fd).max(), 1e-30)
+            print(f'sh {nm} eps {eps}: max|fd-J|/max|fd| = {np.abs(fd - j_phi[:, :, i]).max() / den:.2e} '
+                  f'(max|fd| {den:.3g})')
+    U, W, Vs, g_pv, g_s = normal_blocks(prob.y, pred, j_pv, j_phi)
+    f = float(((prob.y - pred) ** 2).sum())
+    print('phi', dict(zip(prob.phi_names, np.round(phi, 4))), 'g_s', np.round(g_s, 3))
+    for lam in (1e-3, 1e-2, 1e-1, 1, 10, 100, 1e3, 1e4, 1e5):
+        for hold_sh in (False, True):
+            hold = np.ones(len(phi), bool) if hold_sh else None
+            d_pv, d_s = schur_step(U, W, Vs, g_pv, g_s, lam, hold)
+            jd = np.einsum('tvi,vi->tv', j_pv, d_pv) + np.einsum('tvi,i->tv', j_phi, d_s)
+            pred_dec = 2 * (jd * (prob.y - pred)).sum() - (jd ** 2).sum()
+            f_new = prob.sse(x + d_pv, phi + d_s)
+            print(f'λ {lam:g} hold_shared {hold_sh}: predicted ΔSSE {-pred_dec:.4f}, actual {f_new - f:.4f}, '
+                  f'|d_s| {np.abs(d_s).max():.3g}, max|d_pv| per col {np.round(np.abs(d_pv).max(0), 4)}')
+
+
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('stage', choices=['dump', 'fit', 'profile'])
+    ap.add_argument('stage', choices=['dump', 'fit', 'profile', 'check'])
     ap.add_argument('subject', type=int)
     ap.add_argument('--roi', nargs='+', required=True)
     ap.add_argument('--model', default='m7_full', choices=list(MODELS))
@@ -298,7 +335,9 @@ if __name__ == '__main__':
         dump(a.subject, a.roi, a.bids_folder)
     else:
         for roi in a.roi:
-            if a.stage == 'fit':
+            if a.stage == 'check':
+                check(a.subject, roi, a.model, a.bids_folder)
+            elif a.stage == 'fit':
                 fit(a.subject, roi, a.model, a.bids_folder, a.max_iter, a.ftol)
             else:
                 profile(a.subject, roi, a.model, a.param, a.bids_folder, a.max_iter, a.ftol, a.splits, a.grid)
