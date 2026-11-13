@@ -1,0 +1,97 @@
+test	rt	region	n	mean	sem	p	p_bh_mtl
+amplitude	False	hippocampus	28	-0.08494	0.022244	0.00087515	0.00087515
+amplitude	False	entorhinal	28	-0.068269	0.01476	7.9647e-06	1.5929e-05
+amplitude	False	parahippocampal	28	-0.083224	0.019263	0.00019369	0.00025825
+amplitude	False	amygdala	28	-0.11274	0.021026	6.7353e-06	1.5929e-05
+amplitude	False	precentral	28	0.14409	0.026006	7.9647e-06	
+amplitude	False	lateral_occipital	28	0.30759	0.032259	7.4506e-09	
+dD	False	hippocampus	28	-0.021955	0.015217	0.20157	0.80627
+dD	False	entorhinal	28	-0.0047671	0.013341	0.72817	0.9019
+dD	False	parahippocampal	28	-0.0015478	0.013175	0.9019	0.9019
+dD	False	amygdala	28	0.0077173	0.015835	0.42475	0.84951
+dD	False	precentral	28	-0.029008	0.016251	0.062814	
+dD	False	lateral_occipital	28	-0.0050367	0.016335	0.88418	
+dT	False	hippocampus	28	-0.025766	0.012478	0.10925	0.2946
+dT	False	entorhinal	28	-0.013729	0.014248	0.28421	0.2946
+dT	False	parahippocampal	28	-0.012169	0.0087429	0.2946	0.2946
+dT	False	amygdala	28	-0.021044	0.012311	0.17091	0.2946
+dT	False	precentral	28	-0.0016381	0.013341	0.88418	
+dT	False	lateral_occipital	28	0.028495	0.016515	0.26417	
+capture	False	hippocampus	28	-0.041887	0.011752	0.0015548	0.0032531
+capture	False	entorhinal	28	-0.014846	0.013297	0.30523	0.30523
+capture	False	parahippocampal	28	-0.039557	0.014737	0.0024398	0.0032531
+capture	False	amygdala	28	-0.044998	0.012656	0.0024398	0.0032531
+capture	False	precentral	28	-0.0053026	0.014759	0.76214	
+capture	False	lateral_occipital	28	-0.0052701	0.016749	0.58239	
+dD: session 2 − 1	False	hippocampus	28	0.012324	0.031025	0.61364	0.97318
+dD: session 2 − 1	False	entorhinal	28	0.005473	0.029288	0.79656	0.97318
+dD: session 2 − 1	False	parahippocampal	28	-0.0018519	0.030673	0.97318	0.97318
+dD: session 2 − 1	False	amygdala	28	0.02289	0.0346	0.58239	0.97318
+dD: session 2 − 1	False	precentral	28	0.047383	0.0383	0.2098	
+dD: session 2 − 1	False	lateral_occipital	28	0.0015799	0.040999	0.88418	
+dD: run 3 − 1 of block	False	hippocampus	28	0.029319	0.041341	0.37408	0.79656
+dD: run 3 − 1 of block	False	entorhinal	28	-0.016777	0.034654	0.50758	0.79656
+dD: run 3 − 1 of block	False	parahippocampal	28	0.020998	0.045682	0.72817	0.79656
+dD: run 3 − 1 of block	False	amygdala	28	-0.0090595	0.027191	0.79656	0.79656
+dD: run 3 − 1 of block	False	precentral	28	0.036932	0.050353	0.52214	
+dD: run 3 − 1 of block	False	lateral_occipital	28	-0.030616	0.054923	0.58239	
+dT: session 2 − 1	False	hippocampus	28	0.057618	0.028777	0.06624	0.26496
+dT: session 2 − 1	False	entorhinal	28	0.0024415	0.031	0.83137	0.83137
+dT: session 2 − 1	False	parahippocampal	28	-0.0078906	0.030208	0.6947	0.83137
+dT: session 2 − 1	False	amygdala	28	-0.024298	0.034914	0.52214	0.83137
+dT: session 2 − 1	False	precentral	28	0.018599	0.035464	0.55187	
+dT: session 2 − 1	False	lateral_occipital	28	0.040209	0.026032	0.10925	
+dT: run 3 − 1 of block	False	hippocampus	28	0.014962	0.056352	0.61364	0.99106
+dT: run 3 − 1 of block	False	entorhinal	28	0.016494	0.041583	0.61364	0.99106
+dT: run 3 − 1 of block	False	parahippocampal	28	0.0075915	0.049702	0.99106	0.99106
+dT: run 3 − 1 of block	False	amygdala	28	-0.0005639	0.036465	0.9019	0.99106
+dT: run 3 − 1 of block	False	precentral	28	0.045582	0.045683	0.2098	
+dT: run 3 − 1 of block	False	lateral_occipital	28	-0.0099188	0.046936	0.74509	
+amplitude	True	hippocampus	28	-0.085125	0.022151	0.00087515	0.00087515
+amplitude	True	entorhinal	28	-0.070089	0.015176	5.6773e-06	1.3471e-05
+amplitude	True	parahippocampal	28	-0.083158	0.019135	0.00017213	0.00022951
+amplitude	True	amygdala	28	-0.11501	0.02121	6.7353e-06	1.3471e-05
+amplitude	True	precentral	28	0.14029	0.0257	9.3952e-06	
+amplitude	True	lateral_occipital	28	0.30948	0.032103	7.4506e-09	
+dD	True	hippocampus	28	-0.025014	0.015102	0.1638	0.6552
+dD	True	entorhinal	28	-0.0059907	0.013195	0.56703	0.6618
+dD	True	parahippocampal	28	-0.006084	0.013246	0.6618	0.6618
+dD	True	amygdala	28	0.0040644	0.016114	0.45148	0.6618
+dD	True	precentral	28	-0.025377	0.016467	0.17823	
+dD	True	lateral_occipital	28	-0.0050673	0.016242	0.83137	
+dT	True	hippocampus	28	-0.021424	0.012141	0.17823	0.41961
+dT	True	entorhinal	28	-0.012799	0.014207	0.33857	0.438
+dT	True	parahippocampal	28	-0.0092425	0.0085802	0.438	0.438
+dT	True	amygdala	28	-0.017976	0.012549	0.2098	0.41961
+dT	True	precentral	28	-0.0064742	0.013497	0.81392	
+dT	True	lateral_occipital	28	0.02838	0.01662	0.2451	
+capture	True	hippocampus	28	-0.033973	0.011801	0.0070712	0.019073
+capture	True	entorhinal	28	-0.01221	0.013135	0.362	0.362
+capture	True	parahippocampal	28	-0.031857	0.014259	0.0095364	0.019073
+capture	True	amygdala	28	-0.036614	0.012707	0.016728	0.022304
+capture	True	precentral	28	-0.016002	0.015351	0.33857	
+capture	True	lateral_occipital	28	-0.0068136	0.016659	0.56703	
+dD: session 2 − 1	True	hippocampus	28	0.014989	0.031816	0.71137	0.97089
+dD: session 2 − 1	True	entorhinal	28	0.0050919	0.029356	0.72817	0.97089
+dD: session 2 − 1	True	parahippocampal	28	0.00080964	0.031413	0.99106	0.99106
+dD: session 2 − 1	True	amygdala	28	0.026766	0.033723	0.49323	0.97089
+dD: session 2 − 1	True	precentral	28	0.041869	0.038132	0.27407	
+dD: session 2 − 1	True	lateral_occipital	28	0.0074347	0.042069	0.99106	
+dD: run 3 − 1 of block	True	hippocampus	28	0.024199	0.040119	0.49323	0.76214
+dD: run 3 − 1 of block	True	entorhinal	28	-0.022595	0.033514	0.52214	0.76214
+dD: run 3 − 1 of block	True	parahippocampal	28	0.022865	0.044385	0.76214	0.76214
+dD: run 3 − 1 of block	True	amygdala	28	-0.011114	0.028201	0.58239	0.76214
+dD: run 3 − 1 of block	True	precentral	28	0.034783	0.052056	0.49323	
+dD: run 3 − 1 of block	True	lateral_occipital	28	-0.038039	0.055508	0.55187	
+dT: session 2 − 1	True	hippocampus	28	0.057899	0.029624	0.077416	0.30966
+dT: session 2 − 1	True	entorhinal	28	0.0029416	0.030591	0.83137	0.83137
+dT: session 2 − 1	True	parahippocampal	28	-0.0063636	0.032122	0.79656	0.83137
+dT: session 2 − 1	True	amygdala	28	-0.023113	0.035306	0.74509	0.83137
+dT: session 2 − 1	True	precentral	28	0.0043356	0.03518	0.93748	
+dT: session 2 − 1	True	lateral_occipital	28	0.042523	0.024939	0.10925	
+dT: run 3 − 1 of block	True	hippocampus	28	0.021127	0.055014	0.50758	0.97318
+dT: run 3 − 1 of block	True	entorhinal	28	0.010143	0.041469	0.71137	0.97318
+dT: run 3 − 1 of block	True	parahippocampal	28	0.015814	0.049929	0.81392	0.97318
+dT: run 3 − 1 of block	True	amygdala	28	0.0037177	0.035416	0.97318	0.97318
+dT: run 3 − 1 of block	True	precentral	28	0.056155	0.044763	0.15691	
+dT: run 3 − 1 of block	True	lateral_occipital	28	-0.0057965	0.047604	0.91967	
