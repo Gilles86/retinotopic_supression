@@ -177,7 +177,7 @@ def widths(fits_table, logsize, thr=2.):
     m, lo, hi, _ = median_ci(sl)
     med = f.groupby('subject').fwhm.median().median()
     per_area = f.groupby('roi').fwhm.agg(['median', 'count']).reindex(ROIS)
-    return dict(n=len(sl), slope=m, ci_lo=lo, ci_hi=hi, p=stats.wilcoxon(sl).pvalue, k_pos=int((sl > 0).sum()),
+    return dict(threshold=thr, n=len(sl), slope=m, ci_lo=lo, ci_hi=hi, p=stats.wilcoxon(sl).pvalue, k_pos=int((sl > 0).sum()),
                 equivalence_deg=max(abs(lo), abs(hi)), median_fwhm=med,
                 equivalence_rel=max(abs(lo), abs(hi)) / med, n_fits=len(f)), per_area, f
 
@@ -239,6 +239,49 @@ def bin_slopes(b):
     return t
 
 
+TABLE_TERMS = [('Target gain', 'Target gain'), ('Distractor gain', 'Distractor gain'),
+               ('Shared sustained gain (alone)', 'Sustained gain shared by the four locations, estimated alone'),
+               ('Sustained gain at LP', 'Sustained gain at the LP locations, joint fit, sign only'),
+               ('dS, alone', 'Sustained HP − LP (dS), estimated alone'), ('dS, joint', 'Sustained HP − LP (dS), joint fit'),
+               ('dD, alone', 'Distractor HP − LP (dD), estimated alone'), ('dT, alone', 'Target HP − LP (dT), estimated alone')]
+
+
+def family_table(r, out, regression_path):
+    """Markdown table: slopes per term for DoG, Gaussian and DN pRFs (bold: q < .05)."""
+    fam = {'dog': 'DoG (refitted)', 'gauss': 'Gaussian', 'dn': 'DN'}
+
+    def cell(x, sign_only):
+        if sign_only:
+            return f"{'−' if x.slope < 0 else '+'} ({int(x.k_pos)}/{int(x.n)} positive), p = {x.p:.2g}"
+        s = f'{x.slope:+.1f} [{x.ci_lo:+.1f}, {x.ci_hi:+.1f}], p = {x.p:.2g}'
+        return f'**{s}**' if x.q < .05 else s
+
+    lines = ['# Table S. Slopes of the gain terms along the hierarchy, by pRF model', '',
+             "Median per-participant slope on log2 of the area's pRF size (percentage points of gain per doubling of pRF "
+             'size; for the rank predictor, per rank step), bootstrapped 95% CI, Wilcoxon signed-rank p; bold, q < .05 '
+             '(Benjamini-Hochberg across the nine terms per pRF model and area set). n = 28. DoG: pRFs refitted together '
+             'with the gain fields (dS, dD and dT estimated alone on the refitted model; the shared sustained gain estimated '
+             'alone comes from a model that was not refitted). Gaussian and DN: pRFs held at their fit without gain fields, '
+             'estimated-alone terms from the exact error minimum. The sustained gain at the LP locations is given as a sign '
+             'only: its size trades off against the item weight and the pRF amplitude.', '']
+    for rois, pred in [('all nine', 'log2 pRF size'), ('all nine', 'hierarchical rank'),
+                       ('early + dorsal', 'log2 pRF size'), ('early + occipitotemporal', 'log2 pRF size')]:
+        name = rois.replace('early', 'V1–V3')
+        lines += [f'## {name[0].upper() + name[1:]}; predictor: {pred}', '',
+                  '| Term | ' + ' | '.join(fam.values()) + ' |', '|---|---|---|---|']
+        for t, lab in TABLE_TERMS:
+            row = []
+            for f in fam:
+                x = r[(r.family == f) & (r.rois == rois) & (r.predictor == pred) & (r.term == t)]
+                row.append(cell(x.iloc[0], t == 'Sustained gain at LP') if len(x) else '—')
+            lines.append(f'| {lab} | ' + ' | '.join(row) + ' |')
+        lines.append('')
+    lines.append('Area sets: V1, V2 and V3 with V3AB and IPS (dorsal) or with hV4, VO, LO and TO (occipitotemporal). '
+                 'Rank: V1 1, V2 2, V3 3, V3AB/hV4/LO 4, IPS/VO/TO 5. Every combination (also rank within each branch) is '
+                 f'in `{regression_path}`.')
+    Path(out).write_text('\n'.join(lines) + '\n')
+
+
 def main(a):
     size = roi_size(a.sigma_table)
     logsize = np.log2(size)
@@ -251,6 +294,8 @@ def main(a):
             pers.append(p)
     reg = pd.concat(tabs)
     reg.to_csv(f'{a.out}_regression.tsv', sep='\t', index=False)
+    if a.table:
+        family_table(reg, a.table, f'{a.out}_regression.tsv')
     pd.concat(pers).to_csv(f'{a.out}_slopes.tsv', sep='\t', index=False)
     dog = data['dog']
     dog.to_csv(f'{a.out}_terms_dog.tsv', sep='\t', index=False)
@@ -260,7 +305,8 @@ def main(a):
     pa.to_csv(f'{a.out}_proportion_per_area.tsv', sep='\t', index=False)
     pr.to_csv(f'{a.out}_proportion_regression.tsv', sep='\t', index=False)
     w, wa, wf = widths(a.widths_fits, logsize)
-    pd.DataFrame([w]).to_csv(f'{a.out}_width_slope.tsv', sep='\t', index=False)
+    w3 = widths(a.widths_fits, logsize, thr=3.)[0]
+    pd.DataFrame([w, w3]).to_csv(f'{a.out}_width_slope.tsv', sep='\t', index=False)
     wf.to_csv(f'{a.out}_width_fits.tsv', sep='\t', index=False)
     pd.Series(size).rename('prf_size_deg').to_csv(f'{a.out}_prf_size_axis.tsv', sep='\t')
     with pd.option_context('display.width', 250, 'display.max_rows', 200):
@@ -289,5 +335,6 @@ if __name__ == '__main__':
     ap.add_argument('--sigma-table', default='notes/data/fig1_prf_sigma.tsv')
     ap.add_argument('--widths-fits', default='notes/data/field_widths_reliable_n28_2026-11-12_fits.tsv')
     ap.add_argument('--bins-dir', default=None)
+    ap.add_argument('--table', default=None, help='write the DoG/Gaussian/DN markdown table here')
     ap.add_argument('--out', default='notes/data/hierarchy_gain_terms_n28_2026-11-12')
     main(ap.parse_args())

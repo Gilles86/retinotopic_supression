@@ -37,7 +37,8 @@ def main(prefix, name, fits_note):
     logsize = np.log2(size)
     dn = normalised(d)
     reg = pd.read_csv(f'{prefix}_regression.tsv', sep='\t')
-    w = pd.read_csv(f'{prefix}_width_slope.tsv', sep='\t').iloc[0]
+    wt = pd.read_csv(f'{prefix}_width_slope.tsv', sep='\t')
+    w, w3 = wt.iloc[0], wt.iloc[1]
     wf = pd.read_csv(f'{prefix}_width_fits.tsv', sep='\t')
     bins_path = Path(f'{prefix}_bins.tsv')
 
@@ -96,8 +97,7 @@ def main(prefix, name, fits_note):
         cols = [('T', 'Target gain', TARGET), ('D', 'Distractor gain', DISTRACTOR), ('S', 'Shared sustained', FG),
                 ('dS', 'dS', HP)]
         for col, lab, c in cols:
-            pm = bs.groupby('subject')[col].median().median()
-            per = bs.assign(v=bs[col] / pm).groupby(['subject', 'bin']).v.median().unstack()
+            per = bs.groupby(['subject', 'bin'])[col].median().unstack()
             med = per.median()
             ci = np.array([median_ci(per[b].dropna())[1:3] for b in per.columns])
             axc.errorbar(per.columns + {'T': -.12, 'D': -.04, 'S': .04, 'dS': .12}[col], med,
@@ -106,10 +106,11 @@ def main(prefix, name, fits_note):
         axc.axhline(0, color='.85', lw=.6, zorder=0)
         axc.set_xticks([0, 1, 2])
         axc.set_xticklabels(['Smallest third', 'Middle', 'Largest third'])
+        axc.set_xlim(-.4, 2.4)
         axc.set_xlabel('pRF size within an area')
-        axc.set_ylabel('Term / its pooled median')
-        axc.legend(frameon=False, fontsize=6, ncol=2, loc='upper left', handlelength=1.2)
-        axc.set_title('Within areas, by pRF size', fontsize=7, loc='left')
+        axc.set_ylabel('Gain (%)')
+        axc.legend(frameon=False, fontsize=6, ncol=4, loc='lower left', bbox_to_anchor=(0, 1.0), handlelength=1.2,
+                   columnspacing=.8)
     else:
         axc.text(.5, .5, 'Within-area bins: pending', ha='center', va='center', transform=axc.transAxes, fontsize=7)
         axc.set_axis_off()
@@ -135,8 +136,8 @@ def main(prefix, name, fits_note):
     axd.set_xlim(xs.min() - .15, xs.max() + .45)
     axd.set_xlabel('Area pRF size, σ (°, log scale)')
     axd.set_ylabel('Sustained field FWHM (°)')
-    axd.set_title(f'Sustained width: {w.slope:+.2f}° per doubling [{w.ci_lo:+.2f}, {w.ci_hi:+.2f}]', fontsize=7, loc='left',
-                  pad=4)
+    axd.set_title(f'Sustained width: {w.slope:+.2f}° per doubling [{w.ci_lo:+.2f}, {w.ci_hi:+.2f}]\n'
+                  f'(|gain|/SE > 3: {w3.slope:+.2f}° [{w3.ci_lo:+.2f}, {w3.ci_hi:+.2f}])', fontsize=7, loc='left', pad=4)
     offset_spines(axd)
     for ax, let in zip((axa, axb, axc, axd), 'abcd'):
         ax.text(-.13, 1.08, let, transform=ax.transAxes, fontsize=8, fontweight='bold', va='bottom')
@@ -148,8 +149,18 @@ def main(prefix, name, fits_note):
         return f'{r.slope:+.1f} percentage points per doubling [{r.ci_lo:+.1f}, {r.ci_hi:+.1f}], {int(r.k_pos)}/{int(r.n)} positive, p = {r.p:.2g}, q = {r.q:.2g}'
 
     nfit = ', '.join(f'{r} {int((wf.roi == r).sum())}' for r in ROIS)
+    dis = pd.read_csv(f'{prefix}_dissociation.tsv', sep='\t')
+    dz = dis[(dis.dS_version == 'dS_alone') & ~dis.normalised].iloc[0]
+    dzn = dis[(dis.dS_version == 'dS_alone') & dis.normalised].iloc[0]
+    nb = ''
+    if bins_path.exists():
+        bt = pd.read_csv(f'{prefix}_bin_slopes.tsv', sep='\t')
+        bt = bt[bt.by == 'sd'].set_index('term')
+        nb = (f" Slopes on log2 pRF size within areas: target gain {bt.loc['Target gain'].slope:+.1f} percentage points per "
+              f"doubling (p = {bt.loc['Target gain'].p:.2g}), dS {bt.loc['dS'].slope:+.1f} (p = {bt.loc['dS'].p:.2g}); "
+              f"within an area, pRF size and eccentricity go together, so this does not separate the two.")
     legend = f"""
-**Figure S. The gain terms along the visual hierarchy.** Each area's gain terms from the joint gain-field fit and from the terms estimated alone ({fits_note}; DoG pRFs; n = 28 participants). The hierarchy axis is the area's pRF size: the median over participants of the voxel-weighted mean pRF σ at 1–2.5° eccentricity (the axis of the target-gain regression in the main text). Each participant's per-area estimates were regressed on log2 of the area's pRF size; the slope is the change per doubling of pRF size. Because each area is fitted with the stimulus as its input, an area's gain is the gain accumulated up to that area, not the gain added at that stage. a, Area medians of the target gain, the distractor gain (averaged over its locations), the sustained gain shared by the four locations (estimated alone) and the sustained gain at HP minus at the other locations (dS, estimated alone), each divided by its pooled median (median over participants of the median over areas), so that the slopes compare; lines, the median per-participant slope. b, Slopes per term in these normalised units, median and bootstrapped 95% CI. In % gain: target gain {r_('Target gain')}; distractor gain {r_('Distractor gain')}; shared sustained gain {r_('Shared sustained gain (alone)')}; dS {r_('dS, alone')} (Wilcoxon signed-rank; Benjamini-Hochberg across the nine terms of the table). c, Within each area, the five gains re-estimated for the smallest, middle and largest third of voxels by pRF size (least squares, all other parameters fixed at the fit; bins with fewer than 20 voxels dropped), normalised as in a; median over participants of the median over areas, bootstrapped 95% CI. d, FWHM of the sustained field in fits with a reliable sustained gain (|gain|/SE > 2 at HP or at the other locations; leave-one-run-out jackknife SE), per area (dots, fits; diamonds, area medians, coloured by area as in the main figures; fits kept: {nfit}) against pRF size; line, median per-participant slope ({w.slope:+.2f}° per doubling [{w.ci_lo:+.2f}, {w.ci_hi:+.2f}], {int(w.n)} participants with at least three areas, p = {w.p:.2g}); dashed, the 5.7° spacing of neighbouring possible target and distractor locations.
+**Figure S. The gain terms along the visual hierarchy.** Gain terms per area ({fits_note}; n = 28 participants), in % gain. The hierarchy axis is each area's pRF size: the median over participants of the voxel-weighted mean pRF σ at 1–2.5° eccentricity, the axis of the target-gain regression in the main text. Per participant, each term's per-area estimates were regressed on log2 of the area's pRF size, giving the change per doubling of pRF size. Each area is fitted with the stimulus as its input, so an area's gain is the gain accumulated up to that area, not the gain added at that stage. a, Area medians of the target gain, the distractor gain (averaged over its four locations, weighted by how often the distractor appeared there), the sustained gain shared by the four locations (estimated alone) and the sustained gain at HP minus that at the other locations (dS, estimated alone). Each term is divided by its pooled median (median over participants of the median over areas), so a positive slope means the term grows in its own direction and the slopes can be compared across terms; lines, the median per-participant slope. b, Normalised slopes per term, median and bootstrapped 95% CI. In percentage points per doubling: target gain {r_('Target gain')}; distractor gain {r_('Distractor gain')}; shared sustained gain {r_('Shared sustained gain (alone)')}; dS {r_('dS, alone')} (Wilcoxon signed-rank; Benjamini-Hochberg across the nine terms tested). The target slope exceeds the dS slope in % (paired p = {dz.paired_p:.2g}) but not relative to each term's size (p = {dzn.paired_p:.2g}). c, Within each area, the five gains re-estimated for the smallest, middle and largest third of its voxels by pRF size (least squares, all other parameters fixed at the fit; areas with fewer than 60 voxels dropped, mostly IPS and VO); dS here is from the joint fit. Median over participants of the median over areas, bootstrapped 95% CI.{nb} d, Full width at half maximum of the sustained field in fits with a reliable sustained gain (|gain|/SE > 2 at HP or at the other locations; leave-one-run-out jackknife SE). Dots, fits; diamonds, area medians, coloured by area as in the main figures; fits kept: {nfit}. Line, median per-participant slope, {w.slope:+.2f}° per doubling [{w.ci_lo:+.2f}, {w.ci_hi:+.2f}] ({int(w.n)} participants, p = {w.p:.2g}); at |gain|/SE > 3, {w3.slope:+.2f}° [{w3.ci_lo:+.2f}, {w3.ci_hi:+.2f}] ({int(w3.n)} participants, p = {w3.p:.2g}). Dashed, the 5.7° spacing of neighbouring possible target and distractor locations.
 """
     save(fig, name, legend)
 

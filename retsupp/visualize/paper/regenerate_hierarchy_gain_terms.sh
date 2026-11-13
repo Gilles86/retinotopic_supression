@@ -15,7 +15,7 @@
 #   2. laptop, repo root, once those tasks are done:
 #        bash retsupp/visualize/paper/regenerate_hierarchy_gain_terms.sh local
 #      rsyncs the statistics to /data/ds-retsupp/derivatives/gain_bins_${TAG}, writes
-#      notes/data/hierarchy_gain_terms_${TAG}_n28_*.tsv and the supplementary figure.
+#      notes/data/hierarchy_gain_terms_${TAG}_n28_*.tsv, the DoG/Gaussian/DN table and the supplementary figure.
 #
 # Example, the converged refit:
 #   REF_ROOT=af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf_polished_conv TAG=polished_conv_2026-11-13 \
@@ -43,7 +43,8 @@ local)
     rsync -a sciencecluster:$BIDS/derivatives/$BINS/ /data/ds-retsupp/derivatives/$BINS/
     $PY -m retsupp.visualize.paper.hierarchy_gain_terms --gain-table $D/gain_field_parameters_${TAG}.tsv \
         --cond-lin $D/conditional_estimates_${TAG}.tsv --widths-fits $D/field_widths_reliable_${TAG}_n28_fits.tsv \
-        --bins-dir /data/ds-retsupp/derivatives/$BINS --out $OUT
+        --bins-dir /data/ds-retsupp/derivatives/$BINS --out $OUT \
+        --table notes/figures/paper_2026-11/table_hierarchy_gain_terms_${TAG}${SUFFIX}.md
     $PY -m retsupp.visualize.paper.figS_hierarchy_gain_terms --prefix $OUT \
         --name figS_hierarchy_gain_terms_${TAG}${SUFFIX} --fits-note "$FIT_LABEL"
     ;;
