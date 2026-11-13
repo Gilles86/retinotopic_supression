@@ -34,6 +34,6 @@ CODE_DIR="${CODE_DIR:-$(cd "${SLURM_SUBMIT_DIR}" && git rev-parse --show-topleve
 export PYTHONPATH="${CODE_DIR}${PYTHONPATH:+:$PYTHONPATH}"
 echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
 
-exec "$HOME/data/conda/envs/retsupp_cuda/bin/python" -u -m retsupp.modeling.hp_terms_heldout_power \
+"$HOME/data/conda/envs/retsupp_cuda/bin/python" -u -m retsupp.modeling.hp_terms_heldout_power \
     "$subject" --bids-folder /shares/zne.uzh/gdehol/ds-retsupp \
     ${N_DRAWS:+--n-draws $N_DRAWS} ${OUTPUT_SUBDIR:+--output-subdir "$OUTPUT_SUBDIR"} ${ROIS:+--rois $ROIS}
