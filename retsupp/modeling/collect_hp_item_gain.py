@@ -145,11 +145,11 @@ def main(cv_root, full_root, out):
         terms = terms.set_index(['subject', 'roi'])
         terms['mult_dT_pct'] = g.hp_scale * g.g_T_dyn * 100
         terms['mult_dD_pct'] = g.hp_scale * g.g_LP_dyn * 100
-        # A fit with a shared term at its box (|gain| 10, |h|, |a| 10, σ 0.5 or 8°) in any of the four models.
+        # A fit with a gain, h or a at its box (±10, i.e. ±1000%) in any of the four models. Widths at their box
+        # (0.5° or 8°; σ_dyn in about half of all fits, as in the reference fit) are not counted.
         lim = m.set_index(['subject', 'roi'])
         gcols = [c for c in ('g_HP', 'g_LP', 'g_HP_dyn', 'g_LP_dyn', 'g_T_dyn', 'hp_scale', 'hp_offset') if c in lim]
-        hit = ((lim[gcols].abs() >= 9.99).any(axis=1) | (lim[['sigma_AF', 'sigma_dyn']] <= 0.501).any(axis=1)
-               | (lim[['sigma_AF', 'sigma_dyn']] >= 7.99).any(axis=1))
+        hit = (lim[gcols].abs() >= 9.99).any(axis=1)
         terms['at_bound'] = hit.groupby(level=[0, 1]).any().reindex(terms.index).fillna(False)
         terms = terms.reset_index()
         terms.to_csv(f'{out}_terms_{scheme}.tsv', sep='\t', index=False)
@@ -157,8 +157,8 @@ def main(cv_root, full_root, out):
         tt = pd.concat([stats_table(terms, cols).assign(fits='all'),
                         stats_table(terms[~terms.at_bound], cols).assign(fits='none at a bound')], ignore_index=True)
         tt.to_csv(f'{out}_terms_{scheme}_stats.tsv', sep='\t', index=False)
-        print(f'--- fitted terms ({scheme}); {int(terms.at_bound.sum())} of {len(terms)} subject × area with a term '
-              f'at a bound')
+        print(f'--- fitted terms ({scheme}); {int(terms.at_bound.sum())} of {len(terms)} subject × area with a gain, h or a '
+              f'at its box')
         print(tt[tt.kind.ne('area')].round(3).to_string())
 
 
