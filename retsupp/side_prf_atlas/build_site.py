@@ -176,7 +176,18 @@ def build(G, out):
     return ds
 
 
-def inject(index_html, legend, n_subj):
+METHODS_V1 = '''<details><summary>Methods and masks</summary>
+<p>pRF parameters (polar angle, eccentricity, size, HRF delay) come from a difference-of-Gaussians pRF model with a flexible HRF,
+fitted to all runs per participant in volume space and resampled to fsaverage (nearest voxel at mid-thickness, nearest vertex on the registered sphere).</p>
+<p>Masks, per participant and vertex: (1) a model-free reliable response, i.e. the correlation of each run with the mean of the other runs beats a
+null in which that mean is circularly shifted (100 shifts, p &lt; .05); (2) a cross-validated pRF, i.e. a Gaussian pRF fitted on one session predicts the other
+session better than 50 fits to a circularly shifted stimulus (p &lt; .05). A vertex is shown when more participants pass than expected by chance (binomial test,
+Benjamini-Hochberg q &lt; .01). The pRF parameter maps use the participants with both a reliable response and a cross-validated positive pRF at that vertex (at least 5).</p>
+<p>Signed pRFs: a Gaussian pRF grid fit that allows negative amplitudes, fitted on one session and tested on the other (both directions),
+against 50 fits with a circularly shifted stimulus.</p></details>'''
+
+
+def inject(index_html, legend, n_subj, methods=None):
     html = index_html.read_text()
     panel = """
 <style>
@@ -196,15 +207,7 @@ def inject(index_html, legend, n_subj):
 <div id="atl-info"><h1>retsupp pRF atlas (fsaverage)</h1>
 <p>Group maps from __N__ participants, 7T bar pRF mapping during a visual search task. No individual maps.
 Pick a map in the viewer's data menu; white outlines are visual areas (fsaverage overlay) and the default network (Yeo 2011, network 7).</p>
-<details><summary>Methods and masks</summary>
-<p>pRF parameters (polar angle, eccentricity, size, HRF delay) come from a difference-of-Gaussians pRF model with a flexible HRF,
-fitted to all runs per participant in volume space and resampled to fsaverage (nearest voxel at mid-thickness, nearest vertex on the registered sphere).</p>
-<p>Masks, per participant and vertex: (1) a model-free reliable response, i.e. the correlation of each run with the mean of the other runs beats a
-null in which that mean is circularly shifted (100 shifts, p &lt; .05); (2) a cross-validated pRF, i.e. a Gaussian pRF fitted on one session predicts the other
-session better than 50 fits to a circularly shifted stimulus (p &lt; .05). A vertex is shown when more participants pass than expected by chance (binomial test,
-Benjamini-Hochberg q &lt; .01). The pRF parameter maps use the participants with both a reliable response and a cross-validated positive pRF at that vertex (at least 5).</p>
-<p>Signed pRFs: a Gaussian pRF grid fit that allows negative amplitudes, fitted on one session and tested on the other (both directions),
-against 50 fits with a circularly shifted stimulus.</p></details></div>
+__METHODS__</div>
 <div id="atl-legend"><div id="atl-body"></div></div>
 <script>
 (function () {
@@ -234,7 +237,8 @@ against 50 fits with a circularly shifted stimulus.</p></details></div>
 })();
 </script>
 """
-    panel = panel.replace('__ENTRIES__', json.dumps(legend)).replace('__N__', str(n_subj))
+    panel = (panel.replace('__ENTRIES__', json.dumps(legend)).replace('__N__', str(n_subj))
+             .replace('__METHODS__', methods or METHODS_V1))
     index_html.write_text(html + panel)
 
 

@@ -44,6 +44,63 @@ hrf_dispersion, r2, theta, ecc. These are the current fits (May 2026; there is n
   `?h.sphere.reg`. Polar angle is computed from x and y.
 - Coordinate convention check: the signed fit agrees with model 4 on position, r(x) = 0.85 and r(y) = 0.85.
 
+## 1b. Website v2: graded display (after "doesn't look convincing")
+
+The author found v1 unconvincing, because its hard masks leave sparse, speckled maps. v2 is at
+`notes/side_prf_atlas/site_v2/` (27 MB). `site/` is kept unchanged. Built by `build_site_v2.py` from
+`group_sums_fsaverage_v3.npz` (`group_sums.py`, cluster job 8335268, 11 s).
+
+**Weighting.** No binary per-subject selection: every subject contributes to every vertex.
+- The weight is its cross-validated R² proxy, `w = max(cv_r, 0)²`.
+- `cv_r` is the held-out-session correlation of the signed Gaussian pRF.
+- Positive-amplitude subjects feed the model-4 maps (polar angle, eccentricity, σ, HRF delay).
+- Negative-amplitude subjects feed the negative-pRF angle.
+
+**Averaging.** Only group sums (Σw, Σw·cosθ, Σw·sinθ, Σw·ecc, …) leave the cluster.
+- They are smoothed on the fsaverage white surface before taking ratios. The kernel is iterated neighbour averaging,
+  7–8 iterations, calibrated on the mesh to 3.0 mm FWHM.
+- Polar angle is therefore a CV-R²-weighted circular mean on the registered-sphere projection.
+
+**Fit-quality axis and graded alpha.**
+- The axis is `q`, the group median over subjects of the signed CV R² (`sign(cv_r)·cv_r²`), smoothed the same way.
+- Alpha is baked in with `blend_curvature`. The webgl viewer has no live alpha for vertex data, and `Vertex2D`
+  renders washed out.
+- For level `thr`, alpha is 0 below `thr` and ramps linearly to opaque at `2·thr`.
+- Polar-angle alpha is also multiplied by the across-subject agreement (weighted resultant length R, ramp 0.1 → 0.5).
+- No R²-shaped auto-thresholding is used.
+
+**Threshold levels.** Three levels are separate layers for polar angle and eccentricity. A group median CV R² of
+0.0025 / 0.005 / 0.01 means a held-out correlation of 0.05 / 0.07 / 0.1 in the median subject. For reference,
+across all vertices the median of `q` is 0.0002 and the 90th percentile 0.005; fits to a shifted stimulus give values
+near 0.
+
+| Level | Vertices with alpha > 0.5 | Coverage |
+|---|---|---|
+| > 0.0025 | 37k | V1–V3, V3a/b, hV4, LO/TO, IPS0–3, plus small frontal (FEF) patches |
+| > 0.005 | 28k | |
+| > 0.01 | 21k | |
+
+The σ and HRF-delay layers use the 0.005 level.
+
+**Other layers.**
+- Group median CV R² itself.
+- Subjects with a CV pRF (%): fades 5% → 30%.
+- Signed balance: fades with the same share.
+- Negative-pRF prevalence and negative-pRF polar angle: fade from 5% to 20% of subjects (chance about 2%).
+
+**Result.** At the loosest level, polar angle and eccentricity are proper retinotopic maps:
+- contralateral hemifield in each hemisphere;
+- foveal confluence at the occipital pole, with eccentricity increasing anteriorly;
+- angle progressions across V1–V3, V3a and IPS0–3.
+
+Checked in Chrome from a local `http.server`: no console errors, and the legend follows the selected layer.
+
+Screenshots (`notes/side_prf_atlas/screenshots_v2/`):
+- `01_polar_angle_cvr2_0.0025_posterior.jpg`
+- `02_eccentricity_cvr2_0.0025_posterior.jpg`
+- `03_negative_prfs_rh_lateral_dmn.jpg`: strong negative pRFs in peripheral V1–V3, faint ones at the
+  angular/TPJ edge of the right DMN.
+
 ## 2. Negative pRFs in the default network (Szinte & Knapen 2020)
 
 **The existing fits cannot answer this.**
@@ -123,4 +180,14 @@ rsync -a sciencecluster:/shares/zne.uzh/gdehol/ds-retsupp/derivatives/side_prf_a
 ~/mambaforge/envs/pycortex2/bin/python retsupp/side_prf_atlas/build_site.py \
     --group-npz /data/ds-retsupp/derivatives/side_prf_atlas_group/group_maps_fsaverage_v2.npz \
     --annot-dir <dir with ?h.Yeo2011_7Networks_N1000.annot from fsaverage/label> --out notes/side_prf_atlas/site
+```
+
+Site v2:
+
+```bash
+sbatch retsupp/side_prf_atlas/slurm_jobs/group_sums.sh
+rsync -a sciencecluster:/shares/zne.uzh/gdehol/ds-retsupp/derivatives/side_prf_atlas_group/group_sums_fsaverage_v3.npz /data/ds-retsupp/derivatives/side_prf_atlas_group/
+~/mambaforge/envs/pycortex2/bin/python retsupp/side_prf_atlas/build_site_v2.py \
+    --sums /data/ds-retsupp/derivatives/side_prf_atlas_group/group_sums_fsaverage_v3.npz \
+    --annot-dir <dir with ?h.Yeo2011_7Networks_N1000.annot> --out notes/side_prf_atlas/site_v2
 ```
