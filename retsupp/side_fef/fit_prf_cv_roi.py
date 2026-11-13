@@ -40,7 +40,8 @@ def main(subject, region, variant, bids_folder, max_voxels=1500, n_joint=3000, c
         print('exists', out)
         return
     t0 = time.time()
-    z = np.load(deriv / TS_SUBDIR / s / f'{s}_desc-cleaned_region_ts.npz', allow_pickle=False)
+    desc = 'cleanedloso' if region.endswith('loso') else 'cleaned'   # leave-one-out ROIs: loso_rois.py
+    z = np.load(deriv / TS_SUBDIR / s / f'{s}_desc-{desc}_region_ts.npz', allow_pickle=False)
     rois = list(z['rois'])
     vox = np.flatnonzero(z['member'][:, rois.index(region)])
     if len(vox) < 3:

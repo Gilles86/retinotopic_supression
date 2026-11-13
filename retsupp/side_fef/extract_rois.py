@@ -103,6 +103,46 @@ def write_label(vol, mask_img, path):
     img.to_filename(str(path))
 
 
+def extract_ts(sub, der, labs, roi_names, mask_bool, ts_out, resolution=50):
+    """Cleaned BOLD (all runs) + paradigm of the union of the voxels of ``labs[r]`` for ``r`` in ``roi_names``."""
+    s = f'sub-{sub.subject_id:02d}'
+    union = np.zeros(mask_bool.shape, bool)
+    for r in roi_names:
+        union |= labs[r] > 0
+    ijk = np.argwhere(union)
+    idx = tuple(ijk.T)
+    member = np.stack([labs[r][idx] > 0 for r in roi_names], 1)
+    hemi_code = np.zeros(len(ijk), np.int8)
+    for r in roi_names:
+        hemi_code = np.where(hemi_code == 0, labs[r][idx], hemi_code)
+    hemi = np.where(hemi_code == 1, 'L', 'R')
+    lin_index = -np.ones(mask_bool.shape, np.int64)
+    lin_index[mask_bool] = np.arange(mask_bool.sum())
+    voxel_index = lin_index[idx]
+    bold, runs, pars, grid = [], [], [], None
+    for ses in (1, 2):
+        for run in sub.get_runs(ses):
+            fn = (der / 'cleaned' / s / f'ses-{ses}' / 'func'
+                  / f'{s}_ses-{ses}_task-search_desc-cleaned_run-{run}_bold.nii.gz')
+            img = nib.load(str(fn))
+            assert img.shape[:3] == mask_bool.shape, (img.shape, mask_bool.shape)
+            bold.append(np.asarray(img.dataobj)[idx][:, :258].T.astype(np.float32))
+            par = sub.get_stimulus_with_distractors(session=ses, run=run, resolution=resolution, grid_radius=5.0,
+                                                    distractor_shape='rectangle', distractor_long_side=1.5,
+                                                    distractor_short_side=0.375).astype(np.float32)
+            pars.append(par.reshape(par.shape[0], -1)[:258])
+            if grid is None:
+                gx, gy = sub.get_extended_grid_coordinates(resolution=resolution, session=ses, run=run,
+                                                           grid_radius=5.0)
+                grid = np.stack((gx.ravel(), gy.ravel()), axis=1).astype(np.float32)
+            runs.append((ses, run))
+            print(ses, run, bold[-1].shape, flush=True)
+    ts_out.parent.mkdir(parents=True, exist_ok=True)
+    np.savez(ts_out, bold=np.stack(bold), runs=np.array(runs), rois=np.array(roi_names), member=member, hemi=hemi,
+             ijk=ijk, voxel_index=voxel_index, paradigm=np.stack(pars), grid=grid)
+    print('wrote', ts_out, dict(zip(roi_names, member.sum(0).tolist())))
+
+
 def main(subject, bids_folder, group_rois, resolution=50):
     bids = Path(bids_folder)
     der = bids / 'derivatives'
@@ -158,41 +198,7 @@ def main(subject, bids_folder, group_rois, resolution=50):
         tab.to_csv(sel_out, sep='\t', index=False)
         print('wrote', sel_out, len(tab))
 
-    union = np.zeros(mask_bool.shape, bool)
-    for r in ALL_ROIS:
-        union |= labs[r] > 0
-    ijk = np.argwhere(union)
-    idx = tuple(ijk.T)
-    member = np.stack([labs[r][idx] > 0 for r in ALL_ROIS], 1)
-    hemi_code = np.zeros(len(ijk), np.int8)
-    for r in ALL_ROIS:
-        hemi_code = np.where(hemi_code == 0, labs[r][idx], hemi_code)
-    hemi = np.where(hemi_code == 1, 'L', 'R')
-    lin_index = -np.ones(mask_bool.shape, np.int64)
-    lin_index[mask_bool] = np.arange(mask_bool.sum())
-    voxel_index = lin_index[idx]
-    bold, runs, pars, grid = [], [], [], None
-    for ses in (1, 2):
-        for run in sub.get_runs(ses):
-            fn = (der / 'cleaned' / s / f'ses-{ses}' / 'func'
-                  / f'{s}_ses-{ses}_task-search_desc-cleaned_run-{run}_bold.nii.gz')
-            img = nib.load(str(fn))
-            assert img.shape[:3] == mask_bool.shape, (img.shape, mask_bool.shape)
-            bold.append(np.asarray(img.dataobj)[idx][:, :258].T.astype(np.float32))
-            par = sub.get_stimulus_with_distractors(session=ses, run=run, resolution=resolution, grid_radius=5.0,
-                                                    distractor_shape='rectangle', distractor_long_side=1.5,
-                                                    distractor_short_side=0.375).astype(np.float32)
-            pars.append(par.reshape(par.shape[0], -1)[:258])
-            if grid is None:
-                gx, gy = sub.get_extended_grid_coordinates(resolution=resolution, session=ses, run=run,
-                                                           grid_radius=5.0)
-                grid = np.stack((gx.ravel(), gy.ravel()), axis=1).astype(np.float32)
-            runs.append((ses, run))
-            print(ses, run, bold[-1].shape, flush=True)
-    ts_out.parent.mkdir(parents=True, exist_ok=True)
-    np.savez(ts_out, bold=np.stack(bold), runs=np.array(runs), rois=np.array(ALL_ROIS), member=member, hemi=hemi,
-             ijk=ijk, voxel_index=voxel_index, paradigm=np.stack(pars), grid=grid)
-    print('wrote', ts_out, dict(zip(ALL_ROIS, member.sum(0).tolist())))
+    extract_ts(sub, der, labs, ALL_ROIS, mask_bool, ts_out, resolution)
 
 
 if __name__ == '__main__':

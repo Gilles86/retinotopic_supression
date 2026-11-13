@@ -13,12 +13,16 @@
 set -eo pipefail
 subject=${SLURM_ARRAY_TASK_ID}
 mkdir -p "$HOME/logs"
-exec >"$HOME/logs/side_fef_extract_sub-$(printf %02d "$subject")_${SLURM_JOB_ID}.txt" 2>&1
+exec >"$HOME/logs/side_fef_extract${LOSO:+_loso}_sub-$(printf %02d "$subject")_${SLURM_JOB_ID}.txt" 2>&1
 CODE_DIR="${CODE_DIR:-$(cd "${SLURM_SUBMIT_DIR}" && git rev-parse --show-toplevel)}"
 echo "Host: $(hostname) | sub-${subject} | job ${SLURM_JOB_ID} | code $(git -C "$CODE_DIR" rev-parse --short HEAD) | $(date)"
 export CUDA_VISIBLE_DEVICES="" PYTHONPATH="${CODE_DIR}" PYTHONUNBUFFERED=1
 export TMPDIR="/scratch/$USER/tmp/${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID:-0}"
 mkdir -p "$TMPDIR"
-"$HOME/data/conda/envs/retsupp_cuda/bin/python" -u -m retsupp.side_fef.extract_rois "$subject" \
-    --group-rois "${CODE_DIR}/notes/side_fef/data/fsaverage_rois.npz"
+if [[ -n "${LOSO:-}" ]]; then   # LOSO=1: leave-one-participant-out group ROIs (loso_rois.py)
+    "$HOME/data/conda/envs/retsupp_cuda/bin/python" -u -m retsupp.side_fef.loso_rois "$subject"
+else
+    "$HOME/data/conda/envs/retsupp_cuda/bin/python" -u -m retsupp.side_fef.extract_rois "$subject" \
+        --group-rois "${CODE_DIR}/notes/side_fef/data/fsaverage_rois.npz"
+fi
 echo "Finished: $(date)"

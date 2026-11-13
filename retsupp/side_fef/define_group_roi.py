@@ -2,7 +2,7 @@
 
 Input: ``group_sums_fsaverage_v3.npz`` of the pRF-atlas side project (``side_prf_atlas/group_sums.py``). Its
 ``median_cv_r2`` is the group median over n = 28 of the signed cross-validated pRF R² (session 1 -> session 2 and
-back; ``sign(cv_r) * cv_r**2``), smoothed on the fsaverage white surface to 3 mm FWHM.
+back; ``sign(cv_r) * cv_r**2``), unsmoothed (the atlas site smooths it only for display).
 
 ROIs (each a boolean (2, 163842) map, L then R):
 
@@ -51,8 +51,8 @@ def clusters(faces, mask):
     return cl
 
 
-def main(sums, fsaverage, out, thr=0.0025, min_size=5):
-    q = np.load(sums)['median_cv_r2']
+def define(q, fsaverage, thr=0.0025, min_size=5):
+    """(2, 163842) group CV R² map -> {'frontal', 'sPCS', 'iPCS'} boolean (2, 163842) masks."""
     rois = {k: np.zeros(q.shape, bool) for k in ('frontal', 'sPCS', 'iPCS')}
     for hi, h in enumerate('lr'):
         v, f = nib.freesurfer.read_geometry(str(Path(fsaverage) / 'surf' / f'{h}h.white'))
@@ -67,6 +67,12 @@ def main(sums, fsaverage, out, thr=0.0025, min_size=5):
                 m = cl == c
                 if m.sum() >= min_size:
                     rois[roi][hi] |= m
+    return rois
+
+
+def main(sums, fsaverage, out, thr=0.0025, min_size=5):
+    q = np.load(sums)['median_cv_r2']
+    rois = define(q, fsaverage, thr, min_size)
     counts = {k: m.sum(1).tolist() for k, m in rois.items()}
     print('vertices (L, R):', counts)
     Path(out).parent.mkdir(parents=True, exist_ok=True)

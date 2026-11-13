@@ -27,7 +27,7 @@ import pandas as pd
 from retsupp.side_fef.extract_rois import ALL_ROIS, ROIS_SUBDIR
 
 KEYS = ('cv_r', 'cv_p', 'amplitude', 'x', 'y', 'sd', 'rel_r', 'rel_p', 'x_f1', 'y_f1', 'x_f2', 'y_f2')
-ROIS = ('frontal',) + ALL_ROIS
+ROIS = ('frontal',) + ALL_ROIS + ('sPCSloso', 'iPCSloso')
 
 
 def main(bids_folder, voxels_out, summary_out, subjects):
