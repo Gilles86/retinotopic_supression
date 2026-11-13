@@ -70,6 +70,7 @@ def subject_rows(sub_dir):
         C = np.einsum('sni,snj->nij', dd, dd) / (dd.shape[0] - 1)
         out = trials.copy()
         out.insert(0, 'pool', pool)
+        out.insert(0, 'subject', s)
         out['n_areas'] = len(have)
         out['areas'] = ' '.join(have)
         out['gT'], out['gD'], out['gG'] = g[:, 0], g[:, 1], g[:, 2]
