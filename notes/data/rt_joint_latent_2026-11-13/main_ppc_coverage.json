@@ -1,0 +1,17 @@
+{
+ "coverage_participant_condition": 0.9761904761904762,
+ "inside": {
+  "mean_rt": 1.0,
+  "q10": 0.8,
+  "q50": 0.2,
+  "q90": 0.2,
+  "sd_log_rt": 1.0,
+  "mean_gT": 0.6,
+  "sd_gT": 1.0,
+  "mean_gG": 1.0,
+  "sd_gG": 1.0,
+  "mean_gD": 0.6,
+  "sd_gD": 0.6
+ },
+ "n_ppc": 200
+}
