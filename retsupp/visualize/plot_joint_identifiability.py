@@ -78,6 +78,44 @@ def one(df, out):
     print(out)
 
 
+def hessian_summary(hess_dir, out_tsv):
+    """One row per (area, model, bound, point): Laplace SEs (white noise) of g_LP and dS, condition number and the
+    flattest direction of the profiled Hessian (correlation-scaled)."""
+    import pickle
+    rows = []
+    for f in sorted(Path(hess_dir).glob('sub-*_hessian*.pkl')):
+        parts = f.stem.split('_')
+        roi, model = parts[1].replace('roi-', ''), '_'.join(parts[2:4])
+        bound = 'g >= -1' if 'glo-1' in f.stem else 'g >= -10'
+        with open(f, 'rb') as fh:
+            d = pickle.load(fh)
+        for point, h in d.items():
+            n = h['names']
+            cov = np.linalg.pinv(h['H_nat']) * h['sigma2']
+            row = dict(roi=roi, model=model, bound=bound, point=point, sse=h['sse'],
+                       g_LP=h['summary'].get('g_LP'), dS=h['summary'].get('dS'), sigma_AF=h['summary'].get('sigma_AF'),
+                       item_scale=h['summary'].get('item_scale'), amp_median=h['summary'].get('amp_median'),
+                       se_g_LP=np.sqrt(cov[n.index('g_LP'), n.index('g_LP')]), cond_scaled=h['cond_scaled'])
+            if 'g_HP' in n:
+                c = np.zeros(len(n))
+                c[n.index('g_HP')], c[n.index('g_LP')] = 1, -1
+                row['se_dS'] = float(np.sqrt(c @ cov @ c))
+                i, j = n.index('g_HP'), n.index('g_LP')
+                row['corr_gHP_gLP'] = cov[i, j] / np.sqrt(cov[i, i] * cov[j, j])
+            i = n.index('g_LP')
+            if 'sigma_AF' in n:
+                k = n.index('sigma_AF')
+                row['corr_gLP_sigmaAF'] = cov[i, k] / np.sqrt(cov[i, i] * cov[k, k])
+            v = h['evec_scaled'][:, 0]
+            row['flattest'] = ' '.join(f'{nm}{x:+.2f}' for nm, x in zip(n, v) if abs(x) > 0.2)
+            row['eig_min_scaled'] = h['eig_scaled'][0]
+            rows.append(row)
+    df = pd.DataFrame(rows)
+    df.to_csv(out_tsv, sep='\t', index=False, float_format='%.5g')
+    print(df.to_string())
+    return df
+
+
 def main(tsv_dir, out_dir):
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -93,5 +131,8 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('--tsv-dir', default='notes/data/joint_optimisation_2026-11-13')
     ap.add_argument('--out-dir', default='notes/figures/joint_optimisation_2026-11-13')
+    ap.add_argument('--hessian-dir', default=None, help='Also summarise the hessian pickles of this directory.')
     a = ap.parse_args()
+    if a.hessian_dir:
+        hessian_summary(a.hessian_dir, Path(a.tsv_dir) / 'hessian_summary.tsv')
     main(a.tsv_dir, a.out_dir)
