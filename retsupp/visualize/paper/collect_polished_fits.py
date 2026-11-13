@@ -32,9 +32,9 @@ def load(pkl):
     return pars.reset_index(drop=True), info, np.asarray(d.get('voxel_ids', []))
 
 
-def main(bids, root, models, out, subjects):
+def main(bids, root, models, out, subjects, polished_suffix='_polished', clamped_suffix=''):
     deriv = Path(bids) / 'derivatives'
-    croot, proot = deriv / root, deriv / f'{root}_polished'
+    croot, proot = deriv / f'{root}{clamped_suffix}', deriv / f'{root}{polished_suffix}'
     shared_rows, shift_rows = [], []
     for model in models:
         for pkl in sorted((proot / model).glob('sub-*/*_cv-fits.pkl')):
@@ -54,9 +54,15 @@ def main(bids, root, models, out, subjects):
                 row['dS'] = row['g_HP'] - row['g_LP']
                 row['dD'] = row['g_HP_dyn'] - row['g_LP_dyn']
                 if isinstance(info, dict):
-                    for k in ('sse_clamped', 'sse_final', 'seconds', 'nit', 'train_sse_total'):
+                    for k in ('sse_clamped', 'sse_final', 'seconds', 'nit', 'train_sse_total', 'converged'):
                         if k in info:
                             row[k] = info[k]
+                    log = info.get('log') or []
+                    if log:
+                        row['n_rounds'] = len(log)
+                        row['last_rel_change'] = log[-1].get('rel_change', float('nan'))
+                        row['sse_per_round'] = ';'.join(f"{r.get('sse_best', min(r['sse_after_prf'], r['sse_after_shared'])):.2f}"
+                                                        for r in log)
                 shared_rows.append(row)
             shift = np.hypot(pp.x - cp.x, pp.y - cp.y)
             dsd = (pp.sd - cp.sd) / cp.sd
@@ -82,5 +88,7 @@ if __name__ == '__main__':
     ap.add_argument('--models', nargs='+', default=['m4_TDS', 'm7_full'])
     ap.add_argument('--subjects', type=int, nargs='+', default=list(range(1, 31)))
     ap.add_argument('--out', required=True)
+    ap.add_argument('--polished-suffix', default='_polished', help='e.g. _polished_conv')
+    ap.add_argument('--clamped-suffix', default='', help='the comparison root: e.g. _polished (2 rounds)')
     a = ap.parse_args()
-    main(a.bids_folder, a.root, a.models, a.out, set(a.subjects))
+    main(a.bids_folder, a.root, a.models, a.out, set(a.subjects), a.polished_suffix, a.clamped_suffix)
