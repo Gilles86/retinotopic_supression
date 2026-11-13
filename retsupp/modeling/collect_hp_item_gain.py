@@ -42,6 +42,8 @@ EXCLUDE = (1, 2)
 
 def summarise(x, rng):
     x = np.asarray(pd.Series(x).dropna(), dtype=float)
+    if x.size == 0:
+        return dict(n=0, median=np.nan, ci_lo=np.nan, ci_hi=np.nan, n_pos=0, n_neg=0, p=np.nan)
     boot = np.median(rng.choice(x, size=(10000, x.size), replace=True), axis=1)
     p = wilcoxon(x).pvalue if x.size >= 5 and np.any(x != 0) else np.nan
     return dict(n=x.size, median=np.median(x), ci_lo=np.percentile(boot, 2.5), ci_hi=np.percentile(boot, 97.5),
@@ -59,13 +61,14 @@ def stats_table(df, cols):
         q[~np.isnan(p)] = multipletests(p[~np.isnan(p)], method='fdr_bh')[1]
         for r, qq in zip(rows, q):
             r['q_bh'] = qq
-        wide = df.pivot(index='subject', columns='roi', values=col)
+        wide = df.pivot(index='subject', columns='roi', values=col).reindex(columns=list(AREAS))
         rows.append(dict(level='pooled', kind='pooled', q_bh=np.nan,
                          **summarise(wide[list(AREAS)].median(axis=1, skipna=True), rng)))
-        prow = [dict(level=pw, kind='pathway', **summarise(wide[[a for a in areas if a in wide]].median(axis=1),
+        prow = [dict(level=pw, kind='pathway', **summarise(wide[list(areas)].median(axis=1),
                                                              rng)) for pw, areas in PATHWAY.items()]
         p = np.array([r['p'] for r in prow])
-        qp = multipletests(p, method='fdr_bh')[1]
+        qp = np.full(p.size, np.nan)
+        qp[~np.isnan(p)] = multipletests(p[~np.isnan(p)], method='fdr_bh')[1]
         for r, qq in zip(prow, qp):
             r['q_bh'] = qq
         out += [dict(variable=col, **r) for r in rows + prow]
