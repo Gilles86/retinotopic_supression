@@ -36,7 +36,11 @@ N the joint fit's residuals (Y − P_m7), phase-randomised per run with one set 
 of the subject (``simulate_decode.phase_randomise``). Each draw is refitted with both estimators.
 
 Outputs (new folder, never overwritten): ``derivatives/<out>/sub-XX/sub-XX_loro.tsv`` (per area × held-out run ×
-model: held-out SSE and SST) and ``sub-XX_sim.tsv.gz`` (per area × δ × draw: estimates; draw −1 = the real data).
+model: held-out SSE and SST) and ``sub-XX_sim.tsv.gz`` (per area × δ × draw: estimates; draw −1 = the real data) and ``sub-XX_linear.npz`` (per
+area: per-run Gram matrices X'X and X'R, held-out bookkeeping, the generator projections X'(P_gen(δ) − P_base) and
+the noise projections X'N per draw, for the joint-fit residuals (cn_m7) and for the residuals of the linearised model
+with all seven terms (cn_lin), same phases), from which other generators (e.g. base + estimated-alone dS + planted dD)
+are computed without refitting.
 
 Usage::
 
@@ -150,10 +154,17 @@ def run_roi(sub, roi, data, model, phases, n_draws):
         pg = p7.copy()
         pg['g_HP_dyn'] = pg['g_LP_dyn'] + d
         det[d] = np.einsum('tvk,tv->k', X, pred(pg) - P0)
+    # second noise source: residuals of the linearised model with all seven terms (base + dS + dD + dT, real data)
+    beta_all = np.linalg.solve(G, c)
+    noise_lin = R - X @ beta_all
     rows = [dict(roi=roi, delta=np.nan, draw=-1, **real)]
+    cn_m7, cn_lin = [], []
     for k in range(n_draws):
         N = np.concatenate([phase_noise(noise_src[t], phases[k][i]) for i, t in enumerate(runs)])
         cn = np.einsum('tvk,tv->k', X, N)
+        cn_m7.append(cn)
+        N2 = np.concatenate([phase_noise(noise_lin[t], phases[k][i]) for i, t in enumerate(runs)])
+        cn_lin.append(np.einsum('tvk,tv->k', X, N2))
         for d in DELTAS:
             rows.append(dict(roi=roi, delta=d, draw=k, **estimates(G, det[d] + cn)))
     sim = pd.DataFrame(rows)
@@ -165,7 +176,10 @@ def run_roi(sub, roi, data, model, phases, n_draws):
     sim['resid_sd_ratio'] = float(noise_src.std() / R.std())
     print(f'sub-{sub.subject_id:02d} {roi}: {len(vox)} voxels, lin_err {max(lin.values()):.1e}, real alone '
           f'dS {real["dS_alone"]:+.4f} dD {real["dD_alone"]:+.4f} dT {real["dT_alone"]:+.4f}', flush=True)
-    return pd.DataFrame(loro), sim
+    arrays = dict(Gr=Gr, cr=cr, sse0=sse0, sst=sst, det_m7=np.stack([det[d] for d in DELTAS]),
+                  deltas=np.array(DELTAS), cn_m7=np.array(cn_m7), cn_lin=np.array(cn_lin), names=np.array(NAMES),
+                  n_vox=len(vox), lin_err=np.array([lin[n] for n in NAMES]))
+    return pd.DataFrame(loro), sim, arrays
 
 
 def main(subject, bids_folder, out_subdir, n_draws, rois):
@@ -191,19 +205,21 @@ def main(subject, bids_folder, out_subdir, n_draws, rois):
             ph[:, -1] = 0
         phases.append(ph)
     phases = [[ph[k] for ph in phases] for k in range(n_draws)]   # [draw][run]
-    lo, si = [], []
+    lo, si, npz = [], [], {}
     for roi in rois:
         if not ffg.fit_path(bids_folder, 'm7_full', subject, roi, REF_ROOT).exists():
             print(f'{roi}: no fit, skipped')
             continue
         model = ffg.build_full_model(sub, data, roi)
-        a, b = run_roi(sub, roi, data, model, phases, n_draws)
+        a, b, arr = run_roi(sub, roi, data, model, phases, n_draws)
         lo.append(a)
         si.append(b)
+        npz.update({f'{roi}__{k}': v for k, v in arr.items()})
         print(f'{roi} done at {time.time() - t0:.0f}s', flush=True)
     out.mkdir(parents=True, exist_ok=True)
     pd.concat(lo).assign(subject=subject).to_csv(f_loro, sep='\t', index=False)
     pd.concat(si).assign(subject=subject).to_csv(f_sim, sep='\t', index=False)
+    np.savez_compressed(out / f'sub-{subject:02d}_linear.npz', subject=subject, **npz)
 
 
 if __name__ == '__main__':
