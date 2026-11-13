@@ -91,7 +91,12 @@ to those voxels, so m4 onward refit the shared terms on them. Root gets a _relia
 model-free cross-run reliability r > R and p <= ``--max-p`` (0.01) against a circular-shift null
 (``cv/voxel_reliability_null.py``), plus ``--max-bold-sd`` as usual. Root gets a _relnull_r<R> suffix.
 
-``--warm-polish-root <polished root>`` (with ``--polish --polish-method alt --polish-models ...``) fits only the
+``--polish-method lm`` replaces the alternating polish by a joint Levenberg-Marquardt fit of the per-voxel pRFs and
+the shared terms (``joint_lm``: damped Gauss-Newton with the voxel blocks eliminated by the Schur complement, as in
+bundle adjustment; float64 solves on the float32 model), run to convergence (``--polish-lm-iter``,
+``--polish-lm-ftol``). See ``notes/joint_optimisation_2026-11-13.md``.
+
+``--warm-polish-root <polished root>`` (with ``--polish --polish-method alt|lm --polish-models ...``) fits only the
 all-free models, skipping the clamped chain: each starts from the shared terms of that root's fit of the same
 model, subject and area, with per-voxel pRFs from it where the voxel was fitted there and from the whole-brain m4
 pRF (baseline/amplitude by least squares, then Adam on those pRFs with the shared terms fixed) elsewhere. For a
@@ -645,6 +650,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
          warm_roots=(), gd_min_iterations=1000, sigma_starts=SIGMA_STARTS, lbfgs_rounds=LBFGS_ROUNDS,
          hrf_table=None, frozen_prf=False, polish_models=None, polish_method='lbfgs',
          polish_suffix='_polished', polish_rounds=2, polish_max_iter=3000, polish_tol=0.0,
+         polish_lm_iter=300, polish_lm_ftol=1e-10,
          selection_table=None, min_r=None, max_p=0.01, warm_polish_root=None):
     if cv_scheme not in SCHEMES:
         raise ValueError(f'cv_scheme must be in {SCHEMES}')
@@ -658,8 +664,8 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
         raise ValueError('--polish only implements the DoG family')
     if selection_table and (reliable_only or min_r is None):
         raise ValueError('--selection-table needs --min-r and replaces --reliable-only')
-    if warm_polish_root and not (polish and polish_models and polish_method == 'alt'):
-        raise ValueError('--warm-polish-root needs --polish --polish-method alt --polish-models ...')
+    if warm_polish_root and not (polish and polish_models and polish_method in ('alt', 'lm')):
+        raise ValueError('--warm-polish-root needs --polish --polish-method alt|lm --polish-models ...')
     per_voxel_cols = PER_VOXEL_COLS + (
         ['neural_baseline', 'surround_baseline'] if family == 'dn' else [])
     bids_folder = Path(bids_folder)
@@ -988,7 +994,14 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                         init, warm_info = warm_polish_init(name, k, m_tr, y_tr, train['paradigm'], sp, item_scale)
                     else:
                         init = fits[name][k].reindex(columns=labels)
-                    if polish_method == 'alt':
+                    if polish_method == 'lm':
+                        from retsupp.modeling.joint_lm import polish_lm
+                        pars, info = polish_lm(m_tr, y_tr, train['paradigm'], init, free_sh, free_pv,
+                                               bounds=raw_bounds(m_tr, init, free_sh) if bounded else None,
+                                               max_iter=polish_lm_iter, ftol=polish_lm_ftol)
+                        if warm_info is not None:
+                            info['warm_start'] = warm_info
+                    elif polish_method == 'alt':
                         pars, info = polish_alternating(m_tr, y_tr, train['paradigm'], init, free_sh, fixed,
                                                         shared, bounded=bounded, rounds=polish_rounds,
                                                         max_iter=polish_max_iter,
@@ -1215,9 +1228,14 @@ if __name__ == '__main__':
     ap.add_argument('--polish-models', nargs='+', default=None,
                     help='With --polish: refit only these models with all parameters free (default: every model '
                          'fitted or loaded).')
-    ap.add_argument('--polish-method', choices=['lbfgs', 'alt'], default='lbfgs',
+    ap.add_argument('--polish-method', choices=['lbfgs', 'alt', 'lm'], default='lbfgs',
                     help='lbfgs: one L-BFGS over all parameters; alt: alternate Adam on the pRFs and L-BFGS on the '
-                         'shared terms (robust to float32 gradient noise).')
+                         'shared terms (robust to float32 gradient noise); lm: joint Levenberg-Marquardt over pRFs '
+                         'and shared terms with the per-voxel blocks eliminated by the Schur complement (joint_lm).')
+    ap.add_argument('--polish-lm-iter', type=int, default=300, help='LM polish: maximum iterations.')
+    ap.add_argument('--polish-lm-ftol', type=float, default=1e-10,
+                    help='LM polish: stop after 3 accepted steps that each lower training SSE by less than this '
+                         '(relative).')
     ap.add_argument('--polish-suffix', default='_polished', help='Suffix of the polish root (tests).')
     ap.add_argument('--polish-rounds', type=int, default=2, help='Alternating polish: rounds (maximum with --polish-tol).')
     ap.add_argument('--polish-tol', type=float, default=0.0,
@@ -1274,4 +1292,5 @@ if __name__ == '__main__':
          hrf_table=a.hrf_table, frozen_prf=a.frozen_prf, polish_models=a.polish_models,
          polish_method=a.polish_method, polish_suffix=a.polish_suffix, polish_tol=a.polish_tol,
          polish_rounds=a.polish_rounds, polish_max_iter=a.polish_max_iter,
+         polish_lm_iter=a.polish_lm_iter, polish_lm_ftol=a.polish_lm_ftol,
          selection_table=a.selection_table, min_r=a.min_r, max_p=a.max_p, warm_polish_root=a.warm_polish_root)
