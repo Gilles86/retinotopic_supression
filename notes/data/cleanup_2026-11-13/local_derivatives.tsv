@@ -1,0 +1,84 @@
+folder	status	gb	last_modified	on_cluster	reason	action
+fmriprep	KEEP	75.388	2026-11-06	yes	fMRIPrep 25.2.3 outputs (incl. FreeSurfer); pipeline stage in PAPER_REPRODUCTION.md; days of compute	keep (cluster copy is canonical; the local copy can go when not needed for local work)
+cleaned	KEEP	57.141	2025-11-02	yes	confound-cleaned BOLD, input to every fit; not on g_econ	keep (cluster copy is canonical; the local copy can go when not needed for local work)
+mean_signal	KEEP	29.107	2025-11-07	yes	mean time series (pipeline stage, PAPER_REPRODUCTION.md)	keep (cluster copy is canonical; the local copy can go when not needed for local work)
+prf	KEEP	9.787	2026-11-05	yes	whole-brain pRF fits m1-m6 (GPU sweep; Fig. 2 inputs, CLAUDE.md QC); expensive	keep (cluster copy is canonical; the local copy can go when not needed for local work)
+paper_2026-11	KEEP	0.031	2026-11-10	yes	PAPER_REPRODUCTION.md, rt_links_rerun.sh / regenerate_reference.sh (roi_hrf_dog_final2.tsv), writing packages	keep
+freesurfer	KEEP	0.0	-	no	symlink into fmriprep/sourcedata/freesurfer	keep
+glmsingle	SUPERSEDED	45.87	2026-05-09	yes	GLMsingle (archived 2026-11-12: not in the paper)	backup to g_econ (permanent) or delete; recompute is hours/subject
+prf_regressed_out	SUPERSEDED	19.474	2025-11-07	yes	input of the eccentric GLM only (not in the paper); reproducible from cleaned + m4 via eccentric_glm/clean_data.py	delete
+eccentric_glm	SUPERSEDED	7.228	2026-01-09	yes	eccentric GLM: not in PAPER_REPRODUCTION.md / the paper	backup the small summary, delete the rest
+decoded	SUPERSEDED	5.669	2026-05-15	yes	decoded_final_2026-11 (decode_final.py); May 2026 VSS decoding	delete (VSS-era; reproducible with decode.py)
+prf_conditionfit	SUPERSEDED	2.212	2026-05-07	yes	archived conditionwise pRF shifts (archive/conditionwise_shifts/README)	backup to g_econ, then delete
+prf_conditionfit.bak	SUPERSEDED	0.889	2026-01-09	yes	backup copy of a superseded or rerun folder	delete
+af_prf_cv_ladder_nested_bounded	SUPERSEDED	0.668	2026-11-01	yes	..._maxsd20_{,dn_,gauss_}reliable_roihrf (final2) and its _polished refit; earlier October-November ladder generations (CV-ladder verdict era)	delete
+prf_runfit	SUPERSEDED	0.54	2025-09-06	no	per-run pRF fits (2025); runwise analyses not in the paper; not on the cluster	copy to cluster or g_econ first, then delete locally
+af_prf_cv_ladder_nested_run3_bounded	SUPERSEDED	0.462	2026-11-05	yes	..._maxsd20_{,dn_,gauss_}reliable_roihrf (final2) and its _polished refit; earlier October-November ladder generations (CV-ladder verdict era)	delete
+prf_summaries.conditionwise	SUPERSEDED	0.455	2026-01-14	no	archived conditionwise shifts (README says data left in place); not on the cluster	backup to g_econ, then delete locally
+attention_model	SUPERSEDED	0.361	2026-01-19	no	archived conditionwise attention models (Jan 2026); not on the cluster	backup to g_econ, then delete locally
+prf_summaries.conditionwise.bak	SUPERSEDED	0.249	2026-01-09	no	backup of the above	delete
+stimulus_rois	SUPERSEDED	0.248	2026-01-09	yes	eccentric GLM: not in PAPER_REPRODUCTION.md / the paper	backup the small summary, delete the rest
+prf_summaries.runwise	SUPERSEDED	0.167	2025-09-07	no	runwise summaries (2025), not in the paper; not on the cluster	backup or delete
+af_prf_cv_ladder_nested	SUPERSEDED	0.162	2026-11-02	yes	..._maxsd20_{,dn_,gauss_}reliable_roihrf (final2) and its _polished refit; earlier October-November ladder generations (CV-ladder verdict era)	delete
+af_fixed_group_mechanisms_dn	SUPERSEDED	0.143	2026-11-03	yes	af_fixed_group_mechanisms_final2_2026-11 (+ linear_session*, split models in gain_field_parameters_final2; HP-rotation null archived). collect_conditional_estimates.py default still names _maxsd20	delete
+af_fixed_group_mechanisms_maxsd20	SUPERSEDED	0.142	2026-11-03	yes	af_fixed_group_mechanisms_final2_2026-11 (+ linear_session*, split models in gain_field_parameters_final2; HP-rotation null archived). collect_conditional_estimates.py default still names _maxsd20	delete
+af_fixed_group_mechanisms	SUPERSEDED	0.142	2026-11-02	yes	af_fixed_group_mechanisms_final2_2026-11 (+ linear_session*, split models in gain_field_parameters_final2; HP-rotation null archived). collect_conditional_estimates.py default still names _maxsd20	delete
+glmsingle_summaries	SUPERSEDED	0.089	2026-10-26	no	GLMsingle summaries (archived 2026-11-12); not on the cluster	keep small copy or backup
+af_fixed_group_exact_dn	SUPERSEDED	0.066	2026-11-04	yes	*_final2_2026-11 versions (note: fig3_collect_loso.py default still names these)	delete
+af_fixed_group_exact_dog	SUPERSEDED	0.066	2026-11-04	yes	*_final2_2026-11 versions (note: fig3_collect_loso.py default still names these)	delete
+af_fixed_group_gain	SUPERSEDED	0.037	2026-11-02	yes	archived fixed-group gain (archive/paper_cleanup_2026-11-12)	delete
+af_prf_joint_dynamic_v3_dog	SUPERSEDED	0.035	2026-05-07	no	archived AF (May 2026); local only	delete
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_allSharedSigma_pSig0.5	SUPERSEDED	0.032	2026-05-15	yes	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_pSig0.5	SUPERSEDED	0.032	2026-05-19	yes	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_repeat	SUPERSEDED	0.03	2026-05-08	yes	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)
+af_prf_joint_dynamic_v2	SUPERSEDED	0.029	2026-05-07	no	archived AF (May 2026); local only	delete
+prf_figures	SUPERSEDED	0.028	2026-05-10	no	old pRF figures (May 2026); local only	delete
+af_prf_joint_dynamic_v3_dog_neutralsigma	SUPERSEDED	0.026	2026-05-08	yes	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)
+v1_decode_handoffs	SUPERSEDED	0.026	2026-05-12	yes	decoded_final_2026-11 (decode_final.py); May 2026 VSS decoding	delete (VSS-era; reproducible with decode.py)
+af_prf_cv_ladder	SUPERSEDED	0.025	2026-10-29	yes	..._maxsd20_{,dn_,gauss_}reliable_roihrf (final2) and its _polished refit; earlier October-November ladder generations (CV-ladder verdict era)	delete
+af_prf_joint_full	SUPERSEDED	0.025	2026-05-07	no	archived AF (May 2026); local only	delete
+af_prf_joint_dynamic_v3	SUPERSEDED	0.022	2026-05-07	no	archived AF (May 2026); local only	delete
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_pSig0.5_base-m6	SUPERSEDED	0.021	2026-05-19	yes	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_sharedDynGain_pSig0.5	SUPERSEDED	0.019	2026-05-14	yes	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma	SUPERSEDED	0.015	2026-05-11	yes	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)
+af_prf_joint_dynamic_v3_gaussian_with_target_sharedSigma	SUPERSEDED	0.014	2026-05-11	yes	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)
+af_fixed_group_exact_dog_DonT	SUPERSEDED	0.012	2026-11-07	yes	exploratory variant; LOSO tables come from *_final2_2026-11	delete
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_pSig0.5_apt0.5	SUPERSEDED	0.012	2026-05-14	yes	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_pSig0.95	SUPERSEDED	0.011	2026-05-14	yes	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)
+af_prf_joint_dynamic_v3_gaussian_with_target_allSharedSigma	SUPERSEDED	0.01	2026-05-11	yes	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_pSig0.95_apt0.5	SUPERSEDED	0.008	2026-05-14	yes	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)
+af_learning_gains_nested	SUPERSEDED	0.006	2026-11-01	yes	archived learning-gain models (paper_cleanup README)	delete
+eccentric_glm_summary	SUPERSEDED	0.005	2026-01-19	yes	eccentric GLM: not in PAPER_REPRODUCTION.md / the paper	backup the small summary, delete the rest
+sim_refit	SUPERSEDED	0.005	2026-05-18	yes	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)
+figures	SUPERSEDED	0.003	2025-09-10	yes	stray / empty	delete
+prf_cv_roi_bench_cpu16	SUPERSEDED	0.003	2026-11-02	yes	benchmark / debug / smoke output	delete
+af_trialwise_gains	SUPERSEDED	0.002	2026-10-19	yes	af_trialwise_gains_signal_se_2026-11 (and the _polished versions)	delete
+af_prf_cv_ladder_nested_bounded_polished	SUPERSEDED	0.001	2026-10-31	yes	..._maxsd20_{,dn_,gauss_}reliable_roihrf (final2) and its _polished refit; earlier October-November ladder generations (CV-ladder verdict era)	delete
+af_prf_cv_ladder_nested_canary_sigtied	SUPERSEDED	0.001	2026-11-09	yes	canary / test run	delete
+af_dn_vs_dog_check	SUPERSEDED	0.0	-	no	empty check folder	delete
+af_prf_cv_shiftvsgain	SUPERSEDED	0.0	2026-05-31	yes	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)
+af_prf_joint_poc	SUPERSEDED	0.0	2026-05-07	no	archived AF proof of concept; local only	delete
+af_prf_klein_shift_6sigma_sharedSigma_pSig0.5	SUPERSEDED	0.0	2026-05-21	yes	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)
+prf.debug	SUPERSEDED	0.0	2026-05-11	no	debug output	delete
+smoke_cv_run3	SUPERSEDED	0.0	2026-10-27	no	smoke test	delete
+prf.hrffix	UNKNOWN	0.14	2026-11-04	yes	read by retsupp/visualize/pycortex/render_fig1_prf.py; check whether any Fig. 2 render still uses it	author to decide
+prf_roi_cache	UNKNOWN	0.111	2026-11-06	yes	Subject.get_prf_roi cache (utils/data.py); regenerable	author to decide
+prf_summaries	UNKNOWN	0.067	2026-01-06	no	PRF summary tables (summarize_prf.py; CLAUDE.md QC); not on the cluster	copy to cluster first
+prf_diagnostics	UNKNOWN	0.005	2026-11-05	yes	R2-mixture p_signal maps (compute_r2_mixture.py); user no longer uses p_signal for selection	author to decide
+behavior	UNKNOWN	0.0	2026-01-19	no	tiny (Jan 2026); local only	author to decide
+logs	UNKNOWN	0.0	2025-09-05	no	tiny logs (Sep 2025)	author to decide
+volume_masks	UNKNOWN	0.0	2025-09-15	no	tiny (Sep 2025); local only	author to decide
+prf_cv_roi	USED	0.311	2026-11-03	yes	pRF CV fits per ROI (decode_final.py, voxel_reliability_null.py, fit_prf_cv_roi_hrf_joint.py)	keep
+af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf	USED	0.033	2026-11-09	yes	PAPER_REPRODUCTION.md (BASE_ROOT, final fits of update 4); key_numbers update4/8	keep
+prf_cv_roi_reliability	USED	0.021	2026-11-03	yes	reliable voxels (PAPER_REPRODUCTION.md stage)	keep
+af_prf_cv_ladder_nested_full_bounded_maxsd20_relnull_r0.2_roihrf_polished	USED	0.02	2026-11-12	yes	regenerate_reference.sh example, voxel_selection_robustness, WPKG update8	keep
+af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf_polished	USED	0.018	2026-11-12	yes	PAPER_REPRODUCTION.md reference fit (update 8); regenerate_reference.sh / rt_links_rerun.sh REF_ROOT	keep
+af_trialwise_gains_ownvox10_relnull_r0.1_polished_2026-11-13	USED	0.008	2026-11-13	yes	rt_links_robustness_2026-11-12.md (figS_fig7_relnull_r01)	keep
+af_trialwise_gains_ownvox10_relnull_r0.2_polished_2026-11-13	USED	0.008	2026-11-13	yes	rt_links_robustness_2026-11-12.md (figS_fig7_relnull_r02)	keep
+af_trialwise_gains_ownvox10_polished_2026-11-12	USED	0.007	2026-11-12	yes	rt_links_robustness_2026-11-12.md	keep
+af_trialwise_gains_signal_se_polished_2026-11-12	USED	0.007	2026-11-12	yes	new Fig. 7 (rt_links_robustness_2026-11-12.md, rt_links_rerun.sh)	keep
+field_widths_reliable_2026-11-12	USED	0.007	2026-11-12	yes	field_widths_reliable_2026-11-12.md, WPKG update4 (widths, fixed pRFs)	keep
+baseline_vs_gain_2026-11-12	USED	0.006	2026-11-12	yes	baseline_vs_gain_2026-11-12.md, WPKG, figS_baseline_vs_gain.py	keep
+prf_v1_resolution_2026-11-12	USED	0.005	2026-11-12	yes	v1_prf_size_floor_2026-11-12.md	keep
+sim_prf_size_floor_2026-11-12	USED	0.002	2026-11-12	yes	v1_prf_size_floor_2026-11-12.md	keep
+prf_cv_roi_sharedhrf	USED	0.001	2026-11-06	yes	build_roi_hrf_table.py, decode_final.py	keep

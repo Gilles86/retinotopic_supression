@@ -1,0 +1,410 @@
+name	tracked	mb	last_modified	proposal	why	code	docs	figmd	notes
+fig3_voxel_scan/	1	0.1	2026-11-06	git mv to archive/paper_cleanup_2026-11-12/notes/data/	superseded intermediate (DCT / n = 30 / pre-SE / rotation-null / scan); no reference in kept code, PAPER_REPRODUCTION or packages	0	0	0	0
+fig3_example_voxel_scan_sub-15_V2_2026-11.tsv	1	0.01	2026-11-06	git mv to archive/paper_cleanup_2026-11-12/notes/data/	superseded intermediate (DCT / n = 30 / pre-SE / rotation-null / scan); no reference in kept code, PAPER_REPRODUCTION or packages	0	0	0	0
+fig3_example_voxel_scan_sub-21_V3AB_2026-11.tsv	1	0.01	2026-11-06	git mv to archive/paper_cleanup_2026-11-12/notes/data/	superseded intermediate (DCT / n = 30 / pre-SE / rotation-null / scan); no reference in kept code, PAPER_REPRODUCTION or packages	0	0	0	0
+fig3_example_voxel_scan_sub-21_V3_2026-11.tsv	1	0.01	2026-11-06	git mv to archive/paper_cleanup_2026-11-12/notes/data/	superseded intermediate (DCT / n = 30 / pre-SE / rotation-null / scan); no reference in kept code, PAPER_REPRODUCTION or packages	0	0	0	0
+fig3_example_voxel_scan_sub-21_hV4_2026-11.tsv	1	0.01	2026-11-06	git mv to archive/paper_cleanup_2026-11-12/notes/data/	superseded intermediate (DCT / n = 30 / pre-SE / rotation-null / scan); no reference in kept code, PAPER_REPRODUCTION or packages	0	0	0	0
+rt_bayes_distonly/	0	198.5	2026-10-27	delete (or archive)	untracked, 198 MB; read only by plot_trialwise_rt_bayes.py, not in PAPER_REPRODUCTION (Oct-fit Fig. 7 retired)	0	0	0	0
+prf_validity_summary_m6.tsv	0	36.87	2026-05-11	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+sim_refit_cache/	0	30.18	2026-05-18	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+prf_validity_summary_m1.tsv	0	19.83	2026-05-14	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+prf_validity_summary_m3.tsv	0	19.51	2026-05-14	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+prf_validity_summary_m5.tsv	0	17.46	2026-05-11	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+prf_validity_summary_m2.tsv	0	14.48	2026-05-14	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+sim_refit_8subs.tsv	0	5.42	2026-05-18	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+trialwise_af_bins.tsv	0	3.67	2026-10-19	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+trialwise_af_runfit.tsv	0	1.6	2026-10-19	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+af_fits_all_latest.tsv	0	0.88	2026-05-14	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+af_fits_all.tsv	0	0.41	2026-05-11	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+trialwise_af_cv.tsv	0	0.35	2026-10-19	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+cond_frozen_hrf_test.tsv	0	0.34	2026-05-20	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+af_dog_v3_target_allSharedSigma_parameters.tsv	0	0.09	2026-05-15	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+af_results_REPEAT.tsv	0	0.09	2026-05-11	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+af_shared_params_by_subject.tsv	0	0.08	2026-10-27	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+repeat_af_fits_shared_params.tsv	0	0.08	2026-10-19	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+trialwise_af_check.tsv	0	0.08	2026-10-19	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+af_gauss_v3_target_sharedSigma_parameters.tsv	0	0.07	2026-05-15	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+af_results_DOG_m4_NEW_all.tsv	0	0.07	2026-05-11	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+sim_refit_vs_analytic_sub-03_V1.tsv	0	0.06	2026-05-18	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+af_results_GAUSS_partial.tsv	0	0.05	2026-05-11	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+af_results_NEUTRAL.tsv	0	0.05	2026-05-11	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+af_dog_v3_target_sharedSigma_pSig0.95_apt0.5_parameters.tsv	0	0.04	2026-05-14	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+af_dog_v3_target_sharedSigma_pSig0.95_parameters.tsv	0	0.04	2026-05-14	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+af_results_DOG_m4_NEW.tsv	0	0.04	2026-05-11	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+sim_refit_sub-03_V1.tsv	0	0.03	2026-05-18	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+matched_voxel_threshold_sweep.tsv	0	0.02	2026-05-09	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+trialwise_af_multcomp.tsv	0	0.02	2026-10-19	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+fig3_example_voxel_scan_sub-03_V2_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-03_V3AB_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-03_V3_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-03_hV4_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-08_V2_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-08_V3AB_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-08_V3_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-13_V2_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-13_V3AB_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-13_V3_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-13_hV4_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-14_V2_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-14_V3_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-14_hV4_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-15_V3AB_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-15_V3_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-15_hV4_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-17_V2_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-17_V3AB_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-17_V3_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-17_hV4_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-19_V2_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-19_V3AB_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-19_V3_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-19_hV4_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-21_V2_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-23_V2_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-23_V3AB_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-23_V3_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+fig3_example_voxel_scan_sub-23_hV4_2026-11.tsv	0	0.01	2026-11-06	delete	per-voxel scan scratch for the Fig. 3 example voxel choice	0	0	0	0
+model_signal_audit.tsv	0	0.0	2026-05-18	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+model_signal_audit_v2.tsv	0	0.0	2026-05-18	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+prf_surface_coverage.tsv	0	0.0	2026-05-11	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+repeat_rmanova_per_roi.tsv	0	0.0	2026-05-28	delete	May-October tables (old AF / sharedSigma, sim_refit, pRF validity m1-m6, old trial-wise AF); not read by any kept script	0	0	0	0
+event_deconv_relative_dct_final2_2026-11/	1	19.86	2026-11-10	git mv to archive/paper_cleanup_2026-11-12/notes/data/	superseded intermediate (DCT / n = 30 / pre-SE / rotation-null / scan); no reference in kept code, PAPER_REPRODUCTION or packages	0	0	0	0
+trialwise_signal_2026-11/	1	13.48	2026-11-10	git mv to archive/paper_cleanup_2026-11-12/notes/data/	superseded intermediate (DCT / n = 30 / pre-SE / rotation-null / scan); no reference in kept code, PAPER_REPRODUCTION or packages	0	0	0	0
+bar_items_joint_2026-11/	1	9.14	2026-11-07	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+event_deconv_dct_final2_2026-11/	1	8.85	2026-11-10	git mv to archive/paper_cleanup_2026-11-12/notes/data/	superseded intermediate (DCT / n = 30 / pre-SE / rotation-null / scan); no reference in kept code, PAPER_REPRODUCTION or packages	0	0	0	0
+trialwise_final2_2026-11/	1	5.49	2026-11-10	git mv to archive/paper_cleanup_2026-11-12/notes/data/	superseded intermediate (DCT / n = 30 / pre-SE / rotation-null / scan); no reference in kept code, PAPER_REPRODUCTION or packages	0	0	0	0
+event_deconv_nearest_dct_2026-11/	1	2.74	2026-11-07	git mv to archive/paper_cleanup_2026-11-12/notes/data/	superseded intermediate (DCT / n = 30 / pre-SE / rotation-null / scan); no reference in kept code, PAPER_REPRODUCTION or packages	0	0	0	0
+loso_exact_robust_final2_2026-11.tsv	1	0.64	2026-11-10	git mv to archive/paper_cleanup_2026-11-12/notes/data/	superseded intermediate (DCT / n = 30 / pre-SE / rotation-null / scan); no reference in kept code, PAPER_REPRODUCTION or packages	0	0	0	0
+fig3_voxel_selection_n28_2026-11-12_cells.tsv	1	0.32	2026-11-13	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+loso_exact_final2_vslow_2026-11.tsv	1	0.32	2026-11-10	git mv to archive/paper_cleanup_2026-11-12/notes/data/	superseded intermediate (DCT / n = 30 / pre-SE / rotation-null / scan); no reference in kept code, PAPER_REPRODUCTION or packages	0	0	0	0
+loso_linear_final2_2026-11.tsv	1	0.32	2026-11-10	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+loso_exact_final2_2026-11.tsv	1	0.29	2026-11-10	git mv to archive/paper_cleanup_2026-11-12/notes/data/	superseded intermediate (DCT / n = 30 / pre-SE / rotation-null / scan); no reference in kept code, PAPER_REPRODUCTION or packages	0	0	0	0
+field_widths_reliable_polished_2026-11-12_n28_fits.tsv	1	0.18	2026-11-12	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+loso_per_roi_final2_2026-11.tsv	1	0.14	2026-11-10	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+conditional_dS_rotation_null_2026-11.tsv	1	0.13	2026-11-07	git mv to archive/paper_cleanup_2026-11-12/notes/data/	superseded intermediate (DCT / n = 30 / pre-SE / rotation-null / scan); no reference in kept code, PAPER_REPRODUCTION or packages	0	0	0	0
+hrf_comparison_2026-11.tsv	1	0.12	2026-11-06	git mv to archive/paper_cleanup_2026-11-12/notes/data/	superseded intermediate (DCT / n = 30 / pre-SE / rotation-null / scan); no reference in kept code, PAPER_REPRODUCTION or packages	0	0	0	0
+voxel_selection_candidates_2026-11.tsv	1	0.1	2026-11-05	git mv to archive/paper_cleanup_2026-11-12/notes/data/	superseded intermediate (DCT / n = 30 / pre-SE / rotation-null / scan); no reference in kept code, PAPER_REPRODUCTION or packages	0	0	0	0
+gain_field_parameters_relnull_r0.1_polished_2026-11-13.tsv	1	0.09	2026-11-13	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+gain_field_parameters_relnull_r0.2_polished_2026-11-13.tsv	1	0.08	2026-11-13	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+conditional_dS_oddeven_2026-11.tsv	1	0.06	2026-11-07	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+conditional_dS_sessions_2026-11.tsv	1	0.06	2026-11-07	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+baseline_vs_gain_step1_n28_2026-11-12_per_location.tsv	1	0.04	2026-11-12	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+hierarchy_slopes_final2_2026-11.tsv	1	0.04	2026-11-10	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+hierarchy_slopes_polished_2026-11-12_n28.tsv	1	0.04	2026-11-12	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+baseline_vs_gain_step1_n28_2026-11-12_per_roi.tsv	1	0.02	2026-11-12	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+fig3_voxel_selection_n28_2026-11-12_voxels.tsv	1	0.02	2026-11-13	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+hrf_by_roi_2026-11.tsv	1	0.02	2026-11-05	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+trialwise_rt_bayes_hp_2026-11/	1	0.02	2026-11-06	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+conditional_estimates_dS_relnull_r0.1_polished_2026-11-13.tsv	1	0.01	2026-11-13	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+conditional_estimates_dS_relnull_r0.2_polished_2026-11-13.tsv	1	0.01	2026-11-13	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+fig3_voxel_scan_2026-11.tsv	1	0.01	2026-11-06	git mv to archive/paper_cleanup_2026-11-12/notes/data/	superseded intermediate (DCT / n = 30 / pre-SE / rotation-null / scan); no reference in kept code, PAPER_REPRODUCTION or packages	0	0	0	0
+joint_dT_dog_2026-11.tsv	1	0.01	2026-11-07	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+kappa_neighbour_2026-11_fits.tsv	1	0.01	2026-11-10	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+trialwise_rt_bayes_summary_davg_final2_2026-11.tsv	1	0.01	2026-11-10	git mv to archive/paper_cleanup_2026-11-12/notes/data/	superseded intermediate (DCT / n = 30 / pre-SE / rotation-null / scan); no reference in kept code, PAPER_REPRODUCTION or packages	0	0	0	0
+trialwise_rt_bayes_summary_davg_signal_2026-11.tsv	1	0.01	2026-11-10	git mv to archive/paper_cleanup_2026-11-12/notes/data/	superseded intermediate (DCT / n = 30 / pre-SE / rotation-null / scan); no reference in kept code, PAPER_REPRODUCTION or packages	0	0	0	0
+dS_by_sensitivity_2026-11.tsv	1	0.0	2026-11-06	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+dn_by_hp_stats_2026-11_radial.tsv	1	0.0	2026-11-09	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+dog_cs_field_2026-11_tests.tsv	1	0.0	2026-11-11	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+dog_cs_field_full_2026-11_tests.tsv	1	0.0	2026-11-11	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+field_widths_reliable_n28_2026-11-12_volume.tsv	1	0.0	2026-11-12	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+field_widths_reliable_polished_2026-11-12_n28_volume.tsv	1	0.0	2026-11-12	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+fig3_voxel_selection_n28_2026-11-12_stats.tsv	1	0.0	2026-11-13	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+fig5_gain_field_map_parameters_n28_2026-11-12_v11.tsv	1	0.0	2026-11-12	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+loso_per_step_final2_2026-11.tsv	1	0.0	2026-11-10	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+split_models_final2_2026-11.tsv	1	0.0	2026-11-10	keep (check)	no exact-name reference, but dated 2026-11 and probably written by a kept script under a templated name (regenerate_reference.sh, rt_links_rerun.sh, fig scripts); keep unless the author knows otherwise	0	0	0	0
+n28/	1	255.66	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	1	1
+trialwise_meta_bayes_2026-11/	1	243.75	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	0
+trialwise_meta_bayes_ownvox10_relnull_r0.1_polished_2026-11-13/	1	240.35	2026-11-13	keep	written and read by rt_links_rerun.sh (shell-templated name); rt_links_robustness note	0	0	0	0
+trialwise_meta_bayes_ownvox10_relnull_r0.2_polished_2026-11-13/	1	234.04	2026-11-13	keep	written and read by rt_links_rerun.sh (shell-templated name); rt_links_robustness note	0	0	0	0
+trialwise_meta_bayes_excl0102_2026-11/	1	229.84	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	1	1
+trialwise_meta_bayes_signal_se_polished_2026-11-12/	1	229.84	2026-11-13	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+trialwise_meta_bayes_ownvox10_polished_2026-11-12/	1	225.66	2026-11-13	keep	written and read by rt_links_rerun.sh (shell-templated name); rt_links_robustness note	0	0	0	0
+kappa_neighbour_2026-11/	0	62.09	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	1
+prf_dn_params_summary.tsv	0	58.04	2026-05-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+event_deconv_distance_2026-11/	1	57.34	2026-11-07	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+prf_dog_params_summary.tsv	0	41.34	2026-05-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+prf_coverage_summary.tsv	0	29.9	2026-05-08	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+event_deconv_relative_relnull_r0.1_2026-11-12/	1	26.76	2026-11-13	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+event_deconv_relative_relnull_r0.2_2026-11-12/	1	22.09	2026-11-13	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+event_deconv_relative_2026-11/	1	20.41	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+event_deconv_relative_dct_2026-11/	1	20.39	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+event_deconv_relative_final2_2026-11/	1	20.04	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	1
+event_deconv_relative_polished_2026-11-12/	1	18.97	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+location_timeseries_2026-11/	0	18.18	2026-11-06	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+event_deconv_terms_pred_2026-11-11_nohp/	0	18.03	2026-11-11	keep	inputs of richter_followup.py (names built in code); richter note	0	0	0	0
+event_deconv_terms_pred_2026-11-11_S/	0	18.02	2026-11-11	keep	inputs of richter_followup.py (names built in code); richter note	0	0	0	0
+event_deconv_terms_pred_2026-11-11_SD/	0	18.02	2026-11-11	keep	inputs of richter_followup.py (names built in code); richter note	0	0	0	0
+event_deconv_terms_pred_2026-11-11_SDT/	0	18.02	2026-11-11	keep	inputs of richter_followup.py (names built in code); richter note	0	0	0	0
+event_deconv_terms_pred_2026-11-11_SDT0/	0	18.02	2026-11-11	keep	inputs of richter_followup.py (names built in code); richter note	0	0	0	0
+prf_validity_summary.tsv	0	17.5	2026-05-14	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+dn_by_hp_2026-11.tsv.gz	1	13.82	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+af_fixed_group_linear_session1_2026-11-11/	0	11.31	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+af_fixed_group_linear_session2_2026-11-11/	0	11.31	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_frames_canonical_2026-11.npz	1	9.63	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+event_deconv_relative_final2_split_2026-11-11_block1/	0	9.39	2026-11-11	keep	inputs of richter_followup.py (names built in code); richter note	0	0	0	0
+event_deconv_relative_final2_split_2026-11-11_block2/	0	9.39	2026-11-11	keep	inputs of richter_followup.py (names built in code); richter note	0	0	0	0
+event_deconv_relative_final2_split_2026-11-11_ses2/	0	9.39	2026-11-11	keep	inputs of richter_followup.py (names built in code); richter note	0	0	0	0
+event_deconv_relative_final2_split_2026-11-11_ses1/	0	9.38	2026-11-11	keep	inputs of richter_followup.py (names built in code); richter note	0	0	0	0
+event_deconv_2026-11/	1	9.11	2026-11-06	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	1	0
+event_deconv_dct_2026-11/	1	9.1	2026-11-07	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+event_deconv_final2_2026-11/	1	8.94	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	1
+decoding_bands_gauss_jointhrf_2026-11.tsv.gz	1	8.52	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_bands_dn_jointhrf_2026-11.tsv.gz	1	8.5	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_bands_dog_roihrf_2026-11.tsv.gz	1	8.5	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_bands_dn_roihrf_2026-11.tsv.gz	1	8.49	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_bands_jointhrf_2026-11.tsv.gz	1	8.48	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoded_bars_condition_jointhrf_2026-11.npz	1	7.55	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+trialwise_signal_se_2026-11/	1	5.82	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+trialwise_ownvox10_relnull_r0.1_polished_2026-11-13/	1	5.78	2026-11-13	keep	written and read by rt_links_rerun.sh (shell-templated name); rt_links_robustness note	0	0	0	0
+trialwise_ownvox10_relnull_r0.2_polished_2026-11-13/	1	5.56	2026-11-13	keep	written and read by rt_links_rerun.sh (shell-templated name); rt_links_robustness note	0	0	0	0
+trialwise_signal_se_polished_2026-11-12/	1	5.42	2026-11-12	keep	written and read by rt_links_rerun.sh (shell-templated name); rt_links_robustness note	0	0	0	0
+decoded_model_pred_2026-11/	1	5.39	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+trialwise_ownvox10_polished_2026-11-12/	1	5.25	2026-11-13	keep	written and read by rt_links_rerun.sh (shell-templated name); rt_links_robustness note	0	0	0	0
+event_deconv_relative_final2_split_2026-11-11_s2b1/	0	4.7	2026-11-11	keep	inputs of richter_followup.py (names built in code); richter note	0	0	0	0
+event_deconv_relative_final2_split_2026-11-11_s1b1/	0	4.69	2026-11-11	keep	inputs of richter_followup.py (names built in code); richter note	0	0	0	0
+event_deconv_relative_final2_split_2026-11-11_s1b2/	0	4.69	2026-11-11	keep	inputs of richter_followup.py (names built in code); richter note	0	0	0	0
+event_deconv_relative_final2_split_2026-11-11_s2b2/	0	4.69	2026-11-11	keep	inputs of richter_followup.py (names built in code); richter note	0	0	0	0
+decode_simfit_readout_2026-11.tsv	1	4.08	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_maps_dog_roihrf_2026-11.npz	1	3.83	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_maps_jointhrf_2026-11.npz	1	3.83	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	0
+decoding_maps_dn_roihrf_2026-11.npz	1	3.81	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_maps_jointhrf_relnull_r0.2_2026-11.npz	0	3.81	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+trialwise_af_trial_table.tsv.gz	0	3.73	2026-10-20	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	1
+decoded_bars_jointhrf_2026-11.npz	1	3.64	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_bands_canonical_2026-11.tsv.gz	1	3.41	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decode_sim_2026-11.tsv	1	3.38	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+decode_simfit_bands_2026-11.tsv.gz	1	3.14	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+trialwise_af_rt_betas.tsv	0	2.89	2026-10-20	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_readout_jointhrf_relnull_r0.1_2026-11.tsv	1	2.82	2026-11-13	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+fsaverage_roi_flatmap.npz	1	2.81	2026-10-20	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+event_deconv_nearest_2026-11/	0	2.74	2026-11-07	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+event_deconv_nearest_final2_2026-11/	1	2.73	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	0
+decoding_readout_jointhrf_relnull_r0.2_2026-11.tsv	1	2.52	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_readout_gauss_jointhrf_2026-11.tsv	1	2.28	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_readout_dn_jointhrf_2026-11.tsv	1	2.22	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_readout_dog_roihrf_2026-11.tsv	1	2.2	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_readout_dn_roihrf_2026-11.tsv	1	2.18	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_readout_jointhrf_2026-11.tsv	1	2.16	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+event_average_2026-11/	0	2.0	2026-11-06	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+prf_cv_roi_summary.tsv	1	1.99	2026-11-03	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	1
+fig3_event_average/	1	1.6	2026-11-06	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+decoding_example_subjects_jointhrf_2026-11.npz	1	1.52	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_maps_canonical_2026-11.npz	1	1.49	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+gain_field_parameters_final2_2026-11.tsv	1	1.3	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	1
+gain_field_parameters_polished_2026-11-12.tsv	1	1.29	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	0
+decoding_readout_jointhrf_relnull_r0.2_pooled_2026-11.tsv	1	1.26	2026-11-13	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+prf_jointhrf_summary_final2_2026-11.tsv	1	1.18	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	1
+decoding_quality_jointhrf_relnull_r0.1_2026-11.tsv	1	1.16	2026-11-13	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_readout_jointhrf_pooled_2026-11.tsv	1	1.07	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	1
+decoding_frames_dn_roihrf_2026-11.npz	1	1.04	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_quality_jointhrf_relnull_r0.2_2026-11.tsv	1	1.04	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoded_bars_segments_jointhrf_outline_b11_2026-11.tsv	1	1.03	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+decoding_frames_jointhrf_2026-11.npz	1	1.02	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	1	0	0
+decoding_quality_gauss_jointhrf_2026-11.tsv	1	1.0	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_quality_dn_jointhrf_2026-11.tsv	1	0.99	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_quality_dn_roihrf_2026-11.tsv	1	0.98	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_quality_dog_roihrf_2026-11.tsv	1	0.98	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_quality_jointhrf_2026-11.tsv	1	0.97	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_maps_decode_simfit_control_2026-11.npz	1	0.95	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_maps_decode_simfit_model_2026-11.npz	1	0.95	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_readout_canonical_2026-11.tsv	1	0.88	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_example_run_canonical_2026-11.npz	1	0.76	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_example_run_jointhrf_2026-11.npz	1	0.72	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+dog_cs_field_signatures_2026-11.tsv	1	0.7	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+decoded_bars_condition_dn_roihrf_outline_2026-11.npz	1	0.65	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoded_bars_condition_jointhrf_outline_2026-11.npz	1	0.65	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoded_bars_condition_decode_simfit_control_outline_2026-11.npz	1	0.6	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoded_bars_condition_decode_simfit_model_outline_2026-11.npz	1	0.6	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoded_bars_condition_jointhrf_relnull_r0.1_outline_2026-11.npz	1	0.6	2026-11-13	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoded_bars_condition_jointhrf_relnull_r0.2_outline_2026-11.npz	1	0.6	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_example_run_dn_roihrf_2026-11.npz	1	0.6	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+bar_pass_average_2026-11/	0	0.59	2026-11-06	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+decoded_bars_segments_jointhrf_outline_b7_2026-11.tsv	1	0.59	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	1	0	0
+dn_basefield_full_2026-11.tsv	1	0.58	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	1
+trialwise_af_parametric.tsv	0	0.58	2026-10-19	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_quality_jointhrf_relnull_r0.2_pooled_2026-11.tsv	1	0.53	2026-11-13	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_quality_jointhrf_pooled_2026-11.tsv	1	0.49	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+gain_field_parameters.tsv	1	0.48	2026-11-04	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	1
+fig1_prf_coverage.tsv	1	0.42	2026-11-05	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	1
+fig1_prf_coverage_final2.tsv	1	0.4	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	0
+decoding_quality_canonical_2026-11.tsv	1	0.39	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+dn_field_signatures_2026-11.tsv	1	0.39	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	1
+decode_simfit_quality_2026-11.tsv	1	0.37	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_frames_allrois_jointhrf_2026-11.npz	1	0.3	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+loso_exact_final2_excl0102_2026-11.tsv	1	0.3	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	1	1
+behaviour_trials_2026-11-11.tsv.gz	1	0.27	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	1
+dn_basefield_cv_2026-11.tsv	1	0.25	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	1
+dn_basefield_cv_complete_2026-11.tsv	1	0.25	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	0
+dn_basefield_recovery_2026-11.tsv	1	0.24	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	1
+loso_per_roi_2026-11.tsv	1	0.24	2026-11-07	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+prf_refit_2026-11-12_shared.tsv	1	0.24	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	1	0	1
+conditional_exact_final2_allfam_2026-11.tsv	1	0.21	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	1
+repeat_af_fits_params.tsv	0	0.2	2026-10-20	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+dog_cs_field_full_2026-11.tsv	1	0.19	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	0
+field_widths_reliable_n28_2026-11-12_fits.tsv	1	0.18	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+decoded_bars_segments_decode_simfit_outline_b7_2026-11.tsv	1	0.17	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+conditional_exact_dog_dn_2026-11.tsv	1	0.16	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+loso_kappa_dnw_2026-11.tsv	1	0.12	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+conditional_estimates_dog_2026-11.tsv	1	0.11	2026-11-06	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+conditional_estimates_dog_final2_2026-11.tsv	1	0.11	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	1
+decoded_bars_images_jointhrf_outline_b11_2026-11.npz	1	0.11	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+conditional_estimates_clampedcheck_2026-11-12.tsv	1	0.1	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+conditional_estimates_polished_2026-11-12.tsv	1	0.1	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	1
+dog_cs_field_2026-11.tsv	1	0.1	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+prf_refit_2026-11-12_prf_shift.tsv	1	0.09	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	1	0	1
+decoded_bars_images_jointhrf_outline_b7_2026-11.npz	1	0.08	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+trialwise_af_run_behavior.tsv	0	0.05	2026-10-19	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+af_dog_v3_target_parameters.tsv	1	0.04	2026-05-08	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+fig1_prf_sigma_final2.tsv	1	0.04	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	1	0	1
+hierarchy_slopes_2026-11.tsv	1	0.04	2026-11-06	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+loso_kappa_n28_2026-11-11.tsv	1	0.04	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+trialwise_af_parametric_stats.tsv	0	0.04	2026-10-19	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+af_dog_v3_target_sharedSigma_parameters.tsv	1	0.03	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+fig1_prf_sigma.tsv	1	0.03	2026-11-05	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	1	1
+prf_refit_group_2026-11-12.tsv	1	0.03	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	1
+reference_numbers_polished_2026-11-12_n28.tsv	1	0.03	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	1	0	0
+richter_A4_behaviour_history_cells_n28_2026-11-11.tsv	1	0.03	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	1
+richter_A4_behaviour_history_cells_n30_2026-11-11.tsv	1	0.03	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+v1_prf_size_floor_2026-11-12/	1	0.03	2026-11-13	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	1	0	1
+af_results.tsv	0	0.02	2026-05-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+fig3_item_location_blur_n28_2026-11-12.tsv	1	0.02	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	1
+fig3_robustness_n28_2026-11-12.tsv	1	0.02	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	1	1
+fig3_voxel_selection_n28_2026-11-12_abs_values.tsv	1	0.02	2026-11-13	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+hrf_comparison_jointhrf_final2_2026-11.tsv	1	0.02	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	1
+richter_A1_A2_split_values_n28_2026-11-11.tsv	1	0.02	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	1
+richter_A1_A2_split_values_n30_2026-11-11.tsv	1	0.02	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+sensitivity_excl0102_2026-11.tsv	1	0.02	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	1	1
+trialwise_af_bins_stats.tsv	0	0.02	2026-10-19	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+update2_numbers_n28_2026-11-12.tsv	1	0.02	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	0
+af_shared_params_summary.tsv	0	0.01	2026-10-27	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+conditional_dT_dog_2026-11.tsv	1	0.01	2026-11-07	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+decode_sim_summary_2026-11.tsv	1	0.01	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	1	0
+decode_sim_summary_2026-11_n28.tsv	1	0.01	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	1	1	0
+decoding_voxel_selection_2026-11.tsv	1	0.01	2026-11-13	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	1
+fig3_example_voxel_sub-03_V3_2026-11.tsv	0	0.01	2026-11-05	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+fig3_example_voxel_sub-13_hV4_2026-11.tsv	0	0.01	2026-11-05	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+fig3_example_voxel_sub-23_V3_2026-11.tsv	0	0.01	2026-11-05	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+fig3_robustness_values_n28_2026-11-12.tsv	1	0.01	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	1
+gain_field_parameter_stats.tsv	1	0.01	2026-11-04	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+reference_numbers_polished_2026-11-12_n28.md	1	0.01	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	1	0	0
+richter_A1_A2_carry_over_n28_2026-11-11.tsv	1	0.01	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	1
+richter_A1_A2_carry_over_n30_2026-11-11.tsv	1	0.01	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+richter_A1_carry_over_common_denominator_n28_2026-11-11.tsv	1	0.01	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	1	1
+richter_A1_carry_over_common_denominator_n30_2026-11-11.tsv	1	0.01	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+trialwise_af_intertrial_stats.tsv	0	0.01	2026-10-19	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+trialwise_af_mixed_stats.tsv	0	0.01	2026-10-20	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+trialwise_af_priming_stats.tsv	0	0.01	2026-10-19	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+trialwise_af_roigroup_stats.tsv	0	0.01	2026-10-19	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+trialwise_af_rt_betas_stats.tsv	0	0.01	2026-10-19	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+trialwise_af_runlevel_stats.tsv	0	0.01	2026-10-19	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+trialwise_af_sensitivity.tsv	0	0.01	2026-10-19	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+trialwise_rt_bayes_summary.tsv	0	0.01	2026-10-27	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+trialwise_rt_bayes_summary_davg_2026-11.tsv	1	0.01	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+baseline_vs_gain_change_n28_2026-11-12.tsv	1	0.0	2026-11-13	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+baseline_vs_gain_confusion_n28_2026-11-12.tsv	1	0.0	2026-11-13	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+baseline_vs_gain_confusion_per_sim_n28_2026-11-12.tsv	1	0.0	2026-11-13	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+baseline_vs_gain_step1_n28_2026-11-12.tsv	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	1
+baseline_vs_gain_terms_n28_2026-11-12.tsv	1	0.0	2026-11-13	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	1
+behaviour_accuracy_n28_2026-11-12.tsv	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	0
+behaviour_rt_2026-11.tsv	1	0.0	2026-11-05	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	1
+canonical_models.yml	1	0.0	2026-05-15	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+contralateral_final2_2026-11-11.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+cv_power_simulation_2026-11.tsv	1	0.0	2026-11-06	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+dS_pooled_by_pathway_n28_2026-11-12.tsv	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	0
+dS_pooled_by_pathway_n28_2026-11-12_v11.tsv	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_example_subjects_jointhrf_2026-11.tsv	1	0.0	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_prf_models_bands_2026-11.tsv	1	0.0	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_prf_models_bands_2026-11_defaultsrc_n28.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_prf_models_bands_2026-11_final2.tsv	1	0.0	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_prf_models_bands_2026-11_n28.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_prf_models_hp_2026-11.tsv	1	0.0	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_prf_models_hp_2026-11_defaultsrc_n28.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_prf_models_hp_2026-11_final2.tsv	1	0.0	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_prf_models_hp_2026-11_n28.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_prf_models_quadrants_2026-11.tsv	1	0.0	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	0
+decoding_prf_models_quadrants_2026-11_defaultsrc_n28.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_prf_models_quadrants_2026-11_final2.tsv	1	0.0	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_prf_models_quadrants_2026-11_n28.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	1	0	0
+decoding_prf_models_quality_2026-11.tsv	1	0.0	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_prf_models_quality_2026-11_defaultsrc_n28.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_prf_models_quality_2026-11_final2.tsv	1	0.0	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+decoding_prf_models_quality_2026-11_n28.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+discussion_behaviour_anova_n28_2026-11-12.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	1
+discussion_behaviour_by_block_n28_2026-11-12.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	1	1
+discussion_behaviour_trial_counts_n28_2026-11-12.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	1
+dn_by_hp_stats_2026-11.tsv	1	0.0	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	1	0
+field_widths_reliable_n28_2026-11-12_calibration.tsv	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+field_widths_reliable_n28_2026-11-12_claims_thr2.tsv	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+field_widths_reliable_n28_2026-11-12_claims_thr3.tsv	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+field_widths_reliable_n28_2026-11-12_legend.md	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+field_widths_reliable_n28_2026-11-12_tradeoff.tsv	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+field_widths_reliable_n28_2026-11-12_widths_thr2.tsv	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+field_widths_reliable_n28_2026-11-12_widths_thr3.tsv	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+field_widths_reliable_polished_2026-11-12_n28_calibration.tsv	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+field_widths_reliable_polished_2026-11-12_n28_claims_thr2.tsv	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+field_widths_reliable_polished_2026-11-12_n28_claims_thr3.tsv	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+field_widths_reliable_polished_2026-11-12_n28_early_vs_higher_thr2.tsv	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+field_widths_reliable_polished_2026-11-12_n28_early_vs_higher_thr3.tsv	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+field_widths_reliable_polished_2026-11-12_n28_tradeoff.tsv	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+field_widths_reliable_polished_2026-11-12_n28_widths_thr2.tsv	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+field_widths_reliable_polished_2026-11-12_n28_widths_thr3.tsv	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+fig3_location_ordered_tests_n28_2026-11-12.tsv	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	1	0	0
+fig3_location_per_area_n28_2026-11-12.tsv	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	1	0
+fig3_location_per_area_values_n28_2026-11-12.tsv	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	0
+fig5_gain_field_map_parameters_n28_2026-11-12.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	1	0	0
+fig5_gain_field_map_parameters_n28_2026-11-12_v10.tsv	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	1	0	0
+fig5_gain_field_map_parameters_n28_2026-11-12_v8.tsv	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	1	0	0
+fig5_gain_field_map_parameters_n28_2026-11-12_v9.tsv	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	1	0	0
+figS_dog_kappa_2026-11-11.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+figS_dog_kappa_n28_2026-11-11.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	0
+hierarchy_regression_2026-11.tsv	1	0.0	2026-11-06	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+hierarchy_regression_final2_2026-11.tsv	1	0.0	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	0
+hierarchy_regression_polished_2026-11-12_n28.tsv	1	0.0	2026-11-12	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	1	0	0
+hp_item_anova_2026-11.tsv	1	0.0	2026-11-09	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+kappa_neighbour_2026-11.tsv	1	0.0	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	1
+loso_per_step_2026-11.tsv	1	0.0	2026-11-05	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+loso_per_step_allfam_final2_2026-11.tsv	1	0.0	2026-11-10	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	0	0
+prf_cv_dn_vs_dog_per_roi_2026-11.md	1	0.0	2026-11-06	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+richter_A3_session_gains_n28_2026-11-11.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	1	1	1
+richter_A3_session_gains_n30_2026-11-11.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+richter_A4_behaviour_history_n28_2026-11-11.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	1	0	1
+richter_A4_behaviour_history_n30_2026-11-11.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+richter_B_behaviour_cells_n28_2026-11-11.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	1
+richter_B_behaviour_cells_n30_2026-11-11.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+richter_B_behaviour_contrasts_n28_2026-11-11.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	1
+richter_B_behaviour_contrasts_n30_2026-11-11.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+richter_C_D1_location_contrasts_n28_2026-11-11.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	1	0	1
+richter_C_D1_location_contrasts_n30_2026-11-11.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+richter_C_term_contrasts_n28_2026-11-11.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	1	0	1
+richter_C_term_contrasts_n30_2026-11-11.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+richter_D1_intervals_n28_2026-11-11.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	1	0	0
+richter_D1_intervals_n30_2026-11-11.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+richter_D2_without_pilots_n28_2026-11-11.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	1
+richter_D2_without_pilots_n30_2026-11-11.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+richter_D5_target_vs_distractor_n28_2026-11-11.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	1
+richter_D5_target_vs_distractor_n30_2026-11-11.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+richter_D6_per_area_n28_2026-11-11.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	1
+richter_D6_per_area_n30_2026-11-11.tsv	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+rt_summary.tsv	1	0.0	2026-05-07	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+sig_voxel_counts_m4_m6.tsv	0	0.0	2026-05-15	keep	cited in CLAUDE.md	0	0	0	0
+trialwise_af_between_subject_stats.tsv	0	0.0	2026-10-19	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+trialwise_af_gain_collinearity.tsv	0	0.0	2026-10-20	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+trialwise_af_hierarchy_stats.tsv	0	0.0	2026-10-19	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+trialwise_af_lp_hp_slope_stats.tsv	0	0.0	2026-10-19	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	0	0	0	0
+update2_counts_k_of_n_n28_2026-11-12.md	1	0.0	2026-11-11	keep	referenced by code / PAPER_REPRODUCTION / package / figure .md	1	0	0	0
+decode_sweep/	0	12.91	2026-05-15	keep (archive with its note)	cited only by a working note	0	0	0	1
+loso_exact_robust_final2_excl0102_2026-11.tsv	1	0.6	2026-11-11	keep (archive with its note)	cited only by a working note	0	0	0	1
+gain_field_parameters_voxsel_relnull_2026-11-13.tsv	1	0.26	2026-11-13	keep (archive with its note)	cited only by a working note	0	0	0	1
+shared_fit_comparison_canary_3versions_20261102.tsv	1	0.03	2026-11-02	keep (archive with its note)	cited only by a working note	0	0	0	1
+rt_links_trialwise_comparison_2026-11-13.tsv	1	0.02	2026-11-13	keep (archive with its note)	cited only by a working note	0	0	0	1
+voxel_selection_robustness_2026-11-13.tsv	1	0.02	2026-11-13	keep (archive with its note)	cited only by a working note	0	0	0	1
+conditional_estimates_relnull_r0.1_polished_dS.tsv	1	0.01	2026-11-13	keep (archive with its note)	cited only by a working note	0	0	0	1
+conditional_estimates_relnull_r0.2_polished_dS.tsv	1	0.01	2026-11-13	keep (archive with its note)	cited only by a working note	0	0	0	1
+discussion_model_vs_measured_corr_n28_2026-11-12.tsv	1	0.0	2026-11-11	keep (archive with its note)	cited only by a working note	0	0	0	1
+discussion_model_vs_measured_n28_2026-11-12.tsv	1	0.0	2026-11-11	keep (archive with its note)	cited only by a working note	0	0	0	1
+followup_A1_behaviour_ci_2026-11-10.tsv	1	0.0	2026-11-10	keep (archive with its note)	cited only by a working note	0	0	0	1
+followup_A1_fig2_fig3_ci_2026-11-10.tsv	1	0.0	2026-11-10	keep (archive with its note)	cited only by a working note	0	0	0	1
+followup_A3_contralateral_2026-11-10.tsv	1	0.0	2026-11-10	keep (archive with its note)	cited only by a working note	0	0	0	1
+loso_per_step_excl0102_2026-11.tsv	1	0.0	2026-11-11	keep (archive with its note)	cited only by a working note	0	0	0	1
+m4_phantom_cross_subject.tsv	1	0.0	2026-05-10	keep (archive with its note)	cited only by a working note	0	0	0	1
+rt_links_between_subjects_2026-11-13.tsv	1	0.0	2026-11-13	keep (archive with its note)	cited only by a working note	0	0	0	1

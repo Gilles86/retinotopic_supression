@@ -1,0 +1,208 @@
+folder	status	gb	nfiles	last_modified	reason	action	refs_repro	refs_wpkg	refs_newnotes	refs_code
+fmriprep	KEEP	459.63	29606	2026-11-06	fMRIPrep 25.2.3 outputs (incl. FreeSurfer); pipeline stage in PAPER_REPRODUCTION.md; days of compute	keep	0	2	0	17
+cleaned	KEEP	384.942	509	2026-01-06	confound-cleaned BOLD, input to every fit; not on g_econ	keep	0	2	2	31
+mean_signal	KEEP	33.795	61	2026-01-06	mean time series (pipeline stage, PAPER_REPRODUCTION.md)	keep	0	0	0	2
+nordic	KEEP	25.995	139	2025-12-16	NORDIC-denoised BOLD (pipeline stage); input to fMRIPrep	keep	1	0	0	1
+prf	KEEP	9.589	12367	2026-05-19	whole-brain pRF fits m1-m6 (GPU sweep; Fig. 2 inputs, CLAUDE.md QC); expensive	keep	0	0	0	26
+paper_2026-11	KEEP	1.652	2276	2026-11-13	PAPER_REPRODUCTION.md, rt_links_rerun.sh / regenerate_reference.sh (roi_hrf_dog_final2.tsv), writing packages	keep	1	3	6	27
+neuropythy	KEEP	1.008	1105	2026-05-19	visual-area atlas (PAPER_REPRODUCTION.md; all ROIs)	keep	1	2	0	15
+side_hpc_region_ts	RUNNING/RECENT	5.003	57	2026-11-12	written in the last 24 h (running job output)	re-check after current jobs	0	0	0	0
+af_trialwise_gains_ownvox_polished_2026-11-12	RUNNING/RECENT	0.505	1852	2026-11-12	written in the last 24 h; af_trialwise_gains_ownvox10_polished_2026-11-12 (14 subjects copied from here)	delete after the author confirms the copy (after the running jobs)	0	0	1	0
+side_hpc_prf_cv	RUNNING/RECENT	0.148	363	2026-11-12	written in the last 24 h (running job output)	re-check after current jobs	0	0	0	0
+af_fixed_group_mechanisms_relnull_r0.1_polished_dS	RUNNING/RECENT	0.024	281	2026-11-13	written in the last 24 h; same file list as af_fixed_group_mechanisms_dS_relnull_r0.1_polished_2026-11-13 but contents differ; conditional_estimates_relnull_r0.1_polished_dS.tsv; regenerate_reference.sh example names this folder	author to decide after the running jobs	0	0	0	0
+af_fixed_group_mechanisms_relnull_r0.2_polished_dS	RUNNING/RECENT	0.014	278	2026-11-13	written in the last 24 h; same file list as ..._dS_relnull_r0.2_polished_2026-11-13 but contents differ; regenerate_reference.sh example names this folder	author to decide after the running jobs	0	0	0	0
+af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf_polished_conv	RUNNING/RECENT	0.008	500	2026-11-13	written in the last 24 h (running job output)	re-check after current jobs	0	0	1	1
+decoded_sim_fitted_2026-11.canary_concat_bak_202611121422	RUNNING/RECENT	0.005	37	2026-11-12	written in the last 24 h; backup copy of a superseded or rerun folder	delete (after the running jobs)	0	0	0	0
+af_prf_cv_ladder_nested_full_bounded_maxsd20_relnull_r0.1_roihrf_coldtest	RUNNING/RECENT	0.002	43	2026-11-12	written in the last 24 h; canary / test run	delete (after the running jobs)	0	0	0	0
+af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf_polished_lbfgscanary_bak	RUNNING/RECENT	0.001	69	2026-11-12	written in the last 24 h; backup copy of a superseded or rerun folder	delete (after the running jobs)	0	0	0	0
+af_prf_cv_ladder_nested_full_bounded_maxsd20_relnull_r0.1_roihrf_coldtest_polished	RUNNING/RECENT	0.001	15	2026-11-12	written in the last 24 h; canary / test run	delete (after the running jobs)	0	0	0	0
+af_prf_cv_ladder_nested_full_bounded_maxsd20_relnull_r0.2_roihrf_coldtest	RUNNING/RECENT	0.001	43	2026-11-12	written in the last 24 h; canary / test run	delete (after the running jobs)	0	0	0	0
+af_fixed_group_mechanisms_relnull_r0.2_polished_dS_fallbackbase_bak	RUNNING/RECENT	0.0	4	2026-11-13	written in the last 24 h; backup copy of a superseded or rerun folder	delete (after the running jobs)	0	0	1	0
+af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf_polished_4rounds_partial_bak	RUNNING/RECENT	0.0	1	2026-11-12	written in the last 24 h; backup copy of a superseded or rerun folder	delete (after the running jobs)	0	0	0	0
+af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf_polished_alttest	RUNNING/RECENT	0.0	7	2026-11-12	written in the last 24 h; canary / test run	delete (after the running jobs)	0	0	0	0
+af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf_polished_conv_warmr02	RUNNING/RECENT	0.0	9	2026-11-13	written in the last 24 h (running job output)	re-check after current jobs	0	0	0	0
+af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf_polished_cputest	RUNNING/RECENT	0.0	7	2026-11-12	written in the last 24 h; canary / test run	delete (after the running jobs)	0	0	0	0
+af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf_polished_gputest	RUNNING/RECENT	0.0	7	2026-11-12	written in the last 24 h; canary / test run	delete (after the running jobs)	0	0	0	0
+af_prf_cv_ladder_nested_full_bounded_maxsd20_relnull_r0.2_roihrf_coldtest_polished	RUNNING/RECENT	0.0	15	2026-11-12	written in the last 24 h; canary / test run	delete (after the running jobs)	0	0	0	0
+prf_regressed_out	SUPERSEDED	201.398	501	2026-01-09	input of the eccentric GLM only (not in the paper); reproducible from cleaned + m4 via eccentric_glm/clean_data.py	delete	0	0	0	3
+glmsingle	SUPERSEDED	180.507	271	2026-05-09	GLMsingle (archived 2026-11-12: not in the paper)	backup to g_econ (permanent) or delete; recompute is hours/subject	0	0	0	0
+eccentric_glm	SUPERSEDED	7.195	3368	2026-01-09	eccentric GLM: not in PAPER_REPRODUCTION.md / the paper	backup the small summary, delete the rest	0	0	0	4
+decoded	SUPERSEDED	5.998	2714	2026-05-16	decoded_final_2026-11 (decode_final.py); May 2026 VSS decoding	delete (VSS-era; reproducible with decode.py)	1	10	2	24
+prf_conditionfit.bak	SUPERSEDED	5.158	928	2025-10-29	backup copy of a superseded or rerun folder	delete	0	0	0	0
+af_prf_cv_ladder	SUPERSEDED	1.994	13559	2026-10-29	..._maxsd20_{,dn_,gauss_}reliable_roihrf (final2) and its _polished refit; earlier October-November ladder generations (CV-ladder verdict era)	delete	0	0	0	3
+af_prf_cv_ladder_nested	SUPERSEDED	1.68	13561	2026-11-02	..._maxsd20_{,dn_,gauss_}reliable_roihrf (final2) and its _polished refit; earlier October-November ladder generations (CV-ladder verdict era)	delete	0	0	0	6
+af_prf_cv_ladder_run3	SUPERSEDED	1.482	13511	2026-10-28	..._maxsd20_{,dn_,gauss_}reliable_roihrf (final2) and its _polished refit; earlier October-November ladder generations (CV-ladder verdict era)	delete	0	0	0	0
+af_prf_cv_ladder_nested_bounded	SUPERSEDED	1.205	10811	2026-11-01	..._maxsd20_{,dn_,gauss_}reliable_roihrf (final2) and its _polished refit; earlier October-November ladder generations (CV-ladder verdict era)	delete	0	0	0	0
+af_prf_cv_ladder_nested_run3_bounded	SUPERSEDED	1.094	12742	2026-11-09	..._maxsd20_{,dn_,gauss_}reliable_roihrf (final2) and its _polished refit; earlier October-November ladder generations (CV-ladder verdict era)	delete	0	0	0	0
+af_trialwise_gains_signal_2026-11	SUPERSEDED	0.555	2041	2026-11-10	af_trialwise_gains_signal_se_2026-11 (and the _polished versions)	delete	0	0	0	0
+af_trialwise_gains	SUPERSEDED	0.549	2011	2026-10-19	af_trialwise_gains_signal_se_2026-11 (and the _polished versions)	delete	0	0	0	3
+af_trialwise_gains_final2_2026-11	SUPERSEDED	0.437	1585	2026-11-10	af_trialwise_gains_signal_se_2026-11 (and the _polished versions)	delete	0	0	0	0
+af_prf_cv_shiftvsgain	SUPERSEDED	0.429	4059	2026-06-02	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	0
+af_prf_cv_ladder_nested_full_bounded_maxsd20_dn	SUPERSEDED	0.403	13511	2026-11-03	..._maxsd20_{,dn_,gauss_}reliable_roihrf (final2) and its _polished refit; earlier October-November ladder generations (CV-ladder verdict era)	delete	0	0	0	1
+af_prf_cv_ladder_nested_full_bounded	SUPERSEDED	0.366	13511	2026-10-30	..._maxsd20_{,dn_,gauss_}reliable_roihrf (final2) and its _polished refit; earlier October-November ladder generations (CV-ladder verdict era)	delete	0	0	0	3
+stimulus_rois	SUPERSEDED	0.247	1476	2026-01-09	eccentric GLM: not in PAPER_REPRODUCTION.md / the paper	backup the small summary, delete the rest	0	0	0	2
+af_fixed_group_mechanisms	SUPERSEDED	0.142	361	2026-11-02	af_fixed_group_mechanisms_final2_2026-11 (+ linear_session*, split models in gain_field_parameters_final2; HP-rotation null archived). collect_conditional_estimates.py default still names _maxsd20	delete	0	0	0	2
+af_fixed_group_mechanisms_dn	SUPERSEDED	0.142	361	2026-11-03	af_fixed_group_mechanisms_final2_2026-11 (+ linear_session*, split models in gain_field_parameters_final2; HP-rotation null archived). collect_conditional_estimates.py default still names _maxsd20	delete	0	0	0	0
+af_fixed_group_mechanisms_maxsd20	SUPERSEDED	0.142	361	2026-11-03	af_fixed_group_mechanisms_final2_2026-11 (+ linear_session*, split models in gain_field_parameters_final2; HP-rotation null archived). collect_conditional_estimates.py default still names _maxsd20	delete	0	0	0	2
+neuropythy_backup_20260509	SUPERSEDED	0.138	151	2026-05-09	neuropythy (current atlas)	delete	0	0	0	0
+prf_conditionfit	SUPERSEDED	0.11	828	2026-05-10	archived conditionwise pRF shifts (archive/conditionwise_shifts/README)	backup to g_econ, then delete	0	0	0	4
+af_prf_cv_ladder_nested_full_bounded_maxsd20_hprot1	SUPERSEDED	0.101	3184	2026-11-05	..._maxsd20_{,dn_,gauss_}reliable_roihrf (final2) and its _polished refit; earlier October-November ladder generations (CV-ladder verdict era)	delete	0	0	0	0
+af_prf_cv_v2	SUPERSEDED	0.074	693	2026-05-08	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	1
+af_fixed_group_exact_dn	SUPERSEDED	0.066	361	2026-11-04	*_final2_2026-11 versions (note: fig3_collect_loso.py default still names these)	delete	0	0	0	2
+af_fixed_group_exact_dog	SUPERSEDED	0.066	361	2026-11-04	*_final2_2026-11 versions (note: fig3_collect_loso.py default still names these)	delete	0	0	0	2
+v1_decode_handoffs	SUPERSEDED	0.053	3	2026-05-12	decoded_final_2026-11 (decode_final.py); May 2026 VSS decoding	delete (VSS-era; reproducible with decode.py)	0	0	0	1
+af_fixed_group_mechanisms_maxsd20_even	SUPERSEDED	0.047	301	2026-11-07	af_fixed_group_mechanisms_final2_2026-11 (+ linear_session*, split models in gain_field_parameters_final2; HP-rotation null archived). collect_conditional_estimates.py default still names _maxsd20	delete	0	0	0	0
+af_fixed_group_mechanisms_maxsd20_hprot1	SUPERSEDED	0.047	301	2026-11-07	af_fixed_group_mechanisms_final2_2026-11 (+ linear_session*, split models in gain_field_parameters_final2; HP-rotation null archived). collect_conditional_estimates.py default still names _maxsd20	delete	0	0	0	0
+af_fixed_group_mechanisms_maxsd20_hprot2	SUPERSEDED	0.047	301	2026-11-07	af_fixed_group_mechanisms_final2_2026-11 (+ linear_session*, split models in gain_field_parameters_final2; HP-rotation null archived). collect_conditional_estimates.py default still names _maxsd20	delete	0	0	0	0
+af_fixed_group_mechanisms_maxsd20_hprot3	SUPERSEDED	0.047	301	2026-11-07	af_fixed_group_mechanisms_final2_2026-11 (+ linear_session*, split models in gain_field_parameters_final2; HP-rotation null archived). collect_conditional_estimates.py default still names _maxsd20	delete	0	0	0	0
+af_fixed_group_mechanisms_maxsd20_odd	SUPERSEDED	0.046	301	2026-11-07	af_fixed_group_mechanisms_final2_2026-11 (+ linear_session*, split models in gain_field_parameters_final2; HP-rotation null archived). collect_conditional_estimates.py default still names _maxsd20	delete	0	0	0	0
+af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable	SUPERSEDED	0.038	2175	2026-11-06	..._maxsd20_{,dn_,gauss_}reliable_roihrf (final2) and its _polished refit; earlier October-November ladder generations (CV-ladder verdict era)	delete	0	0	0	0
+af_fixed_group_gain	SUPERSEDED	0.037	361	2026-11-02	archived fixed-group gain (archive/paper_cleanup_2026-11-12)	delete	0	0	0	0
+prf.snakemake_demo	SUPERSEDED	0.037	64	2026-05-18	benchmark / debug / smoke output	delete	0	0	0	1
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_repeat_pSig0.5	SUPERSEDED	0.034	692	2026-10-20	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	1
+af_prf_cv_ladder_nested_full_bounded_maxsd20	SUPERSEDED	0.033	1101	2026-11-02	..._maxsd20_{,dn_,gauss_}reliable_roihrf (final2) and its _polished refit; earlier October-November ladder generations (CV-ladder verdict era)	delete	0	0	0	1
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_targetRepeat_pSig0.5	SUPERSEDED	0.033	692	2026-05-28	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	0
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_pSig0.5_base-m6	SUPERSEDED	0.032	669	2026-05-19	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	0
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_allSharedSigma_pSig0.5	SUPERSEDED	0.031	692	2026-05-19	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	0
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_pSig0.5	SUPERSEDED	0.031	692	2026-05-19	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	2
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_repeat	SUPERSEDED	0.03	567	2026-05-08	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	0
+af_prf_joint_full_dog	SUPERSEDED	0.029	511	2026-05-07	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	2
+af_prf_klein_shift_6sigma_sharedSigma_pSig0.5	SUPERSEDED	0.028	688	2026-05-31	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	0
+af_fixed_group_mechanisms_maxsd20_ses1	SUPERSEDED	0.025	301	2026-11-07	af_fixed_group_mechanisms_final2_2026-11 (+ linear_session*, split models in gain_field_parameters_final2; HP-rotation null archived). collect_conditional_estimates.py default still names _maxsd20	delete	0	0	0	0
+af_fixed_group_mechanisms_maxsd20_ses2	SUPERSEDED	0.025	301	2026-11-07	af_fixed_group_mechanisms_final2_2026-11 (+ linear_session*, split models in gain_field_parameters_final2; HP-rotation null archived). collect_conditional_estimates.py default still names _maxsd20	delete	0	0	0	0
+af_prf_joint_dynamic_v3_dog_neutralsigma	SUPERSEDED	0.025	512	2026-05-08	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	1
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_allSharedSigma_sharedDynGain_pSig0.5	SUPERSEDED	0.021	461	2026-05-14	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	0
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_allSharedSigma_pSig0.5.bak.2026-05-15	SUPERSEDED	0.02	445	2026-05-15	backup copy of a superseded or rerun folder	delete	0	0	0	0
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_sharedDynGain_pSig0.5	SUPERSEDED	0.02	453	2026-05-14	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	0
+af_trialwise_gains_ladder_canary	SUPERSEDED	0.016	56	2026-11-07	canary / test run	delete	0	0	0	0
+af_prf_joint_dynamic_v3_gaussian_with_target_sharedSigma	SUPERSEDED	0.015	511	2026-05-11	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	2
+af_trialwise_gains_refactorcheck_2026-11	SUPERSEDED	0.015	56	2026-11-10	canary / test run	delete	0	0	0	0
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma	SUPERSEDED	0.014	591	2026-05-11	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	3
+af_prf_joint_dynamic_v3_gaussian_with_target_allSharedSigma	SUPERSEDED	0.014	447	2026-05-11	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	2
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_pSig0.5_apt0.5	SUPERSEDED	0.013	449	2026-05-14	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	0
+_m2	SUPERSEDED	0.012	381	2026-05-11	benchmark / debug / smoke output	delete	0	0	0	0
+af_fixed_group_exact_dog_DonT	SUPERSEDED	0.011	361	2026-11-07	exploratory variant; LOSO tables come from *_final2_2026-11	delete	0	0	0	0
+af_prf_cv_ladder_nested_full_bounded_maxsd20_gauss_reliable_roihrf_partialhrf_bak_2026-11-10	SUPERSEDED	0.011	751	2026-11-10	backup copy of a superseded or rerun folder	delete	0	0	0	0
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_pSig0.95	SUPERSEDED	0.011	371	2026-05-14	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	0
+af_prf_cv_ladder_nested_full_bounded_nll	SUPERSEDED	0.009	321	2026-11-02	..._maxsd20_{,dn_,gauss_}reliable_roihrf (final2) and its _polished refit; earlier October-November ladder generations (CV-ladder verdict era)	delete	0	0	0	0
+decoded_paradigm_sweep	SUPERSEDED	0.009	8	2026-05-15	decoded_final_2026-11 (decode_final.py); May 2026 VSS decoding	delete (VSS-era; reproducible with decode.py)	0	0	0	0
+prf.bench.gpu10x	SUPERSEDED	0.009	24	2026-05-12	benchmark / debug / smoke output	delete	0	0	0	0
+af_prf_cv_ladder_nested_fasttest_2026-11	SUPERSEDED	0.008	267	2026-11-06	canary / test run	delete	0	0	0	0
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_pSig0.95_apt0.5	SUPERSEDED	0.008	365	2026-05-14	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	0
+af_prf_cv_ladder_nested_full_bounded_maxsd20_dn_basefield_canary	SUPERSEDED	0.005	115	2026-11-09	canary / test run	delete	0	0	0	0
+eccentric_glm_summary	SUPERSEDED	0.005	30	2026-01-19	eccentric GLM: not in PAPER_REPRODUCTION.md / the paper	backup the small summary, delete the rest	0	0	0	1
+sim_refit	SUPERSEDED	0.005	33	2026-05-18	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	0
+af_prf_cv_ladder_nested_bounded_polished	SUPERSEDED	0.004	37	2026-10-31	..._maxsd20_{,dn_,gauss_}reliable_roihrf (final2) and its _polished refit; earlier October-November ladder generations (CV-ladder verdict era)	delete	0	0	0	0
+af_learning_gains_nested	SUPERSEDED	0.003	1351	2026-11-01	archived learning-gain models (paper_cleanup README)	delete	0	0	0	0
+af_prf_cv_ladder_nested_full_bounded_maxsd20_dn.canary1_nofloor	SUPERSEDED	0.003	121	2026-11-03	canary / test run	delete	0	0	0	0
+af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf_dogcs_canary	SUPERSEDED	0.003	115	2026-11-09	canary / test run	delete	0	0	0	0
+af_prf_cv_ladder_nested_run3_frozenprf_dn_basefield_canary	SUPERSEDED	0.003	25	2026-11-09	canary / test run	delete	0	0	0	0
+af_prf_joint_dynamic_v3_dog_with_target_tos4	SUPERSEDED	0.003	77	2026-05-08	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	1
+prf_cv_roi_bench_cpu16	SUPERSEDED	0.003	15	2026-11-02	benchmark / debug / smoke output	delete	0	0	0	0
+prf_cv_roi_bench_cpu32	SUPERSEDED	0.003	15	2026-11-02	benchmark / debug / smoke output	delete	0	0	0	0
+prf_cv_roi_bench_gpu	SUPERSEDED	0.003	15	2026-11-07	benchmark / debug / smoke output	delete	0	0	0	0
+af_prf_cv_ladder_nested_canary_roihrf_noop	SUPERSEDED	0.002	71	2026-11-07	canary / test run	delete	0	0	0	0
+af_prf_joint_dynamic_v3_dog_with_target_tos8	SUPERSEDED	0.002	65	2026-05-08	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	1
+decode	SUPERSEDED	0.002	31	2026-05-10	decoded_final_2026-11 (decode_final.py); May 2026 VSS decoding	delete (VSS-era; reproducible with decode.py)	1	3	0	22
+decoded_final_2026-11_canary	SUPERSEDED	0.002	18	2026-11-09	canary / test run	delete	0	0	0	0
+decoded_paradigm	SUPERSEDED	0.002	4	2026-05-15	decoded_final_2026-11 (decode_final.py); May 2026 VSS decoding	delete (VSS-era; reproducible with decode.py)	0	0	0	0
+af_fixed_group_exact_dnw_canary_2026-11	SUPERSEDED	0.001	11	2026-11-10	canary / test run	delete	0	0	0	0
+af_hprot_repro_check	SUPERSEDED	0.001	49	2026-11-05	canary / test run	delete	0	0	0	0
+af_prf_cv_ladder_nested_canary_sigtied	SUPERSEDED	0.001	39	2026-11-09	canary / test run	delete	0	0	0	0
+af_prf_cv_ladder_nested_full_bounded_maxsd20_dn_hprot1	SUPERSEDED	0.001	19	2026-11-05	..._maxsd20_{,dn_,gauss_}reliable_roihrf (final2) and its _polished refit; earlier October-November ladder generations (CV-ladder verdict era)	delete	0	0	0	0
+af_prf_cv_ladder_nested_full_bounded_maxsd20_dn_reliable_roihrf_badtable_bak_2026-11-09	SUPERSEDED	0.001	178	2026-11-09	backup copy of a superseded or rerun folder	delete	0	0	0	0
+af_prf_joint_dynamic	SUPERSEDED	0.001	18	2026-05-07	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	1
+af_prf_joint_dynamic_v3_dog_with_target_largeSigma	SUPERSEDED	0.001	32	2026-05-08	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	1
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_allSharedSigma_pSig0.95	SUPERSEDED	0.001	21	2026-05-14	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	0
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_allSharedSigma_sharedDynGain_pSig0.95	SUPERSEDED	0.001	23	2026-05-14	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	0
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_perTrial	SUPERSEDED	0.001	15	2026-05-10	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	2
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_sharedDynGain_pSig0.95	SUPERSEDED	0.001	23	2026-05-14	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	0
+prf.bench_A100_30000	SUPERSEDED	0.001	11	2026-05-09	benchmark / debug / smoke output	delete	0	0	0	0
+prf.bench_A100_80000	SUPERSEDED	0.001	11	2026-05-09	benchmark / debug / smoke output	delete	0	0	0	0
+prf.bench.gpu1x	SUPERSEDED	0.001	12	2026-05-12	benchmark / debug / smoke output	delete	0	0	0	0
+prf.bench_H100_30000	SUPERSEDED	0.001	11	2026-05-09	benchmark / debug / smoke output	delete	0	0	0	0
+prf.bench_H100_80000	SUPERSEDED	0.001	11	2026-05-09	benchmark / debug / smoke output	delete	0	0	0	0
+prf.bench_V100_30000	SUPERSEDED	0.001	11	2026-05-09	benchmark / debug / smoke output	delete	0	0	0	0
+prf.bench_V100_80000	SUPERSEDED	0.001	11	2026-05-09	benchmark / debug / smoke output	delete	0	0	0	0
+af_fixed_group_exact_kappa_canary_2026-11	SUPERSEDED	0.0	11	2026-11-10	canary / test run	delete	0	0	0	0
+af_prf_cv_ladder_nested_full_smoke	SUPERSEDED	0.0	61	2026-10-29	canary / test run	delete	0	0	0	0
+af_prf_cv_ladder_nested_full_smoke_polished	SUPERSEDED	0.0	61	2026-10-29	canary / test run	delete	0	0	0	0
+af_prf_cv_ladder_nested_smoke	SUPERSEDED	0.0	61	2026-10-29	canary / test run	delete	0	0	0	0
+af_prf_cv_ladder_nested_smoke_bounded	SUPERSEDED	0.0	51	2026-10-30	canary / test run	delete	0	0	0	0
+af_prf_cv_ladder_nested_smoke_polished	SUPERSEDED	0.0	37	2026-10-29	canary / test run	delete	0	0	0	0
+af_prf_cv_ladder_nested_smoke.v1	SUPERSEDED	0.0	61	2026-10-29	canary / test run	delete	0	0	0	0
+af_prf_cv_shiftvsgain_smoke.bak.20260531_155537	SUPERSEDED	0.0	7	2026-05-31	backup copy of a superseded or rerun folder	delete	0	0	0	0
+af_prf_joint_dynamic_v3_dog_with_target	SUPERSEDED	0.0	5	2026-05-11	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	2
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_allSharedSigma_pSig0.95_apt0.5	SUPERSEDED	0.0	12	2026-05-14	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	0
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_allSharedSigma_sharedDynGain_pSig0.95_apt0.5	SUPERSEDED	0.0	21	2026-05-14	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	0
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_filtered	SUPERSEDED	0.0	1	2026-05-11	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	0
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_rect	SUPERSEDED	0.0	4	2026-05-08	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	1
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_runPosition_dynHP	SUPERSEDED	0.0	31	2026-05-08	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	1
+af_prf_joint_dynamic_v3_dog_with_target_sharedSigma_sharedDynGain_pSig0.95_apt0.5	SUPERSEDED	0.0	17	2026-05-14	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	0
+af_three_models	SUPERSEDED	0.0	17	2026-05-21	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	0
+figures	SUPERSEDED	0.0	2	2026-05-11	stray / empty	delete	1	10	6	25
+gam_clusters	SUPERSEDED	0.0	3	2026-05-07	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	0
+prf.debug.sdmin04	SUPERSEDED	0.0	12	2026-05-11	benchmark / debug / smoke output	delete	0	0	0	0
+prf.debug.sdmin0_control	SUPERSEDED	0.0	12	2026-05-11	benchmark / debug / smoke output	delete	0	0	0	0
+prf_distractors	SUPERSEDED	0.0	3	2026-05-09	"archived AF / Klein / shift analyses (conditionwise_shifts README; May 2026 AF ""sharedSigma"" era)"	delete (code archived; small)	0	0	0	0
+prf_dn_by_hp_2026-11_canary	SUPERSEDED	0.0	3	2026-11-09	canary / test run	delete	0	0	0	0
+_smoke_baseM6	SUPERSEDED	0.0	3	2026-05-18	benchmark / debug / smoke output	delete	0	0	0	0
+_smoke_dn_baseM6	SUPERSEDED	0.0	5	2026-05-18	benchmark / debug / smoke output	delete	0	0	0	0
+voxel_traces_cache	SUPERSEDED	0.0	1	2026-05-09	stray / empty	delete	0	0	0	0
+cleaned_roi_cache	UNKNOWN	3.596	361	2026-05-11	build_cleaned_roi_cache.sh; regenerable cache	author to decide	0	0	0	1
+prf.hrffix	UNKNOWN	1.341	1614	2026-11-04	read by retsupp/visualize/pycortex/render_fig1_prf.py; check whether any Fig. 2 render still uses it	author to decide	0	0	0	1
+af_trialwise_gains_hp	UNKNOWN	0.563	2011	2026-11-06	default output of fit_trialwise_af_gains.sh HP_NEUTRAL=1; notes/data/trialwise_rt_bayes_hp_2026-11/ (not in a package)	author to decide	0	0	0	1
+af_prf_cv_ladder_nested_full_bounded_maxsd20_dT	UNKNOWN	0.043	1108	2026-11-06	dT variant ladder; joint_dT_dog_2026-11.tsv? not cited in packages	author to decide	0	0	0	0
+af_fixed_group_mechanisms_maxsd20_dT	UNKNOWN	0.024	361	2026-11-06	joint_dT_dog_2026-11.tsv? not cited in packages	author to decide	0	0	0	0
+prf_roi_cache	UNKNOWN	0.013	254	2026-05-15	Subject.get_prf_roi cache (utils/data.py); regenerable	author to decide	0	0	0	1
+prf_diagnostics	UNKNOWN	0.007	96	2026-05-19	R2-mixture p_signal maps (compute_r2_mixture.py); user no longer uses p_signal for selection	author to decide	0	0	0	2
+outlier_voxels	UNKNOWN	0.004	4	2026-11-03	diagnose_outlier_voxels.py (project_outlier_variance_voxels memory)	author to decide	0	0	0	1
+cleaned_bold_cache	USED	106.829	61	2026-05-12	decode_final.py, simulate_decode.py, fit_prf.py (regenerable cache of cleaned BOLD)	keep	0	0	0	9
+decoded_final_2026-11	USED	16.702	90927	2026-11-12	Fig. 6 (decode_final.py, fig6_collect.py, figS_decoded_bars.py, group_decoded_frames.py)	keep	0	0	1	6
+decoded_sim_fitted_2026-11	USED	1.516	8137	2026-11-12	Fig. 6 model prediction (simulate_decode.py --mode fitted)	keep	0	0	0	2
+af_prf_cv_ladder_nested_run3_frozenprf_bounded_maxsd20_dn_basefield_2026-11	USED	0.603	4425	2026-11-09	figS_dn_gain_locus held-out panel (dn_basefield_cv*_2026-11.tsv)	keep	0	0	0	0
+af_trialwise_gains_signal_se_2026-11	USED	0.556	2041	2026-11-10	"Fig. 7 at update 4 (trialwise_signal_se_2026-11/, ""Earlier (paper, signal)"" in rt_links_robustness_2026-11-12.md)"	keep	0	0	0	0
+af_trialwise_gains_ownvox10_relnull_r0.1_polished_2026-11-13	USED	0.555	2033	2026-11-13	rt_links_robustness_2026-11-12.md (figS_fig7_relnull_r01)	keep	0	0	1	0
+af_trialwise_gains_ownvox10_relnull_r0.2_polished_2026-11-13	USED	0.533	1955	2026-11-13	rt_links_robustness_2026-11-12.md (figS_fig7_relnull_r02)	keep	0	0	1	0
+prf_cv_roi_jointhrf	USED	0.522	2551	2026-11-10	paper pRFs with joint HRF (PAPER_REPRODUCTION.md stage; decode_final.py)	keep	0	0	1	6
+af_trialwise_gains_signal_se_polished_2026-11-12	USED	0.518	1901	2026-11-12	new Fig. 7 (rt_links_robustness_2026-11-12.md, rt_links_rerun.sh)	keep	0	0	1	0
+af_trialwise_gains_ownvox10_polished_2026-11-12	USED	0.503	1847	2026-11-12	rt_links_robustness_2026-11-12.md	keep	0	0	1	0
+prf_cv_roi	USED	0.31	1201	2026-11-02	pRF CV fits per ROI (decode_final.py, voxel_reliability_null.py, fit_prf_cv_roi_hrf_joint.py)	keep	0	0	0	7
+af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf	USED	0.224	13656	2026-11-09	PAPER_REPRODUCTION.md (BASE_ROOT, final fits of update 4); key_numbers update4/8	keep	0	3	3	11
+af_prf_cv_ladder_nested_full_bounded_maxsd20_dn_reliable_roihrf	USED	0.187	10671	2026-11-10	"DN robustness fits (gain_field_parameters_final2_2026-11.tsv; key_numbers update4 ""Robustness"")"	keep	0	0	0	1
+af_prf_cv_ladder_nested_full_bounded_maxsd20_gauss_reliable_roihrf	USED	0.163	10671	2026-11-10	Gaussian robustness fits (gain_field_parameters_final2_2026-11.tsv)	keep	0	0	0	1
+af_prf_cv_ladder_nested_full_bounded_maxsd20_dn_basefield_2026-11	USED	0.157	3334	2026-11-09	figS_dn_gain_locus (dn_basefield_full_2026-11.tsv), dn_gain_field_variants_2026-11.md	keep	0	0	0	0
+decoded_sim_2026-11	USED	0.124	13080	2026-11-09	figS_decode_simulation (simulate_decode.py, collect_simulate_decode.py)	keep	0	0	0	2
+af_prf_cv_ladder_nested_run3_frozenprf_bounded_maxsd20_reliable_roihrf_dogcs_2026-11	USED	0.118	2069	2026-11-09	figS_dog_kappa panel c (run3 held-out dR2)	keep	0	0	0	0
+af_prf_cv_ladder_nested_full_bounded_maxsd20_relnull_r0.1_roihrf_polished	USED	0.111	3055	2026-11-12	voxel_selection_robustness_2026-11-12.md (gain_field_parameters_relnull_r0.1_polished_2026-11-13.tsv)	keep	0	0	0	0
+prf_cv_roi_sharedhrf	USED	0.104	586	2026-11-09	build_roi_hrf_table.py, decode_final.py	keep	0	0	0	4
+af_fixed_group_mechanisms_final2_2026-11	USED	0.082	290	2026-11-10	conditional_estimates_dog_final2_2026-11.tsv (key_numbers update4: dS, S estimated alone)	keep	0	0	0	0
+af_fixed_group_mechanisms_polished_2026-11-12	USED	0.077	270	2026-11-12	PAPER_REPRODUCTION.md ALONE_FOLDER (update 8)	keep	1	1	1	2
+af_fixed_group_mechanisms_clampedcheck_2026-11-12	USED	0.076	270	2026-11-12	prf_refit_with_gains_2026-11-12.md (check of the polished fit)	keep	0	0	1	0
+af_prf_cv_ladder_nested_full_bounded_maxsd20_relnull_r0.2_roihrf_polished	USED	0.069	3031	2026-11-12	regenerate_reference.sh example, voxel_selection_robustness, WPKG update8	keep	0	1	0	2
+af_fixed_group_exact_dn_final2_2026-11	USED	0.041	290	2026-11-10	loso_exact_robust_final2*.tsv (LOSO with DN pRFs)	keep	0	0	0	0
+af_fixed_group_exact_dog_final2_2026-11	USED	0.041	290	2026-11-10	loso_exact_final2*.tsv (tableS_loso, key_numbers update4)	keep	0	0	0	0
+af_fixed_group_exact_gauss_final2_2026-11	USED	0.04	290	2026-11-10	loso_exact_robust_final2*.tsv (LOSO with Gaussian pRFs)	keep	0	0	0	0
+af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf_polished	USED	0.034	1987	2026-11-12	PAPER_REPRODUCTION.md reference fit (update 8); regenerate_reference.sh / rt_links_rerun.sh REF_ROOT	keep	1	1	2	7
+prf_cv_roi_reliability_null_folds	USED	0.027	113	2026-11-12	decode_final.py --selection relnull; figS_decoding_voxel_selection	keep	0	0	1	2
+prf_dn_by_hp_2026-11	USED	0.027	62	2026-11-09	figS_dn_params_by_hp (fit_dn_by_hp.py, collect_dn_by_hp.py)	keep	0	0	0	3
+af_fixed_group_mechanisms_dS_relnull_r0.1_polished_2026-11-13	USED	0.024	281	2026-11-13	rt_links_robustness_2026-11-12.md, voxel_selection_robustness_2026-11-12.md	keep	0	0	1	0
+af_fixed_group_exact_dnw_2026-11	USED	0.022	301	2026-11-10	loso_kappa_dnw / n28/loso_dnw_2026-11_n28.tsv	keep	0	0	0	0
+af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf_dogcs_2026-11	USED	0.022	1068	2026-11-09	figS_dog_kappa (dog_cs_field_full_2026-11.tsv), collect_dog_cs_field.py	keep	0	0	0	1
+prf_cv_roi_reliability	USED	0.02	121	2026-11-03	reliable voxels (PAPER_REPRODUCTION.md stage)	keep	0	0	1	17
+prf_cv_roi_reliability_null	USED	0.017	57	2026-11-12	voxel_reliability_null.py; decoding_voxel_selection_robustness_2026-11-12.md	keep	0	0	1	2
+af_fixed_group_mechanisms_dS_relnull_r0.2_polished_2026-11-13	USED	0.014	278	2026-11-13	rt_links_robustness_2026-11-12.md, voxel_selection_robustness_2026-11-12.md	keep	0	0	1	0
+af_fixed_group_linear_session1_2026-11-11	USED	0.011	290	2026-11-11	richter_followup.py A3 (per-session dS), notes/richter_followup_2026-11-11.md	keep	0	0	0	0
+af_fixed_group_linear_session2_2026-11-11	USED	0.011	290	2026-11-11	richter_followup.py A3 (per-session dS)	keep	0	0	0	0
+gain_bins_2026-11-12	USED	0.008	270	2026-11-12	hierarchy_gain_terms.py, fit_gain_bins.sh	keep	0	0	0	1
+field_widths_reliable_2026-11-12	USED	0.007	270	2026-11-12	field_widths_reliable_2026-11-12.md, WPKG update4 (widths, fixed pRFs)	keep	0	0	0	2
+field_widths_reliable_polished_2026-11-12	USED	0.007	270	2026-11-12	regenerate_reference.sh (field_widths_reliable_${TAG}), PAPER_REPRODUCTION.md widths	keep	0	0	0	1
+af_fixed_group_exact_kappa_2026-11	USED	0.005	290	2026-11-10	loso_kappa_*.tsv (figS_dog_kappa LOSO, n28)	keep	0	0	0	0
+baseline_vs_gain_2026-11-12	USED	0.005	511	2026-11-12	baseline_vs_gain_2026-11-12.md, WPKG, figS_baseline_vs_gain.py	keep	0	1	1	2
+decoded_model_pred_2026-11	USED	0.005	29	2026-11-11	decode_model_prediction.py (code default)	keep	0	0	0	2
+prf_v1_resolution_2026-11-12	USED	0.005	29	2026-11-12	v1_prf_size_floor_2026-11-12.md	keep	0	0	1	1
+af_prf_cv_ladder_nested_full_bounded_maxsd20_relnull_r0.1_roihrf	USED	0.002	365	2026-11-12	base (unpolished) root of the r>0.1 polished fit; a warm-polish job on r0.1 is running	keep	0	0	0	0
+sim_prf_size_floor_2026-11-12	USED	0.002	39	2026-11-12	v1_prf_size_floor_2026-11-12.md	keep	0	0	1	2
+af_prf_cv_ladder_nested_full_bounded_maxsd20_relnull_r0.2_roihrf	USED	0.0	274	2026-11-12	base (unpolished) root of the r>0.2 polished fit	keep	0	0	0	0
+dn_baseline_field_recovery_2026-11	USED	0.0	21	2026-11-09	figS_dn_gain_locus recovery (collect_dn_baseline_field.py)	keep	0	0	0	2
+dog_cs_field_recovery_2026-11	USED	0.0	21	2026-11-09	dog_cs_field recovery (recover_dog_cs_field.sh)	keep	0	0	0	2
