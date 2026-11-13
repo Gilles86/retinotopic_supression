@@ -5,8 +5,8 @@
 #SBATCH --exclude=u24-chaihm0-633,u24-chaiam0-613
 #SBATCH --output=/dev/null
 #SBATCH --cpus-per-task=2
-#SBATCH --mem=24G
-#SBATCH --time=00:40:00
+#SBATCH --mem=20G            # canary sub-03: 2 min, peak 16 GB
+#SBATCH --time=00:15:00
 #
 # Side project (FEF / sPCS): ROIs in BOLD space + cleaned BOLD + selection table, one task per subject.
 #   cd ~/retsupp_side_fef && sbatch --array=3-30 retsupp/side_fef/slurm_jobs/extract_rois.sh
