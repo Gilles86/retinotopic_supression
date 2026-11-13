@@ -280,7 +280,7 @@ def power_tables(md, summ, obs, gen_label):
                                                       .to_dict('records')), '']
 
 
-def plain_power(label, rows):
+def plain_power(rows):
     by = {round(r['delta_pct']): r for r in rows}
     s = (f"with no planted effect the test fires in {by[0]['power']:.0%} of data sets; it detects a planted "
          f"−2 / −5 / −10% in {by[-2]['power']:.0%} / {by[-5]['power']:.0%} / {by[-10]['power']:.0%}")
