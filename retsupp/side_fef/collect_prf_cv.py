@@ -27,7 +27,7 @@ from retsupp.side_hippocampus.collect_prf_cv import fold_agreement
 HPC_CONTROLS = ('lateral_occipital', 'precentral')
 
 
-def main(bids_folder, voxels_out, summary_out, hrf_out):
+def main(bids_folder, voxels_out, summary_out, hrf_out, prf_voxels_out):
     der = Path(bids_folder) / 'derivatives'
     files = sorted((der / OUT_SUBDIR).glob('sub-*/*_voxels.tsv.gz'))
     files += [f for r in HPC_CONTROLS for f in sorted((der / 'side_hpc_prf_cv').glob(f'sub-*/*_region-{r}_*.tsv.gz'))]
@@ -47,13 +47,14 @@ def main(bids_folder, voxels_out, summary_out, hrf_out):
     vox['contra'] = np.where(vox.hemi == 'L', vox.x > 0, vox.x < 0)
     vox.to_csv(voxels_out, sep='\t', index=False)
 
-    rows = []
+    rows, prf = [], []
     for (s, r, m), d in vox.groupby(['subject', 'region', 'model']):
         t, n = d[d.variant == 'true'], d[d.variant == 'scramble']
         if t.empty or n.empty:
             continue
         thr = np.nanpercentile(n.cvr2, 95)
         sel_t, sel_n = t[t.cvr2 > thr], n[n.cvr2 > thr]
+        prf.append(sel_t)
         raw = df[(df.subject == s) & (df.region == r) & (df.model == m)]
         rows.append(dict(subject=s, region=r, model=m, n_voxels=len(t), median_cvr2_true=t.cvr2.median(),
                          median_cvr2_scramble=n.cvr2.median(), frac_pos_true=(t.cvr2 > 0).mean(),
@@ -66,6 +67,7 @@ def main(bids_folder, voxels_out, summary_out, hrf_out):
                          upper_prf=(sel_t.y > 0).mean() if len(sel_t) else np.nan,
                          x_agree=fold_agreement(raw[(raw.variant == 'true') & raw.voxel.isin(sel_t.voxel)], 'x'),
                          y_agree=fold_agreement(raw[(raw.variant == 'true') & raw.voxel.isin(sel_t.voxel)], 'y')))
+    pd.concat(prf).to_csv(prf_voxels_out, sep='\t', index=False)
     out = pd.DataFrame(rows)
     out.to_csv(summary_out, sep='\t', index=False)
     print(out.groupby(['region', 'model']).median(numeric_only=True).round(3).to_string())
@@ -77,5 +79,6 @@ if __name__ == '__main__':
     ap.add_argument('--voxels-out', required=True)
     ap.add_argument('--summary-out', required=True)
     ap.add_argument('--hrf-out', required=True)
+    ap.add_argument('--prf-voxels-out', required=True, help='true-stimulus voxels above the scramble 95th pct')
     a = ap.parse_args()
-    main(a.bids_folder, a.voxels_out, a.summary_out, a.hrf_out)
+    main(a.bids_folder, a.voxels_out, a.summary_out, a.hrf_out, a.prf_voxels_out)
