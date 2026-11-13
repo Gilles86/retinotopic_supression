@@ -407,6 +407,16 @@ def report(args):
             rows.append(dict(fit=tag, term=f'reliability_{k}', mean_log=float(np.mean(t2 / (t2 + se2[j])))))
         Rm = post['R'].mean(('chain', 'draw')).values
         rows.append(dict(fit=tag, term='latent_R', note=json.dumps(np.round(Rm, 3).tolist())))
+    for tag in args.bambi_traces:
+        post = az.from_netcdf(out / f'{tag}.nc').posterior
+        for k, v in (('T', 'g_target'), ('D', 'g_dist'), ('G', 'g_global')):
+            rows.append(dict(fit=tag, **hdi_row(post[v].values, rt_bar, f'slope_{k}')))
+        dc = post['dist_cond'].values
+        for name, x in [('HP vs LP distractor', dc[..., 0] - dc[..., 1]), ('LP distractor vs absent', dc[..., 1]),
+                        ('HP distractor vs absent', dc[..., 0]),
+                        ('target at HP vs not', -post['target_cond'].values.reshape(dc.shape[:2])),
+                        ('target repeat', post['target_repeat'].values), ('distractor repeat', post['dist_repeat'].values)]:
+            rows.append(dict(fit=tag, **hdi_row(x, rt_bar, name)))
     tab = pd.DataFrame(rows)
     tab.to_csv(out / f'{args.tag}_results.tsv', sep='\t', index=False)
     with pd.option_context('display.width', 250, 'display.max_columns', 30):
@@ -530,6 +540,7 @@ def main():
     p.add_argument('--traces', nargs='*', default=[])
     p.add_argument('--sims', nargs='*', default=[])
     p.add_argument('--ppc', action='store_true')
+    p.add_argument('--bambi-traces', nargs='*', default=[])
     p.add_argument('--n-ppc', type=int, default=200)
     a = p.parse_args()
     {'fit': fit, 'bambi': bambi, 'simulate': simulate, 'report': report, 'recovery': recovery}[a.cmd](a)
