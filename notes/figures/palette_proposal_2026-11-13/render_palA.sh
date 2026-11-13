@@ -20,6 +20,7 @@ if [ -n "$FLAT" ]; then
 fi
 
 # Main figures
+$PY -m $P.fig1_paradigm_behaviour_v5 --exclude-subjects 1 2 --suffix _n28_palA
 $PY -m $P.fig1_paradigm_behaviour_v4 --exclude-subjects 1 2 --suffix _n28_palA
 $EX $P.fig2_prf_fits --final-prfs --name fig2_prf_fits_n28_palA --map-dir notes/figures/fig1_r2low_palA
 $EX $P.fig3_item_locations --name fig3_item_locations_n28_palA --deconv-folder $D/event_deconv_final2_2026-11 \
