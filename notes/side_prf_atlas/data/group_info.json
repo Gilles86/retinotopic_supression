@@ -1,0 +1,45 @@
+{
+ "subjects": [
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15,
+  16,
+  17,
+  18,
+  19,
+  20,
+  21,
+  22,
+  23,
+  24,
+  25,
+  26,
+  27,
+  28,
+  29,
+  30
+ ],
+ "n_subjects": 28,
+ "min_subjects": 5,
+ "masks": {
+  "rel": "rel_p<.05 & rel_r>0; binomial vs .05, BH q<.01",
+  "cv": "cv_p<.05 & cv_r>0; binomial vs .05, BH q<.01",
+  "neg": "cv mask & amplitude<0 in all-runs and both session fits; binomial vs .025, BH q<.01"
+ },
+ "n_vertices": {
+  "rel_mask": 182745,
+  "cv_mask": 32750,
+  "neg_mask": 5026,
+  "pos_mask": 29703
+ }
+}

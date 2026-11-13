@@ -129,15 +129,16 @@ def build(G, out):
     rel_mask = vtx(G, 'rel_mask') > 0
     cv_mask = vtx(G, 'cv_mask') > 0
     neg_mask = vtx(G, 'neg_mask') > 0
-    angle_ok = rel_mask & (vtx(G, 'm4_angle_rayleigh_p') < .05)
-    par_ok = rel_mask & (vtx(G, 'm4_n_used') >= 5)
+    pos_mask = vtx(G, 'pos_mask') > 0
+    par_ok = pos_mask & (vtx(G, 'm4_n_used') >= 5)
+    angle_ok = par_ok & (vtx(G, 'm4_angle_rayleigh_p') < .05)
     neg_angle_ok = neg_mask & (vtx(G, 'neg_angle_rayleigh_p') < .05)
     deg = 180 / np.pi
     L = [  # name, values, alpha, cmap, vmin, vmax, unit label, description
         ('Polar angle', vtx(G, 'm4_polar_angle') * deg, angle_ok, 'hsv', -180, 180, 'deg (0 = right, 90 = up)',
-         'Circular mean over the subjects with a reliable response at the vertex; shown where those angles agree (Rayleigh p < .05).'),
+         'Circular mean over the subjects with a reliable, cross-validated positive pRF at the vertex (at least 5); shown where those angles agree (Rayleigh p < .05).'),
         ('Eccentricity', vtx(G, 'm4_ecc'), par_ok, 'viridis', 0, 4, 'deg',
-         'Median over subjects with a reliable response. The bar aperture had a radius of 3.17 deg.'),
+         'Median over the subjects with a reliable, cross-validated positive pRF. The bar aperture had a radius of 3.17 deg, so values near or above it mean "periphery".'),
         ('pRF size (sigma)', vtx(G, 'm4_sd'), par_ok, 'plasma', 0, 3, 'deg', 'Median model-4 centre sigma.'),
         ('HRF peak delay', vtx(G, 'm4_hrf_delay'), par_ok, 'cividis', 3.5, 6.5, 's', 'Median flexible-HRF delay of model 4.'),
         ('Reliable response (% subjects)', vtx(G, 'rel_prev') * 100, rel_mask.astype(float), 'inferno', 0, 80, '% of subjects',
@@ -181,7 +182,7 @@ def inject(index_html, legend, n_subj):
 <style>
 #atl-info, #atl-legend { position: fixed; z-index: 10000; font: 14px/1.45 -apple-system, system-ui, sans-serif;
   color: #eee; background: rgba(18,18,18,.9); border: 1px solid #4a4a4a; border-radius: 10px; padding: 12px 16px; }
-#atl-info { left: 16px; top: 16px; max-width: 420px; }
+#atl-info { left: 16px; top: 120px; max-width: 420px; max-height: calc(100vh - 160px); overflow-y: auto; }
 #atl-info h1 { font-size: 17px; margin: 0 0 6px; }
 #atl-info p { margin: 4px 0; color: #ccc; }
 #atl-info details summary { cursor: pointer; color: #9cc3ff; }
@@ -198,9 +199,10 @@ Pick a map in the viewer's data menu; white outlines are visual areas (fsaverage
 <details><summary>Methods and masks</summary>
 <p>pRF parameters (polar angle, eccentricity, size, HRF delay) come from a difference-of-Gaussians pRF model with a flexible HRF,
 fitted to all runs per participant in volume space and resampled to fsaverage (nearest voxel at mid-thickness, nearest vertex on the registered sphere).</p>
-<p>Reliability does not use any pRF model: per participant and vertex, the correlation of each run with the mean of the other runs must beat a
-null in which that mean is circularly shifted (100 shifts, p &lt; .05). A vertex enters the group maps when more participants pass than expected by chance
-(binomial test against 5%, Benjamini-Hochberg q &lt; .01), and each parameter is summarised only over the participants that pass at that vertex (at least 5).</p>
+<p>Masks, per participant and vertex: (1) a model-free reliable response, i.e. the correlation of each run with the mean of the other runs beats a
+null in which that mean is circularly shifted (100 shifts, p &lt; .05); (2) a cross-validated pRF, i.e. a Gaussian pRF fitted on one session predicts the other
+session better than 50 fits to a circularly shifted stimulus (p &lt; .05). A vertex is shown when more participants pass than expected by chance (binomial test,
+Benjamini-Hochberg q &lt; .01). The pRF parameter maps use the participants with both a reliable response and a cross-validated positive pRF at that vertex (at least 5).</p>
 <p>Signed pRFs: a Gaussian pRF grid fit that allows negative amplitudes, fitted on one session and tested on the other (both directions),
 against 50 fits with a circularly shifted stimulus.</p></details></div>
 <div id="atl-legend"><div id="atl-body"></div></div>
@@ -223,6 +225,9 @@ against 50 fits with a circularly shifted stimulus.</p></details></div>
         try { show(this.active ? this.active.name : name); } catch (err) { show(name); }
         return r;
       };
+      try { viewer.loaded.done(function () { setTimeout(function () {
+        viewer.ui.set('mix', 0.5); viewer.ui.set('camera.azimuth', 180); viewer.ui.set('camera.altitude', 70);
+        viewer.schedule(); }, 300); }); } catch (err) {}
       try { if (typeof figure !== 'undefined') for (var q in figure) { var c = figure[q]; if (c && c.active && c.active.name) { show(c.active.name); break; } } } catch (err) {}
     } else if (++tries > 100) clearInterval(iv);
   }, 100);
