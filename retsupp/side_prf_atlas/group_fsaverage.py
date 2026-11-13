@@ -19,8 +19,9 @@ Reliability masks (no R² mixture / p_signal anywhere):
 - Negative / positive pRFs: a subject's vertex counts when it is cross-validated AND the amplitude
   is negative (positive) in the all-runs fit and in both session fits. Group masks: binomial vs 0.025, q < .01.
 
-Group parameter maps (model 4: DoG with flexible HRF) use, per vertex, only the subjects reliable at that
-vertex (model-free mask) and need at least 5 of them. Polar angle: circular mean of the subjects'
+Group parameter maps (model 4: DoG with flexible HRF) use, per vertex, only the subjects with a model-free
+reliable response AND a cross-validated positive pRF at that vertex, and need at least 5 of them (shown within
+``pos_mask``). Polar angle: circular mean of the subjects'
 angles; shown where the Rayleigh test across those subjects gives p < .05. Eccentricity, sigma, HRF delay,
 amplitude: medians.
 
@@ -120,7 +121,7 @@ def main(bids_folder):
     der = bids_folder / 'derivatives'
     out_dir = der / OUT_SUBDIR
     out_dir.mkdir(parents=True, exist_ok=True)
-    maps_out = out_dir / 'group_maps_fsaverage.npz'
+    maps_out = out_dir / 'group_maps_fsaverage_v2.npz'   # v1: model-4 maps over model-free-reliable subjects
     if maps_out.exists():
         print(f'{maps_out} exists, nothing to do')
         return
@@ -160,7 +161,10 @@ def main(bids_folder):
     G['median_cv_r'] = np.nanmedian(np.where(valid, D['cv_r'], np.nan), 0)
     G['median_m4_r2'] = np.nanmedian(D['m4_r2'], 0)
 
-    use = rel & np.isfinite(D['m4_x'])
+    # Model-4 parameters only from subjects whose vertex has a cross-validated POSITIVE pRF (model 4 cannot be
+    # negative) and a model-free reliable response; the model-free mask alone admits task-locked, non-retinotopic
+    # responses across much of cortex, where model-4 positions are meaningless (v1 maps showed this).
+    use = pos & rel & np.isfinite(D['m4_x'])
     ang, R, rp, nu = circ_stats(D['m4_x'], D['m4_y'], use)
     G['m4_polar_angle'], G['m4_angle_R'], G['m4_angle_rayleigh_p'], G['m4_n_used'] = ang, R, rp, nu.astype(np.float32)
     G['m4_ecc'] = masked_median(np.hypot(D['m4_x'], D['m4_y']), use)
@@ -215,7 +219,8 @@ def main(bids_folder):
                     row[f'{lab}_ecc_sd_spearman'] = stats.spearmanr(np.hypot(x, y), sd)[0]
             rows.append(row)
     df = pd.DataFrame(rows)
-    df.to_csv(out_dir / 'region_stats.tsv', sep='\t', index=False)
+    if not (out_dir / 'region_stats.tsv').exists():
+        df.to_csv(out_dir / 'region_stats.tsv', sep='\t', index=False)
     info = dict(subjects=subs, n_subjects=S, min_subjects=MIN_SUBJ,
                 masks=dict(rel='rel_p<.05 & rel_r>0; binomial vs .05, BH q<.01',
                            cv='cv_p<.05 & cv_r>0; binomial vs .05, BH q<.01',
