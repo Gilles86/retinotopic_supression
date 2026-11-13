@@ -19,6 +19,8 @@
 #   and L-BFGS (shared terms); POLISH_SUFFIX=_x writes the polish to <root>_x; POLISH_TOL=1e-5 stops
 #   the alternating polish when a round lowers training SSE by less than that (POLISH_ROUNDS is then the cap);
 #   POLISH_METHOD=lm: joint Levenberg-Marquardt (joint_lm, Schur complement) instead, POLISH_LM_ITER / POLISH_LM_FTOL
+#   MODELS="m4_TDS_zs m7_full_zs": zero-sum sustained field, joint LM from two starts each (root <root>${ZS_SUFFIX:-_zs_lm});
+#     ZS_WARM_ROOT=<polished root> adds its m4_TDS as a start; ZS_TRANSIENT_HI / ZS_ITEM_MIN set the bounds
 #   CV_SCHEME=full POLISH=1 sbatch --array=1-330 ...  # main fits
 #   BOUNDED=1 boxes the shared terms (root gets a _bounded suffix)
 #   LOSS=nll fits the shared terms by likelihood (root gets a _nll suffix)
@@ -108,7 +110,7 @@ echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
     ${WARM_ROOT:+--warm-root $WARM_ROOT} ${GD_ITER:+--gd-iterations $GD_ITER} \
     ${GD_MIN_ITER:+--gd-min-iterations $GD_MIN_ITER} ${SIGMA_STARTS:+--sigma-starts $SIGMA_STARTS} \
     ${LBFGS_ROUNDS:+--lbfgs-rounds $LBFGS_ROUNDS} ${OUTPUT_ROOT:+--output-root $OUTPUT_ROOT} \
-    ${HRF_TABLE:+--hrf-table $HRF_TABLE} ${POLISH_MODELS:+--polish-models $POLISH_MODELS} ${POLISH_METHOD:+--polish-method $POLISH_METHOD} ${POLISH_SUFFIX:+--polish-suffix $POLISH_SUFFIX} ${POLISH_ROUNDS:+--polish-rounds $POLISH_ROUNDS} ${POLISH_TOL:+--polish-tol $POLISH_TOL} ${POLISH_MAX_ITER:+--polish-max-iter $POLISH_MAX_ITER} ${POLISH_LM_ITER:+--polish-lm-iter $POLISH_LM_ITER} ${POLISH_LM_FTOL:+--polish-lm-ftol $POLISH_LM_FTOL} \
+    ${HRF_TABLE:+--hrf-table $HRF_TABLE} ${POLISH_MODELS:+--polish-models $POLISH_MODELS} ${POLISH_METHOD:+--polish-method $POLISH_METHOD} ${POLISH_SUFFIX:+--polish-suffix $POLISH_SUFFIX} ${POLISH_ROUNDS:+--polish-rounds $POLISH_ROUNDS} ${POLISH_TOL:+--polish-tol $POLISH_TOL} ${POLISH_MAX_ITER:+--polish-max-iter $POLISH_MAX_ITER} ${POLISH_LM_ITER:+--polish-lm-iter $POLISH_LM_ITER} ${POLISH_LM_FTOL:+--polish-lm-ftol $POLISH_LM_FTOL} ${ZS_SUFFIX:+--zs-suffix $ZS_SUFFIX} ${ZS_WARM_ROOT:+--zs-warm-root $ZS_WARM_ROOT} ${ZS_TRANSIENT_HI:+--zs-transient-hi $ZS_TRANSIENT_HI} ${ZS_ITEM_MIN:+--zs-item-min $ZS_ITEM_MIN} \
     ${SELECTION_TABLE:+--selection-table $SELECTION_TABLE} ${MIN_R:+--min-r $MIN_R} ${MAX_P:+--max-p $MAX_P} \
     ${WARM_POLISH_ROOT:+--warm-polish-root $WARM_POLISH_ROOT} ${PRF_SOURCE_ROOT:+--prf-source-root $PRF_SOURCE_ROOT}
 

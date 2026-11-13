@@ -36,7 +36,7 @@ from braincoder.hrf import SPMHRFModel
 from retsupp.modeling.fit_af_prf_cv_v2 import (build_data_and_paradigm, build_model, fixed_pars_for, get_ring_positions,
                                                make_folds, shared_pars_for, split_by_condition_with_target)
 from retsupp.modeling.fit_cv_ladder_nested import raw_bounds, sign_pattern_of
-from retsupp.modeling.joint_lm import JointProblem, lm_fit, normal_blocks, schur_hessian
+from retsupp.modeling.joint_lm import JointProblem, lm_fit, normal_blocks, schur_hessian, shared_map
 from retsupp.modeling.roi_hrf import hrf_values, load_table
 
 BIDS = Path('/shares/zne.uzh/gdehol/ds-retsupp')
@@ -131,30 +131,6 @@ def free_lists(model, name):
     free_sh = [p for p in shared if p != 'sigma_T_dyn']
     free_pv = [p for p in labels if p not in shared and p not in fixed]
     return free_sh, free_pv
-
-
-def shared_map(free_sh, fix=None):
-    """A, b, φ names for s = A φ + b. ``fix``: None (all free), ('g_LP', v) or ('dS', v): g_HP = g_LP + v."""
-    n = len(free_sh)
-    if fix is None:
-        return None, None, list(free_sh)
-    what, v = fix
-    A, b = np.eye(n), np.zeros(n)
-    if what == 'zerosum':
-        # Sustained field with no condition-invariant part: g_HP + 3 g_LP = 0, so averaged over the four HP
-        # conditions every ring position has gain 0 (g_LP = -g_HP / 3, dS = 4/3 g_HP).
-        i_hp, i_lp = free_sh.index('g_HP'), free_sh.index('g_LP')
-        A[i_lp, i_lp], A[i_lp, i_hp] = 0.0, -1.0 / 3.0
-        drop = i_lp
-    elif what == 'dS':
-        i_hp, i_lp = free_sh.index('g_HP'), free_sh.index('g_LP')
-        A[i_hp, i_hp], A[i_hp, i_lp], b[i_hp] = 0.0, 1.0, v
-        drop = i_hp
-    else:
-        drop = free_sh.index(what)
-        A[drop, drop], b[drop] = 0.0, v
-    keep = [j for j in range(n) if j != drop]
-    return A[:, keep], b, [free_sh[j] for j in keep]
 
 
 def problem(model, name, y, paradigm, init, fix=None):

@@ -187,7 +187,22 @@ LADDER = {
     # m5 + one HP term on both transient item gains (hp_item_gain): multiplicative / additive.
     'm8_full_hpmult': ('free', 'free', 'tied', 'free', 'free', 'free', 'm5_TDS_dS'),
     'm8_full_hpadd': ('free', 'free', 'tied', 'free', 'free', 'free', 'm5_TDS_dS'),
+    # Zero-sum sustained field, fitted only all-free by joint LM (see ZERO_SUM_MODELS below).
+    'm4_TDS_zs': ('zero', 'zero', 'tied', 'free', 'free', 'free', 'm3b_TD'),
+    'm7_full_zs': ('free', 'free', 'free', 'free', 'free', 'free', 'm4_TDS_zs'),
 }
+# Zero-sum sustained field (notes/joint_optimisation_2026-11-13.md, notes/zero_sum_refit_2026-11-13.md). With the pRFs
+# free, the condition-invariant part of the sustained field, 1 + g·Σ_ℓ A_ℓ, is a reshaping of every pRF, so its level
+# is not an attention parameter. These models drop it: the sustained field averages to 1 over the four HP conditions,
+# g_HP + 3·g_LP = 0 (dS = g_HP − g_LP = 4/3·g_HP). m4_TDS_zs has no sustained field at all (same parameters as m3b_TD,
+# but fitted with the pRFs free); m7_full_zs adds the zero-sum field. Both are fitted only with all parameters free by
+# joint Levenberg-Marquardt (joint_lm), from two starts each (keep the lower training SSE, both recorded):
+#   m4_TDS_zs   cold: the clamped m3b_TD fit (pRFs at m0)    warm: the --zs-warm-root m4_TDS fit, sustained gains at 0
+#   m7_full_zs  parent: this run's m4_TDS_zs fit, field at 0  cold: the clamped m7_full fit projected onto zero-sum
+#               (g_HP = ¾·dS, g_LP = −¼·dS), σ_AF from it
+ZERO_SUM_MODELS = ('m4_TDS_zs', 'm7_full_zs')
+ZERO_SUM_CONSTRAINED = ('m7_full_zs',)   # g_HP + 3·g_LP = 0
+ZERO_SUM_NO_SUSTAINED = ('m4_TDS_zs',)   # σ_AF has no effect (both sustained gains 0): not fitted
 # Models fitted on top of finished ladders, run only when asked: the target gain split by target at HP vs
 # elsewhere (``target_split``) and the sustained LP gain split into next to HP vs opposite (``lp_split``).
 # Each adds one shared term to its parent, started at the value that reproduces the parent.
@@ -236,6 +251,23 @@ SHARED_BOUNDS = {'sigma_AF': (0.5, 8.0), 'sigma_dyn': (0.5, 8.0),
                  'w_b': (-5.0, 5.0), 'w_d': (-5.0, 5.0), 'theta_bd': (-6.3, 6.3),
                  KAPPA: (-2.0, 2.0), **{t: (-10.0, 10.0) for t in HP_ITEM_TERMS.values()}}
 POLISH_MAX_ITER = 3000
+# Bounds of the zero-sum LM fits: the sustained field stays non-negative (g_HP ≥ −1 and g_LP = −g_HP/3 ≥ −1); the
+# transient gains, which scale the drive while the distractor / target is on, likewise ≥ −1, and ≤ ZS_TRANSIENT_HI;
+# the item scale ≥ ZS_ITEM_MIN, since the transient terms multiply the item drive and lose their meaning (and run to
+# ±10) when it goes to 0 (TO decision, notes/zero_sum_refit_2026-11-13.md).
+ZS_TRANSIENT_HI = 5.0
+ZS_ITEM_MIN = 0.05
+
+
+def zs_bounds(transient_hi=None, item_min=None):
+    b = dict(SHARED_BOUNDS)
+    b['g_HP'] = (-1.0, 3.0)
+    b['g_LP'] = (-1.0, 1.0 / 3.0)
+    hi = ZS_TRANSIENT_HI if transient_hi is None else transient_hi
+    for g in ('g_HP_dyn', 'g_LP_dyn', 'g_T_dyn'):
+        b[g] = (-1.0, hi)
+    b['item_scale'] = (ZS_ITEM_MIN if item_min is None else item_min, 50.0)
+    return b
 SCHEMES = tuple(CV_SCHEMES) + ('full',)
 
 
@@ -319,13 +351,14 @@ def make_sse_fn(model, bold_train, paradigm, raw_pars, free_ix, loss='sse'):
     return fun
 
 
-def raw_bounds(model, init_pars, cols):
-    """SHARED_BOUNDS of ``cols`` mapped to raw (optimiser) space."""
+def raw_bounds(model, init_pars, cols, bounds=None):
+    """SHARED_BOUNDS (or ``bounds``) of ``cols`` mapped to raw (optimiser) space."""
+    bounds = SHARED_BOUNDS if bounds is None else bounds
     labels = list(model.parameter_labels)
     lo = init_pars[labels].iloc[:1].copy()
     hi = lo.copy()
     for c in cols:
-        lo[c], hi[c] = SHARED_BOUNDS[c]
+        lo[c], hi[c] = bounds[c]
     r = np.asarray(model._transform_parameters_backward(
         np.vstack([lo.values, hi.values]).astype(np.float32)), dtype=np.float64)
     out = []
@@ -677,6 +710,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
          hrf_table=None, frozen_prf=False, polish_models=None, polish_method='lbfgs',
          polish_suffix='_polished', polish_rounds=2, polish_max_iter=3000, polish_tol=0.0,
          polish_lm_iter=300, polish_lm_ftol=1e-10,
+         zs_suffix='_zs_lm', zs_warm_root=None, zs_transient_hi=None, zs_item_min=None,
          selection_table=None, min_r=None, max_p=0.01, warm_polish_root=None, prf_source_root=None):
     if cv_scheme not in SCHEMES:
         raise ValueError(f'cv_scheme must be in {SCHEMES}')
@@ -716,7 +750,9 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
             + ('_polprf' if prf_source_root else '')))
     polish_root = root.parent / f'{root.name}{polish_suffix}'
     hrf_tab = load_hrf_table(hrf_table)
-    models = models or [m for m in LADDER if m not in TARGET_SPLIT]
+    models = models or [m for m in LADDER if m not in TARGET_SPLIT + ZERO_SUM_MODELS]
+    zs_root = root.parent / f'{root.name}{zs_suffix}'
+    zs_b = zs_bounds(zs_transient_hi, zs_item_min)
 
     (bold, par_items, ci, di, ti, grid_coords, _masker,
      run_meta) = build_data_and_paradigm(
@@ -872,6 +908,99 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                 return out
             return init
 
+        def zs_fit(name, k, m_tr, y_tr, train, labels, sp, item_scale, mk):
+            """Joint LM fit of a zero-sum model (ZERO_SUM_MODELS) from its starts; keeps the lowest training SSE."""
+            from retsupp.modeling.joint_lm import polish_lm
+            paradigm = train['paradigm']
+            fixed = fixed_pars_for(sp, item_scale) or []
+            shared = shared_pars_for(sp, item_scale)
+            free_sh = [p for p in shared if p != 'sigma_T_dyn']
+            if name in ZERO_SUM_NO_SUSTAINED:
+                free_sh = [p for p in free_sh if p != 'sigma_AF']
+            free_pv = [p for p in labels if p not in shared and p not in fixed]
+            fix = ('zerosum', None) if name in ZERO_SUM_CONSTRAINED else None
+
+            def pred(model, p):
+                return np.asarray(model.predict(paradigm=paradigm, parameters=p.reindex(
+                    columns=list(model.parameter_labels))), dtype=np.float64)
+
+            def check_equal(p_child, parent_name, p_parent, what):
+                parent_model = build_model(
+                    grid_coords=grid_coords, paradigm=paradigm, condition_indicator=train['condition_indicator'],
+                    dynamic_indicator=train['dynamic_indicator'], target_indicator=train['target_indicator'],
+                    ring_positions=ring_positions, hrf_model=hrf_model, sign_pattern=sign_pattern_of(parent_name),
+                    item_scale='free')
+                ref = pred(parent_model, p_parent)
+                dev = float(np.abs(pred(m_tr, p_child) - ref).max())
+                print(f'  {name} fold {k}: {what}: max |Δpred| = {dev:.3g}', flush=True)
+                if not dev <= 1e-4 * max(1.0, float(np.abs(ref).max())):
+                    raise AssertionError(f'{name} {what} differs: {dev}')
+
+            starts = []
+            if name == 'm4_TDS_zs':
+                cold = fits['m3b_TD'][k].reindex(columns=labels).copy()
+                check_equal(cold, 'm3b_TD', fits['m3b_TD'][k], 'cold start = clamped m3b_TD')
+                starts.append(('cold_m3b_TD', cold))
+                if zs_warm_root:
+                    pkl = (Path(zs_warm_root) / 'm4_TDS' / f'sub-{subject:02d}'
+                           / f'sub-{subject:02d}_roi-{roi}_cv-fits.pkl')
+                    if pkl.exists():
+                        with open(pkl, 'rb') as f:
+                            old = pickle.load(f)
+                        if np.array_equal(np.asarray(old['voxel_ids']), voxel_ids):
+                            warm = old['fit_pars_per_fold'][min(k, len(old['fit_pars_per_fold']) - 1)]
+                            warm = warm.reindex(columns=labels).reset_index(drop=True).copy()
+                            warm[['g_HP', 'g_LP']] = 0.0
+                            starts.append(('warm_polished_m4_TDS', warm))
+                        else:
+                            print(f'  {name}: {pkl} has other voxels, no warm start')
+            else:   # m7_full_zs
+                cold = fits['m7_full'][k].reindex(columns=labels).copy()
+                ds = cold['g_HP'] - cold['g_LP']
+                cold['g_HP'], cold['g_LP'] = 0.75 * ds, -0.25 * ds
+                parent = polished['m4_TDS_zs'][k].reindex(columns=labels).copy()
+                parent[['g_HP', 'g_LP']] = 0.0
+                parent['sigma_AF'] = cold['sigma_AF'].iloc[0]
+                check_equal(parent, 'm4_TDS_zs', polished['m4_TDS_zs'][k], 'parent start = m4_TDS_zs fit')
+                starts += [('parent_m4_TDS_zs', parent), ('cold_m7_full_projected', cold)]
+            ck = zs_root / name / f'sub-{subject:02d}' / f'sub-{subject:02d}_roi-{roi}_fold-{k}_zs-ckpt.pkl'
+            done = {}
+            if ck.exists():
+                with open(ck, 'rb') as f:
+                    done = pickle.load(f)
+                print(f'  {name} fold {k}: resuming, starts done: {list(done)}')
+            for lab, init in starts:
+                if lab in done:
+                    continue
+                bnds = raw_bounds(m_tr, init, free_sh, bounds=zs_b)
+                print(f'  {name} fold {k}: LM from {lab}', flush=True)
+                p_, inf_ = polish_lm(m_tr, y_tr, paradigm, init.copy(), free_sh, free_pv, bounds=bnds,
+                                     max_iter=polish_lm_iter, ftol=polish_lm_ftol, fix=fix)
+                inf_.pop('log', None)
+                done[lab] = (p_, inf_)
+                _atomic_pickle(ck, done)
+            lab_best = min(done, key=lambda lb: done[lb][1]['sse_final'])
+            pars, info = done[lab_best][0].reindex(columns=labels), dict(done[lab_best][1])
+            info['start'] = lab_best
+            info['candidates'] = [dict(start=lb, sse_start=v[1]['sse_start'], sse_final=v[1]['sse_final'],
+                                       nit=v[1]['nit'], seconds=v[1]['seconds'], reason=v[1]['reason'],
+                                       **{t: float(v[0][t].iloc[0])
+                                          for t in GAINS + ['sigma_AF', 'sigma_dyn', 'item_scale']})
+                                  for lb, v in done.items()]
+            info['seconds'] = sum(c['seconds'] for c in info['candidates'])
+            if name in ZERO_SUM_CONSTRAINED:
+                viol = float(np.abs(pars['g_HP'] + 3 * pars['g_LP']).max())
+                if viol > 1e-4:
+                    raise AssertionError(f'{name}: zero-sum constraint violated by {viol}')
+            on_bound = [t for t in free_sh if t in zs_b and (
+                np.isclose(pars[t].iloc[0], zs_b[t][0], rtol=1e-3, atol=1e-4)
+                or np.isclose(pars[t].iloc[0], zs_b[t][1], rtol=1e-3, atol=1e-4))]
+            info['on_bound'] = on_bound
+            print(f'  {name} fold {k}: starts ' + ', '.join(
+                f"{c['start']} SSE {c['sse_start']:.1f} -> {c['sse_final']:.1f}" for c in info['candidates'])
+                + f' | kept {lab_best} | on bound: {on_bound or "none"}', flush=True)
+            return pars, info
+
         def load(name, root):
             pkl = root / name / f'sub-{subject:02d}' / \
                 f'sub-{subject:02d}_roi-{roi}_cv-fits.pkl'
@@ -895,7 +1024,13 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
             # Nothing below m5: m5 starts from the pRF source fit.
             needed = [n for n in needed if n in PRF_SOURCE_MODELS]
 
-        stages = [('clamped', n) for n in needed]
+        if 'm7_full_zs' in needed:   # its cold start is the clamped m7_full
+            chain, n = [], 'm7_full'
+            while n is not None:
+                chain.append(n)
+                n = LADDER[n][6]
+            needed = [n for n in reversed(chain) if n not in needed] + needed
+        stages = [('zs' if n in ZERO_SUM_MODELS else 'clamped', n) for n in needed]
         if warm_polish_root:
             # Only the all-free fits of the named models, each started from the earlier polished fit (no clamped
             # chain): see warm_polish_init. Where that root has no fit of this subject and area (no voxels in its
@@ -912,7 +1047,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
             stages += [('polish', n) for n in needed if not polish_models or n in polish_models]
         polished: dict[str, list] = {}
         for stage, name in stages:
-            out_root = root if stage == 'clamped' else polish_root
+            out_root = root if stage == 'clamped' else zs_root if stage == 'zs' else polish_root
             store = fits if stage == 'clamped' else polished
             cached = load(name, out_root)
             from_base = (('m00_bar', 'm0_prf') + (LABEL_BLIND if hp_rotation else ())
@@ -1037,7 +1172,9 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                 m_tr = mk(train)
                 labels = list(m_tr.parameter_labels)
 
-                if stage == 'polish':
+                if stage == 'zs':
+                    pars, info = zs_fit(name, k, m_tr, y_tr, train, labels, sp, item_scale, mk)
+                elif stage == 'polish':
                     fixed = fixed_pars_for(sp, item_scale) or []
                     shared = shared_pars_for(sp, item_scale)
                     free_sh = [p for p in shared if p != 'sigma_T_dyn']
@@ -1307,7 +1444,14 @@ if __name__ == '__main__':
                     help='lbfgs: one L-BFGS over all parameters; alt: alternate Adam on the pRFs and L-BFGS on the '
                          'shared terms (robust to float32 gradient noise); lm: joint Levenberg-Marquardt over pRFs '
                          'and shared terms with the per-voxel blocks eliminated by the Schur complement (joint_lm).')
-    ap.add_argument('--polish-lm-iter', type=int, default=300, help='LM polish: maximum iterations.')
+    ap.add_argument('--polish-lm-iter', type=int, default=300, help='LM polish (and zero-sum fits): maximum iterations.')
+    ap.add_argument('--zs-suffix', default='_zs_lm', help='Root suffix of the zero-sum models (m4_TDS_zs, m7_full_zs).')
+    ap.add_argument('--zs-warm-root', default=None,
+                    help='Polished root whose m4_TDS is a second start of m4_TDS_zs (sustained gains set to 0).')
+    ap.add_argument('--zs-transient-hi', type=float, default=None, help=f'Upper bound of the transient gains '
+                    f'in the zero-sum fits (default {ZS_TRANSIENT_HI}).')
+    ap.add_argument('--zs-item-min', type=float, default=None, help=f'Lower bound of the item scale in the zero-sum '
+                    f'fits (default {ZS_ITEM_MIN}).')
     ap.add_argument('--polish-lm-ftol', type=float, default=1e-10,
                     help='LM polish: stop after 3 accepted steps that each lower training SSE by less than this '
                          '(relative).')
@@ -1371,6 +1515,7 @@ if __name__ == '__main__':
          hrf_table=a.hrf_table, frozen_prf=a.frozen_prf, polish_models=a.polish_models,
          polish_method=a.polish_method, polish_suffix=a.polish_suffix, polish_tol=a.polish_tol,
          polish_rounds=a.polish_rounds, polish_max_iter=a.polish_max_iter,
-         polish_lm_iter=a.polish_lm_iter, polish_lm_ftol=a.polish_lm_ftol,
+         polish_lm_iter=a.polish_lm_iter, polish_lm_ftol=a.polish_lm_ftol, zs_suffix=a.zs_suffix,
+         zs_warm_root=a.zs_warm_root, zs_transient_hi=a.zs_transient_hi, zs_item_min=a.zs_item_min,
          selection_table=a.selection_table, min_r=a.min_r, max_p=a.max_p, warm_polish_root=a.warm_polish_root,
          prf_source_root=a.prf_source_root)

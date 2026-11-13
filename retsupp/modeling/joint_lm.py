@@ -250,14 +250,46 @@ def lm_fit(prob, x_pv=None, phi=None, bounds=None, max_iter=300, ftol=1e-10, n_s
     return x_pv, phi, info
 
 
+def shared_map(free_sh, fix=None):
+    """A, b, φ names for s = A φ + b over the raw shared terms ``free_sh`` (gains: raw = value).
+
+    ``fix``: None (all free); ('zerosum', None): sustained field with no condition-invariant part,
+    g_HP + 3·g_LP = 0 (g_LP = −g_HP/3; averaged over the four HP conditions every ring position has gain 0;
+    dS = g_HP − g_LP = 4/3·g_HP); (name, v): that term fixed at v; ('dS', v): g_HP = g_LP + v."""
+    n = len(free_sh)
+    if fix is None:
+        return None, None, list(free_sh)
+    what, v = fix
+    A, b = np.eye(n), np.zeros(n)
+    if what == 'zerosum':
+        i_hp, i_lp = free_sh.index('g_HP'), free_sh.index('g_LP')
+        A[i_lp, i_lp], A[i_lp, i_hp] = 0.0, -1.0 / 3.0
+        drop = i_lp
+    elif what == 'dS':
+        i_hp, i_lp = free_sh.index('g_HP'), free_sh.index('g_LP')
+        A[i_hp, i_hp], A[i_hp, i_lp], b[i_hp] = 0.0, 1.0, v
+        drop = i_hp
+    else:
+        drop = free_sh.index(what)
+        A[drop, drop], b[drop] = 0.0, v
+    keep = [j for j in range(n) if j != drop]
+    return A[:, keep], b, [free_sh[j] for j in keep]
+
+
 def polish_lm(model, bold_train, paradigm, init_pars, free_shared, free_per_voxel, bounds=None, max_iter=300,
-              ftol=1e-10, max_seconds=None):
+              ftol=1e-10, max_seconds=None, fix=None):
     """Ladder entry point (``--polish-method lm``): joint LM over per-voxel pRFs and shared terms from ``init_pars``.
 
-    ``bounds``: raw-space (lo, hi) per ``free_shared`` term (``raw_bounds``) or None. Same info keys as the other
-    polish methods."""
+    ``bounds``: raw-space (lo, hi) per ``free_shared`` term (``raw_bounds``) or None. ``fix``: a linear constraint on
+    the shared terms (``shared_map``), e.g. ('zerosum', None); ``bounds`` stay per ``free_shared`` term and are
+    mapped to the optimised coordinates. Same info keys as the other polish methods."""
     labels = list(model.parameter_labels)
-    prob = JointProblem(model, bold_train, paradigm, init_pars.reindex(columns=labels), free_per_voxel, free_shared)
+    A, b, phi_names = shared_map(list(free_shared), fix)
+    prob = JointProblem(model, bold_train, paradigm, init_pars.reindex(columns=labels), free_per_voxel, free_shared,
+                        A=A, b=b, phi_names=phi_names)
+    if bounds is not None:
+        bd = dict(zip(free_shared, bounds))
+        bounds = [bd[n] for n in phi_names]
     x, phi, info = lm_fit(prob, bounds=bounds, max_iter=max_iter, ftol=ftol, max_seconds=max_seconds)
     pars = prob.pars(x, phi)
     info.update(sse_clamped=info['sse_start'], status=0, message=info['reason'])
