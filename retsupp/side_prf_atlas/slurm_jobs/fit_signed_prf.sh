@@ -3,9 +3,9 @@
 #SBATCH --account=hare.econ.uzh
 #SBATCH --partition=standard
 #SBATCH --exclude=u24-chaihm0-633,u24-chaiam0-613
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=40G
-#SBATCH --time=01:30:00
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --time=02:30:00
 #SBATCH --output=/home/gdehol/logs/side_prf_atlas_signed_%A_%a.txt
 
 # Side analysis: whole-brain signed Gaussian pRF (CV over sessions, shift null) + reliability,
