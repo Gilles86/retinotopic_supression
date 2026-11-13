@@ -48,12 +48,14 @@ The real display, as drawn in Fig. 1a and Fig. 4a, keeps its true colours: orang
 All current supplements are included in the new colours, plus the parameter table
 (`table_parameters_2026-11_polished_2026-11-12_n28_palA`).
 
-**Not yet re-rendered in the new colours.** Use the versions from the earlier packages until they follow:
-- `figS_hierarchy_gain_terms` (update 10);
-- `figS_fig7_relnull_r02` / `_r01` (update 9);
-- `figS_decoding_canonical`;
-- `figS_loso_per_roi`;
-- `figS_gain_fields_dn` / `_gauss`.
+**Added later the same day:** the supplements that were missing are now included in the new colours:
+- `figS_hierarchy_gain_terms_polished_2026-11-12_n28_palA` (update 10);
+- `figS_fig7_relnull_r02_n28_palA` and `figS_fig7_relnull_r01_n28_palA` (update 9);
+- `figS_decoding_canonical_n28_palA`;
+- `figS_loso_per_roi_n28_palA` (cells: charcoal above 50%, gold below);
+- `figS_gain_fields_dn_n28_palA` and `figS_gain_fields_gauss_n28_palA`.
+
+Their numbers and captions are those of the earlier versions; only the colour words changed. Every supplement is now in the new colours.
 
 ## For the writing agent
 

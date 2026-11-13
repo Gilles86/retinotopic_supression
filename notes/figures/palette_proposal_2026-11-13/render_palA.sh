@@ -66,5 +66,23 @@ $PY -c "
 import retsupp.visualize.paper.fig3_voxel_selection as m
 m.figure('$D/fig3_voxel_selection_n28_2026-11-12', '/data/ds-retsupp/derivatives/af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf_polished', name='figS_item_locations_voxel_selection_n28_palA')"
 
+# Supplements added later (inputs as read by the n = 28 renders, see notes/data/n28/logs/)
+$EX $P.fig6_decoding plot --source canonical --rois V1 V2 V3 --name figS_decoding_canonical_n28_palA
+F2="--final --gain-table $D/gain_field_parameters_final2_2026-11.tsv --conditional-table $D/conditional_estimates_dog_final2_2026-11.tsv \
+    --slope-table $D/hierarchy_regression_final2_2026-11.tsv --robust-alone-table $D/conditional_exact_final2_allfam_2026-11.tsv --suffix _n28_palA"
+$EX $P.fig5_gain_fields --family dn $F2          # figS_gain_fields_dn_n28_palA
+$EX $P.fig5_gain_fields --family gauss $F2       # figS_gain_fields_gauss_n28_palA
+$EX $P.fig5_gain_fields --outputs loso --loso-table $D/loso_per_roi_final2_2026-11.tsv $F2   # figS_loso_per_roi_n28_palA
+rm -f notes/figures/paper_2026-11/table_parameters_2026-11_n28_palA.{md,tsv}   # side product of the three calls above
+for r in 0.2 0.1; do
+    T=ownvox10_relnull_r${r}_polished_2026-11-13
+    $PY -m $P.fig7_compact --compact --meta $D/trialwise_meta_bayes_$T --param $D/trialwise_$T/trialwise_af_${T}_parametric.tsv \
+        --name figS_fig7_relnull_r${r/./}_n28_palA --fit-label "each subject's joint gain-field fit on the looser voxel selection (cross-run reliability r > $r against a shift null; pRFs refitted together with the gain fields; m7: DoG pRFs, one HRF per subject × area, the fit's own voxels)"
+done
+$PY -m $P.figS_hierarchy_gain_terms --prefix $D/hierarchy_gain_terms_${TAG}_n28 --name figS_hierarchy_gain_terms_${TAG}_n28_palA \
+    --fits-note "joint gain-field fits with DoG pRFs, the pRFs refitted together with the gain fields"
+# Captions of figS_gain_fields_{dn,gauss}, figS_loso_per_roi, fig2, fig3, figS_baseline_vs_gain and figS_decode_simulation:
+# the hand-edited n28 captions with their colour words replaced (the scripts' generated captions predate those edits).
+
 # side tables written next to the inputs by some scripts: not part of this set
 rm -f $D/*n28_palA*.tsv $D/decode_sim_summary_2026-11_n28_palA.tsv $D/decoding_prf_models_*_n28_palA.tsv

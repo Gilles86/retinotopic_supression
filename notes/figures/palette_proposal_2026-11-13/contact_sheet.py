@@ -14,7 +14,9 @@ NAMES = ['fig1_paradigm_behaviour_v5_n28', 'fig1_paradigm_behaviour_v4_n28', 'fi
          'figS_decoding_all_rois_examples_n28', 'figS_decoding_hp_per_area_v10_n28', 'figS_decoding_eccentricity_n28',
          'figS_decoding_sweep_per_area_n28', 'figS_decoded_bars_rotated_n28', 'figS_decoded_bars_per_roi_n28',
          'figS_decoding_prf_models_n28', 'figS_decode_simulation_n28', 'figS_decoded_map_model_vs_measured_n28',
-         'figS_decoding_voxel_selection_n28', 'figS_bar_crossing_response_n28']
+         'figS_decoding_voxel_selection_n28', 'figS_bar_crossing_response_n28', 'figS_decoding_canonical_n28',
+         'figS_loso_per_roi_n28', 'figS_gain_fields_dn_n28', 'figS_gain_fields_gauss_n28',
+         'figS_hierarchy_gain_terms_polished_2026-11-12_n28', 'figS_fig7_relnull_r02_n28', 'figS_fig7_relnull_r01_n28']
 files = [str(D / f'{n}{SUF}.png') for n in NAMES]
 missing = [f for f in files if not Path(f).exists()]
 print('missing:', missing)
