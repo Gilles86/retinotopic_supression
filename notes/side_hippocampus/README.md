@@ -64,8 +64,8 @@ voxels. Dots: participants. Diamonds: mean ± SEM. \*: p < .05, one-sided (BH ac
 | Entorhinal | −0.003 | −0.001 | −0.0024 ± 0.0001 | 0 / 28 | 1.0 | 0.042 ± 0.002 | 1.0 | 0.49 ± 0.03 | .65 |
 | Parahippocampal | −0.003 | −0.001 | −0.0026 ± 0.0001 | 0 / 28 | 1.0 | 0.047 ± 0.003 | 1.0 | 0.50 ± 0.03 | .41 |
 | Amygdala | −0.004 | −0.001 | −0.0025 ± 0.0001 | 0 / 28 | 1.0 | 0.035 ± 0.002 | 1.0 | 0.53 ± 0.03 | .41 |
-| Precentral (neg.) | −0.002 | −0.000 | −0.0021 ± 0.0002 | 1 / 28 | 1.0 | 0.108 ± 0.009 | < 10⁻⁴ | 0.53 ± 0.02 | .038 (unc.) |
-| Lateral occipital (pos.) | 0.036 | 0.019 | +0.017 ± 0.003 | 24 / 28 | < 10⁻⁴ | 0.183 ± 0.008 | < 10⁻⁴ | 0.97 ± 0.005 | < 10⁻⁴ |
+| Precentral (neg.) | −0.003 | −0.000 | −0.0021 ± 0.0002 | 1 / 28 | 1.0 (unc.) | 0.108 ± 0.009 | 3.7 × 10⁻⁸ (unc.) | 0.53 ± 0.02 | .038 (unc.) |
+| Lateral occipital (pos.) | 0.036 | 0.019 | +0.017 ± 0.002 | 25 / 28 | 9.3 × 10⁻⁸ (unc.) | 0.183 ± 0.008 | 3.7 × 10⁻⁹ (unc.) | 0.97 ± 0.004 | 3.7 × 10⁻⁹ (unc.) |
 
 cvR² columns: mean over participants of the median over voxels. ± is SEM over participants. Full table with exact p:
 `data/prf_cv_tests_dog_roihrf.tsv`.
