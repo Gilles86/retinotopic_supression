@@ -83,6 +83,14 @@ differ only in shared terms: per-voxel pRFs and m00-m5 are taken from the all-ru
 their leak into the held-out runs is the same for all models), m7_full and the requested models are refitted per
 fold. Root gets a _frozenprf suffix.
 
+``--models m8_full_hpmult m8_full_hpadd`` (DoG only) ask whether the HP location changes the transient item gains in
+proportion to the gain (target and distractor gains scaled by a shared 1 + h at HP) or by the same amount (a shared
+offset a added to both at HP) (``hp_item_gain``). Both are m5_TDS_dS plus one term (as many terms as m7_full), started
+from m5 with h = a = 0 (checked to reproduce m5's prediction). ``--prf-source-root <all-runs root>`` (with
+``--models`` among m5_TDS_dS, m7_full and these two) freezes the per-voxel pRFs at that root's m7_full fit (e.g. the
+pRFs refitted with the gain fields) and refits m5 (shared terms, from that fit with g_HP_dyn tied) and the models from
+it in every fold, so the models share their pRFs exactly. Root gets a _polprf suffix.
+
 ``--reliable-only`` keeps the selected voxels with model-free cross-run reliability > 0 (mean over
 the ``prf_cv_reliability`` folds). The m00, m0, m1 and m3b fits come from ``--base-root``, restricted
 to those voxels, so m4 onward refit the shared terms on them. Root gets a _reliable suffix.
@@ -134,6 +142,7 @@ from retsupp.modeling.lp_split import NEW as LP_D, LPSplitDN, LPSplitDoG
 from retsupp.modeling.sigma_tied import SigmaTiedDN, SigmaTiedDoG
 from retsupp.modeling.dn_baseline_field import NEW as BF_TERMS, DNBaselineField
 from retsupp.modeling.dog_centre_surround_field import NEW as KAPPA, DoGCentreSurroundField
+from retsupp.modeling.hp_item_gain import CLASSES as HP_ITEM_CLASSES, MODES as HP_ITEM_TERMS
 from retsupp.modeling.gauss_attention_field import gauss_init, gaussian
 from retsupp.modeling.local_models import (
     DoGDynamicAttentionFieldPRF2DWithHRF_v3_target_sharedSigma_factorial as DoGFactorial,
@@ -175,6 +184,9 @@ LADDER = {
     'm8_full_dogk': ('free', 'free', 'free', 'free', 'free', 'free', 'm7_full'),
     'm8_full_dogcen': ('free', 'free', 'free', 'free', 'free', 'free', 'm7_full'),
     'm8_full_dogsur': ('free', 'free', 'free', 'free', 'free', 'free', 'm7_full'),
+    # m5 + one HP term on both transient item gains (hp_item_gain): multiplicative / additive.
+    'm8_full_hpmult': ('free', 'free', 'tied', 'free', 'free', 'free', 'm5_TDS_dS'),
+    'm8_full_hpadd': ('free', 'free', 'tied', 'free', 'free', 'free', 'm5_TDS_dS'),
 }
 # Models fitted on top of finished ladders, run only when asked: the target gain split by target at HP vs
 # elsewhere (``target_split``) and the sustained LP gain split into next to HP vs opposite (``lp_split``).
@@ -194,7 +206,16 @@ THETA_STARTS = (0.785398, -0.785398, 1.570796)   # extra θ starts (parent σ's)
 # the centre / surround pooling only), fitted only when asked.
 CS_FIELD = {'m8_full_dogk': None, 'm8_full_dogcen': 1.0, 'm8_full_dogsur': -1.0}
 KAPPA_STARTS = (1.0, -1.0)   # extra κ starts of dogk (parent σ's and gains)
-TARGET_SPLIT = tuple(SPLIT_TERMS) + SIGMA_TIED + tuple(BASELINE_FIELD) + tuple(CS_FIELD)
+# DoG only: at the HP location the transient target and distractor gains are scaled by (1 + h) (hpmult) or get + a
+# (hpadd), h / a shared (``hp_item_gain``). Both are m5_TDS_dS (no dT, dD) plus one term, so they have the same
+# number of terms as m7_full; h = 0 / a = 0 is m5 exactly (checked at the start).
+HP_ITEM = {'m8_full_hpmult': 'mult', 'm8_full_hpadd': 'add'}
+# --prf-source-root: per-voxel pRFs frozen at that root's all-runs fit of PRF_SOURCE_MODEL (the pRFs refitted with the
+# gain fields); m5_TDS_dS is refitted (shared terms) from it in every fold, and these models from m5.
+PRF_SOURCE_MODEL = 'm7_full'
+PRF_SOURCE_BASE = 'm5_TDS_dS'
+PRF_SOURCE_MODELS = (PRF_SOURCE_BASE, 'm7_full') + tuple(HP_ITEM)
+TARGET_SPLIT = tuple(SPLIT_TERMS) + SIGMA_TIED + tuple(BASELINE_FIELD) + tuple(CS_FIELD) + tuple(HP_ITEM)
 GAINS = ['g_HP', 'g_LP', 'g_HP_dyn', 'g_LP_dyn', 'g_T_dyn']
 # Models whose fit cannot depend on which ring position is labelled HP.
 LABEL_BLIND = ('m1_T', 'm2_D', 'm3_S', 'm3b_TD', 'm4_TDS')
@@ -213,7 +234,7 @@ SHARED_BOUNDS = {'sigma_AF': (0.5, 8.0), 'sigma_dyn': (0.5, 8.0),
                  'item_scale': (1e-3, 50.0),
                  **{g: (-10.0, 10.0) for g in GAINS + [T_HP, LP_D]},
                  'w_b': (-5.0, 5.0), 'w_d': (-5.0, 5.0), 'theta_bd': (-6.3, 6.3),
-                 KAPPA: (-2.0, 2.0)}
+                 KAPPA: (-2.0, 2.0), **{t: (-10.0, 10.0) for t in HP_ITEM_TERMS.values()}}
 POLISH_MAX_ITER = 3000
 SCHEMES = tuple(CV_SCHEMES) + ('full',)
 
@@ -227,6 +248,8 @@ def extra_terms(name):
                 if k is None or k in BASELINE_FIELD[name]]
     if name in CS_FIELD:
         return [KAPPA] if CS_FIELD[name] is None else []
+    if name in HP_ITEM:
+        return [HP_ITEM_TERMS[HP_ITEM[name]]]
     return []
 
 
@@ -440,6 +463,9 @@ def child_init(parent_pars, model, name):
             init[t] = 0.0              # weights 0: the parent's prediction (θ = 0: field at HP only)
     if KAPPA in labels and init[KAPPA].isna().all():
         init[KAPPA] = 0.0              # κ = 0: the parent's prediction (fixed-κ classes override it)
+    for t in HP_ITEM_TERMS.values():
+        if t in labels and init[t].isna().all():
+            init[t] = 0.0              # h = 0 / a = 0: the parent's prediction
     return init
 
 
@@ -651,7 +677,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
          hrf_table=None, frozen_prf=False, polish_models=None, polish_method='lbfgs',
          polish_suffix='_polished', polish_rounds=2, polish_max_iter=3000, polish_tol=0.0,
          polish_lm_iter=300, polish_lm_ftol=1e-10,
-         selection_table=None, min_r=None, max_p=0.01, warm_polish_root=None):
+         selection_table=None, min_r=None, max_p=0.01, warm_polish_root=None, prf_source_root=None):
     if cv_scheme not in SCHEMES:
         raise ValueError(f'cv_scheme must be in {SCHEMES}')
     if frozen_prf and (cv_scheme == 'full' or not base_roots):
@@ -666,6 +692,10 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
         raise ValueError('--selection-table needs --min-r and replaces --reliable-only')
     if warm_polish_root and not (polish and polish_models and polish_method in ('alt', 'lm')):
         raise ValueError('--warm-polish-root needs --polish --polish-method alt|lm --polish-models ...')
+    if prf_source_root and (polish or frozen_prf or base_roots or hp_rotation or family != 'dog'
+                            or not models or any(n not in PRF_SOURCE_MODELS for n in models)):
+        raise ValueError(f'--prf-source-root: DoG, --models within {PRF_SOURCE_MODELS}, no --polish / --frozen-prf / '
+                         '--base-root / --hp-rotation')
     per_voxel_cols = PER_VOXEL_COLS + (
         ['neural_baseline', 'surround_baseline'] if family == 'dn' else [])
     bids_folder = Path(bids_folder)
@@ -682,7 +712,8 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
             + ('_reliable' if reliable_only else '')
             + (f'_relnull_r{min_r:g}' if selection_table else '')
             + ('_roihrf' if hrf_table else '')
-            + ('_frozenprf' if frozen_prf else '')))
+            + ('_frozenprf' if frozen_prf else '')
+            + ('_polprf' if prf_source_root else '')))
     polish_root = root.parent / f'{root.name}{polish_suffix}'
     hrf_tab = load_hrf_table(hrf_table)
     models = models or [m for m in LADDER if m not in TARGET_SPLIT]
@@ -722,6 +753,16 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
             print(f'Reliability > 0: {(voxel_mask & reliable).sum()} of {voxel_mask.sum()} voxels')
             voxel_mask = voxel_mask & reliable
         voxel_ids = np.where(voxel_mask)[0]
+        prf_src = None
+        if prf_source_root:
+            pkl = (Path(prf_source_root) / PRF_SOURCE_MODEL / f'sub-{subject:02d}'
+                   / f'sub-{subject:02d}_roi-{roi}_cv-fits.pkl')
+            with open(pkl, 'rb') as f:
+                d = pickle.load(f)
+            if not np.array_equal(np.asarray(d['voxel_ids']), voxel_ids):
+                raise ValueError(f'{pkl}: voxel set differs from the current selection')
+            prf_src = d['fit_pars_per_fold'][0].reset_index(drop=True)
+            print(f'pRFs frozen at {pkl} ({len(prf_src)} voxels)')
         ring_positions = get_ring_positions()
         hrf_model = roi_hrf_model(sub, roi, hrf_tab)   # canonical without --hrf-table
         print(f'HRF: {hrf_values(subject, roi, hrf_tab)}')
@@ -850,6 +891,9 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
             for n in reversed(chain):
                 if n not in needed:
                     needed.append(n)
+        if prf_source_root:
+            # Nothing below m5: m5 starts from the pRF source fit.
+            needed = [n for n in needed if n in PRF_SOURCE_MODELS]
 
         stages = [('clamped', n) for n in needed]
         if warm_polish_root:
@@ -876,6 +920,8 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
             if any(m in TARGET_SPLIT for m in models):
                 # The split is fitted on top of finished ladders: every ancestor comes from --base-root.
                 from_base = from_base + tuple(n for n in needed if n not in TARGET_SPLIT)
+            if prf_source_root:
+                from_base = ()
             if frozen_prf:
                 # Per-voxel pRFs and the ladder below m7 come from the all-runs fit; m7 and the variants are
                 # refitted per fold (their shared terms only), so held-out prediction compares the shared
@@ -934,6 +980,14 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                                  LP_D: (LPSplitDoG, LPSplitDN)}.get(SPLIT_TERMS.get(name))
                     if name in SIGMA_TIED:
                         split_cls = (SigmaTiedDoG, SigmaTiedDN)
+                    if name in HP_ITEM:
+                        if family != 'dog':
+                            raise ValueError(f'{name} needs --family dog')
+                        return HP_ITEM_CLASSES[HP_ITEM[name]](
+                            item_scale_mode=item_scale, grid_coordinates=grid_coords, paradigm=d['paradigm'],
+                            hrf_model=hrf_model, condition_indicator=d['condition_indicator'],
+                            dynamic_indicator=d['dynamic_indicator'], target_indicator=d['target_indicator'],
+                            ring_positions=ring_positions, sign_pattern=sp)
                     if name in CS_FIELD:
                         if family != 'dog':
                             raise ValueError(f'{name} needs --family dog')
@@ -1052,6 +1106,15 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                     init = warm(name, k, init)
                     pars, info = gd_fit(m_tr, y_tr, train['paradigm'], init, sp,
                                         item_scale, gd_iterations, learning_rate, gd_min_iterations)
+                elif prf_source_root and name == PRF_SOURCE_BASE:
+                    # pRFs and the start of the shared terms from the source fit (all runs); g_HP_dyn is tied.
+                    init = prf_src.reindex(columns=labels).copy()
+                    init['sigma_T_dyn'] = init['sigma_dyn']
+                    free = [p for p in shared_pars_for(sp, item_scale) if p != 'sigma_T_dyn']
+                    pars, info = shared_fit(m_tr, y_tr, train['paradigm'], init, free, bounded=bounded, loss=loss,
+                                            sigma_starts=sigma_starts, lbfgs_rounds=lbfgs_rounds)
+                    print(f'  fold {k}: SSE source start {info["sse_parent_start"]:.2f}'
+                          f' -> {info["sse_final"]:.2f} | {info["seconds"]:.0f}s')
                 else:
                     init = child_init(fits[parent][k], m_tr, name)
                     free = [p for p in shared_pars_for(sp, item_scale)
@@ -1062,7 +1125,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                         # σ_dyn is an extra start.
                         free = [p for p in free if p != 'sigma_dyn']
                         starts = tuple(sigma_starts) + (float(fits[parent][k]['sigma_dyn'].iloc[0]),)
-                    if name in BASELINE_FIELD or CS_FIELD.get(name, 1.0) is None:
+                    if name in BASELINE_FIELD or CS_FIELD.get(name, 1.0) is None or name in HP_ITEM:
                         # Equality check: the start (weights 0) must reproduce the parent's prediction.
                         p_par = np.asarray(mk(train, parent).predict(
                             paradigm=train['paradigm'], parameters=fits[parent][k]))
@@ -1077,6 +1140,18 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                         full = load('m7_full', Path(base_roots[0]))
                         if full is not None:
                             cands.append((full[0].reindex(columns=labels), (None,)))
+                    if prf_src is not None and (name in HP_ITEM or name == 'm7_full'):
+                        # Also start from the source fit's HP − LP distractor gain (dD), as dD itself (m7), as an
+                        # offset a = dD or as a scale h = dD / g_D, from the parent's other terms.
+                        alt = init.copy()
+                        g_hp, g_lp = (float(prf_src[c].iloc[0]) for c in ('g_HP_dyn', 'g_LP_dyn'))
+                        if name == 'm7_full':
+                            alt['g_HP_dyn'] = alt['g_LP_dyn'] + (g_hp - g_lp)
+                        elif HP_ITEM[name] == 'add':
+                            alt[extra[0]] = g_hp - g_lp
+                        elif abs(g_lp) > 1e-6:
+                            alt[extra[0]] = float(np.clip((g_hp - g_lp) / g_lp, -9.0, 9.0))
+                        cands.append((alt, (None,)))
                     if name in BASELINE_FIELD and parent == 'm7_full':
                         # Other HP/LP patterns of the new field, from the parent's σ's.
                         for th in THETA_STARTS:
@@ -1280,6 +1355,10 @@ if __name__ == '__main__':
     ap.add_argument('--frozen-prf', action='store_true',
                     help='CV with the per-voxel pRFs (and m00-m5) of the all-runs --base-root; m7_full and the '
                          'requested models are refitted per fold. Root gets a _frozenprf suffix.')
+    ap.add_argument('--prf-source-root', default=None,
+                    help='All-runs root (e.g. the polished reference): per-voxel pRFs frozen at its m7_full fit; m5_TDS_dS '
+                         'and --models (m7_full, m8_full_hpmult, m8_full_hpadd) refitted per fold (shared terms only). '
+                         'Root gets a _polprf suffix.')
     a = ap.parse_args()
     starts = SIGMA_STARTS if a.sigma_starts is None else tuple(None if v == 'parent' else float(v) for v in a.sigma_starts)
     main(a.subject, a.bids_folder, a.roi, cv_scheme=a.cv_scheme,
@@ -1293,4 +1372,5 @@ if __name__ == '__main__':
          polish_method=a.polish_method, polish_suffix=a.polish_suffix, polish_tol=a.polish_tol,
          polish_rounds=a.polish_rounds, polish_max_iter=a.polish_max_iter,
          polish_lm_iter=a.polish_lm_iter, polish_lm_ftol=a.polish_lm_ftol,
-         selection_table=a.selection_table, min_r=a.min_r, max_p=a.max_p, warm_polish_root=a.warm_polish_root)
+         selection_table=a.selection_table, min_r=a.min_r, max_p=a.max_p, warm_polish_root=a.warm_polish_root,
+         prf_source_root=a.prf_source_root)
