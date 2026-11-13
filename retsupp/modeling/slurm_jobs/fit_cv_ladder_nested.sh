@@ -38,6 +38,7 @@
 #   RELIABLE_ONLY=1 keeps voxels with cross-run reliability > 0 (root gets a _reliable suffix), needs BASE_ROOT
 #   SELECTION_TABLE=<dir> MIN_R=0.2 [MAX_P=0.01]: voxels by cross-run reliability vs a circular-shift null
 #     (cv/voxel_reliability_null.py), no p_signal, no 500 cap (root gets a _relnull_r<MIN_R> suffix)
+#   ROI_MASK_DIR=<dir> (with SELECTION_TABLE): ROIs not in the atlas from <dir>/sub-XX/sub-XX_desc-<roi>_mask.nii.gz
 #   PRF_SOURCE_ROOT=<all-runs root> MODELS="m5_TDS_dS m7_full m8_full_hpmult m8_full_hpadd": pRFs frozen at that root's
 #     m7_full fit, m5 and MODELS refitted per fold (shared terms; root gets a _polprf suffix)
 #   WARM_POLISH_ROOT=<polished root> with POLISH=1 POLISH_METHOD=alt POLISH_MODELS="m4_TDS m7_full": skip the clamped
@@ -110,6 +111,7 @@ echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
     ${LBFGS_ROUNDS:+--lbfgs-rounds $LBFGS_ROUNDS} ${OUTPUT_ROOT:+--output-root $OUTPUT_ROOT} \
     ${HRF_TABLE:+--hrf-table $HRF_TABLE} ${POLISH_MODELS:+--polish-models $POLISH_MODELS} ${POLISH_METHOD:+--polish-method $POLISH_METHOD} ${POLISH_SUFFIX:+--polish-suffix $POLISH_SUFFIX} ${POLISH_ROUNDS:+--polish-rounds $POLISH_ROUNDS} ${POLISH_TOL:+--polish-tol $POLISH_TOL} ${POLISH_MAX_ITER:+--polish-max-iter $POLISH_MAX_ITER} ${POLISH_LM_ITER:+--polish-lm-iter $POLISH_LM_ITER} ${POLISH_LM_FTOL:+--polish-lm-ftol $POLISH_LM_FTOL} \
     ${SELECTION_TABLE:+--selection-table $SELECTION_TABLE} ${MIN_R:+--min-r $MIN_R} ${MAX_P:+--max-p $MAX_P} \
-    ${WARM_POLISH_ROOT:+--warm-polish-root $WARM_POLISH_ROOT} ${PRF_SOURCE_ROOT:+--prf-source-root $PRF_SOURCE_ROOT}
+    ${WARM_POLISH_ROOT:+--warm-polish-root $WARM_POLISH_ROOT} ${PRF_SOURCE_ROOT:+--prf-source-root $PRF_SOURCE_ROOT} \
+    ${ROI_MASK_DIR:+--roi-mask-dir $ROI_MASK_DIR}
 
 echo "Finished: $(date)"

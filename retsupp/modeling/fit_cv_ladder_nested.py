@@ -626,10 +626,21 @@ def _atomic_pickle(path, obj):
 ROI_ALIASES = {'V3AB': ['V3A', 'V3B'], 'LO': ['LO1', 'LO2'], 'TO': ['TO1', 'TO2'], 'VO': ['VO1', 'VO2']}
 
 
+ROI_MASK_DIR = None   # --roi-mask-dir: extra ROIs as <dir>/sub-XX/sub-XX_desc-<roi>_mask.nii.gz (value > 0 = in ROI)
+
+
 def roi_mask(sub, roi, n_vox):
-    """BOLD-mask voxels of ``roi``, built as in ``select_roi_voxels_psignal`` (same aliases, same masker)."""
+    """BOLD-mask voxels of ``roi``, built as in ``select_roi_voxels_psignal`` (same aliases, same masker).
+    With ``--roi-mask-dir``, an ROI whose mask file exists there is read from it instead of the atlas."""
     masker = sub.get_bold_mask(return_masker=True)
     masker.fit()
+    if ROI_MASK_DIR is not None:
+        s = sub.subject_id
+        f = Path(ROI_MASK_DIR) / f'sub-{s:02d}' / f'sub-{s:02d}_desc-{roi}_mask.nii.gz'
+        if f.exists():
+            out = masker.transform(str(f)).ravel() > 0
+            assert out.size == n_vox, (out.size, n_vox)
+            return out
     out = np.zeros(n_vox, dtype=bool)
     for r in ROI_ALIASES.get(roi, [roi]):
         out |= masker.transform(sub.get_retinotopic_roi(roi=r, bold_space=True)).astype(bool).ravel()
@@ -1359,7 +1370,14 @@ if __name__ == '__main__':
                     help='All-runs root (e.g. the polished reference): per-voxel pRFs frozen at its m7_full fit; m5_TDS_dS '
                          'and --models (m7_full, m8_full_hpmult, m8_full_hpadd) refitted per fold (shared terms only). '
                          'Root gets a _polprf suffix.')
+    ap.add_argument('--roi-mask-dir', default=None,
+                    help='Extra ROIs as <dir>/sub-XX/sub-XX_desc-<roi>_mask.nii.gz (BOLD space, > 0 = in ROI); '
+                         'only with --selection-table. Atlas ROIs are unaffected.')
     a = ap.parse_args()
+    if a.roi_mask_dir:
+        if not a.selection_table:
+            raise ValueError('--roi-mask-dir needs --selection-table')
+        ROI_MASK_DIR = a.roi_mask_dir
     starts = SIGMA_STARTS if a.sigma_starts is None else tuple(None if v == 'parent' else float(v) for v in a.sigma_starts)
     main(a.subject, a.bids_folder, a.roi, cv_scheme=a.cv_scheme,
          gd_iterations=a.gd_iterations, learning_rate=a.learning_rate,
