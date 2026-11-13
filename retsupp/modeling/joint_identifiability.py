@@ -48,6 +48,7 @@ MODELS = ('m4_TDS', 'm7_full')
 GRID = {'g_LP': np.array([-10, -5, -3, -2, -1.5, -1.25, -1, -0.9, -0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, -0.1, 0,
                           0.1, 0.2]),
         'dS': np.array([-1, -0.6, -0.4, -0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3, 0.4, 0.6, 1, 2, 3])}
+ZEROSUM = False  # --zerosum: sustained field without a condition-invariant part (g_LP = -g_HP / 3), m7_full only
 GAIN_LO = None   # --gain-lo: lower bound of every sustained/transient gain instead of SHARED_BOUNDS' -10
 SUMMARY = ['sigma_AF', 'g_HP', 'g_LP', 'sigma_dyn', 'g_HP_dyn', 'g_LP_dyn', 'g_T_dyn', 'item_scale']
 
@@ -139,7 +140,13 @@ def shared_map(free_sh, fix=None):
         return None, None, list(free_sh)
     what, v = fix
     A, b = np.eye(n), np.zeros(n)
-    if what == 'dS':
+    if what == 'zerosum':
+        # Sustained field with no condition-invariant part: g_HP + 3 g_LP = 0, so averaged over the four HP
+        # conditions every ring position has gain 0 (g_LP = -g_HP / 3, dS = 4/3 g_HP).
+        i_hp, i_lp = free_sh.index('g_HP'), free_sh.index('g_LP')
+        A[i_lp, i_lp], A[i_lp, i_hp] = 0.0, -1.0 / 3.0
+        drop = i_lp
+    elif what == 'dS':
         i_hp, i_lp = free_sh.index('g_HP'), free_sh.index('g_LP')
         A[i_hp, i_hp], A[i_hp, i_lp], b[i_hp] = 0.0, 1.0, v
         drop = i_hp
@@ -152,6 +159,8 @@ def shared_map(free_sh, fix=None):
 
 def problem(model, name, y, paradigm, init, fix=None):
     free_sh, free_pv = free_lists(model, name)
+    if ZEROSUM and fix is None:
+        fix = ('zerosum', None)
     A, b, phi_names = shared_map(free_sh, fix)
     prob = JointProblem(model, y, paradigm, init.reindex(columns=list(model.parameter_labels)), free_pv, free_sh,
                         A=A, b=b, phi_names=phi_names)
@@ -162,7 +171,7 @@ def problem(model, name, y, paradigm, init, fix=None):
 
 
 def tag():
-    return '' if GAIN_LO is None else f'_glo{GAIN_LO:g}'
+    return ('' if GAIN_LO is None else f'_glo{GAIN_LO:g}') + ('_zerosum' if ZEROSUM else '')
 
 
 def summary(pars, prefix=''):
@@ -397,6 +406,8 @@ def check(subject, roi, name, bids):
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('stage', choices=['dump', 'fit', 'profile', 'check', 'hessian'])
+    ap.add_argument('--zerosum', action='store_true',
+                    help='fit: sustained field with zero condition-average (g_LP = -g_HP/3); m7_full only.')
     ap.add_argument('--gain-lo', type=float, default=None,
                     help='Lower bound of the gains (e.g. -1: the field cannot zero the drive) instead of -10.')
     ap.add_argument('subject', type=int)
@@ -411,6 +422,7 @@ if __name__ == '__main__':
     ap.add_argument('--ftol', type=float, default=1e-10)
     a = ap.parse_args()
     GAIN_LO = a.gain_lo
+    ZEROSUM = a.zerosum
     if a.stage == 'dump':
         dump(a.subject, a.roi, a.bids_folder)
     else:

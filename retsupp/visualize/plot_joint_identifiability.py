@@ -20,8 +20,8 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 LABEL = {'g_LP': 'Sustained LP gain g_LP', 'dS': 'HP-specific gain dS = g_HP − g_LP'}
-TRADE = [('item_scale', 'Item scale'), ('amp_median', 'Median pRF amplitude'), ('g_HP', 'g_HP'), ('g_LP', 'g_LP'),
-         ('dS', 'dS'), ('sigma_AF', 'σ_AF')]
+TRADE = [('amp_median', 'Median pRF amplitude', '#D62828'), ('item_scale', 'Item scale', '#F77F00'),
+         ('sigma_AF', 'σ_AF (°)', '#0077B6')]
 
 
 def one(df, out):
@@ -60,18 +60,24 @@ def one(df, out):
     else:
         ax[1].set_visible(False)
     src = allr if len(allr) else folds[folds.split == folds.split.iloc[0]].sort_values('value')
-    for col, lab in TRADE:
-        if col == param or col not in src:
-            continue
-        v = src[col].to_numpy()
-        ax[2].plot(src.value, v - v[np.argmin(np.abs(src.value.to_numpy() - src[src.kind == 'optimum'].value.iloc[0]))]
-                   if (src.kind == 'optimum').any() else v, '-', lw=1, label=lab)
-    ax[2].set_ylabel('Change from the optimum')
-    ax[2].legend(frameon=False, fontsize=7)
-    ax[2].set_title('Other terms along the profile', fontsize=9)
+    src = src[src.kind == 'grid']
+    for col, lab, colr in TRADE:
+        if col in src:
+            ax[2].plot(src.value, src[col].clip(lower=1e-3), 'o-', ms=2, lw=1, color=colr, label=lab)
+    if param == 'g_LP' and 'dS' in src and src['dS'].abs().max() > 0:
+        ax2 = ax[2].twinx()
+        ax2.plot(src.value, src['dS'], 's--', ms=2, lw=0.8, color='#1F2933', label='dS (right)')
+        ax2.set_ylabel('dS')
+        ax2.legend(frameon=False, fontsize=7, loc='lower right')
+    ax[2].set_yscale('log')
+    ax[2].set_ylabel('Value along the profile')
+    ax[2].legend(frameon=False, fontsize=7, loc='upper left')
+    ax[2].set_title(f'Other terms ({src.split.iloc[0] if len(src) else ""})', fontsize=9)
     for a in ax:
         a.set_xlabel(LABEL[param])
-        a.spines[['top', 'right']].set_visible(False)
+        if param == 'g_LP':
+            a.set_xscale('symlog', linthresh=1.0)
+        a.spines[['top']].set_visible(False)
     fig.suptitle(f'sub-{df.subject.iloc[0]:02d} {roi} {model}: profile over {param}', fontsize=10)
     fig.savefig(out)
     plt.close(fig)

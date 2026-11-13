@@ -16,7 +16,7 @@
 #   STAGE=hessian SUBJECT=3 ROIS=IPS MODEL=m7_full sbatch ...
 set -eo pipefail
 STAGE="${STAGE:?}"; SUBJECT="${SUBJECT:-3}"; ROIS="${ROIS:-IPS}"; MODEL="${MODEL:-m7_full}"; PARAM="${PARAM:-g_LP}"
-LOGFILE="$HOME/logs/joint_ident_${STAGE}_sub-$(printf %02d "$SUBJECT")_${ROIS// /-}_${MODEL}_${PARAM}${GAIN_LO:+_glo$GAIN_LO}${SPLITS:+_${SPLITS// /-}}_${SLURM_JOB_ID}.txt"
+LOGFILE="$HOME/logs/joint_ident_${STAGE}_sub-$(printf %02d "$SUBJECT")_${ROIS// /-}_${MODEL}_${PARAM}${GAIN_LO:+_glo$GAIN_LO}${ZEROSUM:+_zerosum}${SPLITS:+_${SPLITS// /-}}_${SLURM_JOB_ID}.txt"
 mkdir -p "$HOME/logs"
 exec >"$LOGFILE" 2>&1
 scontrol update jobid="${SLURM_JOB_ID}" name="joint_${STAGE}_${MODEL}_${ROIS// /-}" 2>/dev/null || true
@@ -30,5 +30,5 @@ export PYTHONPATH="${CODE_DIR}${PYTHONPATH:+:$PYTHONPATH}"
 echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
 "$HOME/data/conda/envs/retsupp_cuda/bin/python" -u -m retsupp.modeling.joint_identifiability "$STAGE" "$SUBJECT" \
     --roi $ROIS --model "$MODEL" --param "$PARAM" ${SPLITS:+--splits $SPLITS} ${GRID:+--grid $GRID} \
-    ${MAX_ITER:+--max-iter $MAX_ITER} ${FTOL:+--ftol $FTOL} ${GAIN_LO:+--gain-lo $GAIN_LO} ${FROM_START:+--from-start}
+    ${MAX_ITER:+--max-iter $MAX_ITER} ${FTOL:+--ftol $FTOL} ${GAIN_LO:+--gain-lo $GAIN_LO} ${FROM_START:+--from-start} ${ZEROSUM:+--zerosum}
 echo "Finished: $(date)"
