@@ -19,7 +19,7 @@ from pathlib import Path
 import pandas as pd
 
 TERMS = ['g_HP', 'g_LP', 'g_HP_dyn', 'g_LP_dyn', 'g_T_dyn', 'sigma_AF', 'sigma_dyn', 'item_scale']
-REF_OF = {'m4_TDS_zs': 'm4_TDS', 'm7_full_zs': 'm7_full'}
+REF_OF = {'m4_TDS_zs': 'm4_TDS', 'm7_full_zs': 'm7_full', 'm5_TDS_dS_zs': 'm5_TDS_dS'}
 
 
 def main(bids, zs_root, ref_root, out):

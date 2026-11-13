@@ -190,6 +190,7 @@ LADDER = {
     # Zero-sum sustained field, fitted only all-free by joint LM (see ZERO_SUM_MODELS below).
     'm4_TDS_zs': ('zero', 'zero', 'tied', 'free', 'free', 'free', 'm3b_TD'),
     'm7_full_zs': ('free', 'free', 'free', 'free', 'free', 'free', 'm4_TDS_zs'),
+    'm5_TDS_dS_zs': ('free', 'free', 'tied', 'free', 'free', 'free', 'm4_TDS_zs'),
 }
 # Zero-sum sustained field (notes/joint_optimisation_2026-11-13.md, notes/zero_sum_refit_2026-11-13.md). With the pRFs
 # free, the condition-invariant part of the sustained field, 1 + g·Σ_ℓ A_ℓ, is a reshaping of every pRF, so its level
@@ -200,8 +201,11 @@ LADDER = {
 #   m4_TDS_zs   cold: the clamped m3b_TD fit (pRFs at m0)    warm: the --zs-warm-root m4_TDS fit, sustained gains at 0
 #   m7_full_zs  parent: this run's m4_TDS_zs fit, field at 0  cold: the clamped m7_full fit projected onto zero-sum
 #               (g_HP = ¾·dS, g_LP = −¼·dS), σ_AF from it
-ZERO_SUM_MODELS = ('m4_TDS_zs', 'm7_full_zs')
-ZERO_SUM_CONSTRAINED = ('m7_full_zs',)   # g_HP + 3·g_LP = 0
+#   m5_TDS_dS_zs  the paper's main model (no transient HP − LP terms): as m7_full_zs, cold start from the clamped
+#               m5_TDS_dS
+ZERO_SUM_MODELS = ('m4_TDS_zs', 'm7_full_zs', 'm5_TDS_dS_zs')
+ZERO_SUM_CONSTRAINED = ('m7_full_zs', 'm5_TDS_dS_zs')   # g_HP + 3·g_LP = 0
+ZERO_SUM_COLD = {'m7_full_zs': 'm7_full', 'm5_TDS_dS_zs': 'm5_TDS_dS'}   # clamped fit projected onto zero-sum
 ZERO_SUM_NO_SUSTAINED = ('m4_TDS_zs',)   # σ_AF has no effect (both sustained gains 0): not fitted
 # Models fitted on top of finished ladders, run only when asked: the target gain split by target at HP vs
 # elsewhere (``target_split``) and the sustained LP gain split into next to HP vs opposite (``lp_split``).
@@ -954,15 +958,16 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                             starts.append(('warm_polished_m4_TDS', warm))
                         else:
                             print(f'  {name}: {pkl} has other voxels, no warm start')
-            else:   # m7_full_zs
-                cold = fits['m7_full'][k].reindex(columns=labels).copy()
+            else:   # m7_full_zs, m5_TDS_dS_zs
+                cold_name = ZERO_SUM_COLD[name]
+                cold = fits[cold_name][k].reindex(columns=labels).copy()
                 ds = cold['g_HP'] - cold['g_LP']
                 cold['g_HP'], cold['g_LP'] = 0.75 * ds, -0.25 * ds
                 parent = polished['m4_TDS_zs'][k].reindex(columns=labels).copy()
                 parent[['g_HP', 'g_LP']] = 0.0
                 parent['sigma_AF'] = cold['sigma_AF'].iloc[0]
                 check_equal(parent, 'm4_TDS_zs', polished['m4_TDS_zs'][k], 'parent start = m4_TDS_zs fit')
-                starts += [('parent_m4_TDS_zs', parent), ('cold_m7_full_projected', cold)]
+                starts += [('parent_m4_TDS_zs', parent), (f'cold_{cold_name}_projected', cold)]
             ck = zs_root / name / f'sub-{subject:02d}' / f'sub-{subject:02d}_roi-{roi}_fold-{k}_zs-ckpt.pkl'
             done = {}
             if ck.exists():
@@ -1024,12 +1029,13 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
             # Nothing below m5: m5 starts from the pRF source fit.
             needed = [n for n in needed if n in PRF_SOURCE_MODELS]
 
-        if 'm7_full_zs' in needed:   # its cold start is the clamped m7_full
-            chain, n = [], 'm7_full'
-            while n is not None:
-                chain.append(n)
-                n = LADDER[n][6]
-            needed = [n for n in reversed(chain) if n not in needed] + needed
+        for zs_name, cold_name in ZERO_SUM_COLD.items():
+            if zs_name in needed:   # its cold start is the clamped fit of cold_name
+                chain, n = [], cold_name
+                while n is not None:
+                    chain.append(n)
+                    n = LADDER[n][6]
+                needed = [n for n in reversed(chain) if n not in needed] + needed
         stages = [('zs' if n in ZERO_SUM_MODELS else 'clamped', n) for n in needed]
         if warm_polish_root:
             # Only the all-free fits of the named models, each started from the earlier polished fit (no clamped
