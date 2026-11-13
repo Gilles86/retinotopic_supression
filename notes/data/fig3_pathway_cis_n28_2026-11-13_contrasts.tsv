@@ -1,0 +1,49 @@
+selection	selection_label	unit	pathway	contrast	n	mean	mean_ci_lo	mean_ci_hi	median	median_ci_lo	median_ci_hi	k_neg	p_wilcoxon
+refit	current voxels, refitted pRFs (update 8)	relative (% of mean response)	Early	HP − opposite	28	-21.498	-34.617	-8.7882	-21.385	-31.467	-9.914	20	0.0056031
+refit	current voxels, refitted pRFs (update 8)	relative (% of mean response)	Early	Next − opposite	28	-14.523	-26.472	-3.5588	-10.566	-16.314	-0.24217	19	0.017887
+refit	current voxels, refitted pRFs (update 8)	relative (% of mean response)	Early	HP − next	28	-6.9745	-14.214	0.44962	-6.8953	-15.972	-0.69165	20	0.090024
+refit	current voxels, refitted pRFs (update 8)	relative (% of mean response)	Dorsal	HP − opposite	26	-10.467	-33.665	13.178	-12.779	-19.776	-4.4838	19	0.14272
+refit	current voxels, refitted pRFs (update 8)	relative (% of mean response)	Dorsal	Next − opposite	26	2.2189	-26.814	32.377	-2.4876	-9.3774	7.8556	14	0.78353
+refit	current voxels, refitted pRFs (update 8)	relative (% of mean response)	Dorsal	HP − next	26	-12.686	-38.058	8.8211	-1.0606	-23.138	4.3759	13	0.29138
+refit	current voxels, refitted pRFs (update 8)	relative (% of mean response)	Occipitotemporal	HP − opposite	28	-6.9414	-17.449	4.008	-6.1737	-18.389	1.988	18	0.15691
+refit	current voxels, refitted pRFs (update 8)	relative (% of mean response)	Occipitotemporal	Next − opposite	28	-2.9807	-10.169	4.8601	-6.1102	-13.802	1.8187	18	0.28421
+refit	current voxels, refitted pRFs (update 8)	relative (% of mean response)	Occipitotemporal	HP − next	28	-3.9607	-16.347	7.259	-4.7068	-15.018	7.5812	16	0.50758
+refit	current voxels, refitted pRFs (update 8)	relative (% of mean response)	All areas	HP − opposite	28	-15.465	-25.538	-5.0108	-19.671	-24.255	-11.821	22	0.013624
+refit	current voxels, refitted pRFs (update 8)	relative (% of mean response)	All areas	Next − opposite	28	-8.3104	-16.972	0.43072	-9.4316	-15.594	-3.1166	20	0.06624
+refit	current voxels, refitted pRFs (update 8)	relative (% of mean response)	All areas	HP − next	28	-7.1547	-12.384	-1.5507	-10.996	-14.776	-3.3505	20	0.020409
+refit	current voxels, refitted pRFs (update 8)	absolute (% signal)	Early	HP − opposite	28	-0.093534	-0.15912	-0.030811	-0.10332	-0.13472	-0.055305	20	0.0051764
+refit	current voxels, refitted pRFs (update 8)	absolute (% signal)	Early	Next − opposite	28	-0.048498	-0.096056	-0.0040323	-0.045925	-0.070825	-0.002265	19	0.042608
+refit	current voxels, refitted pRFs (update 8)	absolute (% signal)	Early	HP − next	28	-0.045036	-0.083987	-0.0071472	-0.024425	-0.068215	-0.003335	20	0.059531
+refit	current voxels, refitted pRFs (update 8)	absolute (% signal)	Dorsal	HP − opposite	26	-0.097621	-0.22175	0.030372	-0.077835	-0.16654	-0.028155	19	0.055853
+refit	current voxels, refitted pRFs (update 8)	absolute (% signal)	Dorsal	Next − opposite	26	-0.015984	-0.11899	0.082387	-0.01908	-0.07294	0.03263	14	0.70785
+refit	current voxels, refitted pRFs (update 8)	absolute (% signal)	Dorsal	HP − next	26	-0.081637	-0.17033	0.0019078	-0.005835	-0.14478	0.02142	13	0.20785
+refit	current voxels, refitted pRFs (update 8)	absolute (% signal)	Occipitotemporal	HP − opposite	28	-0.035542	-0.1006	0.038823	-0.07091	-0.14211	0.01307	18	0.14377
+refit	current voxels, refitted pRFs (update 8)	absolute (% signal)	Occipitotemporal	Next − opposite	28	-0.018137	-0.070459	0.042354	-0.041005	-0.089185	0.017585	18	0.26417
+refit	current voxels, refitted pRFs (update 8)	absolute (% signal)	Occipitotemporal	HP − next	28	-0.017405	-0.090255	0.058925	-0.02506	-0.13275	0.03771	16	0.39895
+refit	current voxels, refitted pRFs (update 8)	absolute (% signal)	All areas	HP − opposite	28	-0.084375	-0.14749	-0.021115	-0.097725	-0.12795	-0.067425	22	0.0082247
+refit	current voxels, refitted pRFs (update 8)	absolute (% signal)	All areas	Next − opposite	28	-0.034707	-0.079375	0.0093474	-0.043075	-0.06335	-0.019685	20	0.15691
+refit	current voxels, refitted pRFs (update 8)	absolute (% signal)	All areas	HP − next	28	-0.049668	-0.083887	-0.016537	-0.044455	-0.07911	-0.01592	20	0.0070712
+current	Fig. 3 as printed	relative (% of mean response)	Early	HP − opposite	28	-21.648	-34.944	-8.8624	-21.211	-32.297	-10	20	0.0051764
+current	Fig. 3 as printed	relative (% of mean response)	Early	Next − opposite	28	-14.915	-26.821	-3.8287	-12.129	-17.071	0.05925	19	0.021779
+current	Fig. 3 as printed	relative (% of mean response)	Early	HP − next	28	-6.7332	-13.713	0.2993	-6.4096	-16.179	0.86748	19	0.094564
+current	Fig. 3 as printed	relative (% of mean response)	Dorsal	HP − opposite	25	-6.6712	-29.691	16.053	-11.623	-17.936	-0.513	18	0.24107
+current	Fig. 3 as printed	relative (% of mean response)	Dorsal	Next − opposite	25	-3.8936	-31.779	25.02	-2.7785	-12.349	6.9788	14	0.63383
+current	Fig. 3 as printed	relative (% of mean response)	Dorsal	HP − next	25	-2.7776	-18.361	13.857	-1.4272	-17.827	7.0083	13	0.41077
+current	Fig. 3 as printed	relative (% of mean response)	Occipitotemporal	HP − opposite	28	-9.7779	-22.802	2.4018	-9.4543	-16.782	1.1312	18	0.090024
+current	Fig. 3 as printed	relative (% of mean response)	Occipitotemporal	Next − opposite	28	-3.9255	-11.089	3.7228	-6.2568	-14.569	2.5192	18	0.2098
+current	Fig. 3 as printed	relative (% of mean response)	Occipitotemporal	HP − next	28	-5.8524	-18.358	5.5664	-6.1373	-16.764	1.8004	18	0.28421
+current	Fig. 3 as printed	relative (% of mean response)	All areas	HP − opposite	28	-15.504	-25.364	-5.1283	-19.247	-26.899	-11.071	23	0.012704
+current	Fig. 3 as printed	relative (% of mean response)	All areas	Next − opposite	28	-8.6354	-17.426	0.20563	-10.705	-15.642	-2.9541	20	0.059531
+current	Fig. 3 as printed	relative (% of mean response)	All areas	HP − next	28	-6.8687	-12.002	-1.3515	-10.42	-15.939	-1.6174	19	0.017887
+current	Fig. 3 as printed	absolute (% signal)	Early	HP − opposite	28	-0.091991	-0.15615	-0.030702	-0.10582	-0.13306	-0.056755	20	0.0047782
+current	Fig. 3 as printed	absolute (% signal)	Early	Next − opposite	28	-0.050161	-0.098403	-0.0049143	-0.043795	-0.078905	-0.00037	19	0.03793
+current	Fig. 3 as printed	absolute (% signal)	Early	HP − next	28	-0.041829	-0.078355	-0.0060543	-0.021707	-0.069225	0.00037	19	0.06624
+current	Fig. 3 as printed	absolute (% signal)	Dorsal	HP − opposite	26	-0.086294	-0.20431	0.036219	-0.064405	-0.12793	-0.014675	19	0.089029
+current	Fig. 3 as printed	absolute (% signal)	Dorsal	Next − opposite	26	-0.018797	-0.12827	0.087457	-0.021035	-0.0703	0.04571	14	0.78353
+current	Fig. 3 as printed	absolute (% signal)	Dorsal	HP − next	26	-0.067497	-0.14316	0.0059104	-0.01246	-0.13164	0.026005	14	0.19874
+current	Fig. 3 as printed	absolute (% signal)	Occipitotemporal	HP − opposite	28	-0.044915	-0.11332	0.030915	-0.07258	-0.13754	0.005155	18	0.10925
+current	Fig. 3 as printed	absolute (% signal)	Occipitotemporal	Next − opposite	28	-0.015466	-0.069495	0.044128	-0.03442	-0.09421	0.0202	18	0.35016
+current	Fig. 3 as printed	absolute (% signal)	Occipitotemporal	HP − next	28	-0.029448	-0.10313	0.049221	-0.027855	-0.13545	0.01807	18	0.21827
+current	Fig. 3 as printed	absolute (% signal)	All areas	HP − opposite	28	-0.083072	-0.14376	-0.021507	-0.09826	-0.12667	-0.07263	23	0.0076292
+current	Fig. 3 as printed	absolute (% signal)	All areas	Next − opposite	28	-0.036457	-0.081684	0.0079122	-0.044545	-0.075675	-0.01873	20	0.15024
+current	Fig. 3 as printed	absolute (% signal)	All areas	HP − next	28	-0.046614	-0.078697	-0.01476	-0.04565	-0.073285	-0.00635	19	0.0070712

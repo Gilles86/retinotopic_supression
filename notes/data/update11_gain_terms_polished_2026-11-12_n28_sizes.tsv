@@ -1,0 +1,31 @@
+term	area	median	ci_lo	ci_hi	k_pos	n	p	q
+Target gain	pooled	17.148	12.806	23.678	25	28	3.2037e-07	
+Target gain	V1	-2.3187	-14.936	1.5223	12	28	0.090024	0.090024
+Target gain	V2	5.2259	-4.1192	14.197	16	28	0.081454	0.090024
+Target gain	V3	33.312	9.8632	51.983	22	28	0.00034185	0.00061533
+Target gain	V3AB	29.468	20.843	47.76	25	27	3.0845e-06	1.388e-05
+Target gain	IPS	21.123	10.547	103.35	21	25	0.0067255	0.010088
+Target gain	hV4	59.143	33.9	74.946	24	28	7.2047e-05	0.00021614
+Target gain	VO	37.642	14.148	73.442	21	21	9.5367e-07	8.5831e-06
+Target gain	LO	20.057	4.115	34.452	19	28	0.070236	0.090024
+Target gain	TO	18.437	10.535	77.132	25	28	0.000335	0.00061533
+Distractor gain (averaged over its locations)	pooled	7.9947	4.3915	13.426	21	28	0.023224	
+Distractor gain (averaged over its locations)	V1	-0.65724	-6.8553	12.413	14	28	0.74509	0.74509
+Distractor gain (averaged over its locations)	V2	4.3139	-6.8351	12.721	15	28	0.28421	0.36929
+Distractor gain (averaged over its locations)	V3	6.3769	-12.185	24.434	16	28	0.18578	0.33441
+Distractor gain (averaged over its locations)	V3AB	10.776	4.1439	24.854	22	27	0.003878	0.017451
+Distractor gain (averaged over its locations)	IPS	1.8917	-2.0415	17.833	15	25	0.28723	0.36929
+Distractor gain (averaged over its locations)	hV4	21.477	7.9443	47.573	22	28	0.014599	0.043797
+Distractor gain (averaged over its locations)	VO	8.0167	2.9584	19.228	16	21	0.13728	0.30889
+Distractor gain (averaged over its locations)	LO	2.1703	-5.7995	23.024	16	28	0.46518	0.52332
+Distractor gain (averaged over its locations)	TO	8.1636	2.2751	47.599	24	28	0.00058339	0.0052505
+dS (sustained HP − LP)	pooled	-3.4719	-6.72	-1.2633	6	28	0.0044068	
+dS (sustained HP − LP)	V1	-7.8633	-12.748	-0.31924	9	28	0.10925	0.19665
+dS (sustained HP − LP)	V2	-7.7084	-11.209	-2.017	8	28	0.090024	0.19665
+dS (sustained HP − LP)	V3	-9.5337	-19.839	2.1039	10	28	0.0076292	0.034331
+dS (sustained HP − LP)	V3AB	-0.60561	-4.2411	1.3874	11	27	0.71398	0.80322
+dS (sustained HP − LP)	IPS	-0.15911	-39.608	1.1295	11	25	0.36057	0.54085
+dS (sustained HP − LP)	hV4	-5.6198	-22.455	-3.3389	7	28	0.0026621	0.023959
+dS (sustained HP − LP)	VO	-0.55445	-3.0385	1.7226	8	21	0.56207	0.72267
+dS (sustained HP − LP)	LO	-0.52411	-3.0804	3.21	13	28	0.95532	0.95532
+dS (sustained HP − LP)	TO	-3.1077	-8.9807	-0.32418	7	28	0.02805	0.084151

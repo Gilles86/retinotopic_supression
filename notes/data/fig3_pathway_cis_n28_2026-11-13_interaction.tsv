@@ -1,0 +1,17 @@
+selection	unit	pathways	n	F	df1	df2	p_F	p_perm
+refit	relative (% of mean response)	Early × Dorsal × Occipitotemporal	26	0.75512	4	100	0.55694	0.58604
+refit	relative (% of mean response)	Early × Dorsal	26	0.84843	2	50	0.43416	0.46625
+refit	relative (% of mean response)	Early × Occipitotemporal	28	2.5368	2	54	0.088515	0.081892
+refit	relative (% of mean response)	Dorsal × Occipitotemporal	26	0.19001	2	50	0.82754	0.82362
+refit	absolute (% signal)	Early × Dorsal × Occipitotemporal	26	0.55009	4	100	0.69938	0.71553
+refit	absolute (% signal)	Early × Dorsal	26	0.32791	2	50	0.72197	0.72973
+refit	absolute (% signal)	Early × Occipitotemporal	28	1.4318	2	54	0.2478	0.25387
+refit	absolute (% signal)	Dorsal × Occipitotemporal	26	0.57201	2	50	0.56804	0.57354
+current	relative (% of mean response)	Early × Dorsal × Occipitotemporal	25	0.66362	4	96	0.61878	0.63304
+current	relative (% of mean response)	Early × Dorsal	25	0.8833	2	48	0.42003	0.42796
+current	relative (% of mean response)	Early × Occipitotemporal	28	1.7033	2	54	0.19172	0.19458
+current	relative (% of mean response)	Dorsal × Occipitotemporal	25	0.022968	2	48	0.9773	0.9767
+current	absolute (% signal)	Early × Dorsal × Occipitotemporal	26	0.37338	4	100	0.82714	0.83262
+current	absolute (% signal)	Early × Dorsal	26	0.19864	2	50	0.82049	0.81872
+current	absolute (% signal)	Early × Occipitotemporal	28	1.0077	2	54	0.37182	0.38196
+current	absolute (% signal)	Dorsal × Occipitotemporal	26	0.38194	2	50	0.68451	0.69653

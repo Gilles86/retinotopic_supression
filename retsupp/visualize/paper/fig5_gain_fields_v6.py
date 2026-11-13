@@ -28,6 +28,10 @@ a reliable sustained gain (``--widths-table``, the ``_widths_thr2.tsv`` of ``fie
 that names significant areas computed from the data (joint and estimated alone, per pathway). The per-pathway pooling
 is written to ``notes/data/dS_pooled_by_pathway<suffix>_2026-11-12_v11.tsv``. Driver for a whole reference fit:
 ``retsupp/visualize/paper/regenerate_reference.sh``.
+
+``--split-d`` (v11 only) writes the same figure without panel d as ``fig5_gain_fields_v11_abc<suffix>`` (panel c over the
+full width) and panel d alone as the supplementary figure ``figS_transient_hp_lp<suffix>``, each with its own legend;
+the full v11 figure, the search supplement and the side tables are not written.
 """
 from __future__ import annotations
 
@@ -571,7 +575,7 @@ def panel_maps_v9(fig, p, x0, y_top, cw, gap, bgap, under, bars=True):
 
 
 def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_area_sustained=None, compact=False,
-         layout=None, widths_table=None, fit_label=None):
+         layout=None, widths_table=None, fit_label=None, split_d=False):
     # the same inputs and options as fig5_gain_fields_n28 (final fits, b-d unchanged in content)
     F.FINAL, F.SUFFIX, F.WIDTHS_SUPP = True, suffix, True
     F.GAIN_TABLE = gain_table
@@ -584,6 +588,7 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
     layout = layout or ('v7' if compact else 'v6')
     compact = layout in ('v7', 'v8', 'v9', 'v10', 'v11')
     v11 = layout == 'v11'      # v11: v10 on a reference fit, reliable-gain widths, significance sentences from the data
+    assert v11 or not split_d, '--split-d needs --layout v11'
     v10 = layout in ('v10', 'v11')      # v10: v9 with panel c led by the all-areas pooled estimate
     v9 = layout in ('v9', 'v10', 'v11')
     v8 = layout in ('v8', 'v9', 'v10', 'v11')        # v9: the v8 layout and parameters, in percent, sustained block as HP − LP maps
@@ -674,7 +679,7 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
              lambda a: (a.set_axis_off(), stimulus_icon(a, (0, 0, 1, 1), ('lp',)))]
     row(fig, Y(y2), 'c', [('Sustained gain: less at ', FG), ('HP', HP)], [(hp_lp, HP, 'Whole block, at HP − at LP')],
         x_let=.02, x_title=.2, key_y=Y(y2 + .27))
-    ax = at(LX, Y(y2 + .62 + ch), PW, ch)
+    ax = at(LX, Y(y2 + .62 + ch), 6.45 if split_d else PW, ch)     # split: c over the full width, as b
     if v9:
         F.dot_panel(ax, [(cond.assign(dS=cond.dS * 100), 'dS', HP, None)], (-12, 6), 'HP − LP (%)')
         ax.set_yticks([-10, -5, 0, 5])
@@ -689,9 +694,17 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
         title_d = [('Transient gain at HP: slightly less, ', FG), ('target', TARGET), (' and ', FG),
                    ('distractor', DISTRACTOR), (' alike', FG)]
     keys_d = [(icons('location', 'distractor'), DISTRACTOR, 'Each trial'), (icons('location', 'target'), TARGET, '')]
-    row(fig, Y(y2), 'd', title_d, keys_d, x_let=RX - .5, x_title=RX - .32, key_y=Y(y2 + .27))
-    fig.text((RX + PW) / W, Y(y2 + .27) / H, 'As Fig. 1c, d', fontsize=6, color='.45', ha='right', va='center')
-    ax = at(RX, Y(y2 + .62 + ch), PW, ch)
+    fig_d = None
+    if split_d:     # panel d as its own figure: the same row and dot panel, the same axes size
+        Wd, Hd = PW + .8, .62 + ch + .5
+        fig_d = plt.figure(figsize=(Wd, Hd))
+        row(fig_d, Hd - .14, '', title_d, keys_d, x_let=.02, x_title=.12, key_y=Hd - .41)
+        fig_d.text((.55 + PW) / Wd, (Hd - .41) / Hd, 'As Fig. 1c, d', fontsize=6, color='.45', ha='right', va='center')
+        ax = fig_d.add_axes([.55 / Wd, .5 / Hd, PW / Wd, ch / Hd])
+    else:
+        row(fig, Y(y2), 'd', title_d, keys_d, x_let=RX - .5, x_title=RX - .32, key_y=Y(y2 + .27))
+        fig.text((RX + PW) / W, Y(y2 + .27) / H, 'As Fig. 1c, d', fontsize=6, color='.45', ha='right', va='center')
+        ax = at(RX, Y(y2 + .62 + ch), PW, ch)
     if v9:
         F.dot_panel(ax, [(cond.assign(dD=cond.dD * 100), 'dD', DISTRACTOR, None),
                          (dt.assign(dT=dt.dT * 100), 'dT', TARGET, None)], (-35, 30), 'HP − LP (%)')
@@ -772,7 +785,8 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
         pw = None
         if v11:
             pw = pathway_pooling(cond)
-            pw.to_csv(f'notes/data/dS_pooled_by_pathway{suffix}_2026-11-12_v11.tsv', sep='\t', index=False)
+            if not split_d:
+                pw.to_csv(f'notes/data/dS_pooled_by_pathway{suffix}_2026-11-12_v11.tsv', sep='\t', index=False)
         legend = pooled_legend(legend, pooled_c, pw)
     if v11:
         lab = fit_label or ('Gain-field model fits with DoG pRFs, the pRFs refitted together with the gain fields')
@@ -782,6 +796,11 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
         legend = legend.replace(old, old[:-1] + '; with the pRFs refitted, the level shared by all four locations '
                                 'trades off against the item weight and the pRF amplitude, so read its sign, not its '
                                 'size)')
+    if split_d:
+        legend_abc, legend_d = split_legend_d(legend)
+        save(fig, f'fig5_gain_fields_{layout}_abc' + suffix, legend_abc)
+        save(fig_d, 'figS_transient_hp_lp' + suffix, legend_d)
+        return p
     save(fig, f'fig5_gain_fields_{layout}' + suffix, legend)
     print('scales:', scales, 'per-area sustained:', per_area_sustained)
     print(p.loc[AREAS].round(4).to_string())
@@ -795,6 +814,39 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
         f'notes/data/fig5_gain_field_map_parameters{suffix}_2026-11-12{"_" + layout if v8 else ""}.tsv', sep='\t',
              float_format='%.5f')
     return p
+
+
+def split_legend_d(legend):
+    """The v11 legend split into the legend of panels a-c and that of panel d as its own supplementary figure."""
+    import re
+    d0 = legend.index(' d, The gain analogue of Fig. 1c, d')
+    d1 = legend.index(' Estimated alone (c, d):')
+    d_text = legend[d0 + len(' d, '):d1].strip()
+    est = legend[d1:]
+    i_dd = est.index(' The distractor term (dD)')
+    i_joint = est.index(' Fitted jointly with all other terms:')
+    i_jdd = est.index('; dD no ROI q < .05') if '; dD no ROI q < .05' in est else est.index('; dD q < .05')
+    i_end = est.index('. ', i_jdd) + 1
+    d_stats = est[i_dd:i_joint].strip()
+    d_joint = est[i_jdd + 2:i_end].strip()
+    abc = (legend[:d0] + ' Estimated alone (c):' + est[len(' Estimated alone (c, d):'):i_dd] + est[i_joint:i_jdd]
+           + '.' + est[i_end:])
+    abc = abc.replace('b–d: dots are subjects', 'b, c: dots are subjects')
+    abc = abc.replace('(the transient HP − LP difference is in panel d)',
+                      '(the transient HP − LP difference is in Supplementary Fig., transient HP − LP)')
+    abc = re.sub(r'\(c, d\)', '(c)', abc)
+    head = ('**Supplementary Figure. Transient gain at HP minus at the low-probability (LP) locations, for the '
+            'distractor and the target.** Gain-field model fits with DoG pRFs, the pRFs refitted together with the gain '
+            'fields; differences between gains (HP − LP) in percentage points of gain, written as %. Dots are subjects '
+            '(triangles, beyond the axis), points and bars the median and bootstrapped 95% CI; stars, Wilcoxon '
+            'signed-rank test against 0, Benjamini-Hochberg across the nine ROIs, * q < .05. ')
+    d_text = d_text[0].upper() + d_text[1:]
+    d_text = d_text.replace('each estimated alone as in c', 'each estimated alone (added alone to the model with item '
+                            'weight, target, distractor and sustained gain), as dS in Fig. 5c')
+    legend_d = head + d_text + ' Estimated alone: ' + d_stats[0].lower() + d_stats[1:] + ' Fitted jointly with all ' \
+        'other terms: ' + d_joint + (' (the joint fit has no separate target term at HP).' if not d_joint.endswith('.') else
+                         ' The joint fit has no separate target term at HP.')
+    return abc, legend_d
 
 
 POOL_X = -1.85      # x position of the all-areas estimate in panel c (left of V1, past a divider)
@@ -1114,7 +1166,9 @@ if __name__ == '__main__':
                     help='v11: field_widths_reliable ..._widths_thr2.tsv; the sustained width of each map is the median '
                          'among fits with a reliable sustained gain')
     ap.add_argument('--fit-label', default=None, help='v11: how the legend names the fits (first sentence)')
+    ap.add_argument('--split-d', action='store_true', help='v11: write panels a-c (fig5_gain_fields_v11_abc) and panel d '
+                    'as its own supplementary figure (figS_transient_hp_lp) instead of the full figure')
     a = ap.parse_args()
     main(a.gain_table, a.conditional_table, a.slope_table, a.sigma_table, a.suffix,
          None if a.sustained_scale == 'auto' else a.sustained_scale == 'per-area', a.compact, a.layout,
-         a.widths_table, a.fit_label)
+         a.widths_table, a.fit_label, a.split_d)
