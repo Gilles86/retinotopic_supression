@@ -32,13 +32,18 @@ autocorrelation factor, but not by orders of magnitude).
    amplitudes as extra pRF-shape terms. Held-out runs do not separate this from attention: shape terms generalise across
    runs just as well (the held-out SSE of each run3 fold also falls by ~900–1 500 σ² from g_LP = 0 to the joint
    optimum). Its value says how wrong the DoG is around the ring, not how attention is distributed.
-4. **dS = g_HP − g_LP is identified and stable**, because HP moves between runs: it is the only part of the
-   sustained field that differs across conditions. Profiled Hessian at the reference fit (IPS m7_full): the flattest
-   direction is exactly g_HP + g_LP (smallest eigenvalue of the correlation-scaled Hessian 8e-4, condition number
-   3e3; corr(g_HP, g_LP) = +0.998), SE(dS) = 0.008 vs SE(g_LP) = 0.14. Under the −1 bound dS = 0.012 (warm) / 0.017
-   (cold) in IPS and 0.0096 / 0.0096 in TO, vs 0.023 / 0.033 (IPS) in the reference fits — the same within ~1–2 SE.
-   The dS profiles have a sharp interior minimum near 0–0.03 in all splits (IPS all runs: +1 400 SSE ≈ 600 σ² at
-   dS = 0.1), and the held-out minimum sits at the same place.
+4. **dS = g_HP − g_LP is locally well identified, but its value depends on where g_LP sits.** Locally the
+   problem is only the common level: in the profiled Hessian at the reference fit (IPS m7_full) the flattest direction
+   is exactly g_HP + g_LP (smallest eigenvalue of the correlation-scaled Hessian 8e-4, condition number 3e3,
+   corr(g_HP, g_LP) = +0.998), SE(dS) = 0.008 vs SE(g_LP) = 0.14 (TO: 0.10 vs 0.19). And at the joint optimum
+   (gains ≥ −1) dS is reproducible: 0.012 (warm) / 0.017 (cold) in IPS, 0.0096 / 0.0096 in TO, 0.00–0.04 in the three
+   run3 folds, with a sharp profile minimum (IPS all runs: +1 400 SSE ≈ 600 σ² at dS = 0.1) at the same place held out.
+   But dS conditional on a fixed g_LP moves with it — IPS (m7 g_LP profiles, run3 folds 0 and 2): dS ≈ 0.01 at
+   g_LP = −0.8, 0.08–0.15 at −0.5…−0.2, 0.29–0.43 at 0 (σ_AF then jumps to 4–5°); fold 1 −0.08…+0.01 over the same range;
+   TO: ≈ 0 (−0.01…0.00) across −2 … +0.2. The reference fits had dS = 0.023 / 0.033 (IPS) and −0.22 / −0.26 (TO; that
+   reference sits at an item scale of 0.001 and g_LP_dyn = +10, both on bounds). So dS is only as interpretable as the
+   handling of the common level makes it; a constraint that removes the level has to be checked for its effect on dS
+   (the zero-sum test below).
 
 So: no optimiser can make g_LP an attention parameter; the model needs a constraint. The recommendation is at the end.
 
@@ -112,10 +117,15 @@ V1 m7_full, `--polish-method lm --warm-polish-root <reference>`, 300 iterations 
 | TO | m4_TDS | ≥ −1 | cold | 855 220 | 840 279 | −1.000 | — | 2.13 | 2.29 | 1 908 |
 | V1 | m4_TDS | ≥ −10 | warm | 4 367 151 | 4 359 489 | −0.868 | — | 2.06 | 0.55 | 516 |
 | V1 | m4_TDS | ≥ −1 | warm | 4 367 151 | 4 359 784 | −0.925 | — | 1.80 | 0.62 | 378 |
+| V1 | m4_TDS | ≥ −1 | cold | 4 367 629 | 4 359 779 | −0.924 | — | 1.80 | 0.62 | 381 |
 | V1 | m7_full | ≥ −10 | warm | 4 367 153 | 4 363 730 | +2.64 | −0.36 | 4.28 | 0.05 | 56 |
+| V1 | m7_full | ≥ −1 | warm | 4 367 153 | 4 363 768 | +1.94 | −0.28 | 4.29 | 0.05 | 65 |
+| V1 | m7_full | ≥ −1 | cold | 4 367 332 | 4 363 766 | +2.01 | −0.29 | 4.29 | 0.05 | 64 |
 
 Reference (warm start) values for comparison: IPS m7 g_LP −0.59, dS 0.023, σ_AF 1.22, item scale 29, amplitude 36;
-cold start g_LP −0.33, dS 0.033. V1 cold-start fits were still running at the time of writing.
+cold start g_LP −0.33, dS 0.033. V1 m7_full: warm and cold agree with each other but sit in a positive-gain basin
+~4 300 SSE above the nested m4_TDS optimum (see Profiles). Hessian summary per point (SEs, condition numbers,
+flattest direction): `notes/data/joint_optimisation_2026-11-13/hessian_summary.tsv`.
 
 ## Cost of rerunning all 241 cells × 2 models
 
@@ -134,12 +144,23 @@ is (below).
    shift too (IPS g_T_dyn 0.11 → 0.02–0.03), so the item scale and the T, D gains of the polished fits need the same
    re-check once the sustained field is reparametrised.
 2. **Make the model identified by removing the condition-invariant part of the sustained field**: replace
-   1 + g_HP·A_HP + g_LP·Σ_{LP}A by 1 + dS·(A_HP − ¼·Σ_ℓ A_ℓ) (zero-sum over the four positions, so the field averages out
-   over HP conditions), or equivalently fix g_LP = 0 and keep dS. Everything condition-invariant then belongs to the
-   pRF (and to the item scale), and dS is the only sustained term. dS's estimate barely moves under all of the above
-   (0.01–0.03 in IPS whatever g_LP does; sharp profile minimum), so this costs nothing for the paper's key test.
-   Bound the gains so that the field stays positive (g ≥ −1, or a softplus parametrisation) so the `max(·, 0)` clamp
-   can never produce the mask regime.
+   1 + g_HP·A_HP + g_LP·Σ_{LP}A by a field that averages to 1 over the four HP conditions, i.e. g_HP + 3·g_LP = 0
+   (equivalently 1 + ¾·dS·(A_HP − ⅓·Σ_{LP}A), dS = g_HP − g_LP = 4/3·g_HP). Everything condition-invariant then belongs
+   to the pRF (and the item scale); dS is the only sustained term. Tested on the canaries with LM (`--zerosum`,
+   gains ≥ −1, 500 iterations from the warm start; `derivatives/joint_optimisation_2026-11-13/fits/*_zerosum.pkl`):
+   - IPS: dS = 0.034 (reference warm/cold 0.023/0.033), σ_AF 3.3°, item scale 21, median amplitude 34 — no amplitude
+     inflation, so the pRFs stay pRFs. Training SSE 858 975, i.e. 7 000 above the free-level joint optimum (the DoG
+     misfit the level was absorbing) and 730 above the reference fit.
+   - V1: dS = −0.127 (reference −0.126), σ_AF at its 8° bound.
+   - TO: degenerate — g_HP at −1, transient gains at +10 and the item scale at 0.001 (all bounds), as in the TO
+     reference fit itself (item scale 0.001, g_LP_dyn = +10). TO needs its own look (e.g. whether the item drive or the
+     distractor transients are the problem) before any of its gains are used.
+   - IPS from the cold start (clamped fit; 160 of 500 iterations at the time of writing): dS = 0.037, σ_AF 3.1°, item
+     scale 18 — warm and cold agree.
+   So in IPS and V1 the zero-sum model returns the reference dS without the amplitude inflation; this is the
+   parametrisation to rerun.
+   Bound the gains so the field stays positive (g ≥ −1, or a softplus parametrisation) so the `max(·, 0)` clamp can
+   never produce the mask regime.
 3. **If a sustained LP level is wanted descriptively**, report it only from the clamped fit (pRFs held at the field-free
    bar + item fit), defined as "the condition-invariant field needed on top of the field-free pRFs", and say that it is
    not separable from pRF shape — not as an attentional gain.
@@ -147,5 +168,7 @@ is (below).
    never got near, and warm/cold starts agree). Start every all-free model also from its nested parent's joint optimum
    (V1 m7_full otherwise lands in a worse basin than m4_TDS). Polish-tol "convergence" of the alternating method is not
    convergence (sub-03 V3 stopped after one round at 9e-6 while LM keeps finding 0.1–2 % elsewhere).
-5. Before rerunning all 241 cells, refit the canaries with the reparametrised field (point 2) with LM, check dS from
-   warm/cold/parent starts and the held-out fold, then run the full set (~3 CHF, ~4 h wall).
+5. Next: implement the zero-sum sustained field as a ladder model (it is only a linear constraint in
+   `joint_identifiability.shared_map` so far), check it on more canaries (and sort out TO), then rerun all 241 cells × 2
+   models with `--polish-method lm` (~3 CHF, ~4 h wall). Report dS (and the transient terms) from that; report the
+   condition-invariant level, if at all, only as a pRF-shape nuisance.
