@@ -392,7 +392,7 @@ def report(args):
         nc, nd = post.sizes['chain'], post.sizes['draw']
         picks = rng.choice(nc * nd, size=args.n_ppc, replace=False)
         cond = d['dist_cond'] + '|target ' + np.where(d['tHP'] > 0, 'HP', 'LP')
-        stats, subj = [], []
+        stats, subj, fig1 = [], [], []
         def summarise(y, g, who):
             rt = np.exp(y) * 1000
             for c_, ix in d.groupby(cond).groups.items():
@@ -407,6 +407,17 @@ def report(args):
                 stats.append(r)
             m = pd.Series(rt).groupby([d['subject'], d['dist_cond']]).mean()
             subj.append(m.rename(who))
+            # Fig. 1 contrasts: per-participant condition means, difference, mean over participants (ms)
+            mm = m.unstack()
+            onD = d['dist_cond'] != 'Absent'
+            tt = pd.Series(rt[onD.to_numpy()]).groupby([d.loc[onD, 'subject'].to_numpy(),
+                                                        d.loc[onD, 'tHP'].to_numpy()]).mean().unstack()
+            rep = pd.Series(rt).groupby([d['subject'], d['t_rep']]).mean().unstack()
+            drep = pd.Series(rt[onD.to_numpy()]).groupby([d.loc[onD, 'subject'].to_numpy(),
+                                                          d.loc[onD, 'd_rep'].to_numpy()]).mean().unstack()
+            fig1.append(dict(source=who, hp_vs_lp=(mm['HP'] - mm['LP']).mean(), lp_vs_absent=(mm['LP'] - mm['Absent']).mean(),
+                             hp_vs_absent=(mm['HP'] - mm['Absent']).mean(), target_hp_vs_lp=(tt[1.0] - tt[0.0]).mean(),
+                             target_repeat=(rep[1.0] - rep[0.0]).mean(), dist_repeat=(drep[1.0] - drep[0.0]).mean()))
         summarise(d['y'].to_numpy(), obs, 'observed')
         for n, pk in enumerate(picks):
             P = draw_params(post, pk // nd, pk % nd)
@@ -422,6 +433,12 @@ def report(args):
         ppc = pd.concat({'observed': ob[cols], 'pred_mean': mid, 'pred_lo': lo, 'pred_hi': hi}, axis=1)
         ppc.to_csv(out / f'{args.tag}_ppc_conditions.tsv', sep='\t')
         inside = ((ob[cols] >= lo) & (ob[cols] <= hi))
+        F = pd.DataFrame(fig1).set_index('source')
+        fo, fs = F.loc['observed'], F.drop(index='observed')
+        f1 = pd.DataFrame(dict(observed=fo, pred_mean=fs.mean(), pred_lo=fs.quantile(.025), pred_hi=fs.quantile(.975)))
+        f1.to_csv(out / f'{args.tag}_ppc_fig1_contrasts.tsv', sep='\t')
+        print('Fig. 1 contrasts (ms, mean over participants of within-participant differences):')
+        print(f1.round(1).to_string())
         S = pd.concat(subj, axis=1)
         sl, sh = S.drop(columns='observed').quantile(.025, axis=1), S.drop(columns='observed').quantile(.975, axis=1)
         cov_subj = float(((S['observed'] >= sl) & (S['observed'] <= sh)).mean())
