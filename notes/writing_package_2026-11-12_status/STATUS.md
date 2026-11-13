@@ -205,3 +205,44 @@ Accuracy follows the response times in every comparison, so there is no speed–
 > points [1.3, 4.4], 24 of 28 participants, p = 6.7 × 10⁻⁵), least accurate with a distractor at an LP location
 > relative to no distractor (−5.2 points [−6.1, −3.7], 26 of 28, p = 1.0 × 10⁻⁵), and less accurate when the target
 > appeared at the HP location (83.5 vs 86.2%; −2.0 points [−3.5, −1.3], 22 of 28, p = .0011)."
+
+---
+
+## V1 pRF size: replace the "resolution floor" sentence (Results, pRF paragraph)
+
+The current sentence ("…which most likely reflects a floor set by the spatial resolution of the paradigm rather than
+a property of V1") is not supported, so remove it. Full report: `notes/v1_prf_size_floor_2026-11-12.md`; tables in
+`notes/data/v1_prf_size_floor_2026-11-12/`.
+
+**Simulation.** Parameter recovery used the real stimulus, a realistic noise level and the paper's full fitting
+chain.
+- True σ 0.4 / 0.5 / 0.6 / 0.8 / 1.0° came back as 0.36 / 0.47 / 0.56 / 0.76 / 1.00°.
+- Fitting at 2× or 3× the resolution changed the recovered values by at most 0.02°.
+- The only floor is the model's lower bound, at σ = 0.2°.
+
+**Real V1 refit** (4 participants, twice the resolution, lower bounds). 91% of voxels kept their σ. The 9% that
+shrank to 0.1–0.25° predicted held-out data worse, so they were overfits.
+
+**Size measure.** "Size" here is σ of the DoG centre, not the FWHM (FWHM ≈ 1.3–1.5°). Say "σ" in the text.
+
+**Suggested Results text:**
+
+> "In V1, pRF size (σ) stayed between 0.54 and 0.65° across eccentricities. This is not a limit of the fitting
+> procedure: in simulations with the same stimulus, noise level and fitting steps, pRFs were recovered without bias
+> down to σ ≈ 0.4°, independently of the spatial resolution used in the fit, and refitting V1 at twice the resolution
+> did not change it. The flat profile more likely reflects broadening that does not depend on eccentricity, such as
+> small variations in eye position and the scatter of receptive fields within a voxel, on top of the small true pRFs
+> of central V1."
+
+**Short alternative:**
+
+> "…; parameter recovery showed that the fits resolve σ down to about 0.4°, so this flat profile is not a resolution
+> limit of the fit (Supplementary Note)."
+
+**Supplementary Note (Methods):**
+- **Simulation:** pRF time courses with true σ 0.1–1.0° at V1 eccentricities, generated from one participant's
+  stimulus and noise at held-out R² .15–.35, then fitted with the full chain at 50, 100 and 150 pixels.
+- **Real refit:** V1 of four participants refitted at 100 pixels with lower bounds (grid from σ = 0.15°, lower bound
+  0.05°), cross-validated over the same three folds.
+- **No eye tracking:** there were no eye-tracking data in the MRI sessions, so the eye-position account cannot be
+  tested directly. Say so if you name it.
