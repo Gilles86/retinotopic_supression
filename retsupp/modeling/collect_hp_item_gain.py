@@ -31,7 +31,7 @@ from scipy.stats import wilcoxon
 from statsmodels.stats.multitest import multipletests
 
 MODELS = ('m5_TDS_dS', 'm7_full', 'm8_full_hpmult', 'm8_full_hpadd')
-AREAS = ('V1', 'V2', 'V3', 'V3AB', 'hV4', 'LO', 'TO', 'VO', 'IPS')
+AREAS = ('V1', 'V2', 'V3', 'V3AB', 'IPS', 'hV4', 'VO', 'LO', 'TO')
 PATHWAY = {'Early': ('V1', 'V2', 'V3'), 'Dorsal': ('V3AB', 'IPS'), 'Occipitotemporal': ('hV4', 'VO', 'LO', 'TO')}
 CONTRASTS = {'mult_minus_add': ('m8_full_hpmult', 'm8_full_hpadd'),
              'mult_minus_base': ('m8_full_hpmult', 'm5_TDS_dS'),
@@ -75,6 +75,29 @@ def stats_table(df, cols):
     return pd.DataFrame(out)
 
 
+def fmt_p(p):
+    if not np.isfinite(p):
+        return 'n/a'
+    if p < 0.001:
+        m, e = f'{p:.1e}'.split('e')
+        sup = str.maketrans('-0123456789', '⁻⁰¹²³⁴⁵⁶⁷⁸⁹')
+        return f'{m} × 10{str(int(e)).translate(sup)}'
+    return f'{p:.2g}'.lstrip('0') if p < 0.01 else f'{p:.2f}'.lstrip('0')
+
+
+def md_table(st, var, digits=2, pos_label='k > 0 / n'):
+    d = st[st.variable.eq(var)]
+    lines = [f'| Area | Median [95% CI] | {pos_label} | p | q |', '|---|---|---|---|---|']
+    for _, r in d.iterrows():
+        name = {'pooled': '**Pooled**'}.get(r.level, r.level + (' (pathway)' if r.kind == 'pathway' else ''))
+        if r.n == 0:
+            lines.append(f'| {name} | n/a | 0 | n/a | n/a |')
+            continue
+        lines.append(f'| {name} | {r["median"]:+.{digits}f} [{r.ci_lo:+.{digits}f}, {r.ci_hi:+.{digits}f}] | '
+                     f'{int(r.n_pos)}/{int(r.n)} | {fmt_p(r.p)} | {fmt_p(r.q_bh)} |')
+    return '\n'.join(lines)
+
+
 def shared_rows(root, scheme):
     rows = []
     for model in MODELS:
@@ -114,9 +137,10 @@ def main(cv_root, full_root, out):
     complete = wide[list(MODELS)].notna().all(axis=1)
     print(f'{complete.sum()} subject × area with all four models ({(~complete).sum()} incomplete dropped)')
     wide, wtr = wide[complete], wtr[complete]
-    delta = pd.DataFrame({c: (wide[a] - wide[b]) * 100 for c, (a, b) in CONTRASTS.items()})   # % of variance
+    # ΔR² in units of 10⁻⁴ (0.01 percentage points of variance), as in item 1a.
+    delta = pd.DataFrame({c: (wide[a] - wide[b]) * 1e4 for c, (a, b) in CONTRASTS.items()})
     for c, (a, b) in CONTRASTS.items():
-        delta[f'train_{c}'] = (wtr[a] - wtr[b]) * 100
+        delta[f'train_{c}'] = (wtr[a] - wtr[b]) * 1e4
     delta = delta.reset_index()
     delta.to_csv(f'{out}_cv_delta.tsv', sep='\t', index=False)
     cv.to_csv(f'{out}_cv_r2.tsv', sep='\t', index=False)
@@ -124,6 +148,9 @@ def main(cv_root, full_root, out):
     st.to_csv(f'{out}_cv_stats.tsv', sep='\t', index=False)
     pd.set_option('display.width', 220)
     print(st.round(5).to_string())
+    md = []
+    for c in list(CONTRASTS) + ['train_mult_minus_add']:
+        md.append(f'### {c} (ΔR² × 10⁻⁴)\n\n' + md_table(st, c))
     # Fitted terms.
     sh = [shared_rows(cv_root, 'run3')]
     if full_root:
@@ -157,9 +184,13 @@ def main(cv_root, full_root, out):
         tt = pd.concat([stats_table(terms, cols).assign(fits='all'),
                         stats_table(terms[~terms.at_bound], cols).assign(fits='none at a bound')], ignore_index=True)
         tt.to_csv(f'{out}_terms_{scheme}_stats.tsv', sep='\t', index=False)
+        for c in cols:
+            for fits, sub in tt.groupby('fits', sort=False):
+                md.append(f'### {c}, {scheme} fit, {fits} (%)\n\n' + md_table(sub, c, digits=1))
         print(f'--- fitted terms ({scheme}); {int(terms.at_bound.sum())} of {len(terms)} subject × area with a gain, h or a '
               f'at its box')
         print(tt[tt.kind.ne('area')].round(3).to_string())
+    Path(f'{out}_tables.md').write_text('\n\n'.join(md) + '\n')
 
 
 if __name__ == '__main__':
