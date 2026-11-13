@@ -91,3 +91,11 @@ before the RT relation is looked at.
 
 **Interpretation.** As for the main analysis: credible if the 95% HDI excludes 0. Reported whatever the outcome, next to
 the main analysis and the baseline.
+
+**13 Nov 2026, addendum 6 inputs (decided before any gain–RT relation of this step was computed or looked at).**
+No binning: one gain estimate per trial and kind (target, distractor, global), by weighted OLS on the per-trial
+regressors of `fit_trialwise_af_gains` (no ridge), nine areas, signal voxels, refitted root. Sampling covariance per
+trial (3 × 3, across kinds) from 200 circular-shift placebo projections of the canonical model's residual (same
+offsets in every area). Area pooling: per participant, the deviation from each area's canonical gain, averaged over
+the nine areas with fixed weights 1 / median SE² per participant × area × kind; its covariance from the same weighted
+mean of the placebo estimates (so cross-area error correlation is kept). Code: `retsupp/modeling/fit_trialwise_af_gains_trialse.py`.
