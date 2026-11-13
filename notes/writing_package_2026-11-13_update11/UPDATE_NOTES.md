@@ -12,7 +12,6 @@ This update applies on top of updates 8–10 and answers the request in `notes/r
 - `parts/` holds one table file per item, with a plain-language line under each table and the source of every number.
 - `figures/` holds Fig. 5 without panel d, and panel d as its own supplementary figure, both unpolished.
 
-**Not ready:** item 3a (multiplicative vs additive) is still running and follows as an addendum.
 
 ## Bottom line for the manuscript
 
@@ -52,7 +51,19 @@ This update applies on top of updates 8–10 and answers the request in `notes/r
     distractor reduction, and it predicts a target − distractor difference that the data don't show.
   - Text: "the sustained HP reduction alone accounts for the lower response at the HP location for every item type;
     adding item-specific HP terms did not improve, and partly worsened, the account of the item responses".
-- **3a, multiplicative vs additive:** pending; addendum to follow.
+- **3a, multiplicative vs additive (`parts/item3a_mult_vs_add.md`).**
+  - **The models:** two versions of the joint model add one shared term to the item gains at HP. Either HP scales the
+    target and distractor gains by (1 + h), or it adds a common offset a.
+  - **Neither is supported.** Both predict held-out runs worse than the model without such a term (2/28 and 1/28
+    participants better). Neither fitted term differs from zero: h −0.1% [−23, +10], p = .40; a −0.4% [−7.5, +7.7],
+    p = .73.
+  - **Additive vs multiplicative.** The additive version loses less in held-out prediction (22/28 participants;
+    p = 7.9 × 10⁻⁴). The two fit the training data equally well (p = .15), so this reflects how well each
+    generalises, not evidence for an additive mechanism.
+  - **Method:** pRFs held at the refitted joint fit, leave-one-run-per-HP-condition-out.
+  - **Text:** "Allowing the HP location to change the item gains, either proportionally or by a common offset, did
+    not improve the model; the HP effect is captured by the sustained field alone." Do not claim additive or
+    multiplicative.
 - **3b, sizes side by side (`parts/item3b_sizes.md`).**
   - Joint fit: target +17% [+13, +24], distractor +8.0% [+4.4, +13], dS −3.5 points [−6.7, −1.3].
   - dS relative to the target gain is −0.20 as a ratio of medians, or −0.07 per participant where the target gain is
@@ -110,3 +121,23 @@ This update applies on top of updates 8–10 and answers the request in `notes/r
 - **Fig. 3 by pathway, HP − opposite in % signal:** early −0.094 [−0.159, −0.031], dorsal −0.098 [−0.222, +0.030],
   occipitotemporal −0.036 [−0.101, +0.039]; pathway × location p = .70 (permutation p = .72).
 - **Held-out prediction, leave one run out:** adding dS 3/28 better; adding dD 0/28; adding dD + dT 1/28.
+- **HP term on the item gains (3a):**
+  - multiplicative h −0.1% [−23, +10], p = .40;
+  - additive a −0.4% [−7.5, +7.7], p = .73;
+  - held-out vs base: multiplicative 2/28 better, additive 1/28;
+  - multiplicative − additive: −0.28 × 10⁻⁴ [−0.75, −0.09], 6/28, p = 7.9 × 10⁻⁴; training p = .15.
+
+## Caveat added after assembly (13 Nov, afternoon)
+
+The refitted fits behind every gain-field number in this update are being replaced:
+- **Why:** with free pRFs, the shared sustained level is not identifiable (see `notes/joint_optimisation_2026-11-13.md`).
+- **What replaces them:** a zero-sum sustained field fitted with a Levenberg–Marquardt optimiser. The gains then
+  become deviations from the average state.
+- **Expected effects:**
+  - dS was stable where tested;
+  - the target and distractor sizes may shift somewhat.
+- **Until update 13:** treat the gain-field numbers here (dS, target, distractor, ratios, correlations) as provisional
+  and keep them as placeholders in the text.
+- **Unaffected:** the logic of this update. The HP reduction is one sustained field, the transient terms are not
+  supported, and the sensitivity statement stands. The Fig. 3 and model-vs-measured results are also unaffected, apart
+  from the model's numbers.
