@@ -305,7 +305,20 @@ def check(subject, roi, name, bids):
             print(f'sh {nm} eps {eps}: max|fd-J|/max|fd| = {np.abs(fd - j_phi[:, :, i]).max() / den:.2e} '
                   f'(max|fd| {den:.3g})')
     print('bounds', dict(zip(prob.phi_names, bnds)))
-    lm_fit(prob, bounds=bnds, max_iter=6, debug=True)
+    x3, p3, _ = lm_fit(prob, bounds=bnds, max_iter=3, debug=True)
+    pr3, jp3, js3 = prob.jacobians(x3, p3)
+    pars3 = prob.pars(x3, p3)
+    print('non-finite pred:', int((~np.isfinite(pr3)).sum()))
+    for i, nm in enumerate(prob.per_voxel):
+        bad = np.where(~np.isfinite(jp3[:, :, i]).all(0) | ~np.isfinite(jp3[:, :, i]).any(0) * 0 |
+                       (~np.isfinite(jp3[:, :, i])).any(0))[0]
+        if bad.size:
+            print(f'NaN in d/d{nm} for voxels {bad[:10]}: raw {np.round(x3[bad[:5]], 3).tolist()}')
+            print(pars3.iloc[bad[:5]][prob.per_voxel])
+    for i, nm in enumerate(prob.phi_names):
+        bad = np.where((~np.isfinite(js3[:, :, i])).any(0))[0]
+        if bad.size:
+            print(f'NaN in d/d{nm} for {bad.size} voxels, e.g. {bad[:10]}')
     U, W, Vs, g_pv, g_s = normal_blocks(prob.y, pred, j_pv, j_phi)
     f = float(((prob.y - pred) ** 2).sum())
     print('phi', dict(zip(prob.phi_names, np.round(phi, 4))), 'g_s', np.round(g_s, 3))
