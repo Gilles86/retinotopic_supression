@@ -94,6 +94,27 @@ def gain_arrays(d, se_scale=1.0):
 # ---------------------------------------------------------------------------
 # PyMC model (latent gains integrated out)
 # ---------------------------------------------------------------------------
+def mvn_logp_elementwise(x, mu, cov):
+    """Sum over trials of the Gaussian log density; x, mu: lists of n (N,) tensors, cov: n × n nested list of (N,)
+    tensors. Cholesky and forward substitution written out per element (fast and batched; n = 3 or 4)."""
+    import pytensor.tensor as pt
+    n = len(x)
+    L = [[None] * n for _ in range(n)]
+    for i in range(n):
+        for j in range(i + 1):
+            acc = cov[i][j]
+            for k in range(j):
+                acc = acc - L[i][k] * L[j][k]
+            L[i][j] = pt.sqrt(acc) if i == j else acc / L[j][j]
+    w = []
+    for i in range(n):
+        acc = x[i] - mu[i]
+        for k in range(i):
+            acc = acc - L[i][k] * w[k]
+        w.append(acc / L[i][i])
+    return pt.sum(-0.5 * sum(wi ** 2 for wi in w) - sum(pt.log(L[i][i]) for i in range(n)) - 0.5 * n * np.log(2 * np.pi))
+
+
 def build_model(d, obs, C):
     import pymc as pm
     import pytensor.tensor as pt
@@ -149,33 +170,32 @@ def build_model(d, obs, C):
                       pt.stack([rpk[1], rpk[2], 1.0])])
         pm.Deterministic('R', R)
 
-        # ---- joint Gaussian of (ĝ, y) per trial ----
-        tk = tau[sid]                                       # (N, 3)
-        bk = b[sid]                                         # (N, 3)
-        Slat = tk[:, :, None] * R[None] * tk[:, None, :]    # latent covariance
-        cov_gy = tk * pt.dot(bk, R)                         # Cov(z, y) = diag(τ) R b
-        # trials with a distractor: (T, D, G, y)
+        # ---- joint Gaussian of (ĝ, y) per trial, written out elementwise ----
+        Rm = [[1.0, rpk[0], rpk[1]], [rpk[0], 1.0, rpk[2]], [rpk[1], rpk[2], 1.0]]
+        tk = [tau[sid, j] for j in range(3)]
+        bk = [b[sid, j] for j in range(3)]
+        mk = [mT, mD, mG]
+        sig2 = sigma[sid] ** 2
+
+        def part(idx, rows):
+            """(ĝ_idx, y) on the trials `rows`: Cov(ĝ) = τRτ + Σ, Cov(ĝ, y) = τ R b, Var(y) = b'Rb + σ²."""
+            t = [tk[i][rows] for i in idx]
+            bb = [bk[i][rows] for i in idx]
+            n = len(idx)
+            cov = [[None] * (n + 1) for _ in range(n + 1)]
+            for a_, i in enumerate(idx):
+                for c_, j in enumerate(idx):
+                    cov[a_][c_] = t[a_] * Rm[i][j] * t[c_] + C[rows, i, j]
+                cov[a_][n] = cov[n][a_] = t[a_] * sum(Rm[i][j] * bb[c_] for c_, j in enumerate(idx))
+            cov[n][n] = sum(bb[a_] * Rm[i][j] * bb[c_] for a_, i in enumerate(idx) for c_, j in enumerate(idx)) \
+                + sig2[rows]
+            x = [obs[rows, i] for i in idx] + [y[rows]]
+            mu = [mk[i][rows] for i in idx] + [mu_y[rows]]
+            return mvn_logp_elementwise(x, mu, cov)
+
         p = np.nonzero(hasD)[0]
-        Cp = Slat[p] + C[p]
-        var_y_p = (bk[p] * pt.dot(bk[p], R)).sum(1) + sigma[sid[p]] ** 2
-        top = pt.concatenate([Cp, cov_gy[p][:, :, None]], axis=2)
-        bot = pt.concatenate([cov_gy[p], var_y_p[:, None]], axis=1)[:, None, :]
-        cov_p = pt.concatenate([top, bot], axis=1)
-        mean_p = pt.stack([mT[p], mD[p], mG[p], mu_y[p]], axis=1)
-        pm.MvNormal('obs_D', mu=mean_p, cov=cov_p, observed=np.column_stack([obs[p], y[p]]))
-        # trials without a distractor: (T, G, y), no distractor-gain term
         q = np.nonzero(~hasD)[0]
-        ix = [0, 2]
-        Rq = R[ix][:, ix]
-        tq, bq = tk[q][:, ix], bk[q][:, ix]
-        Cq = tq[:, :, None] * Rq[None] * tq[:, None, :] + C[q][:, ix][:, :, ix]
-        cov_gy_q = tq * pt.dot(bq, Rq)
-        var_y_q = (bq * pt.dot(bq, Rq)).sum(1) + sigma[sid[q]] ** 2
-        top = pt.concatenate([Cq, cov_gy_q[:, :, None]], axis=2)
-        bot = pt.concatenate([cov_gy_q, var_y_q[:, None]], axis=1)[:, None, :]
-        cov_q = pt.concatenate([top, bot], axis=1)
-        mean_q = pt.stack([mT[q], mG[q], mu_y[q]], axis=1)
-        pm.MvNormal('obs_noD', mu=mean_q, cov=cov_q, observed=np.column_stack([obs[q][:, ix], y[q]]))
+        pm.Potential('loglik', part([0, 1, 2], p) + part([0, 2], q))
     return model
 
 
