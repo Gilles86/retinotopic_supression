@@ -227,9 +227,11 @@ def lm_fit(prob, x_pv=None, phi=None, bounds=None, max_iter=300, ftol=1e-10, n_s
         x_pv, phi, f = x_new, phi_new, f_new
         lam = max(lam / 3.0, 1e-12)
         small = small + 1 if rel < ftol else 0
-        log.append(dict(it=it, sse=f, rel=rel, lam=lam, seconds=time.time() - t0))
+        log.append(dict(it=it, sse=f, rel=rel, lam=lam, n_capped=n_capped, seconds=time.time() - t0))
         if verbose and (it % log_every == 0 or it <= 3):
-            print(f'    lm it {it}: SSE {f:.4f} (rel {rel:.2e}) λ {lam:.1e} | {time.time() - t0:.0f}s', flush=True)
+            print(f'    lm it {it}: SSE {f:.4f} (rel {rel:.2e}) λ {lam:.1e} capped {n_capped} | '
+                  + ' '.join(f'{n}={v:.3f}' for n, v in zip(prob.phi_names, phi)) + f' | {time.time() - t0:.0f}s',
+                  flush=True)
         if small >= n_small:
             reason = 'ftol'
             break

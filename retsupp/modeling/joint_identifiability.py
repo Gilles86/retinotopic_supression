@@ -45,7 +45,10 @@ CLAMPED = 'af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf'
 HRF_TABLE = 'paper_2026-11/roi_hrf_dog_final2.tsv'
 OUT = 'joint_optimisation_2026-11-13'
 MODELS = ('m4_TDS', 'm7_full')
-GRID = {'g_LP': np.round(np.arange(-0.8, 0.2001, 0.1), 3), 'dS': np.round(np.arange(-0.6, 0.6001, 0.1), 3)}
+GRID = {'g_LP': np.array([-10, -5, -3, -2, -1.5, -1.25, -1, -0.9, -0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2, -0.1, 0,
+                          0.1, 0.2]),
+        'dS': np.array([-1, -0.6, -0.4, -0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3, 0.4, 0.6, 1, 2, 3])}
+GAIN_LO = None   # --gain-lo: lower bound of every sustained/transient gain instead of SHARED_BOUNDS' -10
 SUMMARY = ['sigma_AF', 'g_HP', 'g_LP', 'sigma_dyn', 'g_HP_dyn', 'g_LP_dyn', 'g_T_dyn', 'item_scale']
 
 
@@ -153,7 +156,13 @@ def problem(model, name, y, paradigm, init, fix=None):
     prob = JointProblem(model, y, paradigm, init.reindex(columns=list(model.parameter_labels)), free_pv, free_sh,
                         A=A, b=b, phi_names=phi_names)
     rb = dict(zip(free_sh, raw_bounds(model, init.reindex(columns=list(model.parameter_labels)), free_sh)))
+    if GAIN_LO is not None:   # free gains: raw = value
+        rb = {n: ((max(GAIN_LO, b[0]), b[1]) if n.startswith('g_') else b) for n, b in rb.items()}
     return prob, [rb[n] for n in phi_names]
+
+
+def tag():
+    return '' if GAIN_LO is None else f'_glo{GAIN_LO:g}'
 
 
 def summary(pars, prefix=''):
@@ -223,7 +232,7 @@ def fit(subject, roi, name, bids, max_iter, ftol, kinds=('warm', 'cold')):
     print('   SE (white noise): ' + ', '.join(f'{n}={s:.4f}' for n, s in zip(h['names'], h['se'])))
     print(f'   cond (scaled) {h["cond_scaled"]:.3g}; smallest eigvec: ' + ', '.join(
         f'{n} {v:+.2f}' for n, v in zip(h['names'], h['evec_scaled'][:, 0])))
-    p = out_dir(bids) / 'fits' / f'sub-{subject:02d}_roi-{roi}_{name}_lm.pkl'
+    p = out_dir(bids) / 'fits' / f'sub-{subject:02d}_roi-{roi}_{name}_lm{tag()}.pkl'
     p.parent.mkdir(parents=True, exist_ok=True)
     with open(p, 'wb') as f:
         pickle.dump(res, f)
@@ -232,10 +241,12 @@ def fit(subject, roi, name, bids, max_iter, ftol, kinds=('warm', 'cold')):
 
 def profile(subject, roi, name, param, bids, max_iter, ftol, split_labels=None, grid=None):
     c = load_cache(bids, subject, roi)
-    with open(out_dir(bids) / 'fits' / f'sub-{subject:02d}_roi-{roi}_{name}_lm.pkl', 'rb') as f:
+    with open(out_dir(bids) / 'fits' / f'sub-{subject:02d}_roi-{roi}_{name}_lm{tag()}.pkl', 'rb') as f:
         fitres = pickle.load(f)
     best_pars = fitres[fitres['best']]['pars']
     grid = np.asarray(GRID[param] if grid is None else grid, dtype=float)
+    if param == 'g_LP' and GAIN_LO is not None:
+        grid = grid[grid >= GAIN_LO]
     rows = []
     t0 = time.time()
     for label, train, held in splits(c):
@@ -249,9 +260,11 @@ def profile(subject, roi, name, param, bids, max_iter, ftol, split_labels=None, 
         opt = prob0.pars(x, phi)
         v_opt = float(opt['g_LP'].iloc[0]) if param == 'g_LP' else float(opt['g_HP'].iloc[0] - opt['g_LP'].iloc[0])
 
-        def record(pars, value, it, kind):
+        def record(pars, value, it, kind, inf=None):
+            last = (inf or {}).get('log', [{}])[-1]
             row = dict(subject=subject, roi=roi, model=name, param=param, value=value, split=label, kind=kind,
-                       n_vox=len(pars), n_obs=int(train['bold'].size), nit=it,
+                       gain_lo=GAIN_LO, n_vox=len(pars), n_obs=int(train['bold'].size), nit=it,
+                       reason=(inf or {}).get('reason'), last_rel=last.get('rel', np.nan),
                        sse_train=float(((train['bold'] - np.asarray(m_tr.predict(paradigm=train['paradigm'],
                                                                                 parameters=pars))) ** 2).sum()))
             if held is not None:
@@ -260,7 +273,7 @@ def profile(subject, roi, name, param, bids, max_iter, ftol, split_labels=None, 
                 row['n_obs_held'] = int(held['bold'].size)
             row.update(summary(pars))
             rows.append(row)
-        record(opt, v_opt, info['nit'], 'optimum')
+        record(opt, v_opt, info['nit'], 'optimum', info)
         print(f'  [{label}] optimum {param}={v_opt:.4f} SSE {info["sse_final"]:.4f} ({info["nit"]} it) '
               f'| {time.time() - t0:.0f}s', flush=True)
         for side in (grid[grid >= v_opt], grid[grid < v_opt][::-1]):
@@ -269,16 +282,59 @@ def profile(subject, roi, name, param, bids, max_iter, ftol, split_labels=None, 
                 prob, bnds = problem(m_tr, name, train['bold'], train['paradigm'], start, fix=(param, float(v)))
                 x, phi, info = lm_fit(prob, bounds=bnds, max_iter=max_iter, ftol=ftol, verbose=False)
                 pars = prob.pars(x, phi)
-                record(pars, float(v), info['nit'], 'grid')
+                record(pars, float(v), info['nit'], 'grid', info)
                 print(f'  [{label}] {param}={v:+.2f}: SSE {info["sse_final"]:.4f} ({info["nit"]} it, '
                       f'{info["reason"]}) | {time.time() - t0:.0f}s', flush=True)
                 start = pars
     df = pd.DataFrame(rows).sort_values(['split', 'value'])
-    tag = '' if not split_labels else '_' + '-'.join(split_labels)
-    p = out_dir(bids) / 'profiles' / f'sub-{subject:02d}_roi-{roi}_{name}_profile-{param}{tag}.tsv'
+    stag = '' if not split_labels else '_' + '-'.join(split_labels)
+    p = out_dir(bids) / 'profiles' / f'sub-{subject:02d}_roi-{roi}_{name}_profile-{param}{tag()}{stag}.tsv'
     p.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(p, sep='\t', index=False)
     print(f'-> {p}')
+
+
+def hessians(subject, roi, name, bids):
+    """Profiled GN Hessian over the shared terms at the reference starts (warm = reference polished fit, cold =
+    clamped fit) and at the LM end points of ``fit`` (all in the reported parametrisation)."""
+    c = load_cache(bids, subject, roi)
+    whole = splits(c)[0][1]
+    m = make_model(c, name, whole)
+    y = whole['bold']
+    pts = {f'start_{k}': c['starts'][(name, k)] for k in ('warm', 'cold')}
+    fp = out_dir(bids) / 'fits' / f'sub-{subject:02d}_roi-{roi}_{name}_lm{tag()}.pkl'
+    if fp.exists():
+        with open(fp, 'rb') as f:
+            fr = pickle.load(f)
+        pts.update({f'lm_{k}': fr[k]['pars'] for k in ('warm', 'cold') if k in fr})
+    out, rows = {}, []
+    for label, pars in pts.items():
+        prob, _ = problem(m, name, y, whole['paradigm'], pars)
+        x, phi = prob.start()
+        sse = prob.sse(x, phi)
+        h = hessian_report(prob, x, phi, sse, y.size)
+        out[label] = dict(h, summary=summary(pars.reindex(columns=list(m.parameter_labels))), sse=sse)
+        print(f'== {roi} {name} {label}: SSE {sse:.2f}; cond (correlation-scaled) {h["cond_scaled"]:.3g}')
+        print('   SE: ' + ', '.join(f'{n}={v:.4f}' for n, v in zip(h['names'], h['se'])))
+        for j in range(2):
+            print(f'   eig {h["eig_scaled"][j]:.3g}: ' + ', '.join(
+                f'{n} {v:+.2f}' for n, v in zip(h['names'], h['evec_scaled'][:, j]) if abs(v) > 0.1))
+        if 'g_LP' in h['names']:
+            i = h['names'].index('g_LP')
+            print('   corr(g_LP, ·): ' + ', '.join(f'{n} {h["corr"][i, j]:+.2f}' for j, n in enumerate(h['names'])
+                                                  if j != i))
+        for j, n in enumerate(h['names']):
+            rows.append(dict(subject=subject, roi=roi, model=name, point=label, gain_lo=GAIN_LO, sse=sse, term=n,
+                             value=out[label]['summary'].get(n, np.nan), se=h['se'][j],
+                             cond_scaled=h['cond_scaled'], eig_min_scaled=h['eig_scaled'][0],
+                             evec_min=h['evec_scaled'][j, 0], sigma2=h['sigma2'],
+                             **{f'corr_{k}': h['corr'][j, kk] for kk, k in enumerate(h['names'])}))
+    p = out_dir(bids) / 'hessians' / f'sub-{subject:02d}_roi-{roi}_{name}_hessian{tag()}'
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p.with_suffix('.pkl'), 'wb') as f:
+        pickle.dump(out, f)
+    pd.DataFrame(rows).to_csv(p.with_suffix('.tsv'), sep='\t', index=False)
+    print(f'-> {p}.tsv')
 
 
 def check(subject, roi, name, bids):
@@ -335,7 +391,9 @@ def check(subject, roi, name, bids):
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('stage', choices=['dump', 'fit', 'profile', 'check'])
+    ap.add_argument('stage', choices=['dump', 'fit', 'profile', 'check', 'hessian'])
+    ap.add_argument('--gain-lo', type=float, default=None,
+                    help='Lower bound of the gains (e.g. -1: the field cannot zero the drive) instead of -10.')
     ap.add_argument('subject', type=int)
     ap.add_argument('--roi', nargs='+', required=True)
     ap.add_argument('--model', default='m7_full', choices=list(MODELS))
@@ -346,11 +404,14 @@ if __name__ == '__main__':
     ap.add_argument('--max-iter', type=int, default=300)
     ap.add_argument('--ftol', type=float, default=1e-10)
     a = ap.parse_args()
+    GAIN_LO = a.gain_lo
     if a.stage == 'dump':
         dump(a.subject, a.roi, a.bids_folder)
     else:
         for roi in a.roi:
-            if a.stage == 'check':
+            if a.stage == 'hessian':
+                hessians(a.subject, roi, a.model, a.bids_folder)
+            elif a.stage == 'check':
                 check(a.subject, roi, a.model, a.bids_folder)
             elif a.stage == 'fit':
                 fit(a.subject, roi, a.model, a.bids_folder, a.max_iter, a.ftol)
