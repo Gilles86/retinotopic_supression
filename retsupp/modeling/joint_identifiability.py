@@ -304,6 +304,8 @@ def check(subject, roi, name, bids):
             den = max(np.abs(fd).max(), 1e-30)
             print(f'sh {nm} eps {eps}: max|fd-J|/max|fd| = {np.abs(fd - j_phi[:, :, i]).max() / den:.2e} '
                   f'(max|fd| {den:.3g})')
+    print('bounds', dict(zip(prob.phi_names, bnds)))
+    lm_fit(prob, bounds=bnds, max_iter=6, debug=True)
     U, W, Vs, g_pv, g_s = normal_blocks(prob.y, pred, j_pv, j_phi)
     f = float(((prob.y - pred) ** 2).sum())
     print('phi', dict(zip(prob.phi_names, np.round(phi, 4))), 'g_s', np.round(g_s, 3))

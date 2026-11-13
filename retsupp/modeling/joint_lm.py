@@ -150,7 +150,7 @@ def schur_hessian(U, W, Vs):
 
 
 def lm_fit(prob, x_pv=None, phi=None, bounds=None, max_iter=300, ftol=1e-10, n_small=3, lam0=1e-3,
-           max_seconds=None, verbose=True, log_every=10):
+           max_seconds=None, verbose=True, log_every=10, debug=False):
     """Levenberg-Marquardt over all free parameters of ``prob``.
 
     ``bounds``: list of (lo, hi) per φ (raw space) or None. Stops after ``n_small`` consecutive accepted steps that
@@ -189,6 +189,9 @@ def lm_fit(prob, x_pv=None, phi=None, bounds=None, max_iter=300, ftol=1e-10, n_s
             x_new = x_pv + d_pv
             f_new = prob.sse(x_new, phi_new)
             n_evals += 1
+            if debug:
+                print(f'      trial λ {lam:.2e}: ΔSSE {f_new - f:.4f} | hold {None if hold is None else np.where(hold)[0]}'
+                      f' | clipped {np.where(phi_new != phi + d_s)[0]} | max|d_s| {np.abs(d_s).max():.3g}', flush=True)
             if np.isfinite(f_new) and f_new < f:
                 accepted = True
                 break
