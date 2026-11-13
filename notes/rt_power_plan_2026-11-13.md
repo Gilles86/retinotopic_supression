@@ -51,3 +51,43 @@ test.
   alongside. It is not presented as the only analysis.
 - **Fig. 7:** is updated only if the main analysis changes the conclusion for a term; in that case both versions go in
   the supplement.
+
+## Addendum, added at the author's request before any result of this plan was seen: joint latent model on log RT
+
+**6. One Bayesian model of single-trial log RT.** This complements the main analysis; it does not replace it.
+
+**Fixed effects** (correct trials only):
+- distractor condition (HP / LP / absent);
+- target location (HP / LP);
+- target and distractor repeats;
+- trial number (linear and quadratic);
+- run and session.
+
+**Neural predictors.** The trial's latent target, distractor and global gains, per area or pooled over areas as
+defined below, each with:
+- a participant-level slope;
+- a group mean;
+- a correlated random effect.
+
+**Measurement model.** Each latent gain is observed through its BOLD estimate, with that estimate's standard error:
+observed gain ~ Normal(latent gain, SE). The latent gains get a hierarchical prior per participant × area: their mean
+and SD are estimated, and they may depend on the conditions, so the gains' own condition effects are modelled too.
+
+**Area pooling (fixed now).**
+- **Main version:** per participant, a precision-weighted mean of each gain over the nine areas, so one latent value per
+  trial and gain.
+- **Robustness version:** pathway-level gains (early, dorsal, occipitotemporal), if the model converges.
+
+**Inputs.** Per-trial (or per-short-bin) gain estimates with SEs on the refitted fits, from the trial-wise pipeline.
+If per-trial estimates are not available, they are produced with the same BOLD-level method; the binning is decided
+before the RT relation is looked at.
+
+**Reported.**
+- For each gain: the group slope on log RT (ms per SD of gain) with 95% HDI and P(sign).
+- The condition effects on log RT, which should reproduce Fig. 1.
+- Convergence: R̂, ESS, divergences; a non-centred parameterisation where needed.
+- Posterior predictive checks of the RT distribution per condition.
+- A parameter-recovery check on data simulated from the fitted model.
+
+**Interpretation.** As for the main analysis: credible if the 95% HDI excludes 0. Reported whatever the outcome, next to
+the main analysis and the baseline.
