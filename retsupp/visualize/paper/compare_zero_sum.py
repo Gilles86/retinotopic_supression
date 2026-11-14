@@ -4,7 +4,9 @@ Reads two ``reference_numbers`` TSVs (per area and pooled: median over participa
 participants below 0, Wilcoxon p, BH q across the nine areas) and writes one markdown table per quantity with both
 references. For the zero-sum reference, a third column repeats the joint-fit numbers without the fits in which that
 term (or the item scale, which the transient terms scale) ended on a bound of the zero-sum fit (``--zs-summary``, from
-``modeling/summarize_zero_sum``), with the same statistics (``reference_numbers.Book``).
+``modeling/summarize_zero_sum``), with the same statistics (``reference_numbers.Book``), and a fourth column with the
+supplementary model m7_full_zs (rows of that model in the same gain table). The main model is m5_TDS_dS_zs (read as
+m7_full from the view root).
 
     python -m retsupp.visualize.paper.compare_zero_sum \\
         --ref notes/data/reference_numbers_polished_2026-11-12_n28.tsv \\
@@ -41,15 +43,22 @@ def cell(r):
     return f'{r["value"]:+.1f} [{r["ci_lo"]:+.1f}, {r["ci_hi"]:+.1f}], {int(r["k_neg"])}/{int(r["n"])} < 0, {sig}'
 
 
-def main(ref, zs, zs_gain_table, zs_summary, out, exclude_subjects=(1, 2)):
+def main(ref, zs, zs_gain_table, zs_summary, out, exclude_subjects=(1, 2), main_model='m5_TDS_dS_zs'):
     a = pd.read_csv(ref, sep='\t')
     b = pd.read_csv(zs, sep='\t')
-    excl = {}
+    excl, supp = {}, {}
+    if zs_gain_table:
+        # the supplementary model (with transient HP - LP terms), same statistics
+        g7 = joint(zs_gain_table, 'dog', model='m7_full_zs')
+        g7 = g7[~g7.subject.isin(exclude_subjects)]
+        if len(g7):
+            for qn, (col, _terms, scale) in EXCL.items():
+                supp[qn] = Book().term(g7, col, qn, 'm7_full_zs', scale=scale)
     if zs_gain_table and zs_summary:
         g = joint(zs_gain_table, 'dog')
         g = g[~g.subject.isin(exclude_subjects)]
         s = pd.read_csv(zs_summary, sep='\t')
-        s = s[s.kept & (s.model == 'm7_full_zs')][['subject', 'roi', 'on_bound']].fillna('')
+        s = s[s.kept & (s.model == main_model)][['subject', 'roi', 'on_bound']].fillna('')
         g = g.merge(s, on=['subject', 'roi'], how='left')
         g['on_bound'] = g.on_bound.fillna('')
         for qn, (col, terms, scale) in EXCL.items():
@@ -64,20 +73,25 @@ def main(ref, zs, zs_gain_table, zs_summary, out, exclude_subjects=(1, 2)):
         if ra.empty and rb.empty:
             continue
         hdr = f'### {qn} (%)' if 'Item' not in qn else f'### {qn}'
-        has_ex = qn in excl
-        lines += [hdr, '', '| area | refitted-polished (alternating) | zero-sum LM |'
-                  + (f' zero-sum LM, excl. on-bound fits (n excl. = {excl[qn][1]}) |' if has_ex else ''),
-                  '|---|---|---|' + ('---|' if has_ex else '')]
+        has_ex, has_s = qn in excl, qn in supp
+        lines += [hdr, '', '| area | refitted-polished (alternating) | zero-sum LM, main model |'
+                  + (f' main model, excl. on-bound fits (n excl. = {excl[qn][1]}) |' if has_ex else '')
+                  + (' zero-sum LM, + transient HP − LP (m7_full_zs) |' if has_s else ''),
+                  '|---|---|---|' + ('---|' if has_ex else '') + ('---|' if has_s else '')]
         for area in ROI_ORDER + ['pooled']:
             va = ra.loc[area].to_dict() if area in ra.index else None
             vb = rb.loc[area].to_dict() if area in rb.index else None
             ve = excl[qn][0].get(area) if has_ex else None
-            lines.append(f'| {area} | {cell(va)} | {cell(vb)} |' + (f' {cell(ve)} |' if has_ex else ''))
+            vs = supp[qn].get(area) if has_s else None
+            lines.append(f'| {area} | {cell(va)} | {cell(vb)} |' + (f' {cell(ve)} |' if has_ex else '')
+                         + (f' {cell(vs)} |' if has_s else ''))
             rows.append(dict(quantity=qn, area=area,
                              **{f'ref_{k}': (va or {}).get(k, np.nan) for k in ('value', 'ci_lo', 'ci_hi', 'n', 'p', 'q')},
                              **{f'zs_{k}': (vb or {}).get(k, np.nan) for k in ('value', 'ci_lo', 'ci_hi', 'n', 'p', 'q')},
                              **{f'zs_excl_{k}': (ve or {}).get(k, np.nan) for k in ('value', 'ci_lo', 'ci_hi', 'n', 'p',
-                                                                                    'q')}))
+                                                                                    'q')},
+                             **{f'm7zs_{k}': (vs or {}).get(k, np.nan) for k in ('value', 'ci_lo', 'ci_hi', 'n', 'p',
+                                                                                 'q')}))
         lines.append('')
     open(f'{out}.md', 'w').write('\n'.join(lines))
     pd.DataFrame(rows).to_csv(f'{out}.tsv', sep='\t', index=False)
