@@ -24,6 +24,16 @@ def conditional(table):
     return d.pivot_table(index=['subject', 'roi'], columns='mech', values='estimate').reset_index()
 
 
+def fdr(ps):
+    """Benjamini-Hochberg q; NaN where p is NaN (e.g. a term held at 0 in the model), BH over the others."""
+    ps = np.asarray(ps, dtype=float)
+    q = np.full(ps.shape, np.nan)
+    ok = np.isfinite(ps)
+    if ok.any():
+        q[ok] = stats.false_discovery_control(ps[ok])
+    return q
+
+
 def median_ci(x, n_boot=5000, seed=0):
     x = np.asarray(x)[np.isfinite(x)]
     rng = np.random.default_rng(seed)
