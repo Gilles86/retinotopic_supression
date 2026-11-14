@@ -76,7 +76,7 @@ def main(gain_table, conditional_table, sigma_table, out):
     t = pd.DataFrame(rows)
     t['q'] = np.nan
     for name in sets:
-        k = t.rois == name
+        k = (t.rois == name) & t.p.notna()   # a term fixed at 0 in the model (e.g. dD without HP-LP transient) has no p
         t.loc[k, 'q'] = stats.false_discovery_control(t.loc[k, 'p'])
     t.to_csv(out, sep='\t', index=False)
     pd.concat(per_sub).to_csv(out.replace('regression', 'slopes'), sep='\t', index=False)

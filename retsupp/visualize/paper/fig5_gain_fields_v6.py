@@ -46,7 +46,7 @@ from matplotlib.patches import Circle
 from scipy import stats
 
 import retsupp.visualize.paper.fig5_gain_fields as F
-from retsupp.visualize.paper.fig45_common import conditional, joint
+from retsupp.visualize.paper.fig45_common import fdr, conditional, joint
 from retsupp.visualize.paper.fig5b_gain_field_map import APERTURE, ECC, EXTENT, RING, gauss
 from retsupp.visualize.paper.paper_style import (DISTRACTOR, DOUBLE, FG, HP, IMAGE_CMAP, MUTED, OUT, ROI_ORDER,
                                                  SUSTAINED_CMAP, TARGET, save)
@@ -94,7 +94,7 @@ def map_parameters(gain_table, exclude=(1, 2), cond=None, widths=None):
 def q_by_area(df, term):
     """BH q per area (Wilcoxon against 0) of one term, as panel c and the parameter table."""
     ps = [stats.wilcoxon(df[df.roi == r][term].dropna()).pvalue for r in ROI_ORDER]
-    return dict(zip(ROI_ORDER, stats.false_discovery_control(ps)))
+    return dict(zip(ROI_ORDER, fdr(ps)))
 
 
 def and_list(xs):
@@ -115,7 +115,7 @@ def pathway_pooling(cond, term='dS'):
                          p=stats.wilcoxon(v).pvalue))
     g = pd.DataFrame(rows)
     k = g.group != 'All areas'
-    g.loc[k, 'q_BH3'] = stats.false_discovery_control(g.loc[k, 'p'])
+    g.loc[k, 'q_BH3'] = fdr(g.loc[k, 'p'])
     return g
 
 
@@ -739,7 +739,7 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
     alone_sig = []
     if v8:      # areas where dS estimated alone is reliable, the test of panel c (Wilcoxon, BH across the nine ROIs)
         pv = [stats.wilcoxon(cond[cond.roi == r].dS.dropna()).pvalue for r in ROI_ORDER]
-        alone_sig = [r for r, q in zip(ROI_ORDER, stats.false_discovery_control(pv)) if q < .05 and r in AREAS]
+        alone_sig = [r for r, q in zip(ROI_ORDER, fdr(pv)) if q < .05 and r in AREAS]
     neg = [r for r in ROI_ORDER if p.loc[r, 'g_LP'] < 0 and p.loc[r, 'g_HP_map'] < 0]
     a_txt = (
         "a, The fitted parametric gain field over the search display, not data: for each area, the median over "

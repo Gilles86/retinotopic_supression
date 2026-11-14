@@ -1,0 +1,31 @@
+fit	effect	variant	mean	hdi_lo	hdi_hi	p_sign	n_obs	n_subjects	divergences	rhat_max	ess_bulk_min	source
+earlier	Target gain, target repeat (% of typical gain)	primary	-19.30154573305302	-32.89531624945266	-4.2818317721949395	0.996875	230	28	0	1.0	1266.0	notes/data/n28/trialwise_meta_bayes_2026-11
+earlier	Target gain, target repeat (% of typical gain)	Student-t	-18.30066594733168	-32.76404712850377	-4.25947356501296	0.993875	230	28	0	1.0	1423.0	notes/data/n28/trialwise_meta_bayes_2026-11
+earlier	Target gain, target repeat (% of typical gain)	no SE weighting	-44.405165750774636	-91.70988790771301	1.6414813742677898	0.968375	230	28	0	1.0	1626.0	notes/data/n28/trialwise_meta_bayes_2026-11
+earlier	Distractor gain, distractor repeat (% of typical gain)	primary	-30.29946477813218	-75.49929899104909	12.825325878130739	0.919875	230	28	0	1.0	1210.0	notes/data/n28/trialwise_meta_bayes_2026-11
+earlier	Distractor gain, distractor repeat (% of typical gain)	Student-t	-19.39485933434271	-56.03443864066637	14.28816858139663	0.868125	230	28	0	1.0	1234.0	notes/data/n28/trialwise_meta_bayes_2026-11
+earlier	Distractor gain, distractor repeat (% of typical gain)	no SE weighting	-23.24582428630686	-230.57386769303218	163.2598359641655	0.590875	230	28	0	1.0	1557.0	notes/data/n28/trialwise_meta_bayes_2026-11
+earlier	Distractor gain per SD log RT (×100)	primary	-2.38929687426021	-4.2533881166890195	-0.46352695009463996	0.990375	230	28	0	1.0	2293.0	notes/data/n28/trialwise_meta_bayes_2026-11
+earlier	Distractor gain per SD log RT (×100)	Student-t	-2.38355380203132	-4.25752557395786	-0.37633487996988	0.99175	230	28	0	1.0	2292.0	notes/data/n28/trialwise_meta_bayes_2026-11
+earlier	Distractor gain per SD log RT (×100)	no SE weighting	5.06066511593412	-15.439340255288059	27.16674189427653	0.690125	230	28	0	1.0	2242.0	notes/data/n28/trialwise_meta_bayes_2026-11
+earlier	Global gain per SD log RT (×100)	primary	-2.11259586745103	-4.63788778300402	0.61629448071949	0.9425	230	28	0	1.0	880.0	notes/data/n28/trialwise_meta_bayes_2026-11
+earlier	Global gain per SD log RT (×100)	Student-t	-2.14768464445283	-4.87853636051277	0.71598547823158	0.93625	230	28	0	1.0	1078.0	notes/data/n28/trialwise_meta_bayes_2026-11
+earlier	Global gain per SD log RT (×100)	no SE weighting	-0.05920148805816	-5.135546357678599	5.2696438927681495	0.506625	230	28	0	1.01	1160.0	notes/data/n28/trialwise_meta_bayes_2026-11
+earlier	Target gain per SD log RT (×100)	primary	0.9171235335881199	-1.30575818501829	3.1314480276064103	0.8035	230	28	0	1.0	1110.0	notes/data/n28/trialwise_meta_bayes_2026-11
+earlier	Target gain per SD log RT (×100)	Student-t	0.89313833410826	-1.36959505599789	2.96168002365513	0.80025	230	28	0	1.0	1184.0	notes/data/n28/trialwise_meta_bayes_2026-11
+earlier	Target gain per SD log RT (×100)	no SE weighting	-2.96935023723768	-12.33056615024333	6.551879185232839	0.731125	230	28	0	1.0	1230.0	notes/data/n28/trialwise_meta_bayes_2026-11
+zs_lm_2026-11-13	Target gain, target repeat (% of typical gain)	primary	-18.72224066993475	-29.45022759340726	-9.124593586098099	1.0	230	28	1	1.0	1303.0	notes/data/trialwise_meta_bayes_signal_se_zs_lm_2026-11-13
+zs_lm_2026-11-13	Target gain, target repeat (% of typical gain)	Student-t	-17.10558612482414	-26.44776418306609	-6.92715949021516	0.999875	230	28	0	1.0	1115.0	notes/data/trialwise_meta_bayes_signal_se_zs_lm_2026-11-13
+zs_lm_2026-11-13	Target gain, target repeat (% of typical gain)	no SE weighting	-43.55995385887318	-82.88447566066014	-2.33633221121528	0.98075	230	28	0	1.0	1189.0	notes/data/trialwise_meta_bayes_signal_se_zs_lm_2026-11-13
+zs_lm_2026-11-13	Distractor gain, distractor repeat (% of typical gain)	primary	-36.72725952483017	-79.11381134471857	12.39090284521085	0.947875	230	28	0	1.0	1173.0	notes/data/trialwise_meta_bayes_signal_se_zs_lm_2026-11-13
+zs_lm_2026-11-13	Distractor gain, distractor repeat (% of typical gain)	Student-t	-17.60236868437464	-49.963812034526796	13.14328673732333	0.88275	230	28	0	1.01	718.0	notes/data/trialwise_meta_bayes_signal_se_zs_lm_2026-11-13
+zs_lm_2026-11-13	Distractor gain, distractor repeat (% of typical gain)	no SE weighting	-47.80646186596738	-135.50671205056645	51.03950670551845	0.843875	230	28	0	1.0	2336.0	notes/data/trialwise_meta_bayes_signal_se_zs_lm_2026-11-13
+zs_lm_2026-11-13	Distractor gain per SD log RT (×100)	primary	-2.68683386328825	-4.66259139495887	-0.71782968444415	0.9955	230	28	0	1.0	1890.0	notes/data/trialwise_meta_bayes_signal_se_zs_lm_2026-11-13
+zs_lm_2026-11-13	Distractor gain per SD log RT (×100)	Student-t	-2.7028691351024903	-4.74708508406088	-0.79969241991834	0.9955	230	28	0	1.01	1512.0	notes/data/trialwise_meta_bayes_signal_se_zs_lm_2026-11-13
+zs_lm_2026-11-13	Distractor gain per SD log RT (×100)	no SE weighting	-0.61654770397825	-11.55381150752582	10.10002182258637	0.54475	230	28	0	1.0	1413.0	notes/data/trialwise_meta_bayes_signal_se_zs_lm_2026-11-13
+zs_lm_2026-11-13	Global gain per SD log RT (×100)	primary	-2.2662269879632198	-5.08348345267475	0.47110567051143004	0.943625	230	28	0	1.0	1064.0	notes/data/trialwise_meta_bayes_signal_se_zs_lm_2026-11-13
+zs_lm_2026-11-13	Global gain per SD log RT (×100)	Student-t	-2.20809708365112	-5.07832710623099	0.5518587001964	0.9445	230	28	0	1.01	1070.0	notes/data/trialwise_meta_bayes_signal_se_zs_lm_2026-11-13
+zs_lm_2026-11-13	Global gain per SD log RT (×100)	no SE weighting	-1.3253667713071	-6.205715244922979	3.7359000788247902	0.700125	230	28	0	1.0	1165.0	notes/data/trialwise_meta_bayes_signal_se_zs_lm_2026-11-13
+zs_lm_2026-11-13	Target gain per SD log RT (×100)	primary	0.8180037432793	-1.24687281695408	3.0615422167464	0.78225	230	28	0	1.0	1169.0	notes/data/trialwise_meta_bayes_signal_se_zs_lm_2026-11-13
+zs_lm_2026-11-13	Target gain per SD log RT (×100)	Student-t	0.80236500028497	-1.28049084202824	2.9243028411501797	0.78125	230	28	0	1.0	1077.0	notes/data/trialwise_meta_bayes_signal_se_zs_lm_2026-11-13
+zs_lm_2026-11-13	Target gain per SD log RT (×100)	no SE weighting	1.9264528679632802	-6.0364919891063	9.435881649943049	0.703	230	28	0	1.0	1418.0	notes/data/trialwise_meta_bayes_signal_se_zs_lm_2026-11-13

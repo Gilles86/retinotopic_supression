@@ -23,6 +23,8 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from retsupp.visualize.paper.fig45_common import fdr
+
 ROIS = ['V1', 'V2', 'V3', 'V3AB', 'IPS', 'hV4', 'VO', 'LO', 'TO']
 EARLY, DORSAL, OT = ['V1', 'V2', 'V3'], ['V3AB', 'IPS'], ['hV4', 'VO', 'LO', 'TO']
 SETS = {'all nine': ROIS, 'early + dorsal': EARLY + DORSAL, 'early + occipitotemporal': EARLY + OT}
@@ -108,7 +110,7 @@ def regression_table(d, xmap, family, predictor):
     for name in SETS:
         k = t.rois == name
         if k.any():
-            t.loc[k, 'q'] = stats.false_discovery_control(t.loc[k, 'p'])
+            t.loc[k, 'q'] = fdr(t.loc[k, 'p'])
     return t, pd.concat(per)
 
 
@@ -235,7 +237,7 @@ def bin_slopes(b):
         out.append(dict(term=lab, n=len(ps), n_area_fits=len(p), slope=m, ci_lo=lo, ci_hi=hi, k_pos=int((ps > 0).sum()),
                         p=stats.wilcoxon(ps).pvalue))
     t = pd.DataFrame(out)
-    t['q'] = stats.false_discovery_control(t.p)
+    t['q'] = fdr(t.p)
     return t
 
 

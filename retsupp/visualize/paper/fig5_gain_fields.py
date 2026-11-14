@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from retsupp.visualize.paper.fig45_common import conditional, generalization_row, joint, jzs_bf10, median_ci
+from retsupp.visualize.paper.fig45_common import fdr, conditional, generalization_row, joint, jzs_bf10, median_ci
 from retsupp.visualize.paper.paper_style import (DISTRACTOR, DOUBLE, FG, HP, ICON_PAD, MUTED, OUT, PROVISIONAL, ROI_ORDER, ROI_X,
                                                  SINGLE, TARGET, letter, offset_spines, provisional, roi_axis, roi_icon,
                                                  roi_positions, save as _save)
@@ -83,7 +83,7 @@ def summarise(js, cond):
                                  pct_negative=(v < 0).mean() * 100, p=p, bf10=jzs_bf10(v),
                                  conditional_median=c.median() if len(c) else np.nan,
                                  conditional_p=stats.wilcoxon(c).pvalue if len(c) > 5 else np.nan))
-            for r, qq in zip(rows[-len(ROI_ORDER):], stats.false_discovery_control(ps)):
+            for r, qq in zip(rows[-len(ROI_ORDER):], fdr(ps)):
                 r['q'] = qq
     return pd.DataFrame(rows)
 
@@ -207,7 +207,7 @@ def panel_roi(ax, cond, term='dS', color=HP, ylim=(-.12, .06), ylabel='dS: HP âˆ
         m, a, b = median_ci(v)
         ax.errorbar(ROI_X[roi], m, yerr=[[m - a], [b - m]], fmt='o', ms=6, color=color, mec='w', mew=.8, lw=1.6, capsize=0, zorder=4)
         ps.append(stats.wilcoxon(v).pvalue)
-    for i, q in enumerate(stats.false_discovery_control(ps)):
+    for i, q in enumerate(fdr(ps)):
         ax.text(ROI_X[ROI_ORDER[i]], hi + .03 * (hi - lo), stars(q), ha='center', va='bottom', fontsize=8.5, color=color, clip_on=False)
     ax.hlines(0, -.6, ROI_X[ROI_ORDER[-1]] + .6, color='.6', lw=.8, ls='--', zorder=0)
     ax.annotate(annot[0], xy=annot[1], xytext=annot[2], fontsize=7, color=color, ha='left', va='center',
@@ -355,7 +355,7 @@ def legend_findings(cond, dt, js):
             v = df[df.roi == r][term].dropna()
             ps.append(stats.wilcoxon(v).pvalue)
             meds.append(v.median())
-        q = stats.false_discovery_control(ps)
+        q = fdr(ps)
         sig = [f'{r} {m:+.3f} (q = {qq:.2g})' for r, m, qq in zip(ROI_ORDER, meds, q) if qq < .05]
         return sig, min(zip(q, ROI_ORDER))
 
@@ -397,7 +397,7 @@ def dn_numbers(dn, dog, cond):
     """Per-ROI medians (with BH q) of the joint DN terms next to the joint DoG ones, for the DN legend."""
     def fmt(d, term):
         ps = [stats.wilcoxon(d[d.roi == r][term].dropna()).pvalue for r in ROI_ORDER]
-        q = stats.false_discovery_control(ps)
+        q = fdr(ps)
         return ', '.join(f'{r} {d[d.roi == r][term].median():+.3f}{" (q = %.3g)" % qq if qq < .05 else ""}'
                          for r, qq in zip(ROI_ORDER, q))
     return dict(dn_a=f'target {fmt(dn, "T")}; distractor {fmt(dn, "D")} (DoG joint: target {fmt(dog, "T")}; distractor '
@@ -581,7 +581,7 @@ def panel_location(ax, cond, dt, ylim=(-.35, .3), off=.2):
             ax.errorbar(ROI_X[roi] + dx, m, yerr=[[m - a], [b - m]], fmt='o', ms=5, color=col, mec='w', mew=.7, lw=1.5,
                         capsize=0, zorder=4)
             ps.append(stats.wilcoxon(v).pvalue)
-        for roi, q in zip(ROI_ORDER, stats.false_discovery_control(ps)):
+        for roi, q in zip(ROI_ORDER, fdr(ps)):
             ax.text(ROI_X[roi] + dx, hi + .03 * (hi - lo), stars(q), ha='center', va='bottom', fontsize=8.5, color=col,
                     clip_on=False)
     ax.hlines(0, ROI_X[ROI_ORDER[0]] - .6, ROI_X[ROI_ORDER[-1]] + .6, color='.6', lw=.8, ls='--', zorder=0)
@@ -634,7 +634,7 @@ def dot_panel(ax, series, ylim, ylabel):
                 m, a, b = median_ci(v)
                 rows.append(dict(roi=roi, median=m, ci_low=a, ci_high=b, p=stats.wilcoxon(v).pvalue))
             sm = pd.DataFrame(rows).set_index('roi')
-            sm['q'] = stats.false_discovery_control(sm.p)
+            sm['q'] = fdr(sm.p)
         for i, roi in enumerate(ROI_ORDER):
             v = df[df.roi == roi][col].dropna().to_numpy()
             x = XP[roi] + off[k]
@@ -940,7 +940,7 @@ def main(gain_table, conditional_table, power_table, slope_table, sigma_table, n
         ps = [stats.wilcoxon(cond[cond.roi == roi][term].dropna()).pvalue for roi in ROI_ORDER]
         meds = [cond[cond.roi == roi][term].median() for roi in ROI_ORDER]
         print(term, 'conditional', ', '.join(f'{r} {m:+.3f} (q={q:.2g})' for r, m, q in
-                                             zip(ROI_ORDER, meds, stats.false_discovery_control(ps))))
+                                             zip(ROI_ORDER, meds, fdr(ps))))
 
     if wanted('size'):
         size_figure(d)
