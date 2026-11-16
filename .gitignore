@@ -11,3 +11,6 @@ retsupp.egg-info
 notes/archive/predict_shifts*
 .claude/
 .vscode/
+
+# MCMC posteriors (arviz InferenceData): large binaries, keep out of git
+*idata.nc
