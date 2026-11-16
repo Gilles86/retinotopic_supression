@@ -76,16 +76,6 @@ Estimated alone, pooled:
 > points), whereas a target-specific term estimated alone was negative (−2.6%, p = .019), as expected if it partly
 > absorbs the sustained HP reduction."
 
-## Not recomputed: these update 11 numbers come from the earlier fits
+## Items 1a, 1c, 2, 3a and 5b
 
-These analyses refit or simulate on the earlier refitted fits, and their conclusions are about model comparison, not
-about the size of any term:
-- 1a, held-out prediction;
-- 1c, sensitivity;
-- 2, item responses predicted by the model;
-- 3a, multiplicative vs additive;
-- 5b, model vs measured item-type contrasts.
-
-For 1c, the planted effect size and the noise are what matter, and those are unchanged. For 2 and 5b, the model's
-predicted responses would shift slightly with the zero-sum fits. Use their logic and wording as given in update 11. Any
-predicted-response number quoted in the text should carry "(earlier fit)" until a rerun.
+Now rerun on the zero-sum main model: see `parts/G_update11_items_and_RT_on_zero_sum.md`.

@@ -18,7 +18,8 @@ Apply this on top of updates 8–12. Figures are in the update-12 colours.
 | `parts/A_comparison_previous_vs_zero_sum.md` | Every term, per area and pooled: earlier fits vs zero-sum, with and without on-bound fits, and the model with dD |
 | `parts/B_key_numbers_zero_sum.md` | The full key-numbers file of the zero-sum reference (see "Do not use" below) |
 | `parts/C_field_widths.md` | Field widths on the zero-sum fits: group widths, per-participant identifiability, the transient width along the hierarchy |
-| `parts/D_update11_items_on_zero_sum.md` | Update 11 items 3b, 3c and 1b recomputed; which update 11 numbers still come from the earlier fits |
+| `parts/D_update11_items_on_zero_sum.md` | Update 11 items 3b, 3c and 1b recomputed |
+| `parts/G_update11_items_and_RT_on_zero_sum.md` | Update 11 items 1a, 1c, 2, 3a and 5b, the main residual-RT analysis and the joint latent RT model, rerun on the zero-sum main model (earlier and zero-sum side by side, wording changes) |
 | `parts/E_zero_sum_refit_methods_note.md` | Methods record: models, starts, bounds, TO, runs |
 | `parts/F_identifiability_note.md` | Why the shared level is not identifiable when the pRFs are free (for Methods) |
 | `figures/main/` | Fig. 5 (a–c) and Fig. 7 on the zero-sum fits |
@@ -38,7 +39,12 @@ Apply this on top of updates 8–12. Figures are in the update-12 colours.
     estimates are still largest in the early areas and hV4; report them with exact p (below).
 - **Target and distractor gains are larger:** target +23% (7 of 9 areas), distractor +11% (p = .0065). The item
   weight is smaller (2.8 vs 3.4). This is mostly a trade-off between the item weight and the gains.
-- **RT links are unchanged.**
+- **RT links hold and are slightly stronger** (part G):
+  - main residual-RT analysis: distractor gain −2.4% per SD of residual log RT (P = .994), global gain −2.8%
+    (P = .982); the occipitotemporal global gain is now credible on its own;
+  - joint latent model: −17 ms per SD of latent global gain (P = .995).
+- **Model comparisons (update 11) hold; four sentences change** (part G, and 3h below). The main one: adding dS no
+  longer makes held-out prediction reliably worse (10/28 better, p = .099).
 - **New, reportable:**
   - the sustained field has a group-level width of FWHM 4–7°;
   - the transient field is broad in V1–V3 and item-locked in hV4, V3AB and VO;
@@ -72,6 +78,16 @@ below/above 0 and Wilcoxon p.
 | Fig. 7: target gain on target-repeat trials | −18% [−31, −4] | **−19% [−29, −9]** |
 | Fig. 7: distractor gain per SD log RT | −2.0% [−3.7, −0.2] | **−2.7 [−4.7, −0.7]** |
 | Fig. 7: global gain per SD log RT | n.s. | −2.3 [−5.1, +0.5], n.s. |
+| Main residual-RT analysis: distractor gain per SD of residual log RT | −1.6 [−3.3, −0.04], P = .977 | **−2.4 [−4.3, −0.6], P = .994** |
+| Main residual-RT analysis: global gain | −2.6 [−5.1, −0.04], P = .976 | **−2.8 [−5.5, −0.2], P = .982**; occipitotemporal alone −4.2 [−8.1, −0.3] |
+| Joint latent RT model: global gain | −15 ms [−30, −1] per SD, P = .985 | **−17 ms [−31, −4], P = .995** |
+| Held out (update 11, 1a): dS vs no HP term | worse, 3/28 better, p = 6.7 × 10⁻⁶ | **not reliably different: −0.11 × 10⁻⁴, 10/28 better, p = .099** |
+| Held out: adding dD | 0/28 better | 0/28 better |
+| Sensitivity (update 11, 1c): power of the joint dD test at −10 / −5 / −2 points | 91–97% / 45–56% / 9–16% | **87–90% / 36–46% / 10–13%** |
+| Real joint dD, linearised / LM fit with dD | +1.2%, p = .26 | **+7.3%, p = .0048 / +5.6%, p = .070** (opposite sign to a reduction; fails held out) |
+| Multiplicative vs additive (update 11, 3a), training runs | equal (p = .15) | **multiplicative slightly better, p = .010**; held out worse, 23/28, p = 1.4 × 10⁻⁴ |
+| Item responses (update 11, 2): measured − model with dD, target − distractor | p = .048 | p = .070 |
+| Item-type contrasts (update 11, 5b): model's target − neutral in V1 / V2 | −0.004 / +0.007 | −0.006 / +0.005 (data +0.060 / +0.145) |
 
 ## 3. Text changes
 
@@ -132,10 +148,38 @@ supplement with the framing:
 > "We found moderate evidence against a distractor-specific HP reduction (BF01 = 3.3; equivalence within ±3.5
 > points)."
 
-The sensitivity statement of update 11 still applies.
+The sensitivity statement of update 11 holds with slightly lower power (part G, item 1c):
+
+> "the joint test detects a −10-point distractor-specific reduction 87–90% of the time, a −5-point one 36–46% and a
+> −2-point one rarely (10–13%)."
+
+The joint dD on the real data is positive (+7.3% linearised; +5.6%, p = .070, in the LM fit with dD), so a reduction
+of about the size of the distractor gain is ruled out. Do not report the positive dD as an effect: adding it makes
+held-out prediction worse in every participant.
 
 **g. Item gains and the reduction.** See `parts/D…`, 3b and 3c; suggested text is there. Within participants the
 relation is stronger than before, and holds across split halves for the target.
+
+**h. Sentences from update 11 and the RT notes that change** (details and numbers in part G):
+- **1a, held out.** Replace "every added term makes the held-out run slightly worse, including dS" with:
+
+  > "Held-out prediction does not separate the HP − LP terms: adding the sustained dS neither improves nor reliably
+  > worsens prediction of the left-out run (10 of 28 participants better, p = .099), while each transient term makes
+  > it worse in nearly every participant."
+- **3a, multiplicative vs additive.** The two forms no longer fit the training runs equally well: the multiplicative
+  one fits them slightly better (p = .010) and predicts held-out runs worse (23 of 28 participants favour additive,
+  p = 1.4 × 10⁻⁴). The conclusion stands: neither form is supported, h and a do not differ from 0, and both predict
+  held-out runs worse than no HP term.
+- **2, item responses.** For the model with dD, write "predicts a target − distractor interaction the data do not show"
+  instead of "contradict" (p = .070).
+- **Main residual-RT analysis.** Drop the clause "but this does not survive a looser voxel selection", or mark it
+  "(earlier fits)": that check was not rerun. Suggested sentence:
+
+  > "With RT residualised on the design and the three gains in one model, the global gain is also lower on slower
+  > trials (−2.8% [−5.5, −0.2] per SD; with z(log RT) −2.2%, P = .94)."
+- **Joint latent model.** "about 17 ms per SD of latent global gain" (was 15 ms). Its checks are slightly weaker than
+  before (1 divergence, minimum bulk ESS 318, and the observed distractor-gain moments inside the predictive check in
+  only 2 of 5 cells); mention this if the model goes in the paper.
 
 ## 4. Figures
 
@@ -168,7 +212,10 @@ relation is stronger than before, and holds across split halves for the target.
 ## 5. Still from the earlier fits
 
 These do not change any conclusion:
-- **Update 11, items 1a, 1c, 2, 3a and 5b:** model-comparison and simulation results; see `parts/D…`, last section.
+- **Update 11, item 2, Table 2d** (variants with a target-specific transient term): there is no zero-sum fit with that
+  term. Everything else in items 1a, 1c, 2, 3a and 5b is rerun (part G).
+- **RT side checks:** RT quintiles, the r > 0.2 voxel selection, the Bambi cross-check, pathway fits and parameter
+  recovery of the joint latent model.
 - **Robustness across pRF models:** the Gaussian and DN columns of the hierarchy table and the DN LOSO result.
 - **Robustness to voxel selection (update 9, A):** the looser-selection fits are not refitted zero-sum. The decision
   rule and the conclusion do not depend on the shared level.
