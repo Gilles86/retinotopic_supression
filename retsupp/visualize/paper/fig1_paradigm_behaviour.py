@@ -122,7 +122,7 @@ def stars(p):
     return '***' if p < .001 else '**' if p < .01 else '*' if p < .05 else 'n.s.'
 
 
-def rt_panel(ax, d, conds, colors, pairs, ylim):
+def rt_panel(ax, d, conds, colors, pairs, ylim, step=.13):
     """Actual subject RTs on an axis capped around the means; subjects beyond it are triangles on
     the cap, so none is dropped. Error bars are within-subject SEM (Cousineau-Morey)."""
     w = d.pivot(index='subject', columns='condition', values='rt')[conds]
@@ -144,7 +144,7 @@ def rt_panel(ax, d, conds, colors, pairs, ylim):
     for n, (a, b) in enumerate(pairs):
         diff = w[a] - w[b]
         i, j = conds.index(a), conds.index(b)
-        y = hi + (.2 + n * .13) * span
+        y = hi + (.2 + n * step) * span
         ax.plot([i, j], [y, y], color=FG, lw=.7, clip_on=False)
         ax.text((i + j) / 2, y + .01 * span, f'{diff.median():+.0f} ms {stars(stats.wilcoxon(diff).pvalue)}'.replace('-', '−'),
                 ha='center', va='bottom', fontsize=6.5, color=FG, clip_on=False)

@@ -185,7 +185,8 @@ relation is stronger than before, and holds across split halves for the target.
 
 **Main:**
 - **Fig. 1:** `fig1_paradigm_behaviour_v6_n28_palA`, replacing v5. Panel c now has a third within-subject strip,
-  HP − absent: +14.6 ms [+0.3, +21.7], 19/28 slower, p = .0041. A distractor at HP still slows responses, by about a
+  HP − absent (strip and a bracket
+  with stars over the raw RTs): +14.6 ms [+0.3, +21.7], 19/28 slower, p = .0041. A distractor at HP still slows responses, by about a
   third of the LP cost (+42.6 ms). Behaviour only, so not affected by the refit.
 - **Fig. 5:** `fig5_gain_fields_v11_abc_zs_n28_palA` (panels a–c), replacing the update 12 version.
   - Panel a's sustained maps now show the zero-sum field: under each map, the LP gain is −¼ and the HP gain +¾ of the
