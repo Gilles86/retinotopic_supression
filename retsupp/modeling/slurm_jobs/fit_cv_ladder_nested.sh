@@ -42,6 +42,8 @@
 #     (cv/voxel_reliability_null.py), no p_signal, no 500 cap (root gets a _relnull_r<MIN_R> suffix)
 #   PRF_SOURCE_ROOT=<all-runs root> MODELS="m5_TDS_dS m7_full m8_full_hpmult m8_full_hpadd": pRFs frozen at that root's
 #     m7_full fit, m5 and MODELS refitted per fold (shared terms; root gets a _polprf suffix)
+#   PRF_SOURCE_ZERO_SUM=1 (with PRF_SOURCE_ROOT=<zero-sum view root> BOUNDED=1): those shared fits keep the sustained field
+#     zero-sum with the zero-sum bounds (root suffix _polprf_zs_lm)
 #   WARM_POLISH_ROOT=<polished root> with POLISH=1 POLISH_METHOD=alt POLISH_MODELS="m4_TDS m7_full": skip the clamped
 #     chain, start the all-free fits from that root (pRFs of new voxels from whole-brain m4)
 # Task index -> (subject, ROI): idx0 = task-1; subject = idx0/11 + 1; roi = ROIS[idx0%11].
@@ -56,7 +58,7 @@ BASE_ROOT="${BASE_ROOT:-}"
 FAMILY="${FAMILY:-dog}"
 HP_ROTATION="${HP_ROTATION:-0}"
 MODELS="${MODELS:-}"
-TAG="${CV_SCHEME}${FROZEN_PRF:+_frozenprf}${BOUNDED:+_bounded}${POLISH:+_polish}${MAX_BOLD_SD:+_maxsd$MAX_BOLD_SD}_${LOSS}_${FAMILY}_hprot${HP_ROTATION}${RELIABLE_ONLY:+_reliable}${MIN_R:+_relnull_r$MIN_R}${HRF_TABLE:+_roihrf}${WARM_POLISH_ROOT:+_warmpolish}${PRF_SOURCE_ROOT:+_polprf}"
+TAG="${CV_SCHEME}${FROZEN_PRF:+_frozenprf}${BOUNDED:+_bounded}${POLISH:+_polish}${MAX_BOLD_SD:+_maxsd$MAX_BOLD_SD}_${LOSS}_${FAMILY}_hprot${HP_ROTATION}${RELIABLE_ONLY:+_reliable}${MIN_R:+_relnull_r$MIN_R}${HRF_TABLE:+_roihrf}${WARM_POLISH_ROOT:+_warmpolish}${PRF_SOURCE_ROOT:+_polprf}${PRF_SOURCE_ZERO_SUM:+_zs}"
 ROIS=(${ROI_LIST:-V1 V2 V3 V3AB hV4 LO TO VO IPS SPL1 FEF})
 if [[ -n "${PER_SUBJECT:-}" ]]; then
     subject=$SLURM_ARRAY_TASK_ID
@@ -112,6 +114,6 @@ echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
     ${LBFGS_ROUNDS:+--lbfgs-rounds $LBFGS_ROUNDS} ${OUTPUT_ROOT:+--output-root $OUTPUT_ROOT} \
     ${HRF_TABLE:+--hrf-table $HRF_TABLE} ${POLISH_MODELS:+--polish-models $POLISH_MODELS} ${POLISH_METHOD:+--polish-method $POLISH_METHOD} ${POLISH_SUFFIX:+--polish-suffix $POLISH_SUFFIX} ${POLISH_ROUNDS:+--polish-rounds $POLISH_ROUNDS} ${POLISH_TOL:+--polish-tol $POLISH_TOL} ${POLISH_MAX_ITER:+--polish-max-iter $POLISH_MAX_ITER} ${POLISH_LM_ITER:+--polish-lm-iter $POLISH_LM_ITER} ${POLISH_LM_FTOL:+--polish-lm-ftol $POLISH_LM_FTOL} ${ZS_SUFFIX:+--zs-suffix $ZS_SUFFIX} ${ZS_WARM_ROOT:+--zs-warm-root $ZS_WARM_ROOT} ${ZS_TRANSIENT_HI:+--zs-transient-hi $ZS_TRANSIENT_HI} ${ZS_ITEM_MIN:+--zs-item-min $ZS_ITEM_MIN} \
     ${SELECTION_TABLE:+--selection-table $SELECTION_TABLE} ${MIN_R:+--min-r $MIN_R} ${MAX_P:+--max-p $MAX_P} \
-    ${WARM_POLISH_ROOT:+--warm-polish-root $WARM_POLISH_ROOT} ${PRF_SOURCE_ROOT:+--prf-source-root $PRF_SOURCE_ROOT}
+    ${WARM_POLISH_ROOT:+--warm-polish-root $WARM_POLISH_ROOT} ${PRF_SOURCE_ROOT:+--prf-source-root $PRF_SOURCE_ROOT} ${PRF_SOURCE_ZERO_SUM:+--prf-source-zero-sum}
 
 echo "Finished: $(date)"

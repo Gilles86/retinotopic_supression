@@ -42,9 +42,19 @@ the noise projections X'N per draw, for the joint-fit residuals (cn_m7) and for 
 with all seven terms (cn_lin), same phases), from which other generators (e.g. base + estimated-alone dS + planted dD)
 are computed without refitting.
 
+``--zero-sum --ref-root <zero-sum view root>`` (update 13b): everything sits on the zero-sum main model
+(m5_TDS_dS_zs, read as that root's m7_full) with its pRFs and widths. The sustained field has no level shared by the
+four locations, so the base terms are D0, T0, I0 only (the m4_TDS_zs term set) and dS is the zero-sum direction
+(g_HP + ¾·dS, g_LP − ¼·dS, the derivative per unit of dS). The linearisation point is the main model with its
+sustained field at 0 (dS removed); the generator of the simulation is the main model as fitted (its dD is 0 by
+construction) with the distractor gain at HP set to g_LP_dyn + δ, noise from its residuals.
+
 Usage::
 
     python -m retsupp.modeling.hp_terms_heldout_power 3 --n-draws 200
+    python -m retsupp.modeling.hp_terms_heldout_power 3 --zero-sum \
+        --ref-root af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf_zs_lm_ref \
+        --output-subdir hp_terms_heldout_power_zs_lm_2026-11-16
 """
 from __future__ import annotations
 
@@ -71,6 +81,19 @@ NAMES = list(REGRESSORS)
 BASE = ['S0', 'D0', 'T0', 'I0']
 MODELS = {'none': BASE, 'dS': BASE + ['dS'], 'dS_dD': BASE + ['dS', 'dD'], 'dS_dD_dT': BASE + ['dS', 'dD', 'dT']}
 DELTAS = (0.0, -0.02, -0.05, -0.10)
+ZERO_SUM = False
+
+
+def set_zero_sum():
+    """Zero-sum term set (see the module docstring): no shared sustained level, dS along (¾, −¼)."""
+    global REGRESSORS, NAMES, BASE, MODELS, ZERO_SUM
+    REGRESSORS = {'D0': ['g_HP_dyn', 'g_LP_dyn'], 'T0': ['g_T_dyn', 'g_T_HP_dyn'], 'I0': ['item_scale'],
+                  'dS': {'g_HP': 0.75, 'g_LP': -0.25}, 'dD': ['g_HP_dyn'], 'dT': ['g_T_HP_dyn']}
+    NAMES = list(REGRESSORS)
+    BASE = ['D0', 'T0', 'I0']
+    MODELS = {'none': BASE, 'dS': BASE + ['dS'], 'dS_dD': BASE + ['dS', 'dD'],
+              'dS_dD_dT': BASE + ['dS', 'dD', 'dT']}
+    ZERO_SUM = True
 
 
 def ix(names):
@@ -102,14 +125,22 @@ def estimates(G, c):
     return out
 
 
-def run_roi(sub, roi, data, model, phases, n_draws):
+def run_roi(sub, roi, data, model, phases, n_draws, ref_root=REF_ROOT):
     bold, paradigm, _ci, _di, _ti, _grid, run_meta = data
 
     def pred(p):
         return np.asarray(model.predict(paradigm=paradigm, parameters=p), dtype=np.float64)
 
-    fit4, p4, _, _ = ffg.base_parameters(sub, model, roi, 'm4_TDS', None, REF_ROOT)
-    fit7, p7, _, _ = ffg.base_parameters(sub, model, roi, 'm7_full', None, REF_ROOT)
+    fit7, p7, _, _ = ffg.base_parameters(sub, model, roi, 'm7_full', None, ref_root)
+    if ZERO_SUM:
+        # linearisation point: the main model (its pRFs and widths) with the zero-sum sustained field at 0
+        viol = float(np.abs(p7['g_HP'] + 3 * p7['g_LP']).max())
+        assert viol < 1e-4, f'main model is not zero-sum ({viol})'
+        assert np.allclose(p7['g_HP_dyn'], p7['g_LP_dyn']), 'main model has a dD term'
+        fit4, p4 = fit7, p7.copy()
+        p4[['g_HP', 'g_LP']] = 0.0
+    else:
+        fit4, p4, _, _ = ffg.base_parameters(sub, model, roi, 'm4_TDS', None, ref_root)
     vox = np.asarray(fit4['voxel_ids'])
     assert np.array_equal(vox, np.asarray(fit7['voxel_ids'])), 'm4_TDS and m7_full voxel sets differ'
     Y = bold[:, vox].astype(np.float64)
@@ -117,9 +148,10 @@ def run_roi(sub, roi, data, model, phases, n_draws):
     X, lin = [], {}
     for name, pars in REGRESSORS.items():
         up, dn = p4.copy(), p4.copy()
-        for q in pars:
-            up[q] += H
-            dn[q] -= H
+        w = pars if isinstance(pars, dict) else {q: 1.0 for q in pars}
+        for q, wq in w.items():
+            up[q] += H * wq
+            dn[q] -= H * wq
         fu, fd = pred(up), pred(dn)
         X.append((fu - fd) / (2 * H))
         lin[name] = np.abs((fu - P0) - (P0 - fd)).max() / max(np.abs(fu - fd).max(), 1e-12)
@@ -182,7 +214,9 @@ def run_roi(sub, roi, data, model, phases, n_draws):
     return pd.DataFrame(loro), sim, arrays
 
 
-def main(subject, bids_folder, out_subdir, n_draws, rois):
+def main(subject, bids_folder, out_subdir, n_draws, rois, ref_root=REF_ROOT, zero_sum=False):
+    if zero_sum:
+        set_zero_sum()
     ffg.BASE_ROOT, ffg.OVERLAY_PER_MODEL, ffg.FAMILY = BASE_ROOT, True, 'dog'
     ffg.HRF_TABLE = load_hrf_table(HRF_TABLE)
     out = Path(bids_folder) / 'derivatives' / out_subdir / f'sub-{subject:02d}'
@@ -207,11 +241,11 @@ def main(subject, bids_folder, out_subdir, n_draws, rois):
     phases = [[ph[k] for ph in phases] for k in range(n_draws)]   # [draw][run]
     lo, si, npz = [], [], {}
     for roi in rois:
-        if not ffg.fit_path(bids_folder, 'm7_full', subject, roi, REF_ROOT).exists():
+        if not ffg.fit_path(bids_folder, 'm7_full', subject, roi, ref_root).exists():
             print(f'{roi}: no fit, skipped')
             continue
         model = ffg.build_full_model(sub, data, roi)
-        a, b, arr = run_roi(sub, roi, data, model, phases, n_draws)
+        a, b, arr = run_roi(sub, roi, data, model, phases, n_draws, ref_root)
         lo.append(a)
         si.append(b)
         npz.update({f'{roi}__{k}': v for k, v in arr.items()})
@@ -229,5 +263,7 @@ if __name__ == '__main__':
     ap.add_argument('--output-subdir', default='hp_terms_heldout_power_2026-11-13')
     ap.add_argument('--n-draws', type=int, default=200)
     ap.add_argument('--rois', nargs='+', default=ROIS)
+    ap.add_argument('--ref-root', default=REF_ROOT, help='root whose m7_full (and m4_TDS) the terms sit on')
+    ap.add_argument('--zero-sum', action='store_true', help='zero-sum term set on the main model (docstring)')
     a = ap.parse_args()
-    main(a.subject, a.bids_folder, a.output_subdir, a.n_draws, a.rois)
+    main(a.subject, a.bids_folder, a.output_subdir, a.n_draws, a.rois, a.ref_root, a.zero_sum)

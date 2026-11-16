@@ -15,6 +15,10 @@ Variants (one output subdir each, ``<subdir>_<variant>``), all from the joint fi
 * ``SDT`` / ``SDT0`` (only with ``--dt-root``): m8_full_dT (m7 plus dT) of that root, as fitted / with the target
   split equalised (weighted by the target pulses at HP vs LP). That root's pRFs are the ones held fixed (not polished).
 
+``--sd-model NAME`` (e.g. ``m7_full_zs`` with the zero-sum view root, whose m7_full is the main model without dD): the SD
+variant is that model of ``--root`` as fitted (its own pRFs; same voxels, the selection and the bar from m7_full), so
+S / nohp come from the main model and SD from the model that adds dD.
+
 Also ``<subdir>_SD/sub-XX_overlap.tsv``: per ROI and item location, voxel counts: the Fig. 3 selection (reliable, pRF
 centre within 2°, nearest location) and pRF overlap (reliable, distance from the pRF centre to the item's edge
 < FWHM/2 of the pRF centre, item radius 0.75° = size_stimuli/2; a voxel can overlap more than one item).
@@ -38,7 +42,7 @@ ITEM_RADIUS = 0.75   # deg, size_stimuli / 2
 FWHM = 2 * np.sqrt(2 * np.log(2))
 
 
-def main(subject, rois, bids, out_dir, subdir, root, hrf_table, trials_from, dt_root=None):
+def main(subject, rois, bids, out_dir, subdir, root, hrf_table, trials_from, dt_root=None, sd_model=None):
     from retsupp.modeling.fit_af_prf_cv_v2 import build_data_and_paradigm, build_model, get_ring_positions
     from retsupp.modeling.fit_cv_ladder_nested import GAINS, bar_paradigm, sign_pattern_of
     from retsupp.modeling.roi_hrf import hrf_model as roi_hrf_model, load_table
@@ -95,6 +99,16 @@ def main(subject, rois, bids, out_dir, subdir, root, hrf_table, trials_from, dt_
         row = dict(subject=subject, roi=roi, w_d=w_d, w_t=w_t, dS=g(p7, 'g_HP') - g(p7, 'g_LP'),
                    dD=g(p7, 'g_HP_dyn') - g(p7, 'g_LP_dyn'), g_T=g(p7, 'g_T_dyn'), g_D_lp=g(p7, 'g_LP_dyn'),
                    item_scale=g(p7, 'item_scale'))
+        if sd_model:
+            msd = load(root, sd_model, subject, roi)
+            if not np.array_equal(ids, np.asarray(msd['voxel_ids'])):
+                raise ValueError(f'{roi}: {sd_model} voxels differ from m7_full')
+            psd = msd['fit_pars_per_fold'][0].reindex(columns=list(m7_model.parameter_labels))
+            assert not psd.isna().any().any()
+            params['SD'] = (m7_model, psd)
+            row.update(sd_model=sd_model, dS_sd=g(psd, 'g_HP') - g(psd, 'g_LP'),
+                       dD_sd=g(psd, 'g_HP_dyn') - g(psd, 'g_LP_dyn'), g_T_sd=g(psd, 'g_T_dyn'),
+                       g_D_lp_sd=g(psd, 'g_LP_dyn'), item_scale_sd=g(psd, 'item_scale'))
         if m8 is not None:
             if not np.array_equal(ids, np.asarray(m8['voxel_ids'])):
                 raise ValueError(f'{roi}: m8_full_dT voxels differ from the polished m7_full')
@@ -156,7 +170,9 @@ if __name__ == '__main__':
     ap.add_argument('--subdir', default='location_timeseries_polished_pred_2026-11-13')
     ap.add_argument('--root', required=True, help='refitted ladder root with m7_full (name under derivatives or path)')
     ap.add_argument('--dt-root', default=None, help='root with m8_full_dT (same voxels) for the SDT / SDT0 variants')
+    ap.add_argument('--sd-model', default=None, help='model of --root for the SD variant (default: m7_full as fitted)')
     ap.add_argument('--hrf-table', required=True)
     ap.add_argument('--trials-from', required=True, help='location time-series folder of the data (its trial tables)')
     a = ap.parse_args()
-    main(a.subject, a.rois, a.bids_folder, a.out_dir, a.subdir, a.root, a.hrf_table, a.trials_from, a.dt_root)
+    main(a.subject, a.rois, a.bids_folder, a.out_dir, a.subdir, a.root, a.hrf_table, a.trials_from, a.dt_root,
+         a.sd_model)

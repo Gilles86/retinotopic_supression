@@ -14,6 +14,7 @@
 # Usage (repo root on the cluster login node, after git pull):
 #   sbatch --array=3-30 retsupp/modeling/slurm_jobs/hp_terms_heldout_power.sh
 #   N_DRAWS=200 OUTPUT_SUBDIR=<new folder> sbatch --array=3 ...
+#   ZERO_SUM=1 REF_ROOT=<zero-sum view root> OUTPUT_SUBDIR=<new folder> sbatch ...   (on the zero-sum main model)
 
 set -eo pipefail
 subject=${SLURM_ARRAY_TASK_ID}
@@ -36,4 +37,5 @@ echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
 
 "$HOME/data/conda/envs/retsupp_cuda/bin/python" -u -m retsupp.modeling.hp_terms_heldout_power \
     "$subject" --bids-folder /shares/zne.uzh/gdehol/ds-retsupp \
-    ${N_DRAWS:+--n-draws $N_DRAWS} ${OUTPUT_SUBDIR:+--output-subdir "$OUTPUT_SUBDIR"} ${ROIS:+--rois $ROIS}
+    ${N_DRAWS:+--n-draws $N_DRAWS} ${OUTPUT_SUBDIR:+--output-subdir "$OUTPUT_SUBDIR"} ${ROIS:+--rois $ROIS} \
+    ${REF_ROOT:+--ref-root "$REF_ROOT"} ${ZERO_SUM:+--zero-sum}

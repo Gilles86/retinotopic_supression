@@ -89,7 +89,9 @@ offset a added to both at HP) (``hp_item_gain``). Both are m5_TDS_dS plus one te
 from m5 with h = a = 0 (checked to reproduce m5's prediction). ``--prf-source-root <all-runs root>`` (with
 ``--models`` among m5_TDS_dS, m7_full and these two) freezes the per-voxel pRFs at that root's m7_full fit (e.g. the
 pRFs refitted with the gain fields) and refits m5 (shared terms, from that fit with g_HP_dyn tied) and the models from
-it in every fold, so the models share their pRFs exactly. Root gets a _polprf suffix.
+it in every fold, so the models share their pRFs exactly. Root gets a _polprf suffix. ``--prf-source-zero-sum`` (with
+a zero-sum view root, e.g. ``..._zs_lm_ref``, whose m7_full is the zero-sum main model): every one of these shared fits
+keeps the sustained field zero-sum (g_HP + 3·g_LP = 0) with the zero-sum bounds; root suffix _polprf_zs_lm.
 
 ``--reliable-only`` keeps the selected voxels with model-free cross-run reliability > 0 (mean over
 the ``prf_cv_reliability`` folds). The m00, m0, m1 and m3b fits come from ``--base-root``, restricted
@@ -376,8 +378,12 @@ def raw_bounds(model, init_pars, cols, bounds=None):
 
 def shared_fit(model, bold_train, paradigm, init_pars, free_shared,
                max_iter=2000, bounded=False, loss='sse', sigma_starts=SIGMA_STARTS,
-               lbfgs_rounds=LBFGS_ROUNDS, hessian=False):
+               lbfgs_rounds=LBFGS_ROUNDS, hessian=False, zerosum=False, bounds=None):
     """L-BFGS-B over the shared parameters, per-voxel pRFs frozen.
+
+    ``zerosum``: the sustained field is constrained to g_HP + 3·g_LP = 0 (g_LP = −g_HP/3, raw = value for the
+    gains; ``joint_lm.shared_map``), so g_HP is optimised and g_LP follows. ``bounds``: the bounds dict used with
+    ``bounded`` (default SHARED_BOUNDS; the zero-sum fits use ``zs_bounds``).
 
     Starts from ``init_pars`` (the parent optimum, new terms at null) and
     from alternative σ starts; keeps the lowest training SSE. The parent
@@ -391,7 +397,37 @@ def shared_fit(model, bold_train, paradigm, init_pars, free_shared,
         init_pars[labels].values.astype(np.float32))
     raw0 = np.asarray(raw0)
     fun = make_sse_fn(model, bold_train, paradigm, raw0, free_ix, loss=loss)
-    bnds = raw_bounds(model, init_pars, free_shared) if bounded else None
+    bnds = raw_bounds(model, init_pars, free_shared, bounds=bounds) if bounded else None
+    if zerosum:
+        i_hp, i_lp = free_shared.index('g_HP'), free_shared.index('g_LP')
+        keep = [j for j in range(len(free_ix)) if j != i_lp]
+        j_hp = keep.index(i_hp)
+        viol = float(np.abs(init_pars['g_HP'] + 3 * init_pars['g_LP']).max())
+        if viol > 1e-4:
+            raise ValueError(f'zero-sum start violates g_HP + 3·g_LP = 0 by {viol}')
+        fun_full = fun
+
+        def expand(x):
+            full = np.empty(len(free_ix))
+            full[keep] = x
+            full[i_lp] = -x[j_hp] / 3.0
+            return full
+
+        def fun(x):
+            f, g = fun_full(expand(x))
+            g = np.asarray(g, dtype=np.float64)
+            gr = g[keep].copy()
+            gr[j_hp] -= g[i_lp] / 3.0
+            return f, gr
+        if bnds is not None:
+            bnds = [bnds[j] for j in keep]
+
+        def reduce(x):
+            return np.asarray(x)[keep]
+    else:
+        def expand(x):
+            return x
+        reduce = expand
 
     def clip(x):
         if bnds is None:
@@ -399,7 +435,7 @@ def shared_fit(model, bold_train, paradigm, init_pars, free_shared,
         return np.clip(x, [b[0] for b in bnds], [b[1] for b in bnds])
 
     t0 = time.time()
-    f_parent, _ = fun(clip(raw0[0, free_ix].astype(np.float64)))
+    f_parent, _ = fun(clip(reduce(raw0[0, free_ix].astype(np.float64))))
     best = None
     starts = []
     for s in sigma_starts:
@@ -415,7 +451,7 @@ def shared_fit(model, bold_train, paradigm, init_pars, free_shared,
             for j, k in enumerate(free_ix):
                 if k in sigma_ix:
                     x0[j] = raw_s[0, k]
-        x0 = clip(x0)
+        x0 = clip(reduce(x0))
         f_start, _ = fun(x0)
         f_end, x_end, nit = f_start, x0, 0
         for _round in range(lbfgs_rounds):
@@ -435,7 +471,7 @@ def shared_fit(model, bold_train, paradigm, init_pars, free_shared,
             best = (f_end, x_end)
 
     raw_best = raw0.copy()
-    raw_best[:, free_ix] = best[1].astype(np.float32)
+    raw_best[:, free_ix] = expand(best[1]).astype(np.float32)
     fit_pars = pd.DataFrame(
         np.asarray(model._transform_parameters_forward(raw_best)),
         columns=labels, index=init_pars.index)
@@ -715,7 +751,8 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
          polish_suffix='_polished', polish_rounds=2, polish_max_iter=3000, polish_tol=0.0,
          polish_lm_iter=300, polish_lm_ftol=1e-10,
          zs_suffix='_zs_lm', zs_warm_root=None, zs_transient_hi=None, zs_item_min=None,
-         selection_table=None, min_r=None, max_p=0.01, warm_polish_root=None, prf_source_root=None):
+         selection_table=None, min_r=None, max_p=0.01, warm_polish_root=None, prf_source_root=None,
+         prf_source_zero_sum=False):
     if cv_scheme not in SCHEMES:
         raise ValueError(f'cv_scheme must be in {SCHEMES}')
     if frozen_prf and (cv_scheme == 'full' or not base_roots):
@@ -734,6 +771,8 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                             or not models or any(n not in PRF_SOURCE_MODELS for n in models)):
         raise ValueError(f'--prf-source-root: DoG, --models within {PRF_SOURCE_MODELS}, no --polish / --frozen-prf / '
                          '--base-root / --hp-rotation')
+    if prf_source_zero_sum and not (prf_source_root and bounded):
+        raise ValueError('--prf-source-zero-sum needs --prf-source-root and --bounded')
     per_voxel_cols = PER_VOXEL_COLS + (
         ['neural_baseline', 'surround_baseline'] if family == 'dn' else [])
     bids_folder = Path(bids_folder)
@@ -751,7 +790,8 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
             + (f'_relnull_r{min_r:g}' if selection_table else '')
             + ('_roihrf' if hrf_table else '')
             + ('_frozenprf' if frozen_prf else '')
-            + ('_polprf' if prf_source_root else '')))
+            + ('_polprf' if prf_source_root else '')
+            + ('_zs_lm' if prf_source_zero_sum else '')))
     polish_root = root.parent / f'{root.name}{polish_suffix}'
     hrf_tab = load_hrf_table(hrf_table)
     models = models or [m for m in LADDER if m not in TARGET_SPLIT + ZERO_SUM_MODELS]
@@ -803,6 +843,19 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                 raise ValueError(f'{pkl}: voxel set differs from the current selection')
             prf_src = d['fit_pars_per_fold'][0].reset_index(drop=True)
             print(f'pRFs frozen at {pkl} ({len(prf_src)} voxels)')
+            dd_src = prf_src   # where the second start's HP − LP distractor gain (dD) comes from
+            if prf_source_zero_sum:
+                # The zero-sum main model has no dD: the second start takes it from the supplementary zero-sum
+                # model with dD (m7_full_zs) of the same root, as the earlier run took it from the reference m7_full.
+                pkl_d = (Path(prf_source_root) / 'm7_full_zs' / f'sub-{subject:02d}'
+                         / f'sub-{subject:02d}_roi-{roi}_cv-fits.pkl')
+                with open(pkl_d, 'rb') as f:
+                    d_d = pickle.load(f)
+                if not np.array_equal(np.asarray(d_d['voxel_ids']), voxel_ids):
+                    raise ValueError(f'{pkl_d}: voxel set differs from the current selection')
+                dd_src = d_d['fit_pars_per_fold'][0].reset_index(drop=True)
+                viol = float(np.abs(prf_src['g_HP'] + 3 * prf_src['g_LP']).max())
+                print(f'zero-sum shared fits (zs_bounds); source |g_HP + 3 g_LP| = {viol:.2g}; dD start from {pkl_d}')
         ring_positions = get_ring_positions()
         hrf_model = roi_hrf_model(sub, roi, hrf_tab)   # canonical without --hrf-table
         print(f'HRF: {hrf_values(subject, roi, hrf_tab)}')
@@ -1255,7 +1308,9 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                     init['sigma_T_dyn'] = init['sigma_dyn']
                     free = [p for p in shared_pars_for(sp, item_scale) if p != 'sigma_T_dyn']
                     pars, info = shared_fit(m_tr, y_tr, train['paradigm'], init, free, bounded=bounded, loss=loss,
-                                            sigma_starts=sigma_starts, lbfgs_rounds=lbfgs_rounds)
+                                            sigma_starts=sigma_starts, lbfgs_rounds=lbfgs_rounds,
+                                            zerosum=prf_source_zero_sum,
+                                            bounds=zs_b if prf_source_zero_sum else None)
                     print(f'  fold {k}: SSE source start {info["sse_parent_start"]:.2f}'
                           f' -> {info["sse_final"]:.2f} | {info["seconds"]:.0f}s')
                 else:
@@ -1287,7 +1342,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                         # Also start from the source fit's HP − LP distractor gain (dD), as dD itself (m7), as an
                         # offset a = dD or as a scale h = dD / g_D, from the parent's other terms.
                         alt = init.copy()
-                        g_hp, g_lp = (float(prf_src[c].iloc[0]) for c in ('g_HP_dyn', 'g_LP_dyn'))
+                        g_hp, g_lp = (float(dd_src[c].iloc[0]) for c in ('g_HP_dyn', 'g_LP_dyn'))
                         if name == 'm7_full':
                             alt['g_HP_dyn'] = alt['g_LP_dyn'] + (g_hp - g_lp)
                         elif HP_ITEM[name] == 'add':
@@ -1326,7 +1381,9 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                         c_pars, c_info = shared_fit(
                             m_tr, y_tr, train['paradigm'], c_init, free, bounded=bounded, loss=loss,
                             sigma_starts=c_starts, lbfgs_rounds=lbfgs_rounds,
-                            hessian=name in BASELINE_FIELD or name == 'm8_full_dogk')
+                            hessian=name in BASELINE_FIELD or name == 'm8_full_dogk',
+                            zerosum=bool(prf_source_zero_sum and prf_src is not None),
+                            bounds=zs_b if (prf_source_zero_sum and prf_src is not None) else None)
                         cand_log.append(dict(
                             theta_start=float(c_init['theta_bd'].iloc[0]) if 'theta_bd' in c_init else None,
                             kappa_start=float(c_init[KAPPA].iloc[0]) if KAPPA in c_init else None,
@@ -1509,6 +1566,10 @@ if __name__ == '__main__':
                     help='All-runs root (e.g. the polished reference): per-voxel pRFs frozen at its m7_full fit; m5_TDS_dS '
                          'and --models (m7_full, m8_full_hpmult, m8_full_hpadd) refitted per fold (shared terms only). '
                          'Root gets a _polprf suffix.')
+    ap.add_argument('--prf-source-zero-sum', action='store_true',
+                    help='With --prf-source-root <zero-sum view root> --bounded: the shared fits keep the sustained '
+                         'field zero-sum (g_HP + 3·g_LP = 0) with the zero-sum bounds (zs_bounds), and the dD start '
+                         'comes from that root\'s m7_full_zs. Root gets a _polprf_zs_lm suffix.')
     a = ap.parse_args()
     starts = SIGMA_STARTS if a.sigma_starts is None else tuple(None if v == 'parent' else float(v) for v in a.sigma_starts)
     main(a.subject, a.bids_folder, a.roi, cv_scheme=a.cv_scheme,
@@ -1524,4 +1585,4 @@ if __name__ == '__main__':
          polish_lm_iter=a.polish_lm_iter, polish_lm_ftol=a.polish_lm_ftol, zs_suffix=a.zs_suffix,
          zs_warm_root=a.zs_warm_root, zs_transient_hi=a.zs_transient_hi, zs_item_min=a.zs_item_min,
          selection_table=a.selection_table, min_r=a.min_r, max_p=a.max_p, warm_polish_root=a.warm_polish_root,
-         prf_source_root=a.prf_source_root)
+         prf_source_root=a.prf_source_root, prf_source_zero_sum=a.prf_source_zero_sum)
