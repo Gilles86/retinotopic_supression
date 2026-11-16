@@ -60,6 +60,9 @@ TR_SIGMA = TR_FWHM / FWHM
 TGT, DIS = 'opp', 'left'          # target opposite HP; distractor at the LP location next to HP (its gain is the average)
 
 
+ZERO_SUM = False   # --zero-sum: draw the sustained field as zero-sum (LP = -dS/4, HP = 3/4 dS) of the dS drawn
+
+
 def map_parameters(gain_table, exclude=(1, 2), cond=None, widths=None):
     """Per area, the median over participants of each participant's joint-fit parameter (DoG, m7_full).
 
@@ -80,8 +83,10 @@ def map_parameters(gain_table, exclude=(1, 2), cond=None, widths=None):
         p['dS_alone'] = c.groupby('roi').dS.median().reindex(p.index)
         p['n_alone'] = c.groupby('roi').dS.size().reindex(p.index)
         p['dS_map'] = p.dS_alone
+    if ZERO_SUM:                           # zero-sum sustained field: g_HP + 3 g_LP = 0, so both follow from dS
+        p['g_LP'] = -0.25 * p.dS_map
     p['g_HP_map'] = p.g_LP + p.dS_map
-    if widths is not None:                 # the width among fits with a reliable sustained gain (field_widths_reliable)
+    if widths is not None:                # the width among fits with a reliable sustained gain (field_widths_reliable)
         w = pd.read_csv(widths, sep='\t')
         w = w[(w.field == 'sustained') & w.subset.str.startswith('reliable')].set_index('roi')
         p['sigma_AF_all'] = p.sigma_AF
@@ -1168,7 +1173,10 @@ if __name__ == '__main__':
     ap.add_argument('--fit-label', default=None, help='v11: how the legend names the fits (first sentence)')
     ap.add_argument('--split-d', action='store_true', help='v11: write panels a-c (fig5_gain_fields_v11_abc) and panel d '
                     'as its own supplementary figure (figS_transient_hp_lp) instead of the full figure')
+    ap.add_argument('--zero-sum', action='store_true', help='zero-sum sustained field: the maps draw LP = -dS/4 and '
+                    'HP = 3/4 dS of the dS shown, instead of median g_LP + dS')
     a = ap.parse_args()
+    ZERO_SUM = a.zero_sum
     main(a.gain_table, a.conditional_table, a.slope_table, a.sigma_table, a.suffix,
          None if a.sustained_scale == 'auto' else a.sustained_scale == 'per-area', a.compact, a.layout,
          a.widths_table, a.fit_label, a.split_d)

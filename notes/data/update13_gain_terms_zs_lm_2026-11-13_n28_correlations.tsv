@@ -1,0 +1,21 @@
+x	y	level	rho	ci_lo	ci_hi	p	n	k_neg	mean_rho_from_z
+T	dS joint	between participants (medians over areas)	-0.22167	-0.55392	0.17622	0.25692	28		
+T	dS joint	between areas (area medians)	-0.05	-0.48333	0.53375	0.89835	9		
+T	dS joint	within participants (ρ across areas, ≥ 5 areas)	-0.19524	-0.46667	-0.083333	0.0045774	28	22	-0.24886
+T	dS joint	within participants and areas (area and participant medians removed)	-0.22462	-0.35179	-0.078967	0.00044151	241		
+T	dS joint	all participant × area cells (reference, not independent)	-0.22183			0.00052225	241		
+T	dS estimated alone	between participants (medians over areas)	-0.29995	-0.66	0.11382	0.12096	28		
+T	dS estimated alone	between areas (area medians)	-0.3	-0.66667	0.26667	0.43285	9		
+T	dS estimated alone	within participants (ρ across areas, ≥ 5 areas)	-0.2381	-0.39643	-0.016952	0.0015447	28	21	-0.22588
+T	dS estimated alone	within participants and areas (area and participant medians removed)	-0.17543	-0.29917	-0.039564	0.0063242	241		
+T	dS estimated alone	all participant × area cells (reference, not independent)	-0.20609			0.0012935	241		
+D	dS joint	between participants (medians over areas)	-0.30816	-0.68903	0.13333	0.11063	28		
+D	dS joint	between areas (area medians)	-0.25	-0.73333	0.48333	0.51649	9		
+D	dS joint	within participants (ρ across areas, ≥ 5 areas)	-0.51667	-0.6	-0.13333	0.0015469	28	23	-0.47062
+D	dS joint	within participants and areas (area and participant medians removed)	-0.29173	-0.46742	-0.10109	4.1074e-06	241		
+D	dS joint	all participant × area cells (reference, not independent)	-0.33267			1.2304e-07	241		
+D	dS estimated alone	between participants (medians over areas)	-0.38314	-0.70536	0.015112	0.044167	28		
+D	dS estimated alone	between areas (area medians)	-0.36667	-0.75	0.33375	0.33174	9		
+D	dS estimated alone	within participants (ρ across areas, ≥ 5 areas)	-0.4631	-0.65	-0.19167	0.0008749	28	23	-0.42136
+D	dS estimated alone	within participants and areas (area and participant medians removed)	-0.2841	-0.44938	-0.11769	7.4568e-06	241		
+D	dS estimated alone	all participant × area cells (reference, not independent)	-0.33728			8.0139e-08	241		

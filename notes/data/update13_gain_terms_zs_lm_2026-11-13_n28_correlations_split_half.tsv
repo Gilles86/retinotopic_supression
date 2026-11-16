@@ -1,0 +1,8 @@
+x	y	kind	rho_double_centred	within_participant_median_rho	ci_lo	ci_hi	n	k_neg	p
+T	dS joint (split halves)	same half	-0.20551	-0.29048	-0.42083	-0.053869	28	20	0.0011793
+T	dS joint (split halves)	cross half	-0.17208	-0.22917	-0.35476	-0.025	28	20	0.0047782
+T	split-half reliability	odd vs even	0.76732						
+dS	split-half reliability	odd vs even	0.43455						
+D	dS joint (split halves)	same half	-0.16792	-0.20119	-0.425	-0.0089286	28	19	0.015298
+D	dS joint (split halves)	cross half	-0.082008	-0.17857	-0.27083	0.029167	28	18	0.054316
+D	split-half reliability	odd vs even	0.4489						

@@ -1,0 +1,21 @@
+area	kind	ratio	ci_lo	ci_hi	n	n_cells	k_neg	p
+pooled	ratio of medians	-0.23505	-0.42632	-0.094888	28			
+V1	ratio of medians	1.2802	-11.184	7.9085	28			
+V2	ratio of medians	-2.4994	-15.43	6.9269	28			
+V3	ratio of medians	-0.21741	-0.5923	0.012683	28			
+V3AB	ratio of medians	-0.047118	-0.16181	0.084707	27			
+IPS	ratio of medians	-0.038984	-0.38609	0.090649	25			
+hV4	ratio of medians	-0.11188	-0.28724	-0.054345	28			
+VO	ratio of medians	-0.029232	-0.15312	0.023782	21			
+LO	ratio of medians	-0.055636	-0.36889	0.30936	28			
+TO	ratio of medians	-0.15732	-0.54524	-0.0087169	28			
+pooled	per participant, reliable target cells	-0.084356	-0.1572	-0.061735	27	135	23	0.00066777
+V1	per participant, reliable target cells				1	1		
+V2	per participant, reliable target cells	-0.11167	-0.19889	0.074722	7	7	5	0.29688
+V3	per participant, reliable target cells	-0.14883	-0.30592	-0.064196	17	17	14	0.050537
+V3AB	per participant, reliable target cells	-0.061735	-0.1424	-0.023632	21	21	15	0.11106
+IPS	per participant, reliable target cells	-0.0077186	-0.12824	0.18042	16	16	8	0.63217
+hV4	per participant, reliable target cells	-0.11136	-0.21359	-0.056308	23	23	18	0.011157
+VO	per participant, reliable target cells	-0.07364	-0.17817	-0.021817	17	17	13	0.098373
+LO	per participant, reliable target cells	-0.076076	-0.13147	0.086147	15	15	10	0.27686
+TO	per participant, reliable target cells	-0.081947	-0.11915	-0.031416	18	18	15	0.0089645
