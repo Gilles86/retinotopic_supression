@@ -1,0 +1,85 @@
+grouping	grp	unit	source	F_loc	p_loc	F_inter	p_inter	df1	df2	n
+pathway	Dorsal	relative	measured	1.0383	0.31797	0.94978	0.39369	2	50	26
+pathway	Dorsal	relative	measured − nohp	0.24035	0.6284	0.10014	0.9049	2	48	25
+pathway	Dorsal	relative	nohp predicted	2.0952	0.1607	1.2698	0.29014	2	48	25
+pathway	Dorsal	relative	measured − S	0.033681	0.85593	0.087793	0.9161	2	48	25
+pathway	Dorsal	relative	S predicted	1.0099	0.32495	1.1055	0.33932	2	48	25
+pathway	Dorsal	relative	measured − SD	0.13919	0.71236	0.073485	0.92925	2	48	25
+pathway	Dorsal	relative	SD predicted	1.9252	0.17804	0.51735	0.59938	2	48	25
+pathway	Early	relative	measured	7.3161	0.011688	0.486	0.61775	2	54	28
+pathway	Early	relative	measured − nohp	7.0985	0.012855	0.54112	0.58522	2	54	28
+pathway	Early	relative	nohp predicted	0.32317	0.57441	0.46834	0.62856	2	54	28
+pathway	Early	relative	measured − S	1.2511	0.2732	0.53752	0.58729	2	54	28
+pathway	Early	relative	S predicted	4.3569	0.046428	0.15116	0.86007	2	54	28
+pathway	Early	relative	measured − SD	1.7097	0.20205	1.0161	0.36883	2	54	28
+pathway	Early	relative	SD predicted	4.0813	0.053384	1.0777	0.34758	2	54	28
+pathway	Occipitotemporal	relative	measured	0.26438	0.61131	0.55165	0.57921	2	54	28
+pathway	Occipitotemporal	relative	measured − nohp	0.35608	0.55566	0.48539	0.61812	2	54	28
+pathway	Occipitotemporal	relative	nohp predicted	6.0491	0.020606	0.90675	0.40989	2	54	28
+pathway	Occipitotemporal	relative	measured − S	0.086559	0.77085	0.47984	0.6215	2	54	28
+pathway	Occipitotemporal	relative	S predicted	3.3996	0.076212	1.0527	0.35606	2	54	28
+pathway	Occipitotemporal	relative	measured − SD	0.029628	0.86462	1.8415	0.1684	2	54	28
+pathway	Occipitotemporal	relative	SD predicted	2.2495	0.14527	1.5712	0.21715	2	54	28
+area	V1	relative	measured	6.4635	0.01731	0.92361	0.4035	2	52	27
+area	V1	relative	measured − nohp	5.7877	0.023546	1.1404	0.32756	2	52	27
+area	V1	relative	nohp predicted	1.6525	0.20995	0.63594	0.53351	2	52	27
+area	V1	relative	measured − S	3.3927	0.076919	1.3212	0.27561	2	52	27
+area	V1	relative	S predicted	0.07066	0.79248	0.67261	0.51476	2	52	27
+area	V1	relative	measured − SD	4.4868	0.043876	0.73954	0.48228	2	52	27
+area	V1	relative	SD predicted	0.011289	0.9162	2.1581	0.12578	2	52	27
+area	V2	relative	measured	5.6441	0.024872	0.76535	0.47015	2	54	28
+area	V2	relative	measured − nohp	5.4803	0.026866	0.89319	0.41531	2	54	28
+area	V2	relative	nohp predicted	0.23002	0.63537	2.0533	0.13821	2	54	28
+area	V2	relative	measured − S	3.1527	0.087076	0.89506	0.41456	2	54	28
+area	V2	relative	S predicted	0.97707	0.3317	1.0516	0.35642	2	54	28
+area	V2	relative	measured − SD	2.8193	0.10468	0.77395	0.46624	2	54	28
+area	V2	relative	SD predicted	1.5226	0.22786	0.42677	0.65479	2	54	28
+area	V3	relative	measured	0.0052481	0.94278	1.523	0.22728	2	54	28
+area	V3	relative	measured − nohp	0.66852	0.42073	0.89426	0.41488	2	54	28
+area	V3	relative	nohp predicted	1.6823	0.20559	0.43723	0.64809	2	54	28
+area	V3	relative	measured − S	0.049633	0.82538	1.1044	0.33878	2	54	28
+area	V3	relative	S predicted	0.081855	0.77698	0.55361	0.5781	2	54	28
+area	V3	relative	measured − SD	0.12257	0.72898	1.4747	0.23791	2	54	28
+area	V3	relative	SD predicted	0.19408	0.66305	0.58016	0.56326	2	54	28
+pathway	Dorsal	absolute	measured	2.2832	0.14332	0.39154	0.67807	2	50	26
+pathway	Dorsal	absolute	measured − nohp	2.5078	0.12586	0.26816	0.76588	2	50	26
+pathway	Dorsal	absolute	nohp predicted	7.1634	0.012944	5.3634	0.0077579	2	50	26
+pathway	Dorsal	absolute	measured − S	1.3775	0.25158	0.26474	0.76848	2	50	26
+pathway	Dorsal	absolute	S predicted	2.48	0.12787	5.8919	0.0050396	2	50	26
+pathway	Dorsal	absolute	measured − SD	1.3421	0.2576	0.57213	0.56798	2	50	26
+pathway	Dorsal	absolute	SD predicted	2.9668	0.097343	0.31558	0.73081	2	50	26
+pathway	Early	absolute	measured	7.4041	0.011249	1.5311	0.22553	2	54	28
+pathway	Early	absolute	measured − nohp	7.453	0.011013	1.6814	0.19571	2	54	28
+pathway	Early	absolute	nohp predicted	0.030521	0.86262	1.2663	0.29011	2	54	28
+pathway	Early	absolute	measured − S	2.1947	0.15006	1.7245	0.18794	2	54	28
+pathway	Early	absolute	S predicted	7.6624	0.010062	0.57689	0.56507	2	54	28
+pathway	Early	absolute	measured − SD	2.8491	0.10295	2.9162	0.062709	2	54	28
+pathway	Early	absolute	SD predicted	6.1403	0.019761	1.8174	0.17225	2	54	28
+pathway	Occipitotemporal	absolute	measured	0.042093	0.83898	1.8347	0.16947	2	54	28
+pathway	Occipitotemporal	absolute	measured − nohp	0.059856	0.80857	1.6984	0.19261	2	54	28
+pathway	Occipitotemporal	absolute	nohp predicted	4.1687	0.051059	1.5943	0.21246	2	54	28
+pathway	Occipitotemporal	absolute	measured − S	0.20731	0.65252	1.7349	0.1861	2	54	28
+pathway	Occipitotemporal	absolute	S predicted	8.2145	0.0079568	1.7786	0.17863	2	54	28
+pathway	Occipitotemporal	absolute	measured − SD	0.14897	0.70254	2.6104	0.082759	2	54	28
+pathway	Occipitotemporal	absolute	SD predicted	7.2167	0.012206	0.93657	0.39824	2	54	28
+area	V1	absolute	measured	3.9666	0.056614	2.8273	0.067958	2	54	28
+area	V1	absolute	measured − nohp	3.8893	0.058917	2.8534	0.066373	2	54	28
+area	V1	absolute	nohp predicted	0.0017854	0.96661	0.33114	0.71955	2	54	28
+area	V1	absolute	measured − S	3.054	0.091903	2.9365	0.061573	2	54	28
+area	V1	absolute	S predicted	2.7746	0.10733	0.31072	0.73422	2	54	28
+area	V1	absolute	measured − SD	3.3136	0.079812	2.4018	0.10017	2	54	28
+area	V1	absolute	SD predicted	1.8847	0.1811	0.40838	0.66676	2	54	28
+area	V2	absolute	measured	2.1139	0.15749	1.2021	0.30848	2	54	28
+area	V2	absolute	measured − nohp	2.1189	0.15702	1.3462	0.26882	2	54	28
+area	V2	absolute	nohp predicted	0.003461	0.95352	0.77779	0.4645	2	54	28
+area	V2	absolute	measured − S	1.5487	0.22403	1.3204	0.2755	2	54	28
+area	V2	absolute	S predicted	2.5627	0.12105	0.23763	0.78932	2	54	28
+area	V2	absolute	measured − SD	1.5018	0.23097	2.1655	0.12455	2	54	28
+area	V2	absolute	SD predicted	3.1255	0.088377	0.95614	0.39078	2	54	28
+area	V3	absolute	measured	0.033473	0.8562	2.4864	0.092689	2	54	28
+area	V3	absolute	measured − nohp	0.045551	0.8326	2.5303	0.089044	2	54	28
+area	V3	absolute	nohp predicted	0.4967	0.48699	2.4734	0.093805	2	54	28
+area	V3	absolute	measured − S	1.1424	0.2946	2.4869	0.092649	2	54	28
+area	V3	absolute	S predicted	3.9528	0.057019	4.6336	0.013893	2	54	28
+area	V3	absolute	measured − SD	0.53568	0.47054	4.2398	0.019485	2	54	28
+area	V3	absolute	SD predicted	2.6754	0.11352	1.4575	0.24183	2	54	28

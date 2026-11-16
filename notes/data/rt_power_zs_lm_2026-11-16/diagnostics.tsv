@@ -1,0 +1,4 @@
+analysis	term	ppc_obs_coverage95	ppc_area_means_inside	n_areas	n_obs	n_subjects	divergences	rhat_max	ess_bulk_min	ess_tail_min
+baseline (refit): z(log RT), separate, SE-weighted	target	0.9478260869565217	8	9	230	28	0	1.0	1120.0	1556.0
+baseline (refit): z(log RT), separate, SE-weighted	distractor	0.9521739130434783	9	9	230	28	0	1.0	1881.0	1738.0
+baseline (refit): z(log RT), separate, SE-weighted	global	0.9652173913043478	9	9	230	28	0	1.01	1021.0	866.0
