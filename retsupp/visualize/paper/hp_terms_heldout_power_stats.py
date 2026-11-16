@@ -11,6 +11,9 @@ Usage::
 
     python -m retsupp.visualize.paper.hp_terms_heldout_power_stats collect --bids-folder /shares/... (cluster)
     python -m retsupp.visualize.paper.hp_terms_heldout_power_stats stats (laptop)
+    # zero-sum main model (update 13b): term set from each npz's 'names' (no shared sustained level S0)
+    ... collect --folder hp_terms_heldout_power_zs_lm_2026-11-16 --tag zs_lm_2026-11-16
+    ... stats --tag zs_lm_2026-11-16 --zero-sum --out-dir notes/data/update13b_zs_lm_2026-11-16
 """
 from __future__ import annotations
 
@@ -25,9 +28,23 @@ from retsupp.visualize.paper.fig45_common import median_ci
 from retsupp.visualize.paper.paper_style import ROI_GROUPS, ROI_ORDER
 
 D = 'notes/data'
-LORO = f'{D}/hp_terms_loro_2026-11-13.tsv'
-LINEAR = f'{D}/hp_terms_linear_2026-11-13.npz'
+TAG = '2026-11-13'
+LORO = f'{D}/hp_terms_loro_{TAG}.tsv'
+LINEAR = f'{D}/hp_terms_linear_{TAG}.npz'
 FOLDER = 'hp_terms_heldout_power_v2_2026-11-13'
+ZERO_SUM = False
+BASE_TEXT = ('the base terms (item weight, target gain, distractor gain, sustained gain at all four locations) and the '
+             'HP − LP terms of each model were fitted on the other runs and the held-out run was predicted. pRFs and '
+             'field widths: the all-runs fit of the model with item weight, target, distractor and sustained gain '
+             '(m4_TDS) in the reference root (pRFs refitted together with the gain fields, update 8, '
+             '`af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf_polished`; that polish was not run to full '
+             'convergence), identical in every model, so their leak into the held-out run is shared.')
+BASE_TEXT_ZS = ('the base terms (item weight, target gain, distractor gain; the zero-sum model has no sustained level '
+                'shared by the four locations) and the HP − LP terms of each model (dS in the zero-sum direction, '
+                'g_HP + ¾·dS, g_LP − ¼·dS) were fitted on the other runs and the held-out run was predicted. pRFs and '
+                'field widths: the all-runs fit of the zero-sum main model (m5_TDS_dS_zs, pRFs and gain fields fitted '
+                'jointly by LM, `..._zs_lm_ref` m7_full), identical in every model, so their leak into the held-out '
+                'run is shared.')
 EXCL = (1, 2)
 CONTRASTS = [('dS', 'none', 'Sustained HP − LP (dS) vs no HP terms'),
              ('dS_dD', 'dS', 'Adding the distractor transient HP − LP (dD) to dS'),
@@ -49,8 +66,8 @@ def collect(bids, folder):
     print(LINEAR, len(arrs), 'arrays')
 
 
-def load_linear_table(path=LINEAR):
-    z = np.load(path)
+def load_linear_table(path=None):
+    z = np.load(path or LINEAR)
     out = {}
     for k in z.files:
         subj, roi, name = k.split('__')
@@ -100,13 +117,8 @@ def heldout(md, scale=1e4):
     w = agg.pivot_table(index=['subject', 'roi'], columns='model', values='r2').reset_index()
     out = []
     md += ['# Item 1a: do the transient HP − LP terms improve held-out prediction?', '',
-           'Leave-one-run-out cross-validation (12 folds; 11 for sub-20 and sub-24): in each fold the base terms '
-           '(item weight, target gain, distractor gain, sustained gain at all four locations) and the HP − LP terms '
-           'of each model were fitted on the other runs and the held-out run was predicted. pRFs and field widths: '
-           'the all-runs fit of the model with item weight, target, distractor and sustained gain (m4_TDS) in the '
-           'reference root (pRFs refitted together with the gain fields, update 8, '
-           '`af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf_polished`; that polish was not run to full '
-           'convergence), identical in every model, so their leak into the held-out run is shared. The HP − LP terms '
+           'Leave-one-run-out cross-validation (12 folds; 11 for sub-20 and sub-24): in each fold '
+           + (BASE_TEXT_ZS if ZERO_SUM else BASE_TEXT) + ' The HP − LP terms '
            'enter linearly (least squares around that fit). Held-out R² per participant × area = 1 − ΣSSE / ΣSST over '
            'the held-out runs and voxels; ΔR² in units of 10⁻⁴ (0.01 percentage points of variance). Per area: median '
            'over participants [bootstrapped 95% CI], participants with ΔR² > 0, Wilcoxon p, BH q across nine areas; '
@@ -158,21 +170,31 @@ def plain_heldout(a, b, pl, rows):
 
 
 NAMES = ['S0', 'D0', 'T0', 'I0', 'dS', 'dD', 'dT']
-BASE = [0, 1, 2, 3]
-JOINT = {'dS_dD': [0, 1, 2, 3, 4, 5], 'dS_dD_dT': [0, 1, 2, 3, 4, 5, 6]}
 
 
-def estimates_batch(G, c):
+def index_sets(names=NAMES):
+    """Base indices (names ending in 0), the HP terms' indices and the joint models, from the term names."""
+    names = [str(n) for n in names]
+    base = [i for i, n in enumerate(names) if n.endswith('0')]
+    hp = {k: names.index(k) for k in ('dS', 'dD', 'dT')}
+    joint = {'dS_dD': base + [hp['dS'], hp['dD']], 'dS_dD_dT': base + [hp['dS'], hp['dD'], hp['dT']]}
+    return base, hp, joint
+
+
+BASE, _HP, JOINT = index_sets()   # the original seven terms: BASE [0, 1, 2, 3], JOINT [0..5], [0..6]
+
+
+def estimates_batch(G, c, names=NAMES):
     """G (K, K), c (..., K) -> dict of estimates (...,): alone (base refit / base fixed) and joint."""
-    b = BASE
+    b, hp, joint = index_sets(names)
     beta_b = np.linalg.solve(G[np.ix_(b, b)], c[..., b].T).T
     out = {}
-    for k, j in (('dS', 4), ('dD', 5), ('dT', 6)):
+    for k, j in hp.items():
         out[f'{k}_alone'] = (c[..., j] - beta_b @ G[b, j]) / G[j, j]
         out[f'{k}_alone_fixedbase'] = c[..., j] / G[j, j]
-    for m, sel in JOINT.items():
+    for m, sel in joint.items():
         beta = np.linalg.solve(G[np.ix_(sel, sel)], c[..., sel].T).T
-        for k, j in (('dS', 4), ('dD', 5), ('dT', 6)):
+        for k, j in hp.items():
             if j in sel:
                 out[f'{k}_joint_{m}'] = beta[..., sel.index(j)]
     out['dDmT_alone'] = out['dD_alone'] - out['dT_alone']
@@ -191,16 +213,18 @@ def simulate(lin, deltas=(0.0, -0.02, -0.05, -0.10)):
     rows, real = [], []
     for (subj, roi), z in lin.items():
         G, c = z['Gr'].sum(0), z['cr'].sum(0)
-        r = estimates_batch(G, c[None])
+        names = list(z['names']) if 'names' in z else NAMES
+        _b, hp, _j = index_sets(names)
+        r = estimates_batch(G, c[None], names)
         real.append(dict(subject=subj, roi=roi, **{k: v[0] * 100 for k, v in r.items()}))
         dS_alone = r['dS_alone_fixedbase'][0]
         for gen in ('alone', 'joint'):
             for i, d in enumerate(z['deltas']):
                 if gen == 'alone':
-                    cc = G[:, 4] * dS_alone + G[:, 5] * d + z['cn_lin']
+                    cc = G[:, hp['dS']] * dS_alone + G[:, hp['dD']] * d + z['cn_lin']
                 else:
                     cc = z['det_m7'][i] + z['cn_m7']
-                e = estimates_batch(G, cc)
+                e = estimates_batch(G, cc, names)
                 df = pd.DataFrame({k: v * 100 for k, v in e.items()})
                 df['draw'] = np.arange(len(df))
                 df['generator'], df['subject'], df['roi'], df['delta'] = gen, subj, roi, d * 100
@@ -293,18 +317,24 @@ def plain_power(rows):
 def main_stats(out_dir):
     md = []
     ho, w = heldout(md)
+    from pathlib import Path
+    for df, name in ((ho, 'heldout_stats'), (w, 'heldout_r2')):   # never overwrite an earlier table
+        if not Path(f'{D}/hp_terms_{name}_{TAG}.tsv').exists():
+            df.to_csv(f'{D}/hp_terms_{name}_{TAG}.tsv', sep='\t', index=False)
     lin = load_linear_table()
     # in-sample (all runs) R² gain, for scale
     ins = []
     for (subj, roi), z in lin.items():
         G, c, sst = z['Gr'].sum(0), z['cr'].sum(0), z['sst'].sum()
+        base, hp, joint = index_sets(list(z['names']) if 'names' in z else NAMES)
         red = {}
-        for m, sel in (('none', BASE), ('dS', BASE + [4]), ('dS_dD', JOINT['dS_dD']), ('dS_dD_dT', JOINT['dS_dD_dT'])):
+        for m, sel in (('none', base), ('dS', base + [hp['dS']]), ('dS_dD', joint['dS_dD']),
+                       ('dS_dD_dT', joint['dS_dD_dT'])):
             beta = np.linalg.solve(G[np.ix_(sel, sel)], c[sel])
             red[m] = beta @ c[sel] / sst
         ins.append(dict(subject=subj, roi=roi, **{f'{a}_minus_{b}': (red[a] - red[b]) * 1e4 for a, b, _ in CONTRASTS}))
     ins = pd.DataFrame(ins)
-    ins.to_csv(f'{D}/hp_terms_insample_dr2_2026-11-13.tsv', sep='\t', index=False)
+    ins.to_csv(f'{D}/hp_terms_insample_dr2_{TAG}.tsv', sep='\t', index=False)
     md += ['## For scale: in-sample R² gain of the same terms (all runs; ≥ 0 by construction)', '',
            '| Contrast | Median over participants of the pooled in-sample ΔR² (× 10⁻⁴) |', '|---|---|']
     for a, b, label in CONTRASTS:
@@ -312,19 +342,19 @@ def main_stats(out_dir):
         md.append(f'| {label} | {v.median():+.2f} |')
     md += ['', '*Summary:* in sample each added term explains only about 10⁻⁴ of the variance or less; held out, that '
            'gain is smaller than the cost of estimating the term, so held-out prediction cannot separate these models.',
-           '', 'Sources: `notes/data/hp_terms_loro_2026-11-13.tsv` (per participant × area × held-out run × model: '
-           'held-out SSE and SST, fold coefficients), `notes/data/hp_terms_heldout_r2_2026-11-13.tsv` (held-out R² per '
-           'participant × area × model), `notes/data/hp_terms_heldout_stats_2026-11-13.tsv` (every number in the '
-           'tables), `notes/data/hp_terms_insample_dr2_2026-11-13.tsv` (in-sample ΔR²). Code: '
+           '', f'Sources: `notes/data/hp_terms_loro_{TAG}.tsv` (per participant × area × held-out run × model: '
+           f'held-out SSE and SST, fold coefficients), `notes/data/hp_terms_heldout_r2_{TAG}.tsv` (held-out R² per '
+           f'participant × area × model), `notes/data/hp_terms_heldout_stats_{TAG}.tsv` (every number in the '
+           f'tables), `notes/data/hp_terms_insample_dr2_{TAG}.tsv` (in-sample ΔR²). Code: '
            '`retsupp/modeling/hp_terms_heldout_power.py` (cluster, `retsupp/modeling/slurm_jobs/hp_terms_heldout_power.sh`, '
            f'output `derivatives/{FOLDER}`), `retsupp/visualize/paper/hp_terms_heldout_power_stats.py` (tables).']
     open(f'{out_dir}/item1a_heldout.md', 'w').write('\n'.join(md) + '\n')
 
     sim, real = simulate(lin)
-    real.to_csv(f'{D}/hp_terms_real_estimates_2026-11-13.tsv', sep='\t', index=False)
+    real.to_csv(f'{D}/hp_terms_real_estimates_{TAG}.tsv', sep='\t', index=False)
     summ, pr, obs = power([], sim, real)
-    summ.to_csv(f'{D}/hp_terms_power_2026-11-13.tsv', sep='\t', index=False)
-    pr.to_csv(f'{D}/hp_terms_power_per_draw_2026-11-13.tsv.gz', sep='\t', index=False)
+    summ.to_csv(f'{D}/hp_terms_power_{TAG}.tsv', sep='\t', index=False)
+    pr.to_csv(f'{D}/hp_terms_power_per_draw_{TAG}.tsv.gz', sep='\t', index=False)
     md = ['<!-- tables generated by retsupp/visualize/paper/hp_terms_heldout_power_stats.py -->', '']
     power_tables(md, summ, obs, [('alone', ' (generator: base + dS alone)'), ('joint', ' (generator: joint fit)')])
     open(f'{out_dir}/item1c_tables_generated.md', 'w').write('\n'.join(md) + '\n')
@@ -336,7 +366,11 @@ if __name__ == '__main__':
     ap.add_argument('--bids-folder', default='/shares/zne.uzh/gdehol/ds-retsupp')
     ap.add_argument('--folder', default=FOLDER)
     ap.add_argument('--out-dir', default='notes/writing_package_2026-11-13_update11/parts')
+    ap.add_argument('--tag', default=TAG, help='suffix of the collected and output tables')
+    ap.add_argument('--zero-sum', action='store_true', help='describe the zero-sum term set in the generated text')
     a = ap.parse_args()
+    TAG, ZERO_SUM = a.tag, a.zero_sum
+    LORO, LINEAR = f'{D}/hp_terms_loro_{TAG}.tsv', f'{D}/hp_terms_linear_{TAG}.npz'
     if a.what == 'collect':
         collect(a.bids_folder, a.folder)
     else:

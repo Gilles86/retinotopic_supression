@@ -22,6 +22,10 @@ Wilcoxon p < .05 in the model's direction (power). Also the minimum detectable e
 Voxel counts per area from ``*_overlap.tsv``.
 
     python -m retsupp.visualize.paper.items_model_vs_measured
+    # zero-sum main model (update 13b): S / nohp from the main model, SD = the zero-sum model with dD, no SDT
+    python -m retsupp.visualize.paper.items_model_vs_measured --tag zs_lm_2026-11-16 --no-sdt \
+        --rel-meas notes/data/event_deconv_relative_zs_lm_2026-11-16 --hplp-meas notes/data/event_deconv_hplp_zs_lm_2026-11-16 \
+        --pred 'notes/data/event_deconv_zs_lm_pred_2026-11-16_{mode}_{v}' --overlap notes/data/zs_lm_pred_overlap_2026-11-16
 """
 from __future__ import annotations
 
@@ -49,6 +53,7 @@ ITEMS = ('target', 'distractor', 'neutral')
 AREAS = ('V1', 'V2', 'V3')
 GROUPINGS = {'pathway': {r: g for g, rs in PATHWAY.items() for r in rs}, 'area': {r: r for r in AREAS}}
 N_SIM = 5000
+OVERLAP = f'{D}/polished_pred_overlap_2026-11-13'
 
 
 def window(folder, groups, keep=None):
@@ -81,13 +86,14 @@ def all_windows(mode, meas):
     """Measured and predicted windows; the m8 variants (SDT, SDT0) exist only for some subject × ROI pairs, so they
     are compared with the measured data and the joint fit on those pairs only (keys 'measured@SDT', 'SD@SDT')."""
     out = {}
-    keep = pairs(PRED.format(mode=mode, v='SDT'))
+    keep = pairs(PRED.format(mode=mode, v='SDT')) if 'SDT' in VARIANTS else None
     for name, groups in GROUPINGS.items():
         out[('measured', name)] = window(meas, groups)
-        out[('measured@SDT', name)] = window(meas, groups, keep)
         for v in VARIANTS:
             out[(v, name)] = window(PRED.format(mode=mode, v=v), groups)
-        out[('SD@SDT', name)] = window(PRED.format(mode=mode, v='SD'), groups, keep)
+        if keep is not None:
+            out[('measured@SDT', name)] = window(meas, groups, keep)
+            out[('SD@SDT', name)] = window(PRED.format(mode=mode, v='SD'), groups, keep)
     return out
 
 
@@ -137,7 +143,8 @@ def rm_anova(c):
 def part_hp():
     w = all_windows('relative', REL_MEAS)
     rows, anov = [], []
-    sets = (('measured', ('nohp', 'S', 'SD')), ('measured@SDT', ('SD@SDT', 'SDT', 'SDT0')))
+    sets = (('measured', ('nohp', 'S', 'SD')),) + (
+        (('measured@SDT', ('SD@SDT', 'SDT', 'SDT0')),) if 'SDT' in VARIANTS else ())
     for unit, grouping, (mkey, vlist) in product(('relative', 'absolute'), GROUPINGS, sets):
         meas = hp_cells(w[(mkey, grouping)], unit)
         for g in meas.index.get_level_values('grp').unique():
@@ -209,7 +216,8 @@ def part_items():
     return pd.concat([bh(t[t.grouping == gg], by=('grouping', 'contrast', 'source')) for gg in GROUPINGS])
 
 
-def overlap_counts(folder=f'{D}/polished_pred_overlap_2026-11-13'):
+def overlap_counts(folder=None):
+    folder = folder or OVERLAP
     o = pd.concat([pd.read_csv(f, sep='\t') for f in sorted(Path(folder).glob('sub-*_overlap.tsv'))])
     o = o[o.subject >= rf.MIN_SUBJECT]
     per = o.groupby(['roi', 'subject']).agg(fig3_mean=('n_fig3', 'mean'), fig3_min=('n_fig3', 'min'),
@@ -237,4 +245,14 @@ def main(parts):
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--part', nargs='+', default=['hp', 'items'], choices=['hp', 'items'])
-    main(ap.parse_args().part)
+    ap.add_argument('--tag', default=TAG, help='suffix of the output tables')
+    ap.add_argument('--rel-meas', default=REL_MEAS)
+    ap.add_argument('--hplp-meas', default=HPLP_MEAS)
+    ap.add_argument('--pred', default=PRED, help='prediction folders, with {mode} and {v}')
+    ap.add_argument('--overlap', default=OVERLAP, help='folder of the sub-XX_overlap.tsv files')
+    ap.add_argument('--no-sdt', action='store_true', help='no SDT / SDT0 variants (zero-sum run)')
+    a = ap.parse_args()
+    TAG, REL_MEAS, HPLP_MEAS, PRED, OVERLAP = a.tag, a.rel_meas, a.hplp_meas, a.pred, a.overlap
+    if a.no_sdt:
+        VARIANTS = {k: v for k, v in VARIANTS.items() if k not in ('SDT', 'SDT0')}
+    main(a.part)

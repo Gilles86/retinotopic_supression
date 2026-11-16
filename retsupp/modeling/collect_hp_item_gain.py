@@ -38,6 +38,7 @@ CONTRASTS = {'mult_minus_add': ('m8_full_hpmult', 'm8_full_hpadd'),
              'add_minus_base': ('m8_full_hpadd', 'm5_TDS_dS'),
              'dD_minus_base': ('m7_full', 'm5_TDS_dS')}
 EXCLUDE = (1, 2)
+ZERO_SUM = False
 
 
 def summarise(x, rng):
@@ -174,9 +175,17 @@ def main(cv_root, full_root, out):
         terms['mult_dD_pct'] = g.hp_scale * g.g_LP_dyn * 100
         # A fit with a gain, h or a at its box (±10, i.e. ±1000%) in any of the four models. Widths at their box
         # (0.5° or 8°; σ_dyn in about half of all fits, as in the reference fit) are not counted.
+        # --zero-sum: the boxes of the zero-sum fits (zs_bounds: g_HP in [−1, 3], transient gains in [−1, 5]; h, a ±10).
         lim = m.set_index(['subject', 'roi'])
         gcols = [c for c in ('g_HP', 'g_LP', 'g_HP_dyn', 'g_LP_dyn', 'g_T_dyn', 'hp_scale', 'hp_offset') if c in lim]
-        hit = (lim[gcols].abs() >= 9.99).any(axis=1)
+        if ZERO_SUM:
+            from retsupp.modeling.fit_cv_ladder_nested import zs_bounds
+            zb = zs_bounds()
+            hit = pd.concat([(np.isclose(lim[c], zb[c][0], rtol=1e-3, atol=1e-4)
+                              | np.isclose(lim[c], zb[c][1], rtol=1e-3, atol=1e-4)) for c in gcols if c != 'g_LP'],
+                            axis=1).any(axis=1)
+        else:
+            hit = (lim[gcols].abs() >= 9.99).any(axis=1)
         terms['at_bound'] = hit.groupby(level=[0, 1]).any().reindex(terms.index).fillna(False)
         terms = terms.reset_index()
         terms.to_csv(f'{out}_terms_{scheme}.tsv', sep='\t', index=False)
@@ -198,5 +207,7 @@ if __name__ == '__main__':
     ap.add_argument('--cv-root', required=True)
     ap.add_argument('--full-root', default=None)
     ap.add_argument('--out', required=True, help='Output prefix (…_cv_delta.tsv, …_cv_stats.tsv, …_terms_*.tsv).')
+    ap.add_argument('--zero-sum', action='store_true', help='roots from --prf-source-zero-sum: at-bound check on zs_bounds')
     a = ap.parse_args()
+    ZERO_SUM = a.zero_sum
     main(a.cv_root, a.full_root, a.out)
