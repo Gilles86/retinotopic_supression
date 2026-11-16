@@ -181,9 +181,9 @@ def main(cv_root, full_root, out):
         if ZERO_SUM:
             from retsupp.modeling.fit_cv_ladder_nested import zs_bounds
             zb = zs_bounds()
-            hit = pd.concat([(np.isclose(lim[c], zb[c][0], rtol=1e-3, atol=1e-4)
-                              | np.isclose(lim[c], zb[c][1], rtol=1e-3, atol=1e-4)) for c in gcols if c != 'g_LP'],
-                            axis=1).any(axis=1)
+            hit = pd.DataFrame({c: np.isclose(lim[c], zb[c][0], rtol=1e-3, atol=1e-4)
+                                | np.isclose(lim[c], zb[c][1], rtol=1e-3, atol=1e-4) for c in gcols if c != 'g_LP'},
+                               index=lim.index).any(axis=1)
         else:
             hit = (lim[gcols].abs() >= 9.99).any(axis=1)
         terms['at_bound'] = hit.groupby(level=[0, 1]).any().reindex(terms.index).fillna(False)
