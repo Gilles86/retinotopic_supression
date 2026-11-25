@@ -12,11 +12,11 @@ Source note: the revised manuscript could not be opened here (newest accessible 
 
 ## Read first: three changes of substance
 
-1. **Fig. 3: "next to HP lower than opposite HP" does not hold** (item 13). With each estimate weighted by its precision, the early next − opposite difference is −3.6% (P = .82), not −14.9% (p = .022). The old relative mean was carried by participant × area cells whose mean response was near zero.
-   - Remove the HP < next < opposite ordering (Page's L).
-   - Remove the first "observation" of the Discussion paragraph on the LP gradient and the model's failure to reproduce it (items 1, 6).
-   - "Lowest at HP" holds.
-2. **Fig. 3: the HP reduction at the item locations is not specific to early visual cortex.** It is as large in occipitotemporal areas (item 13).
+1. **Fig. 3: "next to HP lower than opposite HP" is a trend, not a finding** (item 13). It points the same way in every analysis, but most of it comes from a few participants with noisy estimates. With each participant weighted by the precision of their estimate (pathways pooled by voxels as in the manuscript, no pooling over areas), the early next − opposite difference is −0.030% signal [−0.070, +0.010], P = .93 (relative −4.7%, P = .84), against −0.050% (p = .038) and −14.9% (p = .022) unweighted.
+   - Do not claim the HP < next < opposite ordering (Page's L) as a result; report next < opposite as a trend with this caveat.
+   - Soften, rather than delete, the first "observation" of the Discussion paragraph on the LP gradient (wording in item 1). In item 6, keep the model comparison with the same caveat.
+   - "Lowest at HP" holds (early −0.069% signal, P = .986).
+2. **Fig. 3: the HP reduction at the item locations is credible in early visual cortex, and occipitotemporal areas point the same way** with a similar size (P = .968). Write "found in early visual cortex", not "only in early visual cortex" (item 13).
 3. **The HRF is not refitted with the gains,** and the main fits' voxel selection still includes p_signal (item 10). The Methods text must say what was done. A refit on the reliability-only selection is possible (about one day on the cluster) but has not been started.
 
 ## Status overview
@@ -28,14 +28,14 @@ Source note: the revised manuscript could not be opened here (newest accessible 
 | 3. Decoding predictions | done | Predictions barely change (−1.20 vs −1.58%, r = .61); Gaussian/DN decoding holds pooled |
 | 4. Item-specific HP effects | done | No distractor-specific reduction (dD +1.3 [−1.6, +4.0]); drop dT |
 | 5. Gain vs baseline (S13) | done | Holds, slightly stronger; drop the 72% recovery sentence |
-| 6. Model predictions of item responses | done | HP − next reproduced; drop the next − opposite comparison (see item 13) |
+| 6. Model predictions of item responses | done | HP − next reproduced; the next − opposite comparison only with the trend caveat (item 13) |
 | 7. LP-gradient variant | **pending** (cluster, about 1,000 CPU-h, results expected 26 Nov) | Remove the old −0.6% (p = .73); mark pending |
 | 8. Trial-wise, Student-t | done | History terms hold; new Fig. 7 panel c recommended |
 | 9. Individual differences | done | No relation (ρ = −0.02); the behavioural benefit is unreliable per participant |
 | 10. Methods text | done | Replacement text below; long list of sentences to delete |
 | 11. Captions, Fig. 4 | done | Fig. 4 re-rendered for the zero-sum, single-distractor-gain model |
 | 12. Supplement | done | Table of every cited supplement with status and new number |
-| 13. Fig. 3, hierarchical | done (new) | Item contrasts hold; "next < opposite" does not; HP effect also occipitotemporal |
+| 13. Fig. 3, weighted by precision | done (new) | Item contrasts and "lowest at HP" hold; "next < opposite" is a trend only; occipitotemporal points the same way |
 
 
 ## 1. Width of the sustained field
@@ -67,7 +67,7 @@ Source note: the revised manuscript could not be opened here (newest accessible 
 > "whereas the sustained field around the HP location had largely fallen off at the neighbouring locations (to about 2% of its peak in early visual cortex, at the group-level width of 4.7°)"
 
 
-**Addendum (item 13).** The measured "next lower than opposite" gradient is itself not robust, so the Discussion paragraph that starts "Two observations are not explained by a single field ..." should lose its first observation entirely, not only the width clause. Keep the second observation, the behavioural target vs distractor pattern.
+**Addendum (item 13).** The measured "next lower than opposite" difference is only a trend: P = .93 with participants weighted by precision. So the first observation of the Discussion paragraph "Two observations are not explained by a single field ..." should be softened rather than stated as fact, for example: "the locations next to HP tended to respond less than the opposite location (Fig. 3e), which a field that has fallen to about 2% of its peak there would not produce, although this difference was not reliable once participants were weighted by the precision of their estimates." Keep the second observation, the behavioural target vs distractor pattern.
 
 ## 2. Gaussian and DN robustness: PENDING
 
@@ -232,9 +232,9 @@ Verdict: both Results sentences still hold on the zero-sum fit.
 
 > "More generally, the model predicted smaller differences between each odd item and a neutral item than we measured, in every pathway, although it captured the difference between the target and the distractor in every pathway."
 
-**Addendum (item 13).** Because the measured next − opposite difference does not survive precision weighting, drop the comparison of the model with it ("predicted −1.3 ± 0.8% against a measured −14.9 ± 6.0%"). Keep only the HP − next comparison. Suggested:
+**Addendum (item 13).** The measured next − opposite difference is only a trend (P = .93 with participants weighted by precision), so lead with the HP − next comparison and give next − opposite with the caveat. Suggested:
 
-> "Analysed in the same way as the measured responses, the fitted model reproduced the lower response at HP than next to it (predicted −7.2 ± 3.7% against a measured −9.2 ± 4.9%; difference p = .94)."
+> "Analysed in the same way as the measured responses, the fitted model reproduced the lower response at HP than next to it (predicted −7.2 ± 3.7% against a measured −9.2 ± 4.9%; difference p = .94). It predicted almost no difference between the locations next to HP and the location opposite it (−1.5 ± 0.7%), less than the measured difference (−17.1 ± 6.3%; difference p = .023), although the measured difference itself was not reliable once participants were weighted by the precision of their estimates."
 
 ## Item 7. LP gradient as a zero-sum joint variant (PENDING, cluster)
 
@@ -432,8 +432,8 @@ Files are in `notes/figures/paper_2026-11/`.
 | S1 | Raw response times behind the priming panel (Fig. 1e) | `figS_priming_rt_v4_n28_palA` | Behaviour | compliant | **S1** |
 | S10, S11 | Gain fields with Gaussian and DN pRFs (Results, pRF section and robustness paragraph) | `figS_gain_fields_gauss_n28_palA`, `figS_gain_fields_dn_n28_palA` | Gaussian/DN m7_full, not zero-sum, plus estimated-alone dS | rerun (Gaussian/DN zero-sum fits running; then the Fig. 5 layout with `--bayes-dir` per family) | **S10, S11** (become S9, S10 after drops) |
 | S21 | Decoding with Gaussian and DN pRFs | `figS_decoding_prf_models_n28_palA` | Decoder pRFs without gain fields | compliant (the open VERIFY in the text is update-4 item 3) | **S20** |
-| S3 | Item-location effect per area (V1, V2 q values) | `figS_item_locations_per_area_abs_n28` | Data, no model | compliant; statistics may move to the hierarchical model (Fig. 3 analysis running) | **S2** |
-| Table S1 | All Fig. 3 statistics | `tableS_item_locations_n28.md` | Data | compliant; add the hierarchical columns when the Fig. 3 analysis is in | **Table S1** |
+| S3 | Item-location effect per area (V1, V2 q values) | `figS_item_locations_per_area_abs_n28` | Data, no model | compliant; add the precision-weighted own-data statistics (item 13) | **S2** |
+| Table S1 | All Fig. 3 statistics | `tableS_item_locations_n28.md` | Data | compliant; add the precision-weighted columns of item 13 | **Table S1** |
 | TODO | Including more voxels does not help at the item locations | `figS_item_locations_voxel_selection_n28_palA` | Voxel overlap with the polished m7_full | rerun (local re-render from `items_voxel_overlap_n28_zs_lm_2026-11-16.tsv`) | **S3** |
 | S5 | Sum of the fields during a search display | `figS_gain_field_map_search_v3_n28_palA` (and `_zs_n28`) | Joint dD from non-zero-sum fits, estimated-alone dS | drop (Fig. 5a shows the components; the main model has no dD) | none |
 | S4 | Field widths (2.8° claim) | `figS_field_widths_v3_n28_palA` | Polished fits, free g_HP/g_LP | drop; replace with `figS_width_profiles_zs_n28_palA` (group width profiles on the zero-sum fits, compliant). The 2.8° sentence is update-4 item 1. | **S4** (width profiles) |
@@ -515,7 +515,7 @@ Files are in `notes/figures/paper_2026-11/`.
 
 The S10/S11 and S20 citations in the pRF paragraph come before S2 in the text. If the revised text keeps that, move the Gaussian/DN figures to S2 and S3 and shift the rest.
 
-## 13. Fig. 3 through the hierarchical model (new)
+## 13. Fig. 3 with each participant weighted by the precision of their estimate (new)
 
 **Inputs.** The manuscript's Fig. 3 comes from `fig3_item_locations.py` (n = 28 via `run_excluding`) on `notes/data/event_deconv_final2_2026-11/` (item × HP/LP) and `event_deconv_relative_final2_2026-11/` (item × HP / next / opposite). These were deconvolved from the cluster's `paper_2026-11/location_timeseries_final2`. Reproduced exactly:
 - early target − neutral +0.125% signal (mean);
@@ -528,49 +528,81 @@ The S10/S11 and S20 citations in the pRF paragraph come before S2 in the text. I
 
 Per participant × area, each contrast over 3.2 to 6.4 s gets a leave-one-run-out jackknife SE. Calibration (half the odd − even difference over the SE; 0.67 expected) is 0.60 to 0.79 overall; the highest is early HP − opposite (abs) at 0.82, so its SEs are somewhat small.
 
-**Units.** Relative units (% of the participant's mean response, as Fig. 3e) are unstable per area. The denominators are near 0 in some cells: the V1 Wilcoxon mean is −53% and TO −111%, against medians of −30% and −25%. **Absolute % signal is therefore the primary hierarchical analysis for the location contrasts**; relative is reported alongside.
+**Units.** Absolute % signal is the primary unit for the location contrasts. Relative units (% of the participant's mean response, as Fig. 3e) are reported alongside. Their SEs also carry the noise of each participant's denominator, which is near zero in some cells: the V1 Wilcoxon mean is −53% and TO −111%, against medians of −30% and −25%.
 
-**Model.** Student-t hierarchical model as for the gain fields (`gain_meta_zs.bayes`). A pathway is the mean of its areas; the manuscript's Wilcoxon pools a pathway's voxels instead, which weights V1 and V2 heavily in early. Each area was also fitted on its own data (no pooling). No divergences; all area means inside the predictive check. Code: `retsupp/visualize/paper/fig3_meta.py`; outputs: `notes/data/fig3_meta_2026-11-25/`.
+**Statistics.** The primary analysis keeps the manuscript's units: each pathway, and all areas, with voxels pooled as in Fig. 3. Each unit is fitted on its own, with no pooling over areas: y ~ Student-t(ν, μ, √(SE² + τ²)) over participants, where SE is each participant's jackknife SE. This differs from the manuscript's Wilcoxon only in weighting each participant by the precision of their estimate. Single areas are fitted the same way, each on its own data. As a check, the hierarchical model over areas (pathway = mean of its areas, as for the gain fields) gives the same conclusions. No divergences in any fit.
 
-### Item contrasts (% signal; n = 28, dorsal 26 to 27)
+Code: `retsupp/visualize/paper/fig3_meta.py` (`--unit-own-data`). Outputs: `notes/data/fig3_meta_units_2026-11-25/own_data_units.tsv` for pathways and all areas, and `notes/data/fig3_meta_2026-11-25/` for the hierarchical model and single areas.
 
-| Contrast | Unit | Wilcoxon (manuscript), mean, q | Hierarchical, mean [95% HDI], P |
+### Item contrasts (% signal; n = 28, dorsal 26)
+
+| Contrast | Unit | Wilcoxon (manuscript), mean, q | Weighted by SE, mean [95% HDI], P |
 |---|---|---|---|
-| Target − neutral | Early / dorsal / occ.-temporal | +0.125 / +0.264 / +0.236, all q < 10⁻⁵ | +0.117 [+0.084, +0.148] / +0.210 [+0.165, +0.258] / +0.207 [+0.173, +0.243], all P > .999 |
-| | V1 / V2 | +0.060, +0.143, q < .001 | +0.048 [+0.006, +0.091], P = .989 (own data +0.050, P = .997) / +0.126, P > .999 |
-| Distractor − neutral | Early / dorsal / occ.-temporal | +0.072 / +0.149 / +0.156, all q ≤ 10⁻⁴ | +0.064 [+0.031, +0.099] / +0.122 [+0.077, +0.168] / +0.100 [+0.064, +0.137], all P > .999; every area credible pooled and on its own data |
-| Target − distractor | Early / dorsal / occ.-temporal | +0.045 (q = .015) / +0.126 / +0.105 (q < .001) | +0.055 [+0.018, +0.091], P = .998 / +0.125 [+0.068, +0.180] / +0.125 [+0.085, +0.165], P > .999 |
+| Target − neutral | Early / dorsal / occ.-temporal | +0.125 / +0.264 / +0.236, all q < 10⁻⁵ | +0.115 [+0.088, +0.141] / +0.238 [+0.188, +0.288] / +0.228 [+0.188, +0.269], all P > .999 |
+| | V1 (own data) | +0.060, q < .001 | +0.050, P = .997 |
+| Distractor − neutral | Early / dorsal / occ.-temporal | +0.072 / +0.149 / +0.156, all q ≤ 10⁻⁴ | +0.057 [+0.021, +0.089] / +0.114 [+0.065, +0.165] / +0.125 [+0.081, +0.169], all P ≥ .999; every area credible on its own data |
+| Target − distractor | Early / dorsal / occ.-temporal | +0.045 (q = .015) / +0.126 / +0.105 (q < .001) | +0.056 [+0.023, +0.090], P = .999 / +0.135 / +0.120, P > .999 |
 | | V1 | −0.018, q = .57 | −0.014, P = .71 (not credible, as before) |
 
-**Verdict, item contrasts:** unchanged. Target and distractor are above neutral in every pathway and every area. The target is above the distractor in every pathway, though not in V1.
+**Verdict, item contrasts:** unchanged. The target and the distractor are above neutral in every pathway and every area. The target is above the distractor in every pathway, but not in V1.
 
 ### Location contrasts (absolute % signal, primary; relative % in brackets)
 
-| Contrast | Unit | Wilcoxon (manuscript) | Hierarchical, pooled | Own data only |
-|---|---|---|---|---|
-| HP − opposite | All areas | −0.083, p = .0076 (rel −15.5%, p = .013) | **−0.066 [−0.120, −0.014], P = .990** (rel −11.3%, P = .997) | |
-| | Early | −0.092, p = .0048 (rel −21.6%, p = .0052) | **−0.063 [−0.118, −0.004], P = .983** (rel −13.1%, P = .992) | |
-| | Dorsal | −0.086, p = .089 | −0.023, P = .69 | |
-| | Occ.-temporal | −0.045, p = .11 (rel −9.8%, p = .090) | **−0.089 [−0.155, −0.028], P = .996** (rel −11.6%, P = .993) | |
-| | V1 / V2 | −0.101, q = .029 / −0.145, q = .029 (rel q = .015 / .031) | −0.061, P = .965 / **−0.069, P = .985** | −0.067, P = .962 / **−0.101 [−0.165, −0.039], P = .998** |
-| | TO | −0.147, q = .041 | **−0.090, P = .994** | **−0.116 [−0.195, −0.028], P = .993** |
-| Next − opposite | Early | −0.050, p = .038 (rel −14.9 ± 6.0%, p = .022) | −0.030 [−0.070, +0.008], P = .938 (rel −3.6%, P = .82) | V2 −0.047, P = .968; V1, V3 P ≤ .83 |
-| | All areas | −0.037, p = .15 (rel −8.6%, p = .060) | −0.019, P = .86 | |
-| HP − next | All areas | −0.047, p = .0071 (rel −6.9%, p = .018) | **−0.040 [−0.071, −0.010], P = .994** | |
-| | Early / occ.-temporal | −0.042, p = .066 / −0.029, p = .22 | −0.025, P = .935 / **−0.059 [−0.102, −0.017], P = .996** | TO −0.084, P = .995 |
+| Contrast | Unit | Wilcoxon (manuscript) | Weighted by SE, own data |
+|---|---|---|---|
+| HP − opposite | All areas | −0.083, p = .0076 (rel −15.5%, p = .013) | **−0.062 [−0.126, −0.003], P = .978** (rel −11.8%, P = .971) |
+| | Early | −0.092, p = .0048 (rel −21.6%, p = .0052) | **−0.069 [−0.127, −0.011], P = .986** (rel −15.2% [−29.3, −1.6], P = .984) |
+| | Dorsal | −0.086, p = .089 | −0.062, P = .90 |
+| | Occ.-temporal | −0.045, p = .11 (rel −9.8%, p = .090) | −0.079 [−0.159, +0.003], P = .968 (rel −9.2%, P = .948) |
+| | V1 / V2 / TO | V1 −0.101, V2 −0.145 (q = .029); TO −0.147 (q = .041) | V1 −0.067, P = .962 / **V2 −0.101 [−0.165, −0.039], P = .998** / **TO −0.116 [−0.195, −0.028], P = .993** |
+| Next − opposite | Early | −0.050, p = .038 (rel −14.9 ± 6.0%, p = .022) | −0.030 [−0.070, +0.010], P = .93 (rel −4.7% [−14.0, +4.4], P = .84) |
+| | All areas | −0.037, p = .15 (rel −8.6%, p = .060) | −0.021, P = .84 |
+| | V2 | −0.088 | −0.047, P = .968 (V1, V3 P ≤ .83) |
+| HP − next | All areas | −0.047, p = .0071 (rel −6.9%, p = .018) | −0.027 [−0.062, +0.008], P = .94 (rel −5.7%, P = .953) |
+| | Early / occ.-temporal | −0.042, p = .066 / −0.029, p = .22 | −0.013, P = .74 / **−0.056 [−0.110, −0.001], P = .976** |
+| | TO | | **−0.084, P = .995** |
+
+**Why the weighting matters.** On the location contrasts, the participants with the largest negative values are also the noisiest. In early areas, next − opposite has sub-25 at −0.44 and sub-20 at −0.27, each with an SE of about 0.36 against a median of 0.12; the Spearman correlation of value and SE over participants is −0.27, and −0.38 in relative units. Weighting by precision lowers these participants' influence. A standard random-effects meta-analysis gives the same answer as the Student-t model: −0.029 ± 0.018 against −0.050 unweighted. The SEs are trustworthy: half the odd − even difference over the SE is 0.65 for this contrast (0.67 expected). Pooling over areas plays no part; the hierarchical model over areas gives the same numbers (early next − opposite −0.030, P = .94).
 
 **Verdicts, location contrasts:**
-- **HP lowest: holds.** HP is below opposite over all areas and in early visual cortex, in both units. HP is also below next to HP over all areas (P = .994).
-- **Next below opposite in early VC: does not hold.** The manuscript's −14.9 ± 6.0% (p = .022) becomes −3.6% (P = .82) in relative units and −0.030% signal (P = .938) in absolute units once each estimate is weighted by its precision. The manuscript's relative mean was carried by cells with small denominators. The HP < next < opposite ordering (Page's L) should therefore not be claimed; only "lowest at HP".
-- **Not specific to early VC.** With precision weighting the HP − opposite reduction is as large in occipitotemporal areas (−0.089, P = .996) as in early ones (−0.063, P = .983). The Wilcoxon on voxel-pooled pathways had it only in early areas. Dorsal shows no effect.
-- **Per area.** On own data, V2 (P = .998) and TO (P = .993) are credible; V1 just misses (P = .962). Pooled, V2, hV4, VO, LO and TO are credible, but hV4, VO and LO only through pooling. So V2 holds as before, V1 becomes a trend, and TO is a new single area.
+- **HP lowest: holds.** HP is below the opposite location over all areas and in early visual cortex, in both units, and on its own data in V2 and TO; V1 points the same way (P = .96).
+- **Next below opposite: a trend, not a finding.** The direction is the same in every analysis and in every pathway, but weighted by precision the early difference is −0.030% signal (P = .93) and −4.7% in relative units (P = .84), against −14.9% (p = .022) unweighted. Report it with that caveat. Do not claim the HP < next < opposite ordering (Page's L) as a result.
+- **HP below next:** not reliable over all areas or in early areas once weighted (P = .94 and .74). It is credible in occipitotemporal areas (P = .976), and in TO on its own data.
+- **Pathways:** the HP − opposite reduction is credible in early visual cortex. Occipitotemporal areas point the same way with a similar size (P = .968, or P = .996 with areas as the units of the hierarchical model). Dorsal is not credible. So "the reduction is found in early visual cortex" is safe; "only in early visual cortex" is not.
 
-**Consistency with Fig. 5c and 6c.** All three now put the HP reduction in early visual cortex. Fig. 3 additionally shows it in occipitotemporal areas, which Fig. 5c (dS, occipitotemporal −2.2%, P = .996) also has.
+**Consistency with Fig. 5c and 6c.** All three put the HP reduction in early visual cortex. Fig. 3 and Fig. 5c (dS, occipitotemporal −2.2%, P = .996) also point to occipitotemporal areas.
 
-Not done: a Fig. 3 variant with hierarchical statistics in b, c and e. `fig3_item_locations.py` computes its brackets and stars inside the panels from voxel-pooled pathways, so swapping in the model needs a larger change than an option.
+Not done: Fig. 3 re-rendered with these statistics. The figure can stay as it is: its brackets show the manuscript's tests, and the legend can point to Supplementary Table S1 for the weighted ones.
 
 **Suggested Results text for Fig. 3 (location part):**
 
-> "We then asked whether the response at an item location also depends on where that location lies relative to the HP location. In line with learned suppression, the response was lowest at the HP location: over all areas it was 0.066% signal below the location opposite HP (95% HDI [−0.120, −0.014], P = .990), in early visual cortex 0.063% (P = .983) and in occipitotemporal areas 0.089% (P = .996), and it was also below the locations next to HP (−0.040%, P = .994). The locations next to HP did not reliably differ from the location opposite HP (early −0.030%, P = .94). Of the single areas, V2 and TO showed the reduction on their own data (P ≥ .993), and V1 pointed the same way (P = .96). The location effect did not depend on what appeared there [keep the location × item type statement]."
+> "We then asked whether the response at an item location also depends on where that location lies relative to the HP location. In line with learned suppression, the response was lowest at the HP location: in early visual cortex it was 0.069% signal below the location opposite HP (95% HDI [−0.127, −0.011], P = .986, with each participant weighted by the precision of their estimate; unweighted −0.092%, p = .005), and over all areas 0.062% (P = .978). Of the single areas, V2 and TO showed the reduction on their own data, and V1 pointed the same way (P = .96). The locations next to HP tended to respond less than the location opposite HP (early, unweighted −14.9 ± 6.0%, p = .022), but this difference came mostly from participants with noisy estimates and was not reliable once these were weighted by their precision (−0.030% signal, P = .93). The location effect did not depend on what appeared there [keep the location × item type statement]."
 
-Delete: "This order, lowest at HP, then next to HP, then opposite HP, was reliable (Page's L test, p = .0016)" and "the locations next to HP also responded less than the opposite location (−14.9 ± 6.0%, p = .022)". The relative-unit statistics can stay in Supplementary Table S1 next to the hierarchical ones.
+Change: "This order, lowest at HP, then next to HP, then opposite HP, was reliable (Page's L test, p = .0016)". Either delete it or move it, with the caveat above, to Supplementary Table S1. The relative-unit and Wilcoxon statistics can stay in Table S1 next to the weighted ones.
+
+### Why the gain-field model: the item-location responses are noisier per participant (new argument)
+
+The same jackknife SEs let the two analyses be compared on one scale. For each participant × area cell we take the estimate divided by its SE (z), so units do not matter. If there were no effect and the SEs were right, the median |z| would be 0.67. Values are corrected for each analysis's own SE calibration (odd/even check).
+
+| Pathway | Gain field, dS | HP − opposite (measured) | HP − next (measured) | Next − opposite (measured) |
+|---|---|---|---|---|
+| Early | **1.22** | 0.56 | 0.80 | 0.69 |
+| Dorsal | **1.05** | 0.58 | 0.45 | 0.63 |
+| Occipitotemporal | **1.22** | 0.66 | 0.72 | 0.53 |
+| All areas | **1.26** | 0.60 | 0.69 | 0.61 |
+
+(Median |z| over participant × area cells, n = 241 for dS and 219 for the measured contrasts. Without the calibration correction: dS 1.36, measured 0.63 to 0.73.)
+
+**Reading.**
+- In a single participant and area, the measured responses at the item locations cannot separate the HP effect from noise: their median |z| is at the level expected from noise alone.
+- The gain-field estimate of the same effect stands about 1.2 SE from zero, about twice as far.
+- The reason is that the model uses every time point of the run: the bar sweeps over the HP and LP locations throughout, not only in the few seconds after each search display. It summarises the effect in one parameter per participant and area, constrained by each voxel's pRF.
+- The group-level item-location effect is still credible (HP − opposite, early P = .986), because it averages 28 participants. But its finer structure (next vs opposite, single areas) is at the edge of what these data can show. That explains the fragility found above.
+
+**Caveats to keep in the text.**
+- The precision comes from the model's assumptions: the pRF, the HRF and the shape of the field. The argument is therefore only as good as the model's fit, and the held-out tests of the model support that fit.
+- It concerns precision within a participant. It does not make individual differences in dS reliable: across participants, odd and even runs agree poorly in early areas (ρ = 0.15; item 9).
+
+**Suggested sentence (Results, after Fig. 3, or Discussion):**
+
+> "These model-free responses were noisy at the level of single participants: within a participant and area, the HP − opposite difference was typically no larger than its standard error (median |estimate / SE| 0.6, the value expected from noise alone), whereas the HP − LP difference of the gain-field model, which uses the response to the mapping bar over the whole run, was typically 1.2 standard errors from zero. This is why we estimate the effect of the HP location with the gain-field model, and use the item-location responses as a model-free check of its direction."
