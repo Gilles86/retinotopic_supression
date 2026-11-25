@@ -174,7 +174,7 @@ def rt_rows(path, analysis):
 
 
 def main(meta, name, param, compact=False, fit_label=FIT_LABEL, rt_summary=None, rt_analysis=None, rt_legend=None,
-         primary_t=False):
+         primary_t=False, panel_c=None):
     """compact: narrower panels (5.9 in wide), shorter titles and keys; same content. rt_summary / rt_analysis:
     panel b (and its legend numbers) from that ``rt_power_meta`` analysis; rt_legend replaces the legend's panel-b
     model description and its robustness clause."""
@@ -195,6 +195,9 @@ def main(meta, name, param, compact=False, fit_label=FIT_LABEL, rt_summary=None,
         pw, ph = 2.2, 1.45
         xa, xb = .72, .72 + pw + .72
         W = xb + pw + .16
+        if panel_c:
+            xc = xb + pw + .72
+            W = xc + pw + .75
     else:
         W = DOUBLE
         pw, ph = 2.75, 1.45            # axes size (inches); wider than high
@@ -240,6 +243,20 @@ def main(meta, name, param, compact=False, fit_label=FIT_LABEL, rt_summary=None,
     axb.set_yticks([-.08, -.04, 0, .04])
     axb.text(UNIT_X['occipitotemporal'] + .38, .06, 'Higher on\nslow trials', ha='right', va='top', fontsize=6.5, color='.45')
     ax.text(UNIT_X['occipitotemporal'] + .38, 66, 'Higher on\nrepeats', ha='right', va='top', fontsize=6.5, color='.45')
+    if panel_c:
+        assert compact, '--panel-c needs --compact'
+        sum_c = pd.read_csv(Path(panel_c) / 'summary.tsv', sep='\t')
+        if primary_t:
+            sum_c['variant'] = sum_c.variant.replace({'abs': 'abs_t', 'abs_t': 'abs', 'rel': 'rel_t', 'rel_t': 'rel'})
+        heading(fig, xc, yh, 'c', [('A location that held an item gives ', FG), ('less gain', FG), (' next', FG)], W, H)
+        fig.text(xc / W, yk / H, 'At the previous', fontsize=6.5, color='.45', va='center', ha='left')
+        key(fig, xc + .62, yk, [([], TARGET, 'target: neutral'), ([], DISTRACTOR, 'distractor: neutral'),
+                                ([], FG, 'distractor: target')], W, H, gap=.1)
+        axc = fig.add_axes([xc / W, y0 / H, pw / W, ph / H])
+        rc = panel(axc, sum_c, [('Q_main', 'abs', TARGET), ('P_main', 'abs', DISTRACTOR),
+                             ('T_target_at_prev_dist', 'abs', FG)], 100, (-16, 16), 'Gain change\n(percentage points)',
+                   width=.5)
+        axc.set_yticks([-15, -10, -5, 0, 5, 10])
     sig_key(fig, xa - .3, ys, W, H)
     for a in (ax, axb):
         bb = a.get_window_extent()
@@ -338,6 +355,17 @@ def main(meta, name, param, compact=False, fit_label=FIT_LABEL, rt_summary=None,
         legend = legend.replace('Robustness (table below):', 'Robustness of panel a (table below):')
     if 'own voxels' in fit_label:
         legend = legend.replace('fewer than 10 signal voxels', 'fewer than 10 voxels')
+    if panel_c:
+        ss = sum_c.set_index(['question', 'variant', 'level', 'unit'])
+        gc = lambda q, u='all': ss.loc[(q, 'abs', 'overall' if u == 'all' else 'group', u)]
+        fc = lambda q, u='all': f"{fmt(gc(q, u), 100, '')} points, P = {pdir(gc(q, u))}"
+        legend = legend.strip() + (
+            f" c, History of the location (estimated in a model that also contains the target-repeat term): the gain of a "
+            f"neutral item at the location that held the target on the previous trial ({fc('Q_main')}; early "
+            f"{fc('Q_main', 'early')}, dorsal {fc('Q_main', 'dorsal')}, occipitotemporal {fc('Q_main', 'occipitotemporal')}), "
+            f"of a neutral item at the location that held the distractor ({fc('P_main')}), and the change in target gain "
+            f"when the target appears where the distractor was ({fc('T_target_at_prev_dist')}), in percentage points of "
+            f"gain, same model and conventions as a and b.")
     save(fig, name, legend.strip() + '\n' + '\n'.join(tab))
     print(pd.concat([ra, rb]).round(4).to_string(index=False))
 
@@ -355,5 +383,8 @@ if __name__ == '__main__':
     ap.add_argument('--rt-legend', default=None, help='panel-b model description that opens the legend\'s b part')
     ap.add_argument('--primary-t', action='store_true', help='Student-t likelihood as the primary model (points, '
                     'stars, legend); the normal likelihood moves to the robustness column')
+    ap.add_argument('--panel-c', default=None, help='trialwise_meta_bayes output with Q_main, P_main and '
+                    'T_target_at_prev_dist (--prev-target-neutral fits): adds panel c (needs --compact)')
     a = ap.parse_args()
-    main(a.meta, a.name, a.param, a.compact, a.fit_label, a.rt_summary, a.rt_analysis, a.rt_legend, a.primary_t)
+    main(a.meta, a.name, a.param, a.compact, a.fit_label, a.rt_summary, a.rt_analysis, a.rt_legend, a.primary_t,
+         a.panel_c)
