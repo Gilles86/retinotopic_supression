@@ -4,8 +4,6 @@ Source manuscript: Google Doc "Retsupp manuscript v2 (for Docky, 13 Nov 2026)", 
 
 **Important for every item:** both manuscript tabs still quote the gain-field numbers of updates 8 to 11. Update 13 (zero-sum refit, `/Users/gdehol/git/retsupp/notes/writing_package_2026-11-16_update13/UPDATE_NOTES.md`) replaces them. Current values are given first below.
 
-**Pending:** three cluster runs (item 4a, neutral item at the previous target location; item 5b, zero-sum reruns at r > 0.2 and r > 0.1) finished or were running when the cluster became unreachable from the laptop (VPN). They are marked PENDING below.
-
 ## 1. Size of the HP reduction ("the gain was reduced about 20%")
 
 A gain is already expressed in % of the drive at the centre of the field, so dS is in % of drive as it stands. Under the zero-sum field, g_HP = ¾ dS and g_LP = −¼ dS.
@@ -116,9 +114,27 @@ Absolute −1.8 points [−6.5, +3.3], P(−) = .78; relative +1.1% [−11, +14]
 - Neutral item at the **previous distractor location** (regressor P, already in the model): gain lower,
   **−4.1 points [−7.6, −0.6], P = .987**; same sign in every area (V1 −5.9 [−10.7, −0.8], V2 −4.9 [−9.7, −0.1],
   others −2.5 to −4.8, HDIs include 0).
-- Neutral item at the **previous target location** (new regressor Q, `--prev-target-neutral`): PENDING. SLURM 8796023 (28 tasks, submitted 24 Nov 17:3x) finished on the cluster side, but the cluster became unreachable from the laptop (VPN) before collection. Output: `/shares/zne.uzh/gdehol/ds-retsupp/derivatives/af_trialwise_gains_signal_se_prevtgt_zs_lm_2026-11-24`. Canary (sub-03 V1) ran cleanly.
+- Neutral item at the **previous target location** (new regressor Q, `--prev-target-neutral`, SLURM 8796023): gain
+  also lower, **−6.5 points [−10.7, −2.2], P = .996** (Student-t −6.1 [−10.3, −2.1], P = .998). It is negative in
+  every area, credibly so in V3 −7.7, V3AB −9.8, hV4 −11.6, LO −7.0 and TO −5.8, but not in V1 −3.1 or V2 −2.9.
+  Per pathway: early −4.5 [−11.8, +2.9], dorsal −8.0 [−16.4, +0.8], occipitotemporal −7.4 [−14.2, −1.0].
+  Check: the area means fall inside the predictive band in 7 of 9 areas, 0 divergences.
+- With Q in the model, the target-repeat effect is larger: −23% [−33, −13], P > .999 (early −43%, dorsal −28%,
+  occipitotemporal −6%). The neutral-item term at the previous distractor location stays at −4.7 [−8.1, −1.1],
+  P = .994.
 
-**Interpretation.** Provisional, from what is in hand: the target-repeat reduction survives RT and the global gain in the same model, and a target at the previous distractor location shows no change. A neutral item at the previous distractor location loses gain (−4.1 points, P = .987), which is intertrial inhibition of the last distractor location, not repetition suppression of a repeated stimulus (the neutral item there is a new item type at that location). The decisive test for repetition suppression of the target location is Q (neutral item at the previous target location): adaptation of the location predicts Q < 0, as for the target; priming (the previous target location keeps priority while a repeated target needs less gain to be selected) predicts Q ≥ 0. Fill in when Q is collected.
+**Interpretation.** The pattern favours a location-level after-effect, not priming as raised priority. The
+location that held the target on the previous trial gives less gain to whatever appears there next: a repeated
+target loses gain, and so does a neutral item. The location of the previous distractor also gives less gain to a
+neutral item. If priming had kept the previous target location at a higher priority, a neutral item there should
+gain, not lose. Repetition suppression in the strict sense (adaptation to the same stimulus) also does not fit
+well, because the neutral item there is a different stimulus from the target that preceded it. The best
+description is a reduced gain at locations that held a singleton on the previous trial, whatever appears there now
+(adaptation or inhibition of the recently selected location). That target repeats are nonetheless faster (−38.7
+ms) means the behavioural benefit does not come from more gain at the repeated location. The data cannot tell
+whether it comes from a lower gain needed to select the target or from processing outside visual cortex.
+Suggested wording: "after a location had held the target or the distractor, it received less gain on the next
+trial, whatever item appeared there".
 
 ## 5. Distractor gain and RT
 
@@ -137,7 +153,21 @@ Absolute −1.8 points [−6.5, +3.3], P(−) = .78; relative +1.1% [−11, +14]
   position and run; −2.4%, P = .994). Suggested wording: "distractor gain was lower on trials with slower
   responses".
 
-**(b) Looser voxel selections.** Zero-sum rerun submitted (SLURM 8796024 for r > 0.2, 8796025 for r > 0.1; the zero-sum main model's gain fields held fixed, voxels from the cross-run reliability selection, pRFs of the added voxels from the joint-HRF fold fits; new `--voxels relnull --min-r`). Collection is pending for the same connectivity reason. Earlier (non-zero-sum) fits, which refitted the gain fields on each looser selection (fit's own voxels, at least 10 per area), are below. Signal voxels: −2.0 [−3.7, −0.2], P = .990. Own voxels: −2.2 [−3.9, −0.5], P = .992. **r > 0.2: −1.5 [−3.0, −0.0], P = .975.** **r > 0.1: −1.3 [−2.9, +0.1], P = .960**, early areas only: −2.3 [−4.5, −0.1], P = .983. The effect shrinks with looser selections and is at or below the credibility threshold. Source: `/Users/gdehol/git/retsupp/notes/rt_links_robustness_2026-11-12.md`.
+**(b) Looser voxel selections.** Rerun on the zero-sum main model (SLURM 8796024 and 8796025): its gain fields
+are held fixed, the voxels come from the cross-run reliability selection, and the added voxels take their pRFs from
+the joint-HRF fold fits. Distractor gain per SD of log RT:
+
+| Selection | Zero-sum (now) | Earlier fits (gain fields refitted per selection) |
+|---|---|---|
+| Signal voxels (Fig. 7) | −2.7 [−4.7, −0.7], P = .996, 230 estimates | −2.0 [−3.7, −0.2], P = .990 |
+| r > 0.2 | **−2.5 [−4.5, −0.6], P = .994**, 236 | −1.5 [−3.0, −0.0], P = .975 |
+| r > 0.1 | **−1.9 [−3.7, +0.0], P = .978**, 241 | −1.3 [−2.9, +0.1], P = .960 |
+
+The effect weakens as the selection loosens but stays just credible at r > 0.1 on the zero-sum fits. Without the
+SE weighting it is not credible in any selection (r > 0.2 +5.4, P(−) = .19; r > 0.1 +1.8, P(−) = .32). The
+target-repeat effect holds in both selections (−19% and −20%, P > .999). The manuscript's clause "became weaker
+with looser voxel selections" still holds in direction, but on the current fits the effect stays credible. The two
+rerun columns are not identical procedures, because the earlier fits refitted the gain fields on each selection.
 
 **(c) The earlier "opposite relations" result.** Found: October 2026 (commits 56a335e to 4e73889, 19 to 20 Oct;
 script `/Users/gdehol/git/retsupp/retsupp/visualize/paper/mixed_trialwise_af_rt.R`, table
