@@ -173,12 +173,15 @@ def rt_rows(path, analysis):
     return r[['question', 'variant', 'level', 'unit', 'mean', 'hdi_lo', 'hdi_hi', 'p_gt0', 'p_lt0']]
 
 
-def main(meta, name, param, compact=False, fit_label=FIT_LABEL, rt_summary=None, rt_analysis=None, rt_legend=None):
+def main(meta, name, param, compact=False, fit_label=FIT_LABEL, rt_summary=None, rt_analysis=None, rt_legend=None,
+         primary_t=False):
     """compact: narrower panels (5.9 in wide), shorter titles and keys; same content. rt_summary / rt_analysis:
     panel b (and its legend numbers) from that ``rt_power_meta`` analysis; rt_legend replaces the legend's panel-b
     model description and its robustness clause."""
     meta = Path(meta)
     summary = pd.read_csv(meta / 'summary.tsv', sep='\t')
+    if primary_t:   # Student-t likelihood as the primary model; the normal one becomes the robustness column
+        summary['variant'] = summary.variant.replace({'abs': 'abs_t', 'abs_t': 'abs', 'rel': 'rel_t', 'rel_t': 'rel'})
     global PRECISE_ZERO
     PRECISE_ZERO = bool(rt_summary)
     if rt_summary:
@@ -315,6 +318,15 @@ def main(meta, name, param, compact=False, fit_label=FIT_LABEL, rt_summary=None,
             cells.append(f'{fmt(r, sc, un)}, P = {pdir(r)}')
         tab.append(f'| {lab} | ' + ' | '.join(cells) + ' |')
     legend = legend.replace(FIT_LABEL, fit_label)
+    if primary_t:
+        for a_, b_ in [('estimate ~ Normal(θ, √(SE² + τ²))', 'estimate ~ Student-t(ν, θ, √(SE² + τ²)), ν ~ Gamma(2, 0.1)'),
+                       ('a Student-t likelihood gives the same conclusions', 'a normal likelihood gives the same conclusions'),
+                       ('| Primary | Student-t |', '| Student-t (primary) | Normal |'),
+                       ('variants: primary, Student-t likelihood,', 'variants: primary (Student-t likelihood), normal likelihood,'),
+                       ('(primary model;', '(primary model, Student-t;')]:
+            assert a_ in legend or a_ in '\n'.join(tab), a_
+            legend = legend.replace(a_, b_)
+            tab = [t_.replace(a_, b_) for t_ in tab]
     if rt_legend:
         b0 = ('b, Response time: change in each gain per SD of log RT (z within run and trial type; positive: higher '
               'gain on slower trials).')
@@ -341,5 +353,7 @@ if __name__ == '__main__':
     ap.add_argument('--rt-summary', default=None, help='rt_power_meta summary.tsv for panel b')
     ap.add_argument('--rt-analysis', default='main (1 + 2 + 3)')
     ap.add_argument('--rt-legend', default=None, help='panel-b model description that opens the legend\'s b part')
+    ap.add_argument('--primary-t', action='store_true', help='Student-t likelihood as the primary model (points, '
+                    'stars, legend); the normal likelihood moves to the robustness column')
     a = ap.parse_args()
-    main(a.meta, a.name, a.param, a.compact, a.fit_label, a.rt_summary, a.rt_analysis, a.rt_legend)
+    main(a.meta, a.name, a.param, a.compact, a.fit_label, a.rt_summary, a.rt_analysis, a.rt_legend, a.primary_t)

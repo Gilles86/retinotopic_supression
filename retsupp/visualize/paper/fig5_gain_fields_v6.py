@@ -596,7 +596,7 @@ def panel_maps_v9(fig, p, x0, y_top, cw, gap, bgap, under, bars=True):
 
 
 def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_area_sustained=None, compact=False,
-         layout=None, widths_table=None, fit_label=None, split_d=False):
+         layout=None, widths_table=None, fit_label=None, split_d=False, bayes_dir=None, bayes_variant='t'):
     # the same inputs and options as fig5_gain_fields_n28 (final fits, b-d unchanged in content)
     F.FINAL, F.SUFFIX, F.WIDTHS_SUPP = True, suffix, True
     F.GAIN_TABLE = gain_table
@@ -614,6 +614,17 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
     v9 = layout in ('v9', 'v10', 'v11')
     v8 = layout in ('v8', 'v9', 'v10', 'v11')        # v9: the v8 layout and parameters, in percent, sustained block as HP − LP maps
     p = map_parameters(gain_table, cond=cond if v8 else None, widths=widths_table if v11 else None)
+    B = None
+    if bayes_dir:   # panels b, c (and the HP − LP maps of a) from the hierarchical model of dS_meta
+        assert v11 and split_d, '--bayes-dir needs --layout v11 --split-d'
+        B = load_bayes(bayes_dir, bayes_variant)
+        for r in p.index.intersection(ROI_ORDER):
+            p.loc[r, 'dS_map'] = B['sm']['dS'].loc[r, 'median'] / 100
+            p.loc[r, 'T'] = B['sm']['target'].loc[r, 'median'] / 100
+            p.loc[r, 'D'] = B['sm']['distractor'].loc[r, 'median'] / 100
+            if ZERO_SUM:
+                p.loc[r, 'g_LP'] = -0.25 * p.loc[r, 'dS_map']
+            p.loc[r, 'g_HP_map'] = p.loc[r, 'g_LP'] + p.loc[r, 'dS_map']
 
     from retsupp.visualize.paper.fig7_behaviour import icons, row
     from retsupp.visualize.paper.paper_style import stimulus_icon
@@ -645,7 +656,8 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
 
     # a: the maps
     fig.text(.02 / W, Y(.14) / H, 'a', fontsize=8, fontweight='bold', va='center', ha='left')
-    fig.text(.2 / W, Y(.14) / H, 'The fitted gain fields over the display (group medians)', fontsize=7.5, color=FG,
+    fig.text(.2 / W, Y(.14) / H, 'The fitted gain fields over the display (group ' +
+             ('estimates)' if bayes_dir else 'medians)'), fontsize=7.5, color=FG,
              va='center', ha='left')
     if v9:
         y_bottom, dmin, vmax = panel_maps_v9(fig, p, x0, Y(.58), cw, gap, bgap, under)
@@ -670,8 +682,12 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
     # b: target and distractor gain per area (the earlier a)
     yb = y_bottom - .05
     d_rois = t[(t.model == 'DoG') & (t.term == 'D') & (t.q < .05)].roi.tolist()
+    if B is not None:
+        d_rois = B['sm']['distractor'].query('q < .05').index.tolist()
     d_where = ' in ' + ', '.join(d_rois) if d_rois else ' nowhere reliably'
     t_rois = t[(t.model == 'DoG') & (t.term == 'T') & (t.q < .05)].roi.tolist()
+    if B is not None:
+        t_rois = B['sm']['target'].query('q < .05').index.tolist()
     t_where = (' in every area' if len(t_rois) == 9 else ' beyond V1' if set(t_rois) == set(ROI_ORDER) - {'V1'}
                else f' in {len(t_rois)} of 9 areas')
     row(fig, yb, 'b', [('Gain at the ', FG), ('target', TARGET), (t_where, FG),
@@ -686,8 +702,13 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
         d100 = d.assign(T=d['T'] * k, D=d.D * k)
         sm100 = lambda term: sm(term).assign(median=lambda x: x['median'] * k, ci_low=lambda x: x.ci_low * k,
                                              ci_high=lambda x: x.ci_high * k)
-        F.dot_panel(ax, [(d100, 'T', TARGET, sm100('T')), (d100, 'D', DISTRACTOR, sm100('D'))], (-40, 120),
-                    'Gain change (%)')
+        if B is not None:
+            F.dot_panel(ax, [(B['est']['target'], 'y', TARGET, B['sm']['target']),
+                             (B['est']['distractor'], 'y', DISTRACTOR, B['sm']['distractor'])], (-40, 120),
+                        'Gain change (%)')
+        else:
+            F.dot_panel(ax, [(d100, 'T', TARGET, sm100('T')), (d100, 'D', DISTRACTOR, sm100('D'))], (-40, 120),
+                        'Gain change (%)')
         ax.set_yticks([0, 50, 100])
     else:
         F.dot_panel(ax, [(d, 'T', TARGET, sm('T')), (d, 'D', DISTRACTOR, sm('D'))], (-.4, 1.2), 'Gain')
@@ -702,10 +723,15 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
         x_let=.02, x_title=.2, key_y=Y(y2 + .27))
     ax = at(LX, Y(y2 + .62 + ch), 6.45 if split_d else PW, ch)     # split: c over the full width, as b
     if v9:
-        F.dot_panel(ax, [(cond.assign(dS=cond.dS * 100), 'dS', HP, None)], (-12, 6), 'HP − LP (%)')
-        ax.set_yticks([-10, -5, 0, 5])
-        if v10:
-            pooled_c = pooled_all_areas(ax, cond, (-12, 6))
+        if B is not None:
+            F.dot_panel(ax, [(B['est']['dS'], 'y', HP, B['sm']['dS'])], (-25, 15), 'HP − LP (%)')
+            ax.set_yticks([-20, -10, 0, 10])
+            pooled_c = pooled_bayes(ax, B, (-25, 15))
+        else:
+            F.dot_panel(ax, [(cond.assign(dS=cond.dS * 100), 'dS', HP, None)], (-12, 6), 'HP − LP (%)')
+            ax.set_yticks([-10, -5, 0, 5])
+            if v10:
+                pooled_c = pooled_all_areas(ax, cond, (-12, 6))
     else:
         F.dot_panel(ax, [(cond, 'dS', HP, None)], (-.12, .06), 'Gain, HP − LP')
         ax.set_yticks([-.1, 0, .05])
@@ -808,7 +834,8 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
             pw = pathway_pooling(cond)
             if not split_d:
                 pw.to_csv(f'notes/data/dS_pooled_by_pathway{suffix}_2026-11-12_v11.tsv', sep='\t', index=False)
-        legend = pooled_legend(legend, pooled_c, pw)
+        if B is None:
+            legend = pooled_legend(legend, pooled_c, pw)
     if v11:
         lab = fit_label or ('Gain-field model fits with DoG pRFs, the pRFs refitted together with the gain fields')
         legend = legend.replace('Gain-field model fits with DoG pRFs (n = ', f'{lab} (n = ', 1)
@@ -817,6 +844,10 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
         legend = legend.replace(old, old[:-1] + '; with the pRFs refitted, the level shared by all four locations '
                                 'trades off against the item weight and the pRF amplitude, so read its sign, not its '
                                 'size)')
+    if B is not None:
+        save(fig, f'fig5_gain_fields_{layout}_abc' + suffix + '_bayes', bayes_legend(legend, B, n))
+        plt.close(fig_d)
+        return p
     if split_d:
         legend_abc, legend_d = split_legend_d(legend)
         save(fig, f'fig5_gain_fields_{layout}_abc' + suffix, legend_abc)
@@ -835,6 +866,91 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
         f'notes/data/fig5_gain_field_map_parameters{suffix}_2026-11-12{"_" + layout if v8 else ""}.tsv', sep='\t',
              float_format='%.5f')
     return p
+
+
+def load_bayes(bayes_dir, variant='t'):
+    """dS_meta outputs: per-cell estimates (in %, re-solved around the joint fit, with jackknife SEs) and the
+    hierarchical model's posteriors. Summaries in dot_panel's format: median = posterior mean, ci = 95% HDI, and
+    q = 2·(1 − P(sign)), so that dot_panel's stars mark P > .975 (*), > .995 (**), > .9995 (***)."""
+    est = pd.read_csv(f'{bayes_dir}/estimates.tsv', sep='\t')
+    b = pd.read_csv(f'{bayes_dir}/bayes.tsv', sep='\t')
+    b = b[b.variant == variant]
+    out = dict(est={}, sm={}, post=b, variant=variant)
+    for term in ('dS', 'target', 'distractor'):
+        out['est'][term] = est[est.term == term]
+        a = b[(b.question == term) & (b.level == 'area')].set_index('unit').loc[ROI_ORDER]
+        out['sm'][term] = pd.DataFrame(dict(median=a['mean'], ci_low=a.hdi_lo, ci_high=a.hdi_hi,
+                                            q=2 * (1 - np.maximum(a.p_gt0, a.p_lt0))))
+    return out
+
+
+BAYES_UNITS = [('all', 'All\nareas', -4.3), ('early', 'Early', -3.25), ('dorsal', 'Dorsal', -2.45),
+               ('occipitotemporal', 'Occ.-\ntemp.', -1.65)]
+
+
+def pooled_bayes(ax, B, ylim):
+    """Panel c with the hierarchical model: the mean over all nine areas and the three pathway means (posterior mean,
+    95% HDI, stars from the posterior probability of the sign), left of a divider; the areas as before."""
+    from retsupp.visualize.paper.fig7_behaviour import XMAX
+    lo, hi = ylim
+    post = B['post'][B['post'].question == 'dS']
+    out = {}
+    for unit, lab, x in BAYES_UNITS:
+        r = post[(post.unit == unit) & post.level.isin(['overall', 'group'])].iloc[0]
+        pr = max(r.p_gt0, r.p_lt0)
+        big = unit == 'all'
+        ax.errorbar(x, r['mean'], yerr=[[r['mean'] - r.hdi_lo], [r.hdi_hi - r['mean']]], fmt='o', ms=7 if big else 5,
+                    color=HP, mec='w', mew=.8, lw=2.0 if big else 1.4, capsize=0, zorder=5, alpha=1 if pr > .975 else .45)
+        ax.text(x, hi + .02 * (hi - lo), F.stars(2 * (1 - pr)), ha='center', va='bottom', fontsize=8.5, color=HP,
+                clip_on=False)
+        out[unit] = dict(mean=r['mean'], lo=r.hdi_lo, hi=r.hdi_hi, P=pr)
+    ax.axvline(-.95, color='.85', lw=.6, zorder=0)
+    ax.hlines(0, BAYES_UNITS[0][2] - .6, -.6, color='.75', lw=.6, ls='--', zorder=0)
+    ax.set_xlim(BAYES_UNITS[0][2] - .6, XMAX + .6)
+    ticks = [u[2] for u in BAYES_UNITS] + list(ax.get_xticks())
+    labels = [u[1] for u in BAYES_UNITS] + [t.get_text() for t in ax.get_xticklabels()]
+    ax.set_xticks(ticks)
+    ax.set_xticklabels(labels, fontsize=6)
+    for i in range(len(BAYES_UNITS)):
+        ax.get_xticklabels()[i].set_color(HP)
+    ax.get_xticklabels()[0].set_fontweight('bold')
+    return out
+
+
+def bayes_legend(legend, B, n):
+    """Legend for the --bayes-dir version: panel a as in the v11 legend; b and c rewritten for the hierarchical model."""
+    def f(r, unit=''):
+        return (f"{r['mean']:+.1f}{unit} [{r.hdi_lo:+.1f}, {r.hdi_hi:+.1f}], P = {max(r.p_gt0, r.p_lt0):.3f}"
+                .replace('-', '−'))
+    post = B['post']
+    g = lambda term, unit: post[(post.question == term) & (post.unit == unit)].iloc[0]
+    lik = ('Student-t likelihood, ν ~ Gamma(2, 0.1)' if B['variant'] == 't' else 'normal likelihood')
+    i = legend.find(' b, ')
+    assert i > 0
+    head = legend[:i].replace(
+        "the median over participants (n = 28) of each participant's fitted parameters",
+        "the group estimates of panels b and c (posterior means; widths, the median over participants)").replace("the area's median HP − LP difference estimated alone (dS, the value panel c plots",
+                              "the area's posterior mean HP − LP difference (dS, the value panel c plots")
+    areas = lambda term: ', '.join(f"{a} {f(g(term, a), '%')}" for a in ROI_ORDER)
+    sig = lambda term: [a for a in ROI_ORDER if max(g(term, a).p_gt0, g(term, a).p_lt0) > .975]
+    txt = (f" b, c: per participant and area, the gains re-estimated around the joint fit (the gains of the sustained "
+           f"and transient fields solved by least squares, pRFs, HRF and field widths held at the joint fit), each with "
+           f"its leave-one-run-out jackknife SE (half the odd − even-run difference over the SE: median 0.71 for dS, "
+           f"0.67 expected). Dots, participants (triangles, beyond the axis). Hierarchical Bayesian model per term "
+           f"(as Fig. 7): estimate ~ {'Student-t(ν, θ, √(SE² + τ²))' if B['variant'] == 't' else 'Normal(θ, √(SE² + τ²))'}, "
+           f"θ = pathway mean + area deviation + participant deviation ({lik}; pathway means as fixed effects, "
+           f"HalfNormal SDs; PyMC with nutpie, 4 × 2000 draws, no divergences, max R̂ ≤ 1.01). Points and bars, "
+           f"posterior mean and 95% HDI; stars, posterior probability of the sign shown: * > .975, ** > .995, "
+           f"*** > .9995. Partial pooling over areas takes the place of a correction across areas. n = {n}. "
+           f"b, Gain at the target (orange) and at the distractor (green) while a search display is on. Over all nine "
+           f"areas: target {f(g('target', 'all'), '%')}, distractor {f(g('distractor', 'all'), '%')}; credible in "
+           f"{', '.join(sig('target'))} (target) and {', '.join(sig('distractor')) or 'no single area'} (distractor). "
+           f"c, Sustained gain at HP minus at LP (dS). Left of the divider, the mean over all nine areas "
+           f"{f(g('dS', 'all'), '%')} and the pathway means: early {f(g('dS', 'early'), '%')}, dorsal "
+           f"{f(g('dS', 'dorsal'), '%')}, occipitotemporal {f(g('dS', 'occipitotemporal'), '%')}. Per area: "
+           f"{areas('dS')}. Without the SEs (each estimate weighted equally) nothing is credible, because a few "
+           f"participant × area estimates are very noisy (SEs up to 3 times the gain itself).")
+    return head + txt
 
 
 def split_legend_d(legend):
@@ -1193,10 +1309,13 @@ if __name__ == '__main__':
                     'HP = 3/4 dS of the dS shown, instead of median g_LP + dS')
     ap.add_argument('--hp-angle', type=float, default=0., help='draw HP at this angle, degrees clockwise from the top '
                     '(45: upper right, one of the four diagonal search positions); default 0 (top)')
+    ap.add_argument('--bayes-dir', default=None, help='v11 --split-d: panels b, c from the hierarchical model of '
+                    'dS_meta (that output folder)')
+    ap.add_argument('--bayes-variant', default='t', choices=['t', 'normal', 'no_se'])
     a = ap.parse_args()
     ZERO_SUM = a.zero_sum
     if a.hp_angle:
         rotate_display(a.hp_angle)
     main(a.gain_table, a.conditional_table, a.slope_table, a.sigma_table, a.suffix,
          None if a.sustained_scale == 'auto' else a.sustained_scale == 'per-area', a.compact, a.layout,
-         a.widths_table, a.fit_label, a.split_d)
+         a.widths_table, a.fit_label, a.split_d, a.bayes_dir, a.bayes_variant)
