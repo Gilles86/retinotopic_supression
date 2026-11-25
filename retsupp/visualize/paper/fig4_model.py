@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import Circle
 
-from retsupp.visualize.paper.paper_style import (DISTRACTOR, DISTRACTOR_CMAP, DOUBLE, FG, HP, IMAGE_CMAP, LP, MUTED, NEUTRAL,
+from retsupp.visualize.paper.paper_style import (DIV_CMAP, DISTRACTOR, DISTRACTOR_CMAP, DOUBLE, FG, HP, IMAGE_CMAP, LP, MUTED, NEUTRAL,
                                                  PRF, STIM, SUSTAINED_CMAP, TARGET, TARGET_CMAP, letter, save)
 from retsupp.visualize.paper.plot_fig1 import APERTURE, display
 
@@ -24,6 +24,16 @@ COMMON = ("A search display on screen is reduced to the model input: the bar and
           "location (g_HP) and the three LP locations (g_LP), plus transient fields at the target (g_T) and at the distractor, "
           "whose gain can also differ between HP and LP. Shown here is less sustained gain at HP than at LP, relative to LP. "
           "HP is at the lower right (purple dashed ring). All gains are illustrative and exaggerated for clarity.")
+COMMON_ZS = ("A search display on screen is reduced to the model input: the bar and the eight items as patches of the "
+             "same size and orientation (their colour, and so which items are the target and the distractor, are not in "
+             "the input). The weight of the items relative to the bar is fitted per area. Each voxel's pRF reads this "
+             "input multiplied by a gain field: 1 plus a sustained field at the four possible target and distractor "
+             "locations, plus transient fields at the target (g_T) and at the distractor (g_D), present while a search "
+             "display is on. The sustained field sums to zero over the four locations (g_HP + 3 g_LP = 0): it captures "
+             "only how the HP location differs from the other three, so less gain at HP (purple) comes with slightly "
+             "more at each LP location (gold). The pRFs, the HRF and the gains are fitted together. HP is at the lower "
+             "right (purple dashed ring). All gains are illustrative and exaggerated for clarity.")
+ZERO_SUM = False
 LEGEND = f"""
 **Figure 4. Gain-field model.** a, {COMMON} b, A schematic stretch of a run with illustrative trials: one bar sweep from left to right and four trials, with symbols above their onsets (target: diamond; distractor: dot; HP: purple ring; pRF: charcoal circle). For three pRFs, the rows show the stimulus reaching the pRF (bar and items), the gain it sees, and the predicted BOLD response after the HRF, with and without gain. Rows share their scale across columns.
 """
@@ -218,8 +228,10 @@ def top_row(fig, gs, prfs=None):
     sus = sum((GAINS['hp'] if i == HP_IX else GAINS['lp']) * gauss(*p, SIGMA['sus']) for i, p in enumerate(POS))
     tgt = GAINS['t'] * gauss(*POS[T_IX], SIGMA['dyn'])
     dis = GAINS['d'] * gauss(*POS[HP_IX], SIGMA['dyn'])
-    maps = [('Model input', stimulus(), IMAGE_CMAP, 2.6, FG, False, 'Fixed pRF'),
-            ('Sustained', -sus, SUSTAINED_CMAP, .9, HP, False, 'Whole block, less at HP'),
+    sus_map = (('Sustained', sus, DIV_CMAP, .75, HP, True, 'Whole block: less at HP, more at LP') if ZERO_SUM else
+               ('Sustained', -sus, SUSTAINED_CMAP, .9, HP, False, 'Whole block, less at HP'))
+    maps = [('Model input', stimulus(), IMAGE_CMAP, 2.6, FG, False, 'pRF' if ZERO_SUM else 'Fixed pRF'),
+            sus_map,
             ('Target', tgt, TARGET_CMAP, 1.8, TARGET, False, 'During search'),
             ('Distractor', dis, DISTRACTOR_CMAP, 1.55, DISTRACTOR, False, 'During search')]   # its own scale, so the smaller distractor gain is still visible
     for j, (title, im, cmap, lim, col, signed, sub) in enumerate(maps, start=1):
@@ -341,6 +353,9 @@ def main_hp(name='fig4_model_hp_blocks'):
         g.set_ylim(g_lo * 2.0, g_hi * 1.05)
         if k == 0:
             g.text(7.6, d['base'] - .1 * (g_hi - g_lo), 'Less gain, whole block', fontsize=6.5, color=HP, ha='left', va='top')
+        elif ZERO_SUM and d['base'] > 0:
+            g.text(7.6, d['base'] + .04 * (g_hi - g_lo), 'Slightly more gain, whole block', fontsize=6.5, color=HP,
+                   ha='left', va='bottom')
         r3 = rows[2]
         r3.plot(t, d['without'], color='.65', lw=1.1)
         r3.plot(t, d['predicted'], color=FG, lw=1.3)
@@ -379,14 +394,25 @@ def main_hp(name='fig4_model_hp_blocks'):
             r3.annotate('', xy=(t[ipk], d['predicted'].max()), xytext=(t[ipk], anchor),
                         arrowprops=dict(arrowstyle='-|>', color=HP, lw=1.3, mutation_scale=8, shrinkA=0, shrinkB=0))
             r3.text(DURATION - .4, anchor - .03 * (p_hi - p_lo), 'Peak with HP not near', fontsize=6.5, color=FG, ha='right', va='top')
-    save(fig, name, LEGEND_HP)
+    legend = LEGEND_HP
+    if ZERO_SUM:
+        legend = legend.replace(COMMON, COMMON_ZS).replace(
+            '(purple shading: the sustained loss of gain with HP near, present for the whole block)',
+            '(purple: the sustained field, present for the whole block; less gain with HP near, slightly more with HP '
+            'at another location)').replace('(red arrows from above)', '(purple arrows from above)')
+    save(fig, name, legend)
 
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--version', choices=['locations', 'blocks'], default='blocks')
     ap.add_argument('--name', default=None)
+    ap.add_argument('--zero-sum', action='store_true', help='final model: zero-sum sustained field (LP slightly above 0, '
+                    'drawn on a signed scale), one distractor gain, pRFs fitted with the gains (legend)')
     a = ap.parse_args()
+    if a.zero_sum:
+        ZERO_SUM = True
+        GAINS.update(hp=-.6, lp=.2)
     if a.version == 'blocks':
         main_hp(a.name or 'fig4_model_hp_blocks')
     else:
