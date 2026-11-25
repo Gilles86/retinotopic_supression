@@ -8,8 +8,9 @@ Per question (a modulator of one gain), over the nine areas::
     y[s, a] ~ Normal(θ[s, a], sqrt(se[s, a]² + τ²))
     θ[s, a] = m[group(a)] + v[a] + w[s]
 
-m: group means (fixed effects, Normal(0, 2·sd(y)); early V1–V3, dorsal V3AB IPS, occipitotemporal hV4 LO TO VO);
-v: area within group; w: subject; τ: residual subject × area heterogeneity beyond the sampling error. The overall
+m: group (pathway) population means (fixed effects, Normal(0, 2·sd(y)); early V1–V3, dorsal V3AB IPS, occipitotemporal hV4 LO TO VO);
+v: area within group; w: subject. Reported per pathway (level 'group'): the mean of its areas' means, as the overall
+effect is the mean of all nine (level 'group_pop': the population mean m, which also carries the spread between areas); τ: residual subject × area heterogeneity beyond the sampling error. The overall
 effect μ is the mean of the nine area means. Non-centred, HalfNormal SDs scaled to the spread of y. Variants for sensitivity: Student-t likelihood (``--likelihood t``)
 and no SE weighting (``--no-se``).
 
@@ -84,6 +85,10 @@ def fit(t, likelihood='normal', use_se=True, seed=0, draws=2000, tune=2000):
         w = pm.Deterministic('w', sd_s * pm.Normal('w_z', 0, 1, dims='subject'), dims='subject')
         am = pm.Deterministic('area_mean', gm[gi_area] + v, dims='area')
         pm.Deterministic('mu', am.mean())
+        # Pathway effect as reported: the mean of its areas' means (like mu over all nine). group_mean itself is the
+        # population mean of a pathway's areas, whose uncertainty includes the spread between areas (wide with 2-4 areas).
+        pm.Deterministic('group_avg', pm.math.stack([am[np.where(gi_area == k)[0]].mean() for k in range(len(groups))]),
+                         dims='group')
         theta = am[ai] + w[si]
         sigma = pm.math.sqrt(se ** 2 + tau ** 2)
         if likelihood == 't':
@@ -108,7 +113,8 @@ def summarize(idata, t, areas, groups, question, variant):
                          hdi_hi=hi, p_gt0=(x > 0).mean(), p_lt0=(x < 0).mean()))
     add('overall', 'all', post['mu'])
     for g in groups:
-        add('group', g, post['group_mean'].sel(group=g))
+        add('group', g, post['group_avg'].sel(group=g))
+        add('group_pop', g, post['group_mean'].sel(group=g))
     for a in areas:
         add('area', a, post['area_mean'].sel(area=a))
     s = az.summary(idata, var_names=['mu', 'sd_area', 'sd_subject', 'tau', 'group_mean', 'area_mean'])
