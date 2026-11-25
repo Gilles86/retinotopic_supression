@@ -704,13 +704,14 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
                                              ci_high=lambda x: x.ci_high * k)
         if B is not None:
             F.dot_panel(ax, [(B['est']['target'], 'y', TARGET, B['sm']['target']),
-                             (B['est']['distractor'], 'y', DISTRACTOR, B['sm']['distractor'])], (-40, 120),
+                             (B['est']['distractor'], 'y', DISTRACTOR, B['sm']['distractor'])], (-25, 85),
                         'Gain change (%)')
-            pooled_bayes(ax, B, (-40, 120), series=(('target', TARGET), ('distractor', DISTRACTOR)))
+            pooled_bayes(ax, B, (-25, 85), series=(('target', TARGET), ('distractor', DISTRACTOR)))
+            ax.set_yticks([0, 40, 80])
         else:
             F.dot_panel(ax, [(d100, 'T', TARGET, sm100('T')), (d100, 'D', DISTRACTOR, sm100('D'))], (-40, 120),
                         'Gain change (%)')
-        ax.set_yticks([0, 50, 100])
+            ax.set_yticks([0, 50, 100])
     else:
         F.dot_panel(ax, [(d, 'T', TARGET, sm('T')), (d, 'D', DISTRACTOR, sm('D'))], (-.4, 1.2), 'Gain')
         ax.set_yticks([0, .5, 1])
