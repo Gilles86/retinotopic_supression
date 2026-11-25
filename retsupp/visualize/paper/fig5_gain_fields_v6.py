@@ -929,7 +929,7 @@ def bayes_legend(legend, B, n):
         return (f"{r['mean']:+.1f}{unit} [{r.hdi_lo:+.1f}, {r.hdi_hi:+.1f}], P = {max(r.p_gt0, r.p_lt0):.3f}"
                 .replace('-', '−'))
     post = B['post']
-    g = lambda term, unit: post[(post.question == term) & (post.unit == unit)].iloc[0]
+    g = lambda term, unit: post[(post.question == term) & (post.unit == unit) & (post.level != 'group_pop')].iloc[0]
     lik = ('Student-t likelihood, ν ~ Gamma(2, 0.1)' if B['variant'] == 't' else 'normal likelihood')
     i = legend.find(' b, ')
     assert i > 0
@@ -942,10 +942,23 @@ def bayes_legend(legend, B, n):
                             'rotated so that the HP location is at the upper right, one of the four diagonal positions')
     areas = lambda term: ', '.join(f"{a} {f(g(term, a), '%')}" for a in ROI_ORDER)
     sig = lambda term: [a for a in ROI_ORDER if max(g(term, a).p_gt0, g(term, a).p_lt0) > .975]
-    txt = (f" b, c: per participant and area, the gains re-estimated around the joint fit (the gains of the sustained "
-           f"and transient fields solved by least squares, pRFs, HRF and field widths held at the joint fit), each with "
-           f"its leave-one-run-out jackknife SE (half the odd − even-run difference over the SE: median 0.71 for dS, "
-           f"0.67 expected). Dots, participants (triangles, beyond the axis). Hierarchical Bayesian model per term "
+    import re
+    head = re.sub(r'\. Values used: .*$', '. Values used (posterior means): ' + '; '.join(
+        f"{a}: HP − LP {g('dS', a)['mean']:+.1f}%, target {g('target', a)['mean']:+.0f}%, distractor "
+        f"{g('distractor', a)['mean']:+.0f}%".replace('-', '−') for a in AREAS) + '.', head)
+    est = B['est']['dS']
+    cal = float(np.median(est.halfdiff / est.se))
+    zs = 'y_lin' in est.columns
+    txt = ((f" b, c: per participant and area, the gains of the joint zero-sum fit, each with a leave-one-run-out "
+            f"jackknife SE (the fit's three free gains, dS, target and distractor, re-solved by least squares under the "
+            f"model's constraints, zero-sum sustained field and one distractor gain, with the pRFs, HRF, field widths and "
+            f"item weight held at the fit; half the odd − even-run difference over the SE: median {cal:.2f} for dS, "
+            f"0.67 expected).") if zs else
+           (f" b, c: per participant and area, the gains re-estimated around the joint fit (the gains of the sustained "
+            f"and transient fields solved by least squares, pRFs, HRF and field widths held at the joint fit), each with "
+            f"its leave-one-run-out jackknife SE (half the odd − even-run difference over the SE: median {cal:.2f} for "
+            f"dS, 0.67 expected)."))
+    txt += (f" Dots, participants (triangles, beyond the axis). Hierarchical Bayesian model per term "
            f"(as Fig. 7): estimate ~ {'Student-t(ν, θ, √(SE² + τ²))' if B['variant'] == 't' else 'Normal(θ, √(SE² + τ²))'}, "
            f"θ = pathway mean + area deviation + participant deviation ({lik}; pathway means as fixed effects, "
            f"HalfNormal SDs; PyMC with nutpie, 4 × 2000 draws, no divergences, max R̂ ≤ 1.01). Points and bars, "
@@ -1325,8 +1338,11 @@ if __name__ == '__main__':
     ap.add_argument('--bayes-dir', default=None, help='v11 --split-d: panels b, c from the hierarchical model of '
                     'dS_meta (that output folder)')
     ap.add_argument('--bayes-variant', default='t', choices=['t', 'normal', 'no_se'])
+    ap.add_argument('--map-areas', nargs=3, default=None, help='the three areas of the panel-a maps (default V3 hV4 TO)')
     a = ap.parse_args()
     ZERO_SUM = a.zero_sum
+    if a.map_areas:
+        AREAS[:] = a.map_areas
     if a.hp_angle:
         rotate_display(a.hp_angle)
     main(a.gain_table, a.conditional_table, a.slope_table, a.sigma_table, a.suffix,

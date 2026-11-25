@@ -1,0 +1,13 @@
+question	variant	n_obs	n_subjects	divergences	rhat_max	ess_bulk_min	ess_tail_min	ppc_obs_coverage95	ppc_area_means_inside	n_areas	term
+dS	t	241	28	0	1.01	1292.0	1872.0	0.9543568464730291	9	9	dS
+dS	normal	241	28	0	1.01	948.0	1204.0	0.9087136929460581	8	9	dS
+dS	t_inflated	241	28	0	1.0	1101.0	822.0	0.9585062240663901	9	9	dS
+dS	t_nose	241	28	0	1.0	1218.0	1004.0	0.9294605809128631	9	9	dS
+target	t	241	28	0	1.01	1068.0	854.0	0.9543568464730291	7	9	target
+target	normal	241	28	2	1.0	1190.0	1528.0	0.921161825726141	8	9	target
+target	t_inflated	241	28	0	1.0	1197.0	1459.0	0.966804979253112	8	9	target
+target	t_nose	241	28	0	1.01	1400.0	1538.0	0.950207468879668	9	9	target
+distractor	t	241	28	0	1.0	1353.0	1776.0	0.941908713692946	8	9	distractor
+distractor	normal	241	28	0	1.0	1145.0	1035.0	0.9087136929460581	8	9	distractor
+distractor	t_inflated	241	28	0	1.0	1224.0	1122.0	0.941908713692946	8	9	distractor
+distractor	t_nose	241	28	0	1.0	1054.0	1447.0	0.9626556016597511	9	9	distractor
