@@ -61,6 +61,18 @@ TGT, DIS = 'opp', 'left'          # target opposite HP; distractor at the LP loc
 
 
 ZERO_SUM = False   # --zero-sum: draw the sustained field as zero-sum (LP = -dS/4, HP = 3/4 dS) of the dS drawn
+HP_ANGLE = 0.      # --hp-angle: where HP is drawn, degrees clockwise from the top (45: upper right, a real search position)
+
+
+def rotate_display(deg):
+    """Draw the maps with HP at `deg` clockwise from the top instead of at the top: rotates the ring locations (and so
+    every field, which is defined relative to them) and the item positions. A pure display rotation."""
+    global HP_ANGLE
+    HP_ANGLE = float(deg)
+    t = np.deg2rad(-HP_ANGLE)
+    c, s_ = np.cos(t), np.sin(t)
+    for k, (x, y) in list(RING.items()):
+        RING[k] = (c * x - s_ * y, s_ * x + c * y)
 
 
 def map_parameters(gain_table, exclude=(1, 2), cond=None, widths=None):
@@ -156,7 +168,7 @@ def draw_display(ax, marks=()):
     locations stronger), HP ring at the top, fixation; marks: (kind, location key)."""
     ax.add_patch(Circle((0, 0), APERTURE, fill=False, ec=MUTED, lw=.5))
     ax.add_patch(Circle((0, 0), ECC, fill=False, ec=FG, lw=.35, ls=(0, (1.5, 1.5)), alpha=.45))
-    for k, a in enumerate(np.deg2rad(np.arange(0, 360, 45))):
+    for k, a in enumerate(np.deg2rad(np.arange(0, 360, 45) + HP_ANGLE)):
         main4 = k % 2 == 0
         ax.add_patch(Circle((ECC * np.sin(a), ECC * np.cos(a)), .75, fill=False, ec=FG, lw=.5 if main4 else .3,
                             alpha=.7 if main4 else .3))
@@ -515,8 +527,12 @@ def panel_maps_v9(fig, p, x0, y_top, cw, gap, bgap, under, bars=True):
         draw_display(ax)
         ax.set_title(a, fontsize=7.5, pad=2, color=FG)
         hx, hy = RING['hp']
-        ax.text(hx + 1.35, hy + .15, pct(p.loc[a, 'dS_map']), fontsize=7, weight='bold', color=HP, ha='left',
-                va='center', path_effects=STROKE, zorder=7)
+        if HP_ANGLE:      # HP off the top: the value above the HP ring, so it stays inside the map
+            ax.text(hx, hy + 1.3, pct(p.loc[a, 'dS_map']), fontsize=7, weight='bold', color=HP, ha='center',
+                    va='bottom', path_effects=STROKE, zorder=7)
+        else:
+            ax.text(hx + 1.35, hy + .15, pct(p.loc[a, 'dS_map']), fontsize=7, weight='bold', color=HP, ha='left',
+                    va='center', path_effects=STROKE, zorder=7)
         if bars:      # the full sustained gain at LP and at HP (%), which the difference map leaves out
             ax.text(.5, -.005, f'Gain at LP {pct(p.loc[a, "g_LP"])}\nat HP {pct(p.loc[a, "g_HP_map"])}',
                     transform=ax.transAxes, fontsize=6, ha='center', va='top', color='.4', linespacing=1.1)
@@ -1175,8 +1191,12 @@ if __name__ == '__main__':
                     'as its own supplementary figure (figS_transient_hp_lp) instead of the full figure')
     ap.add_argument('--zero-sum', action='store_true', help='zero-sum sustained field: the maps draw LP = -dS/4 and '
                     'HP = 3/4 dS of the dS shown, instead of median g_LP + dS')
+    ap.add_argument('--hp-angle', type=float, default=0., help='draw HP at this angle, degrees clockwise from the top '
+                    '(45: upper right, one of the four diagonal search positions); default 0 (top)')
     a = ap.parse_args()
     ZERO_SUM = a.zero_sum
+    if a.hp_angle:
+        rotate_display(a.hp_angle)
     main(a.gain_table, a.conditional_table, a.slope_table, a.sigma_table, a.suffix,
          None if a.sustained_scale == 'auto' else a.sustained_scale == 'per-area', a.compact, a.layout,
          a.widths_table, a.fit_label, a.split_d)

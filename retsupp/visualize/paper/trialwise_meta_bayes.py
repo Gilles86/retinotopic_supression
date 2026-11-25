@@ -45,6 +45,12 @@ QUESTIONS = {   # name: (with_global, kinds averaged, modulator)
     'D_rt': (True, ['D_HP', 'D_LP'], 'rt'),
     'G_rt': (True, ['G'], 'rt'),
 }
+EXTRA_QUESTIONS = {   # --questions: not run by default
+    'T_target_at_prev_dist': (False, ['T'], 'target_at_prev_dist'),   # target at the previous distractor location
+    'T_target_repeat_wg': (True, ['T'], 'target_repeat'),             # target repeat, design with the global gain
+    'P_main': (False, ['P'], 'main'),   # neutral item at the previous distractor location (gain vs 0)
+    'Q_main': (False, ['Q'], 'main'),   # neutral item at the previous target location (--prev-target-neutral fits)
+}
 
 
 def question_table(p, with_global, kinds, modulator, units):
@@ -131,15 +137,20 @@ def base_scale(check):
             'D': c.groupby('roi').D.apply(lambda x: x.abs().median())}
 
 
-def main(param, check, out, variants):
+def main(param, check, out, variants, questions=None):
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     p = pd.read_csv(param, sep='\t')
     scale = base_scale(check)
     pd.DataFrame(scale).rename_axis('roi').to_csv(out / 'base_scale.tsv', sep='\t')
     summ, diags, data = [], [], []
-    for q, (wg, kinds, mod) in QUESTIONS.items():
+    allq = {**QUESTIONS, **EXTRA_QUESTIONS}
+    for q in (questions or QUESTIONS):
+        wg, kinds, mod = allq[q]
         t0 = question_table(p, wg, kinds, mod, AREAS)
+        if t0.empty:
+            print(f'{q}: no estimates in {param}, skipped', flush=True)
+            continue
         gain = kinds[0][0]
         for variant in variants:
             if variant.startswith('rel') and gain not in scale:
@@ -170,5 +181,7 @@ if __name__ == '__main__':
     ap.add_argument('--check', required=True, help='Collected check table (base gains per subject × area)')
     ap.add_argument('--out', required=True)
     ap.add_argument('--variants', nargs='+', default=['abs', 'abs_t', 'abs_nose', 'rel', 'rel_t', 'rel_nose'])
+    ap.add_argument('--questions', nargs='+', default=None,
+                    help=f'Questions to run (default: {list(QUESTIONS)}); also {list(EXTRA_QUESTIONS)}')
     a = ap.parse_args()
-    main(a.param, a.check, a.out, a.variants)
+    main(a.param, a.check, a.out, a.variants, a.questions)

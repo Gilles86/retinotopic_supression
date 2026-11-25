@@ -18,6 +18,8 @@
 # VOXELS=signal: each ROI's signal voxels instead of the ladder fit's voxels; POOL_GROUPS=1 adds early / dorsal /
 # occipitotemporal gains (shared deviations from each ROI's canonical gains). REPO=<clone> picks the code.
 # RT_MODULATOR=residual: residualised log RT as the RT modulator (+ quintile bins rq5).
+# PREV_TARGET_NEUTRAL=1: add the gain at the previous trial's target location when it holds a neutral item (kind Q).
+# VOXELS=relnull MIN_R=0.2 [MAX_P=0.01]: the cross-run reliability selection instead of the signal voxels (with LADDER_ROOT).
 # MIN_VOXELS=10 (with the ladder fit's own voxels): leave out subject x ROI fits with fewer voxels, as VOXELS=signal does.
 # Output: derivatives/af_trialwise_gains/sub-XX/
 
@@ -53,6 +55,7 @@ cd "${REPO:-$HOME/git/retsupp}"
     -m retsupp.modeling.fit_trialwise_af_gains "$subject" \
     --bids-folder /shares/zne.uzh/gdehol/ds-retsupp $ROI_ARGS $EXTRA \
     ${LADDER_ROOT:+--ladder-root $LADDER_ROOT} ${HRF_TABLE:+--hrf-table $HRF_TABLE} \
-    ${VOXELS:+--voxels $VOXELS} ${POOL_GROUPS:+--groups} ${MIN_VOXELS:+--min-voxels $MIN_VOXELS} ${RT_MODULATOR:+--rt-modulator $RT_MODULATOR}
+    ${VOXELS:+--voxels $VOXELS} ${POOL_GROUPS:+--groups} ${MIN_VOXELS:+--min-voxels $MIN_VOXELS} ${RT_MODULATOR:+--rt-modulator $RT_MODULATOR} \
+    ${MIN_R:+--min-r $MIN_R} ${MAX_P:+--max-p $MAX_P} ${PREV_TARGET_NEUTRAL:+--prev-target-neutral}
 
 echo "Finished: $(date)"

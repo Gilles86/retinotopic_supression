@@ -46,6 +46,10 @@ nor distractor; prior 0): trial-to-trial gain at HP without a singleton
 response in it. ``P`` is then left out on trials where the previous
 distractor location is the HP location, so the two never share a regressor.
 
+With ``--prev-target-neutral``, a sixth kind, ``Q``, is the gain at the PREVIOUS trial's target location when it holds
+a neutral item on the current trial (prior 0): whether a location loses or keeps gain after a target was there,
+without a target response in it now.
+
 A fourth regressor kind, ``P``, is the gain at the PREVIOUS trial's
 distractor location when it holds a neutral item on the current trial
 (prior 0; no canonical counterpart) — intertrial inhibition at a
@@ -284,6 +288,8 @@ HRF_TABLE = None    # one HRF per subject x ROI (roi_hrf.load_table) for the lad
 VOXELS = 'ladder'   # --voxels signal: the signal voxels of each ROI instead of the ladder fit's own voxels
 MAX_BOLD_SD = 20.0  # with --voxels signal, as in the final ladder fits
 RT_MODULATOR = 'zlogrt'   # --rt-modulator residual: residual log RT (see residual_rt)
+RELNULL = None      # --voxels relnull: (min_r, max_p) of the cross-run reliability selection
+RELNULL_TABLE = 'prf_cv_roi_reliability_null'
 MIN_VOXELS = 0      # --min-voxels: leave out a subject x ROI whose ladder fit has fewer voxels (0: keep all)
 SIGNAL_TABLE = 'af_prf_cv_ladder_nested/cv_ladder_per_voxel.tsv'
 JOINT_STEM = 'dog_final2_stage-3'   # DoG fold fits with the joint per-ROI HRF (the HRF table's source)
@@ -305,6 +311,21 @@ def signal_voxels(sub, roi):
         _CACHE['signal'] = t[t > 0].reset_index()
     t = _CACHE['signal']
     return np.sort(t.loc[t.roi == roi, 'voxel_id'].to_numpy())
+
+
+def relnull_voxels(sub, roi, n_vox):
+    """ROI voxels with cross-run reliability r > min_r and circular-shift p <= max_p (the looser selections of the
+    voxel-selection robustness fits, ``fit_cv_ladder_nested --selection-table``)."""
+    from retsupp.modeling.fit_cv_ladder_nested import roi_mask
+    min_r, max_p = RELNULL
+    s = sub.subject_id
+    if 'relnull' not in _CACHE:
+        _CACHE['relnull'] = pd.read_csv(Path(sub.bids_folder) / 'derivatives' / RELNULL_TABLE / f'sub-{s:02d}'
+                                        / f'sub-{s:02d}_reliability_null.tsv.gz', sep='\t')
+    tab = _CACHE['relnull']
+    sel = tab[(tab.r > min_r) & (tab.p <= max_p)].voxel_index.to_numpy()
+    in_roi = roi_mask(sub, roi, n_vox)
+    return np.sort(sel[in_roi[sel]])
 
 
 def joint_prfs(sub):
@@ -331,7 +352,7 @@ def extend_to_signal_voxels(sub, roi, model, pars, fit_ids, bold, paradigm):
     fits, and its baseline and amplitude by OLS on the m7_full prediction (linear in both). Voxels with BOLD SD above
     MAX_BOLD_SD, without a fold fit, or whose fit has R² <= 0 or amplitude <= 0 are left out.
     """
-    sig = signal_voxels(sub, roi)
+    sig = relnull_voxels(sub, roi, bold.shape[1]) if VOXELS == 'relnull' else signal_voxels(sub, roi)
     sd = bold.std(0)
     n_sig = len(sig)
     sig = sig[sd[sig] <= MAX_BOLD_SD]
@@ -404,7 +425,7 @@ def load_ladder_fit(sub, roi, data):
     pars = fit['fit_pars_per_fold'][0].reindex(columns=list(model.parameter_labels)).astype(np.float32).reset_index(drop=True)
     af = dict(voxel_mask_indices=np.asarray(fit['voxel_ids']), r2=np.asarray(fit.get('r2_train', [np.nan]), dtype=float),
               voxel_info={})
-    if VOXELS == 'signal':
+    if VOXELS in ('signal', 'relnull'):
         vox, pars, info = extend_to_signal_voxels(sub, roi, model, pars, af['voxel_mask_indices'], bold, paradigm)
         af.update(voxel_mask_indices=vox, r2=np.array([np.nan]), voxel_info=info)
     elif len(af['voxel_mask_indices']) < MIN_VOXELS:
@@ -466,7 +487,7 @@ def convolve_cols(x, kern, amp):
 # ---------------------------------------------------------------------------
 # Per-trial design (windowed, never materialised as T × K × V)
 # ---------------------------------------------------------------------------
-def trial_regressors(trials, u, D, D_glob, kern, amp, hp_neutral=False):
+def trial_regressors(trials, u, D, D_glob, kern, amp, hp_neutral=False, prev_target_neutral=False):
     """Return list of regressors (start, window (W, V)) and their meta."""
     n_t = u.shape[0]
     L = kern.shape[0]
@@ -489,6 +510,10 @@ def trial_regressors(trials, u, D, D_glob, kern, amp, hp_neutral=False):
         h_ch = row['hp_ch'] if hp_neutral else -1
         if p_ch >= 0 and p_ch not in (row['target_ch'], row['dist_ch'], h_ch):
             specs.append(('P', D[p_ch]))
+        # Previous trial's target location, when it holds a neutral item now.
+        q_ch = row['prev_target_ch'] if prev_target_neutral else -1
+        if q_ch >= 0 and q_ch not in (row['target_ch'], row['dist_ch'], h_ch):
+            specs.append(('Q', D[q_ch]))
         # HP location holding a neutral item on this trial.
         if h_ch >= 0 and h_ch not in (row['target_ch'], row['dist_ch']):
             specs.append(('H', D[h_ch]))
@@ -610,7 +635,7 @@ def param_uncertainty(names, P, q):
 # ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
-def roi_pieces(sub, roi, data, trials, u, seed=0, hp_neutral=False):
+def roi_pieces(sub, roi, data, trials, u, seed=0, hp_neutral=False, prev_target_neutral=False):
     """Everything the estimates need from one ROI: the sanity checks, the per-trial regressors' meta and canonical
     gains g0, the normal equations (all voxels and two voxel halves) and those of the run-wise joint model."""
     bold, paradigm, cond_ind, dyn_ind, grid, tgt_ind = data
@@ -716,9 +741,9 @@ def roi_pieces(sub, roi, data, trials, u, seed=0, hp_neutral=False):
     half[rng.permutation(len(vox))[:len(vox) // 2]] = True
     sets = [np.ones(len(vox), dtype=bool), half, ~half]
 
-    regs, meta = trial_regressors(trials, u, D, D_glob, kern, amp, hp_neutral)
+    regs, meta = trial_regressors(trials, u, D, D_glob, kern, amp, hp_neutral, prev_target_neutral)
     g0 = meta['kind'].map({'T': g_T, 'D_HP': g_HP, 'D_LP': g_LP,
-                           'G': 0.0, 'P': 0.0, 'H': 0.0}).values.astype(np.float64)
+                           'G': 0.0, 'P': 0.0, 'H': 0.0, 'Q': 0.0}).values.astype(np.float64)
     eqs = normal_equations(regs, resid0, w, sets)
     run_id = np.full(Y.shape[0], -1)
     for i, (_ses, _run, sl, _h) in enumerate(run_masks):
@@ -784,7 +809,7 @@ def estimate(trials, meta, g0, eqs, run_eqs, param_runs=None):
         row = dict(alpha=alpha,
                    heldout_gain=0.5 * ((sse_A0 - sse(gA, MB, bB, cB)) / sse_A0
                                        + (sse_B0 - sse(gB, MA, bA, cA)) / sse_B0))
-        for kind in ('T', 'D_HP', 'D_LP', 'G', 'P', 'H'):
+        for kind in ('T', 'D_HP', 'D_LP', 'G', 'P', 'H', 'Q'):
             sel = (meta['kind'] == kind).values
             dA, dB = gA[sel] - g0[sel], gB[sel] - g0[sel]
             row[f'splithalf_r_{kind}'] = (float(np.corrcoef(dA, dB)[0, 1])
@@ -870,8 +895,9 @@ def save_estimates(sub, roi, out_dir, trials, check, trial_rows, cv_rows, bin_ro
 
 
 
-def fit_roi(sub, roi, data, trials, u, out_dir, seed=0, hp_neutral=False):
-    pieces = roi_pieces(sub, roi, data, trials, u, seed=seed, hp_neutral=hp_neutral)
+def fit_roi(sub, roi, data, trials, u, out_dir, seed=0, hp_neutral=False, prev_target_neutral=False):
+    pieces = roi_pieces(sub, roi, data, trials, u, seed=seed, hp_neutral=hp_neutral,
+                        prev_target_neutral=prev_target_neutral)
     save_estimates(sub, roi, out_dir, trials, pieces['check'],
                    *estimate(trials, pieces['meta'], pieces['g0'], pieces['eqs'], pieces['run_eqs'], pieces['param_runs']))
     return pieces
@@ -928,11 +954,16 @@ def fit_group(sub, group, pieces, rois, out_dir, trials):
 
 
 def main(subject, bids_folder, rois, output_subdir='af_trialwise_gains', hp_neutral=False, ladder_roots=(),
-         hrf_table=None, voxels='ladder', groups=False, min_voxels=0, rt_modulator='zlogrt'):
-    global LADDER_ROOTS, HRF_TABLE, VOXELS, MIN_VOXELS, RT_MODULATOR
+         hrf_table=None, voxels='ladder', groups=False, min_voxels=0, rt_modulator='zlogrt',
+         prev_target_neutral=False, min_r=None, max_p=0.01):
+    global LADDER_ROOTS, HRF_TABLE, VOXELS, MIN_VOXELS, RT_MODULATOR, RELNULL
     VOXELS, MIN_VOXELS, RT_MODULATOR = voxels, min_voxels, rt_modulator
-    if voxels == 'signal' and not ladder_roots:
-        raise ValueError('--voxels signal needs --ladder-root')
+    if voxels in ('signal', 'relnull') and not ladder_roots:
+        raise ValueError(f'--voxels {voxels} needs --ladder-root')
+    if voxels == 'relnull':
+        if min_r is None:
+            raise ValueError('--voxels relnull needs --min-r')
+        RELNULL = (min_r, max_p)
     from retsupp.modeling.roi_hrf import load_table
     LADDER_ROOTS = tuple(Path(bids_folder) / 'derivatives' / r if not str(r).startswith('/') else Path(r) for r in ladder_roots)
     HRF_TABLE = load_table(hrf_table)
@@ -964,7 +995,8 @@ def main(subject, bids_folder, rois, output_subdir='af_trialwise_gains', hp_neut
     for roi in rois:
         print(f'\n===== sub-{subject:02d} {roi} =====')
         try:
-            p = fit_roi(sub, roi, data, trials, u, out_dir, hp_neutral=hp_neutral)
+            p = fit_roi(sub, roi, data, trials, u, out_dir, hp_neutral=hp_neutral,
+                        prev_target_neutral=prev_target_neutral)
         except NoFit as e:
             # e.g. no m7_full fit: the ladder leaves out subject x ROI pairs without reliable voxels
             print(f'skipped {roi}: {e}')
@@ -995,9 +1027,16 @@ if __name__ == '__main__':
                         help='Use the m7_full fits of the gain-model ladder in these roots (first hit wins) '
                              'instead of the October fits.')
     parser.add_argument('--hrf-table', default=None, help='One HRF per subject x ROI (with --ladder-root)')
-    parser.add_argument('--voxels', choices=['ladder', 'signal'], default='ladder',
+    parser.add_argument('--voxels', choices=['ladder', 'signal', 'relnull'], default='ladder',
                         help='signal (with --ladder-root): the signal voxels of each ROI (held-out null cvR² > 0, '
-                             'BOLD SD <= 20), pRFs of voxels outside the m7_full fit from the joint-HRF DoG fold fits.')
+                             'BOLD SD <= 20), pRFs of voxels outside the m7_full fit from the joint-HRF DoG fold fits. '
+                             'relnull: the same, with the voxels of the cross-run reliability selection (--min-r, '
+                             '--max-p) instead of the signal voxels.')
+    parser.add_argument('--min-r', type=float, default=None, help='With --voxels relnull: reliability r > this.')
+    parser.add_argument('--max-p', type=float, default=0.01, help='With --voxels relnull: circular-shift null p.')
+    parser.add_argument('--prev-target-neutral', action='store_true',
+                        help="Add the Q regressor: gain at the previous trial's target location when it holds a "
+                             'neutral item.')
     parser.add_argument('--groups', action='store_true',
                         help='Also one set of gains per ROI group (early, dorsal, occipitotemporal): a shared '
                              'deviation from each ROI\'s canonical gains.')
@@ -1009,4 +1048,5 @@ if __name__ == '__main__':
                              '(notes/rt_power_plan_2026-11-13.md); adds residual-RT quintile bins (scheme rq5).')
     args = parser.parse_args()
     main(args.subject, args.bids_folder, args.rois, args.output_subdir, args.hp_neutral, args.ladder_root,
-         args.hrf_table, args.voxels, args.groups, args.min_voxels, args.rt_modulator)
+         args.hrf_table, args.voxels, args.groups, args.min_voxels, args.rt_modulator,
+         args.prev_target_neutral, args.min_r, args.max_p)
