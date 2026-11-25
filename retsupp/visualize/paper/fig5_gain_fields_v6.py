@@ -706,6 +706,7 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
             F.dot_panel(ax, [(B['est']['target'], 'y', TARGET, B['sm']['target']),
                              (B['est']['distractor'], 'y', DISTRACTOR, B['sm']['distractor'])], (-40, 120),
                         'Gain change (%)')
+            pooled_bayes(ax, B, (-40, 120), series=(('target', TARGET), ('distractor', DISTRACTOR)))
         else:
             F.dot_panel(ax, [(d100, 'T', TARGET, sm100('T')), (d100, 'D', DISTRACTOR, sm100('D'))], (-40, 120),
                         'Gain change (%)')
@@ -888,22 +889,26 @@ BAYES_UNITS = [('all', 'All\nareas', -4.3), ('early', 'Early', -3.25), ('dorsal'
                ('occipitotemporal', 'Occ.-\ntemp.', -1.65)]
 
 
-def pooled_bayes(ax, B, ylim):
-    """Panel c with the hierarchical model: the mean over all nine areas and the three pathway means (posterior mean,
-    95% HDI, stars from the posterior probability of the sign), left of a divider; the areas as before."""
+def pooled_bayes(ax, B, ylim, series=(('dS', None),)):
+    """The mean over all nine areas and the three pathway means (posterior mean, 95% HDI, stars from the posterior
+    probability of the sign), left of a divider; the areas as before. series: (term, colour) pairs, side by side."""
     from retsupp.visualize.paper.fig7_behaviour import XMAX
     lo, hi = ylim
-    post = B['post'][B['post'].question == 'dS']
+    off = [0.] if len(series) == 1 else [-.17, .17]
     out = {}
-    for unit, lab, x in BAYES_UNITS:
-        r = post[(post.unit == unit) & post.level.isin(['overall', 'group'])].iloc[0]
-        pr = max(r.p_gt0, r.p_lt0)
-        big = unit == 'all'
-        ax.errorbar(x, r['mean'], yerr=[[r['mean'] - r.hdi_lo], [r.hdi_hi - r['mean']]], fmt='o', ms=7 if big else 5,
-                    color=HP, mec='w', mew=.8, lw=2.0 if big else 1.4, capsize=0, zorder=5, alpha=1 if pr > .975 else .45)
-        ax.text(x, hi + .02 * (hi - lo), F.stars(2 * (1 - pr)), ha='center', va='bottom', fontsize=8.5, color=HP,
-                clip_on=False)
-        out[unit] = dict(mean=r['mean'], lo=r.hdi_lo, hi=r.hdi_hi, P=pr)
+    for k, (term, color) in enumerate(series):
+        color = color or HP
+        post = B['post'][B['post'].question == term]
+        for unit, lab, x in BAYES_UNITS:
+            r = post[(post.unit == unit) & post.level.isin(['overall', 'group'])].iloc[0]
+            pr = max(r.p_gt0, r.p_lt0)
+            big = unit == 'all'
+            ax.errorbar(x + off[k], r['mean'], yerr=[[r['mean'] - r.hdi_lo], [r.hdi_hi - r['mean']]], fmt='o',
+                        ms=6 if big else 4.5, color=color, mec='w', mew=.8, lw=1.8 if big else 1.3, capsize=0, zorder=5,
+                        alpha=1 if pr > .975 else .45, clip_on=False)
+            ax.text(x, hi + (.02 + .12 * k) * (hi - lo), F.stars(2 * (1 - pr)), ha='center', va='bottom',
+                    fontsize=8.5, color=color, clip_on=False)
+            out[(term, unit)] = dict(mean=r['mean'], lo=r.hdi_lo, hi=r.hdi_hi, P=pr)
     ax.axvline(-.95, color='.85', lw=.6, zorder=0)
     ax.hlines(0, BAYES_UNITS[0][2] - .6, -.6, color='.75', lw=.6, ls='--', zorder=0)
     ax.set_xlim(BAYES_UNITS[0][2] - .6, XMAX + .6)
@@ -911,8 +916,9 @@ def pooled_bayes(ax, B, ylim):
     labels = [u[1] for u in BAYES_UNITS] + [t.get_text() for t in ax.get_xticklabels()]
     ax.set_xticks(ticks)
     ax.set_xticklabels(labels, fontsize=6)
+    lab_col = series[0][1] or HP if len(series) == 1 else FG
     for i in range(len(BAYES_UNITS)):
-        ax.get_xticklabels()[i].set_color(HP)
+        ax.get_xticklabels()[i].set_color(lab_col)
     ax.get_xticklabels()[0].set_fontweight('bold')
     return out
 
@@ -942,7 +948,11 @@ def bayes_legend(legend, B, n):
            f"HalfNormal SDs; PyMC with nutpie, 4 × 2000 draws, no divergences, max R̂ ≤ 1.01). Points and bars, "
            f"posterior mean and 95% HDI; stars, posterior probability of the sign shown: * > .975, ** > .995, "
            f"*** > .9995. Partial pooling over areas takes the place of a correction across areas. n = {n}. "
-           f"b, Gain at the target (orange) and at the distractor (green) while a search display is on. Over all nine "
+           f"b, Gain at the target (orange) and at the distractor (green) while a search display is on; left of the "
+           f"divider, the mean over all nine areas and the pathway means (target: early {f(g('target', 'early'), '%')}, "
+           f"dorsal {f(g('target', 'dorsal'), '%')}, occipitotemporal {f(g('target', 'occipitotemporal'), '%')}; "
+           f"distractor: early {f(g('distractor', 'early'), '%')}, dorsal {f(g('distractor', 'dorsal'), '%')}, "
+           f"occipitotemporal {f(g('distractor', 'occipitotemporal'), '%')}). Over all nine "
            f"areas: target {f(g('target', 'all'), '%')}, distractor {f(g('distractor', 'all'), '%')}; credible in "
            f"{', '.join(sig('target'))} (target) and {', '.join(sig('distractor')) or 'no single area'} (distractor). "
            f"c, Sustained gain at HP minus at LP (dS). Left of the divider, the mean over all nine areas "
