@@ -14,6 +14,7 @@
 #   cd ~/retsupp_plan && sbatch --exclude=u24-chaihm0-633 --array=3 retsupp/modeling/slurm_jobs/fit_baseline_terms.sh   # canary
 #   cd ~/retsupp_plan && sbatch --exclude=u24-chaihm0-633 --array=4-30 retsupp/modeling/slurm_jobs/fit_baseline_terms.sh
 #   N_SIM=<k> number of simulated datasets (default 10); ROIS="V1 V3" subset
+#   ZERO_SUM=1 BASE_ROOT=<zero-sum view root> OUTPUT_SUBDIR=<new> SIM_DS=<group dS>: on the zero-sum main model
 
 set -eo pipefail
 subject=${SLURM_ARRAY_TASK_ID}
@@ -32,4 +33,6 @@ export PYTHONPATH="${CODE_DIR}${PYTHONPATH:+:$PYTHONPATH}"
 echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
 
 exec "$HOME/data/conda/envs/retsupp_cuda/bin/python" -u -m retsupp.modeling.fit_baseline_terms \
-    "$subject" ${ROIS:+--rois $ROIS} ${N_SIM:+--n-sim $N_SIM}
+    "$subject" ${ROIS:+--rois $ROIS} ${N_SIM:+--n-sim $N_SIM} \
+    ${OUTPUT_SUBDIR:+--output-subdir $OUTPUT_SUBDIR} ${BASE_ROOT:+--base-root $BASE_ROOT} \
+    ${SIM_DS:+--sim-ds $SIM_DS} ${ZERO_SUM:+--zero-sum}

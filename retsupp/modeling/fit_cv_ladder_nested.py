@@ -193,6 +193,8 @@ LADDER = {
     'm4_TDS_zs': ('zero', 'zero', 'tied', 'free', 'free', 'free', 'm3b_TD'),
     'm7_full_zs': ('free', 'free', 'free', 'free', 'free', 'free', 'm4_TDS_zs'),
     'm5_TDS_dS_zs': ('free', 'free', 'tied', 'free', 'free', 'free', 'm4_TDS_zs'),
+    # The main model with the sustained LP gain split into next to HP vs opposite HP (lp_split), zero-sum.
+    'm6_TDS_dS_adjopp_zs': ('free', 'free', 'tied', 'free', 'free', 'free', 'm5_TDS_dS_zs'),
 }
 # Zero-sum sustained field (notes/joint_optimisation_2026-11-13.md, notes/zero_sum_refit_2026-11-13.md). With the pRFs
 # free, the condition-invariant part of the sustained field, 1 + g·Σ_ℓ A_ℓ, is a reshaping of every pRF, so its level
@@ -205,14 +207,18 @@ LADDER = {
 #               (g_HP = ¾·dS, g_LP = −¼·dS), σ_AF from it
 #   m5_TDS_dS_zs  the paper's main model (no transient HP − LP terms): as m7_full_zs, cold start from the clamped
 #               m5_TDS_dS
-ZERO_SUM_MODELS = ('m4_TDS_zs', 'm7_full_zs', 'm5_TDS_dS_zs')
-ZERO_SUM_CONSTRAINED = ('m7_full_zs', 'm5_TDS_dS_zs')   # g_HP + 3·g_LP = 0
+#   m6_TDS_dS_adjopp_zs  m5_TDS_dS_zs + δ = g_next − g_opp (LPSplitDoG; g_LP stays the mean LP gain, so the field
+#               remains zero-sum: g_HP + 2·g_next + g_opp = g_HP + 3·g_LP = 0); fitted on top of a finished zero-sum
+#               ladder (ancestors from --base-root), starts: the m5_TDS_dS_zs fit with δ = 0 (asserted to reproduce
+#               it) and the same with δ = dS of that fit
+ZERO_SUM_MODELS = ('m4_TDS_zs', 'm7_full_zs', 'm5_TDS_dS_zs', 'm6_TDS_dS_adjopp_zs')
+ZERO_SUM_CONSTRAINED = ('m7_full_zs', 'm5_TDS_dS_zs', 'm6_TDS_dS_adjopp_zs')   # g_HP + 3·g_LP = 0
 ZERO_SUM_COLD = {'m7_full_zs': 'm7_full', 'm5_TDS_dS_zs': 'm5_TDS_dS'}   # clamped fit projected onto zero-sum
 ZERO_SUM_NO_SUSTAINED = ('m4_TDS_zs',)   # σ_AF has no effect (both sustained gains 0): not fitted
 # Models fitted on top of finished ladders, run only when asked: the target gain split by target at HP vs
 # elsewhere (``target_split``) and the sustained LP gain split into next to HP vs opposite (``lp_split``).
 # Each adds one shared term to its parent, started at the value that reproduces the parent.
-SPLIT_TERMS = {'m8_full_dT': T_HP, 'm8_full_adjopp': LP_D}
+SPLIT_TERMS = {'m8_full_dT': T_HP, 'm8_full_adjopp': LP_D, 'm6_TDS_dS_adjopp_zs': LP_D}
 # m7_full with one width (σ_dyn := σ_AF): one term fewer, so it is fitted from m7 but is not above it.
 SIGMA_TIED = ('m7_full_sigtied',)
 # DN only: a second sustained field (σ_AF, HP/LP pattern θ) scales the neural baseline b (w_b), the surround
@@ -971,7 +977,7 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
             paradigm = train['paradigm']
             fixed = fixed_pars_for(sp, item_scale) or []
             shared = shared_pars_for(sp, item_scale)
-            free_sh = [p for p in shared if p != 'sigma_T_dyn']
+            free_sh = [p for p in shared if p != 'sigma_T_dyn'] + extra_terms(name)
             if name in ZERO_SUM_NO_SUSTAINED:
                 free_sh = [p for p in free_sh if p != 'sigma_AF']
             free_pv = [p for p in labels if p not in shared and p not in fixed]
@@ -1011,6 +1017,15 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                             starts.append(('warm_polished_m4_TDS', warm))
                         else:
                             print(f'  {name}: {pkl} has other voxels, no warm start')
+            elif name in SPLIT_TERMS:   # m6_TDS_dS_adjopp_zs: on top of the main model's fit
+                par_name = LADDER[name][6]
+                base = polished[par_name][k]
+                parent = base.reindex(columns=labels).copy()
+                parent[SPLIT_TERMS[name]] = 0.0
+                check_equal(parent, par_name, base, f'parent start = {par_name} fit')
+                alt = parent.copy()
+                alt[SPLIT_TERMS[name]] = float(base['g_HP'].iloc[0] - base['g_LP'].iloc[0])
+                starts += [(f'parent_{par_name}', parent), ('parent_delta_dS', alt)]
             else:   # m7_full_zs, m5_TDS_dS_zs
                 cold_name = ZERO_SUM_COLD[name]
                 cold = fits[cold_name][k].reindex(columns=labels).copy()

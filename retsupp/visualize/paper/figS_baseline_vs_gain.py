@@ -179,17 +179,17 @@ def figure(step1, res, t, conf, name):
     return fig
 
 
-def main(in_dir, step1_path, name):
+def main(in_dir, step1_path, name, tag='n28_2026-11-12'):
     t, s = collect(in_dir)
     res = results_table(t)
     chg = change_table(t)
-    res.to_csv('notes/data/baseline_vs_gain_terms_n28_2026-11-12.tsv', sep='\t', index=False)
-    chg.to_csv('notes/data/baseline_vs_gain_change_n28_2026-11-12.tsv', sep='\t', index=False)
+    res.to_csv(f'notes/data/baseline_vs_gain_terms_{tag}.tsv', sep='\t', index=False)
+    chg.to_csv(f'notes/data/baseline_vs_gain_change_{tag}.tsv', sep='\t', index=False)
     conf = None
     if s is not None:
         conf, per = confusion(s)
-        conf.to_csv('notes/data/baseline_vs_gain_confusion_n28_2026-11-12.tsv', sep='\t')
-        per.to_csv('notes/data/baseline_vs_gain_confusion_per_sim_n28_2026-11-12.tsv', sep='\t', index=False)
+        conf.to_csv(f'notes/data/baseline_vs_gain_confusion_{tag}.tsv', sep='\t')
+        per.to_csv(f'notes/data/baseline_vs_gain_confusion_per_sim_{tag}.tsv', sep='\t', index=False)
     kept = t.add_sustained_kept.max()
     step1 = pd.read_csv(step1_path, sep='\t')
     print(res.round(4).to_string(index=False))
@@ -206,5 +206,6 @@ if __name__ == '__main__':
     ap.add_argument('--in-dir', default='/data/ds-retsupp/derivatives/baseline_vs_gain_2026-11-12')
     ap.add_argument('--step1', default='notes/data/baseline_vs_gain_step1_n28_2026-11-12.tsv')
     ap.add_argument('--name', default='figS_baseline_vs_gain_n28')
+    ap.add_argument('--tag', default='n28_2026-11-12', help='suffix of the output tables (default: the original run)')
     a = ap.parse_args()
-    main(a.in_dir, a.step1, a.name)
+    main(a.in_dir, a.step1, a.name, a.tag)

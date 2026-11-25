@@ -18,6 +18,9 @@ from pathlib import Path
 import pandas as pd
 
 
+SIM_ROOT = None   # --sim-root: the fitted simulations' out-root (simulate_decode.py --out-root), default decoded_sim_fitted_2026-11
+
+
 def main(bids, source, noise, out):
     out = Path(out)
     if out.exists():
@@ -48,7 +51,7 @@ def collect_fitted(bids, source, noise, out_dir, prefix='decode_simfit', jobs=4)
     for o in outs:
         if o.exists():
             raise FileExistsError(f'{o} exists; not overwriting')
-    root = Path(bids) / 'derivatives' / 'decoded_sim_fitted_2026-11' / source / f'noise-{noise}'
+    root = Path(SIM_ROOT or Path(bids) / 'derivatives' / 'decoded_sim_fitted_2026-11') / source / f'noise-{noise}'
     files = sorted(root.glob('*/*/sub-*/readout_*.tsv'))
     d = pd.concat([pd.read_csv(f, sep='\t') for f in files], ignore_index=True)
     d.to_csv(outs[0], sep='\t', index=False)
@@ -99,7 +102,7 @@ def collect_fitted_maps(bids, source, noise, out_dir, prefix='decode_simfit', jo
     import numpy as np
 
     from retsupp.visualize.paper.fig6_collect import one_run
-    root = Path(bids) / 'derivatives' / 'decoded_sim_fitted_2026-11' / source / f'noise-{noise}'
+    root = Path(SIM_ROOT or Path(bids) / 'derivatives' / 'decoded_sim_fitted_2026-11') / source / f'noise-{noise}'
     for v in ('model', 'control'):
         out = Path(out_dir) / f'decoding_maps_{prefix}_{v}_2026-11.npz'
         if out.exists():
@@ -136,7 +139,7 @@ def collect_fitted_segments(bids, source, noise, out_dir, prefix='decode_simfit'
     out = Path(out_dir) / f'decoded_bars_segments_{prefix}_outline_b{fb.N_BINS}_2026-11.tsv'
     if out.exists():
         raise FileExistsError(f'{out} exists; not overwriting')
-    root = Path(bids) / 'derivatives' / 'decoded_sim_fitted_2026-11' / source / f'noise-{noise}'
+    root = Path(SIM_ROOT or Path(bids) / 'derivatives' / 'decoded_sim_fitted_2026-11') / source / f'noise-{noise}'
     tasks, keys = [], []
     for v in ('model', 'control'):
         for sd in sorted((root / v / 'outline').glob('sub-*')):
@@ -179,7 +182,9 @@ if __name__ == '__main__':
     p.add_argument('--out-dir', default='notes/data')
     p.add_argument('--prefix', default='decode_simfit')
     p.add_argument('-j', '--jobs', type=int, default=4)
+    p.add_argument('--sim-root', default=None, help='with --fitted: the simulations\' --out-root (default decoded_sim_fitted_2026-11)')
     a = p.parse_args()
+    SIM_ROOT = a.sim_root
     if a.fitted and a.segments:
         collect_fitted_segments(a.bids_folder, a.source, a.noise, a.out_dir, a.prefix, a.jobs)
         raise SystemExit

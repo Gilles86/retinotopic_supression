@@ -62,6 +62,22 @@ DESIGNS = {
     'dS+trial_search': ['dS', 'trial_spec_search', 'trial_ns_search'],
 }
 PERTURB = {'dS': 'g_HP', 'dD': 'g_HP_dyn', 'dT': 'g_T_HP_dyn'}
+# --zero-sum: the base fit has a zero-sum sustained field (g_HP + 3 g_LP = 0, the update-13 main model read as
+# m7_full from the zero-sum view root). dS then moves g_HP by +3/4 and g_LP by -1/4 of the step (d/d dS along the
+# zero-sum direction), and the recovery base without a sustained HP effect is g_HP = g_LP = 0 (no sustained field).
+ZERO_SUM = False
+DS_DIRECTION = {'g_HP': 0.75, 'g_LP': -0.25}
+
+
+def step(p, name, h):
+    """Parameters p moved by h along term ``name`` (dS along the zero-sum direction with --zero-sum)."""
+    q = p.copy()
+    if name == 'dS' and ZERO_SUM:
+        for c, w in DS_DIRECTION.items():
+            q[c] += w * h
+    else:
+        q[PERTURB[name]] += h
+    return q
 
 
 def overlap(x, y, sd, c, sigma):
@@ -129,11 +145,8 @@ def fit_roi(sub, roi, data, out_dir, overlay_root, n_sim, sim_ds, seed):
     P0 = pred(pars)
     R = Y - P0
     terms = {}
-    for name, par in PERTURB.items():
-        up, dn = pars.copy(), pars.copy()
-        up[par] += fgm.H
-        dn[par] -= fgm.H
-        terms[name] = (pred(up) - pred(dn)) / (2 * fgm.H)
+    for name in PERTURB:
+        terms[name] = (pred(step(pars, name, fgm.H)) - pred(step(pars, name, -fgm.H))) / (2 * fgm.H)
     # trial-locked and sustained additive regressors
     ring = get_ring_positions()
     sigma = float(pars['sigma_AF'].iloc[0])
@@ -177,12 +190,12 @@ def fit_roi(sub, roi, data, out_dir, overlay_root, n_sim, sim_ds, seed):
         return
     # recovery: base with the sustained HP gain tied to LP
     pn = pars.copy()
-    pn['g_HP'] = pn['g_LP']
+    if ZERO_SUM:
+        pn[['g_HP', 'g_LP']] = 0.0
+    else:
+        pn['g_HP'] = pn['g_LP']
     P0n = pred(pn)
-    up, dn = pn.copy(), pn.copy()
-    up['g_HP'] += fgm.H
-    dn['g_HP'] -= fgm.H
-    Xds = (pred(up) - pred(dn)) / (2 * fgm.H)
+    Xds = (pred(step(pn, 'dS', fgm.H)) - pred(step(pn, 'dS', -fgm.H))) / (2 * fgm.H)
     Xtr = terms['trial_spec_search']
     # Matched size: the same signal power (sum of squares) at the voxels nearest HP (w_v at least half its maximum),
     # with the sign of a suppression. A match on the mean is ill-posed here: both signals have about zero mean per run.
@@ -248,6 +261,8 @@ if __name__ == '__main__':
     ap.add_argument('--n-sim', type=int, default=10)
     ap.add_argument('--sim-ds', type=float, default=-0.014, help='Simulated sustained HP − LP gain (group dS)')
     ap.add_argument('--seed', type=int, default=20261112)
+    ap.add_argument('--zero-sum', action='store_true', help='base fit with a zero-sum sustained field (see ZERO_SUM)')
     a = ap.parse_args()
+    ZERO_SUM = a.zero_sum
     main(a.subject, a.bids_folder, a.rois, a.output_subdir, a.base_root, a.hrf_table, a.overlay_root, a.n_sim,
          a.sim_ds, a.seed)

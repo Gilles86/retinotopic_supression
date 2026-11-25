@@ -1,0 +1,2 @@
+question	variant	n_obs	n_subjects	divergences	rhat_max	ess_bulk_min	ess_tail_min	ppc_obs_coverage95	ppc_area_means_inside	n_areas
+decoded	x	212	28	0	1.0	2131.0	1659.0	1.0	9	9
