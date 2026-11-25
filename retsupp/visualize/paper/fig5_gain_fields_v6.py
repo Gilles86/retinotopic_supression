@@ -937,6 +937,9 @@ def bayes_legend(legend, B, n):
         "the median over participants (n = 28) of each participant's fitted parameters",
         "the group estimates of panels b and c (posterior means; widths, the median over participants)").replace("the area's median HP − LP difference estimated alone (dS, the value panel c plots",
                               "the area's posterior mean HP − LP difference (dS, the value panel c plots")
+    if HP_ANGLE == 45:
+        head = head.replace('rotated so that the HP location is at the top',
+                            'rotated so that the HP location is at the upper right, one of the four diagonal positions')
     areas = lambda term: ', '.join(f"{a} {f(g(term, a), '%')}" for a in ROI_ORDER)
     sig = lambda term: [a for a in ROI_ORDER if max(g(term, a).p_gt0, g(term, a).p_lt0) > .975]
     txt = (f" b, c: per participant and area, the gains re-estimated around the joint fit (the gains of the sustained "
