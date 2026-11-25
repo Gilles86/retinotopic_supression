@@ -16,7 +16,8 @@ Each with its leave-one-run-out jackknife SE and half its odd − even differenc
 
 Statistics: Wilcoxon on the all-run values (per area BH over nine; pathways pooled by voxels, BH over three, as the
 manuscript), the Student-t hierarchical model of ``gain_meta_zs.bayes`` (pathway = mean of its areas), and each area on
-its own data (no pooling).
+its own data (no pooling). With ``--unit-own-data``, also each voxel-pooled pathway and all areas on its own data
+(participants weighted by their SE, no pooling over areas).
 
     PYTHONPATH=. ~/mambaforge/envs/bauer/bin/python -m retsupp.visualize.paper.fig3_meta \\
         --plain <folder> --relative <folder> --out notes/data/fig3_meta_2026-11-25
@@ -145,7 +146,7 @@ def main(a):
     by_area = {r: r for r in ROI_ORDER}
     by_path = {r: PATHWAY_NAMES[g] for r, g in PW_OF.items()}
     all_ = {r: 'All areas' for r in ROI_ORDER}
-    cells, wil = [], []
+    cells, wil, units = [], [], []
     for kind, folder, fun in (('item', a.plain, item_contrasts), ('location', a.relative, loc_contrasts)):
         d = load(folder)
         for groups, level in ((by_area, 'area'), (by_path, 'pathway'), (all_, 'all')):
@@ -154,6 +155,8 @@ def main(a):
             wil.append(wilcoxon_rows(full, level).assign(kind=kind))
             if level == 'area':
                 cells.append(per_cell(c).assign(kind=kind))
+            elif a.unit_own_data:
+                units.append(per_cell(c).assign(kind=kind, level=level))
         print(kind, 'done', flush=True)
     cells = pd.concat(cells)
     cells['pathway'] = cells.roi.map(PW_OF)
@@ -165,6 +168,15 @@ def main(a):
                                                                 include_groups=False).rename('all')], axis=1)
     cal.to_csv(out / 'calibration.tsv', sep='\t')
     print(cal.round(2).to_string(), flush=True)
+    if a.unit_own_data:
+        units = pd.concat(units)
+        units.to_csv(out / 'estimates_units.tsv', sep='\t', index=False)
+        res = []
+        for term in a.terms or units.term.unique():
+            for level, t in units[units.term == term].groupby('level'):
+                res.append(own_data(t).assign(term=term, level=level))
+                print(term, level, flush=True)
+        pd.concat(res).to_csv(out / 'own_data_units.tsv', sep='\t', index=False)
     if a.no_bayes:
         return
     post, own, diags = [], [], []
@@ -188,4 +200,7 @@ if __name__ == '__main__':
     ap.add_argument('--out', default='notes/data/fig3_meta_2026-11-25')
     ap.add_argument('--terms', nargs='+', default=None)
     ap.add_argument('--no-bayes', action='store_true')
+    ap.add_argument('--unit-own-data', action='store_true',
+                    help='also fit each pathway and all areas on its own (voxels pooled as in the manuscript, '
+                         'participants weighted by their jackknife SE, no pooling over areas): own_data_units.tsv')
     main(ap.parse_args())
