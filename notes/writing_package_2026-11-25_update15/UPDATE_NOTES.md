@@ -34,7 +34,7 @@ All per-area values, with HDIs, are in part A, section 1.
    - The distractor gain is about a fifth of the target gain (+4.7 / 23.5).
    - Suggested: "the gain at the high-probability location was reduced by a few percent of the drive, most strongly in early visual cortex".
 2. **Where the reduction is.**
-   > "The sustained gain was lower at the HP location than at the LP locations (−3.2% of the drive over all nine areas). The reduction was largest in early visual cortex (V1 to V3, −5.5%), smaller in dorsal (−1.9%) and occipitotemporal areas (−2.2%), and credible in V1, V2, V3, hV4 and LO."
+   > "The sustained gain was lower at the HP location than at the LP locations (−3.2% of the drive over all nine areas). The reduction was largest in early visual cortex (V1 to V3, −5.5%), smaller in dorsal (−1.9%) and occipitotemporal areas (−2.2%), and credible on their own data in V3 and hV4; V1, V2 and V3AB pointed the same way." Per-area credibility in the pooled model partly borrows from neighbouring areas (part A, section 8): do not claim LO, and base claims on all areas and the pathways.
 
    The early reduction is larger than the dorsal and occipitotemporal ones (+3.6 and +3.3 points, both P = .998). Remove "not best characterized as an early visual phenomenon" and "localized in areas where receptive fields begin to grow large".
 3. **Hierarchy** (part A, section 3).

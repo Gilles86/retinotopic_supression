@@ -165,3 +165,40 @@ A full list is in `notes/data/gain_meta_zs_dog_2026-11-25/README_audit.md`. The 
   - Can be re-rendered locally from existing zero-sum tables: figS_fig7_relnull and figS_item_locations_voxel_selection.
   - The Discussion's item-response predictions ("−4.9 / −1.3%") come from the polished fit.
 - **Already compliant:** Fig. 7 (both versions), all trial-wise RT analyses, items 1a/1c joint rows, 2/5b, 3a, figS_width_profiles_zs, figS_gain_vs_prf_size_zs.
+
+## 8. Does pooling make areas credible because their neighbours are?
+
+Partly, yes. Each area was also fitted on its own: the same Student-t model with the same SEs, using only that area's 28 estimates, so no other area contributes. Output: `notes/data/gain_meta_zs_dog_2026-11-25/no_pooling_per_area.tsv`.
+
+| dS | Pooled (main) | Own data only | Median, Wilcoxon p |
+|---|---|---|---|
+| V1 | −4.7, P = .996 | −4.2 [−9.7, +1.1], P = .938 | −8.1, p = .086 |
+| V2 | −5.8, P > .999 | −4.6 [−10.1, +0.9], P = .949 | −7.8, p = .090 |
+| V3 | −6.0, P > .999 | −9.4 [−16.3, −2.4], P = .996 | −10.2, p = .028 |
+| V3AB | −1.8, P = .970 | −2.4 [−5.0, +0.3], P = .959 | −1.8, p = .77 |
+| IPS | −1.9, P = .946 | −0.8, P = .73 | −1.2, p = .60 |
+| hV4 | −5.0, P > .999 | −5.3 [−9.1, −1.4], P = .997 | −8.2, p = .0025 |
+| VO | −0.2, P = .57 | −1.1, P = .948 | −2.2, p = .41 |
+| LO | −2.2, P = .989 | −1.1 [−3.3, +1.1], P = .862 | −1.2, p = .76 |
+| TO | −1.5, P = .949 | −0.9, P = .916 | −2.8, p = .048 |
+
+On their own data, only V3 and hV4 are credible. V1, V2, V3AB and VO point the same way (P = .94 to .96).
+
+**V1, V2 and LO become credible only through pooling.**
+- V1 and V2 are pulled towards the early mean, which V3 drives.
+- LO borrows most: on its own it is −1.1% (P = .86); it reaches −2.2% (P = .989) because the participants with a large reduction elsewhere are assumed to have one in LO too.
+
+Pooling also works the other way: it pulls large estimates down (V3 −9.4 to −6.0; target in VO +75 to +25).
+
+The same happens for the other terms:
+- The target gain in V1 is −10% [−17, −3] on its own data (P = .995), but not credible when pooled.
+- The distractor gain in V3 is +14% (P = .984) on its own data, but not credible when pooled.
+
+**Verdict.** Pooled per-area credibility is only as good as the assumption that areas in a pathway are alike. With 2 to 4 areas per pathway, that assumption is weakly checked. The pathway and all-area estimates do not depend on it, because they are averages over areas.
+
+Recommended wording:
+- Base claims on all areas and the pathways.
+- For single areas, name those credible on their own data: dS in V3 and hV4.
+- Describe the others as pointing the same way, for example: "the reduction was credible in V3 and hV4 on their own, and V1, V2 and V3AB pointed the same way".
+- Do not claim LO.
+- Keep the stars in Fig. 5c from the pooled model, and say so in the legend.
