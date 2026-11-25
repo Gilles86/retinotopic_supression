@@ -13,6 +13,10 @@ twelve event types (item × HP, next to HP on the left, next to HP on the right,
 from fixation looking towards HP (HP rotated to the top): left is the counterclockwise neighbour. ``loc`` keeps the
 absolute location, so the neighbours can also be split into the one in the same and the other hemifield.
 
+``--jackknife``: per subject, besides the fit on all runs (``left_out`` = 'none'), one fit with each run left out
+(``left_out`` = '<session>_<run>') and one on the odd and one on the even runs (``left_out`` = 'odd' / 'even', by run
+number), for leave-one-run-out SEs and their odd-even calibration (``fig3_meta.py``).
+
 Usage::
 
     python -m retsupp.visualize.paper.deconvolve_location_responses --folder notes/data/location_timeseries_2026-11
@@ -96,7 +100,26 @@ def deconvolve(ts, trials, tr=1.6, oversample=4, basis='fourier'):
     return tc[['event_type', 'time', 'response']].rename(columns={'event_type': 'cls', 'time': 't'})
 
 
-def main(folder, out, subject=None, basis='fourier', relative=False, split=None):
+def fit_all(ts, trials, basis, relative_):
+    """Deconvolve every ROI x location of one subject's (subset of) runs."""
+    rows = []
+    keys = ['roi', 'loc'] + (['dbin'] if 'dbin' in ts else [])
+    for key, x in ts.groupby(keys):
+        tc = deconvolve(x, trials[trials['loc'] == key[1]], basis=basis)
+        rows.append(tc.assign(n_voxels=int(x.n_voxels.iloc[0]), **dict(zip(keys, key))))
+    return rows
+
+
+def run_subsets(ts):
+    """(label, list of (session, run) kept): all runs, each run left out, odd and even run numbers."""
+    runs = [tuple(r) for r in ts[['session', 'run']].drop_duplicates().sort_values(['session', 'run']).to_numpy()]
+    out = [('none', runs)]
+    out += [(f'{s}_{r}', [x for x in runs if x != (s, r)]) for s, r in runs]
+    out += [('odd', [x for x in runs if x[1] % 2 == 1]), ('even', [x for x in runs if x[1] % 2 == 0])]
+    return out
+
+
+def main(folder, out, subject=None, basis='fourier', relative=False, split=None, jackknife=False):
     rows = []
     pattern = f'sub-{subject:02d}_timeseries.tsv.gz' if subject else 'sub-*_timeseries.tsv.gz'
     for f in sorted(Path(folder).glob(pattern)):
@@ -107,6 +130,13 @@ def main(folder, out, subject=None, basis='fourier', relative=False, split=None)
             ts, trials = select_runs(ts, trials, split)
         if relative:
             trials = relabel_relative(trials)
+        if jackknife:
+            for label, keep in run_subsets(ts):
+                k = pd.DataFrame(keep, columns=['session', 'run'])
+                tsk, trk = ts.merge(k, on=['session', 'run']), trials.merge(k, on=['session', 'run'])
+                rows += [r.assign(subject=subject, left_out=label) for r in fit_all(tsk, trk, basis, relative)]
+            print(f.name, flush=True)
+            continue
         keys = ['roi', 'loc'] + (['dbin'] if 'dbin' in ts else [])
         for key, x in ts.groupby(keys):
             tc = deconvolve(x, trials[trials['loc'] == key[1]], basis=basis)
@@ -129,5 +159,7 @@ if __name__ == '__main__':
     ap.add_argument('--split', choices=SPLITS, default=None,
                     help='Only the runs of one session, one block within the sessions (HP location 1 or 2 of the '
                          'session), or one session x block (A1/A2 of the Richter follow-up).')
+    ap.add_argument('--jackknife', action='store_true',
+                    help="Also fit with each run left out and on odd / even runs (column left_out; 'none' = all runs).")
     a = ap.parse_args()
-    main(a.folder, a.out, a.subject, a.basis, a.relative, a.split)
+    main(a.folder, a.out, a.subject, a.basis, a.relative, a.split, a.jackknife)

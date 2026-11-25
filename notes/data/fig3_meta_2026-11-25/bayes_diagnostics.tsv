@@ -1,0 +1,10 @@
+question	variant	n_obs	n_subjects	divergences	rhat_max	ess_bulk_min	ess_tail_min	ppc_obs_coverage95	ppc_area_means_inside	n_areas	term
+target − neutral	x	219	28	0	1.0	1543.0	1980.0	0.9726027397260274	9	9	target − neutral
+distractor − neutral	x	219	28	0	1.0	1227.0	1751.0	0.9908675799086758	9	9	distractor − neutral
+target − distractor	x	219	28	0	1.0	1628.0	1433.0	0.9908675799086758	9	9	target − distractor
+HP − opposite (abs)	x	219	28	0	1.0	1993.0	2209.0	0.9863013698630136	9	9	HP − opposite (abs)
+HP − opposite (rel)	x	211	28	0	1.0	1363.0	1383.0	0.976303317535545	9	9	HP − opposite (rel)
+next − opposite (abs)	x	219	28	0	1.0	1695.0	1708.0	0.9680365296803652	9	9	next − opposite (abs)
+next − opposite (rel)	x	211	28	0	1.0	1600.0	1163.0	0.976303317535545	9	9	next − opposite (rel)
+HP − next (abs)	x	219	28	0	1.0	1224.0	1107.0	0.9497716894977168	9	9	HP − next (abs)
+HP − next (rel)	x	211	28	0	1.0	1632.0	1393.0	0.9715639810426541	9	9	HP − next (rel)
