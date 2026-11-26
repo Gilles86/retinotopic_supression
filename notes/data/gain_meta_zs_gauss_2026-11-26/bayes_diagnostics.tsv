@@ -1,0 +1,7 @@
+question	variant	n_obs	n_subjects	divergences	rhat_max	ess_bulk_min	ess_tail_min	ppc_obs_coverage95	ppc_area_means_inside	n_areas	term
+dS	t	241	28	0	1.0	1281.0	1728.0	0.966804979253112	9	9	dS
+dS	normal	241	28	0	1.0	1373.0	1785.0	0.950207468879668	9	9	dS
+target	t	241	28	0	1.01	500.0	766.0	1.0	9	9	target
+target	normal	241	28	0	1.0	999.0	795.0	0.9336099585062241	9	9	target
+distractor	t	241	28	0	1.0	1103.0	788.0	0.9543568464730291	7	9	distractor
+distractor	normal	241	28	0	1.0	875.0	689.0	0.9128630705394191	8	9	distractor

@@ -1,4 +1,4 @@
-# Update 4 for the writing agent (25 Nov 2026): closing the VERIFY and PENDING items
+# Update 4 for the writing agent (25 Nov 2026): closing the VERIFY and PENDING items (completed 26 Nov)
 
 Builds on update 3 (`reports/docky_followup_2026-11-25_for_writing_agent_update3.md`); where they disagree, this file wins. New and changed figures with their legend `.md` files are in `notes/writing_agent_update4_2026-11-25.zip`.
 
@@ -24,7 +24,7 @@ Source note: the revised manuscript could not be opened here (newest accessible 
 | Item | Status | One-line verdict |
 |---|---|---|
 | 1. Sustained width | done | "Local" holds at the group level (FWHM 4.7°); "in all 28 participants" and 2.8° go |
-| 2. Gaussian and DN robustness | **pending** (fits done; standard-error step running on the cluster, SLURM 8890963 and 8890965) | Keep the old sentences out; mark pending; drop the DN baseline-variant sentence (S12) |
+| 2. Gaussian and DN robustness | done | dS replicates with both (−5.2%, −5.7%; DoG smallest); "largest early" with DoG and DN, not Gaussian; early target gain model-dependent; S10/S11 not yet re-rendered |
 | 3. Decoding predictions | done | Predictions barely change (−1.20 vs −1.58%, r = .61); Gaussian/DN decoding holds pooled |
 | 4. Item-specific HP effects | done | No distractor-specific reduction (dD +1.3 [−1.6, +4.0]); drop dT |
 | 5. Gain vs baseline (S13) | done | Holds, slightly stronger; drop the 72% recovery sentence |
@@ -69,14 +69,80 @@ Source note: the revised manuscript could not be opened here (newest accessible 
 
 **Addendum (item 13).** The measured "next lower than opposite" difference is only a trend: P = .93 with participants weighted by precision. So the first observation of the Discussion paragraph "Two observations are not explained by a single field ..." should be softened rather than stated as fact, for example: "the locations next to HP tended to respond less than the opposite location (Fig. 3e), which a field that has fallen to about 2% of its peak there would not produce, although this difference was not reliable once participants were weighted by the precision of their estimates." Keep the second observation, the behavioural target vs distractor pattern.
 
-## 2. Gaussian and DN robustness: PENDING
+## 2. Gaussian and DN robustness (joint zero-sum fits)
 
-The joint zero-sum fits for Gaussian and DN pRFs are running on the cluster (SLURM 8834744 Gaussian, 8834745 DN). About half of the 2 × 252 cells were done at the time of writing, and some failed cells are being resubmitted. The width-profile step for the standard errors follows, then the hierarchical model (`gain_meta_zs.py --family gauss|dn`).
+**What was run.**
+- **The fits:** the main model (zero-sum sustained field, target gain, one distractor gain) was fitted jointly with Gaussian and with divisive-normalization (DN) pRFs, in the same way as with DoG pRFs:
+  - LM with every voxel's pRF free;
+  - each family's own HRF per participant × area, held fixed;
+  - the same voxel selection.
+  - SLURM 8834744 (Gaussian) and 8834745 (DN), 241 cells each.
+- **The standard errors:** leave-one-run-out jackknife SEs from the per-run sufficient statistics, as for DoG (SLURM 8890963, 8890965). The SE calibration is as good as with DoG:
 
-Until then:
-- Mark "Both gains replicated with Gaussian and DN pRFs (...)" and the paragraph "The reduction replicated with Gaussian and DN pRFs ..." as **pending**. Do not keep their old numbers.
-- In the Limitations, replace "joint fit: DoG −3.5%, DN −7.8%, Gaussian −8.8%" and "the DoG model gave the smallest of the three estimates" with a pending marker.
-- **DN baseline variants (S12, "predicted held-out runs worse in all 28 participants, p = 7.5 × 10⁻⁹"): drop.** They are earlier, non-zero-sum DN fits, n = 30. A zero-sum rerun (zero-sum DN base, three variants, recovery) costs about 1,100 CPU-h. The gain argument does not need it (item 5).
+  | | dS, all areas | dS, early | Target, all areas | Distractor, all areas |
+  |---|---|---|---|---|
+  | Gaussian | 0.70 | 0.83 | 0.65 | 0.69 |
+  | DN | 0.72 | 0.77 | 0.59 | 0.63 |
+  | DoG | 0.73 | 0.82 | | |
+
+  (0.67 expected.) In the sub-03 V1 test cell, the linearity check of the DN gains was poor, but the calibration shows that the DN SEs are usable.
+- **Statistics:** the same Student-t hierarchical model, plus each area fitted on its own data.
+- **Code and outputs:** `gain_meta_zs.py --family gauss|dn`; outputs in `notes/data/gain_meta_zs_{gauss,dn}_2026-11-26/`, including `pathway_contrasts.tsv` and `no_pooling_per_area.tsv`.
+
+**dS (HP − LP), % of the drive, mean [95% HDI], P = P(< 0):**
+
+| | All areas | Early | Dorsal | Occipitotemporal |
+|---|---|---|---|---|
+| DoG (main) | −3.2 [−4.8, −1.6], P > .999 | −5.5 [−8.0, −3.0], P > .999 | −1.9, P = .977 | −2.2, P = .996 |
+| Gaussian | −5.2 [−9.9, −0.2], P = .982 | −6.6 [−11.8, −1.3], P = .991 | −2.0, P = .71 | −5.8 [−11.8, +0.1], P = .971 |
+| DN | −5.7 [−8.5, −3.2], P = .999 | −10.8 [−15.1, −6.4], P > .999 | −1.5, P = .82 | −4.1 [−6.8, −1.2], P = .996 |
+
+**Is the reduction largest in early visual cortex?**
+- **DoG:** yes. Early exceeds dorsal and occipitotemporal by 3.6 and 3.3 points, P = .998.
+- **DN:** yes. Early exceeds dorsal by 9.2 points (P > .999) and occipitotemporal by 6.7 (P = .999).
+- **Gaussian:** not established. Early (−6.6) and occipitotemporal (−5.8) are about equal (difference 0.8, P = .62); early vs dorsal is 4.6, P = .90.
+
+**Single areas, on their own data (dS, P(< 0) > .975):**
+- DoG: V3, hV4.
+- Gaussian: V3, V3AB, hV4.
+- DN: V3, hV4, LO.
+- V3 and hV4 hold with all three pRF models.
+
+**Target and distractor gains.** These depend on the pRF model more than dS does. The size of a gain is not comparable across pRF models: a "% of the drive" means something different when the pRF has no surround (Gaussian) or is normalized (DN).
+
+| | Target: all / early / dorsal / occ.-temp. | Distractor: all / early |
+|---|---|---|
+| DoG | +23 / +9 (P = .974) / +31 / +30 | +4.7 (P = .988) / +1.1 (n.s.) |
+| Gaussian | +49 / **−12 [−18, −6]** / +100 / +68 | +0.5 (n.s.) / −2.3 (n.s.) |
+| DN | +74 / **+64 [+49, +80]** / +89 / +73 | **+19 [+10, +29]** / +20 [+9, +32] |
+
+- **In early visual cortex, the target gain is model-dependent:** positive with DN (V1, V2 and V3 each credible on their own data), slightly negative with Gaussian pRFs, and near zero with DoG (V3 only).
+- **The distractor gain** is credible over all areas with DoG and DN, but not with Gaussian pRFs. With Gaussian pRFs it is credible only in V3AB, hV4 and VO on their own data.
+- **The target gain is larger in dorsal and occipitotemporal areas than in early ones** with DoG and Gaussian pRFs (P > .999). With DN pRFs this holds only weakly (dorsal − early +25, P = .96; occipitotemporal − early +9, P = .78).
+
+**Verdict.**
+- The HP reduction replicates with all three pRF models: over all areas, in early visual cortex and in occipitotemporal areas (Gaussian P = .971 there).
+- DoG gives the smallest estimate (−3.2% against −5.2% and −5.7%), as in the old text.
+- "Largest in early visual cortex" holds with DoG and DN, not with Gaussian pRFs. Write "largest in early visual cortex with DoG and DN pRFs".
+- The target gain in early visual cortex should not be claimed in either direction: it depends on the pRF model.
+
+**Replacement sentences.**
+
+Results, robustness paragraph (replaces "The reduction replicated with Gaussian and DN pRFs ..."):
+
+> "The reduction at HP did not depend on the pRF model. Fitted in the same way with Gaussian or divisive-normalization (DN) pRFs, the HP − LP difference was −5.2% (95% HDI [−9.9, −0.2]) and −5.7% ([−8.5, −3.2]) over all areas, and −6.6% and −10.8% in early visual cortex. With DN pRFs, as with DoG pRFs, it was larger in early visual cortex than in dorsal and occipitotemporal areas; with Gaussian pRFs, early and occipitotemporal areas did not differ. V3 and hV4 showed the reduction on their own data with all three pRF models (Supplementary Figs. [Gaussian], [DN])."
+
+Results, "Both gains replicated with Gaussian and DN pRFs (...)", replace with:
+
+> "The target gain in dorsal and occipitotemporal areas was present with all three pRF models; the distractor gain was present over all areas with DoG and DN pRFs, but not with Gaussian pRFs. In early visual cortex the target gain depended on the pRF model (DoG +9%, Gaussian −12%, DN +64%), so we draw no conclusion about it there."
+
+Limitations, replace "joint fit: DoG −3.5%, DN −7.8%, Gaussian −8.8%" and "the DoG model gave the smallest of the three estimates" with:
+
+> "joint fit: DoG −3.2%, Gaussian −5.2%, DN −5.7% over all areas; the DoG model gave the smallest of the three estimates"
+
+**Still applies:**
+- **DN baseline variants (S12, "predicted held-out runs worse in all 28 participants, p = 7.5 × 10⁻⁹"): drop.** They are earlier, non-zero-sum DN fits (n = 30), and the gain argument does not need them (item 5).
+- **Supplementary figures S10 and S11** (gain fields with Gaussian and DN pRFs) still show the old non-zero-sum fits. They are not yet re-rendered from these fits. Until they are, cite the numbers above, not the figures' numbers.
 
 ## Item 3. Decoding predictions (Fig. 6e, f) from the joint zero-sum fit
 
@@ -383,7 +449,7 @@ Verdict: still no relation; the limitation sentence stays, with new numbers and 
 >
 > **Statistics of the gain-field terms.** For each participant and area, we obtained the standard errors of dS, g_T and g_D by a leave-one-run-out jackknife of the gains re-solved under the model's constraints, with all other parameters held at the joint fit. Half the difference between odd and even runs, divided by this standard error, had a median of 0.73 for dS (0.67 expected). [Hierarchical model paragraph from update 2/3.] Single-area statements rest on each area fitted on its own (the same model without pooling over areas).
 >
-> **Variants.** As checks, we fitted (i) the same model with a distractor gain that differs between the HP and LP locations (dD), (ii) the same model with separate sustained gains next to and opposite the HP location (g_next = g_LP + δ/3, g_opp = g_LP − 2δ/3, keeping the field zero-sum), and (iii) the same model with Gaussian and divisive-normalization pRFs [pending]. The width of the sustained field was examined by profiling the fit over a grid of widths (Supplementary Fig. [width profiles])."
+> **Variants.** As checks, we fitted (i) the same model with a distractor gain that differs between the HP and LP locations (dD), (ii) the same model with separate sustained gains next to and opposite the HP location (g_next = g_LP + δ/3, g_opp = g_LP − 2δ/3, keeping the field zero-sum), and (iii) the same model with Gaussian and divisive-normalization pRFs, each with its own HRF. The width of the sustained field was examined by profiling the fit over a grid of widths (Supplementary Fig. [width profiles])."
 
 **Old Methods sentences that must go:**
 - The nested series of models with terms added one at a time, and every "estimated alone" result.
