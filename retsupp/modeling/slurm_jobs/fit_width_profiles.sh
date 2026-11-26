@@ -17,6 +17,7 @@
 # On the polished joint fits (pRFs refitted together with the gain fields), into their own folder:
 #   OVERLAY_ROOT=af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf_polished \
 #   OUTPUT_SUBDIR=field_widths_reliable_polished_2026-11-12 sbatch --exclude=u24-chaihm0-633 --array=3-30 ...
+# FAMILY=gauss|dn with BASE_ROOT=<that family's ladder root> HRF_TABLE=<its HRF table>: Gaussian / DN fits.
 
 set -eo pipefail
 subject=${SLURM_ARRAY_TASK_ID}
@@ -36,4 +37,5 @@ echo "Code: ${CODE_DIR} @ $(git -C "$CODE_DIR" rev-parse --short HEAD)"
 
 exec "$HOME/data/conda/envs/retsupp_cuda/bin/python" -u -m retsupp.modeling.fit_width_profiles \
     "$subject" ${ROIS:+--rois $ROIS} ${OVERLAY_ROOT:+--overlay-root $OVERLAY_ROOT} \
-    ${OUTPUT_SUBDIR:+--output-subdir $OUTPUT_SUBDIR}
+    ${OUTPUT_SUBDIR:+--output-subdir $OUTPUT_SUBDIR} ${FAMILY:+--family $FAMILY} ${BASE_ROOT:+--base-root $BASE_ROOT} \
+    ${HRF_TABLE:+--hrf-table $HRF_TABLE}

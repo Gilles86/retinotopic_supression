@@ -114,10 +114,10 @@ def fit_roi(sub, roi, data, out_dir, overlay_root):
           + f'; σ_AF {out["sigma_AF"]:.2f}, σ_dyn {out["sigma_dyn"]:.2f}', flush=True)
 
 
-def main(subject, bids_folder, rois, output_subdir, base_root, hrf_table, overlay_root):
+def main(subject, bids_folder, rois, output_subdir, base_root, hrf_table, overlay_root, family='dog'):
     fgm.BASE_ROOT = base_root
     fgm.HRF_TABLE = load_hrf_table(hrf_table)
-    fgm.FAMILY = 'dog'
+    fgm.FAMILY = family   # dog (default), gauss or dn: the pRF family of the fits read
     sub = Subject(subject, bids_folder=Path(bids_folder))
     out_dir = Path(bids_folder) / 'derivatives' / output_subdir / f'sub-{subject:02d}'
     todo = [r for r in rois if not (out_dir / f'sub-{subject:02d}_roi-{r}_widthprof.npz').exists()]
@@ -141,5 +141,6 @@ if __name__ == '__main__':
     ap.add_argument('--base-root', default='af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf')
     ap.add_argument('--hrf-table', default='/shares/zne.uzh/gdehol/ds-retsupp/derivatives/paper_2026-11/roi_hrf_dog_final2.tsv')
     ap.add_argument('--overlay-root', default=None)
+    ap.add_argument('--family', choices=['dog', 'gauss', 'dn'], default='dog')
     a = ap.parse_args()
-    main(a.subject, a.bids_folder, a.rois, a.output_subdir, a.base_root, a.hrf_table, a.overlay_root)
+    main(a.subject, a.bids_folder, a.rois, a.output_subdir, a.base_root, a.hrf_table, a.overlay_root, a.family)

@@ -981,6 +981,8 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
             if name in ZERO_SUM_NO_SUSTAINED:
                 free_sh = [p for p in free_sh if p != 'sigma_AF']
             free_pv = [p for p in labels if p not in shared and p not in fixed]
+            if family == 'gauss':   # the Gaussian classes keep the surround columns at 0, with no gradient
+                free_pv = [p for p in free_pv if p not in ('srf_amplitude', 'srf_size')]
             fix = ('zerosum', None) if name in ZERO_SUM_CONSTRAINED else None
 
             def pred(model, p):
@@ -988,11 +990,17 @@ def main(subject, bids_folder, rois, cv_scheme='loco', resolution=50,
                     columns=list(model.parameter_labels))), dtype=np.float64)
 
             def check_equal(p_child, parent_name, p_parent, what):
-                parent_model = build_model(
-                    grid_coords=grid_coords, paradigm=paradigm, condition_indicator=train['condition_indicator'],
-                    dynamic_indicator=train['dynamic_indicator'], target_indicator=train['target_indicator'],
-                    ring_positions=ring_positions, hrf_model=hrf_model, sign_pattern=sign_pattern_of(parent_name),
-                    item_scale='free')
+                pkw = dict(paradigm=paradigm, condition_indicator=train['condition_indicator'],
+                           dynamic_indicator=train['dynamic_indicator'], target_indicator=train['target_indicator'],
+                           ring_positions=ring_positions, hrf_model=hrf_model, sign_pattern=sign_pattern_of(parent_name))
+                if family == 'dn':
+                    parent_model = DNDynamicAttentionFieldPRF2D(grid_coordinates=grid_coords, item_scale_mode='free',
+                                                                **pkw)
+                elif family == 'gauss':
+                    parent_model = gaussian(DoGFactorialItems)(grid_coordinates=grid_coords, item_scale_mode='free',
+                                                               **pkw)
+                else:
+                    parent_model = build_model(grid_coords=grid_coords, item_scale='free', **pkw)
                 ref = pred(parent_model, p_parent)
                 dev = float(np.abs(pred(m_tr, p_child) - ref).max())
                 print(f'  {name} fold {k}: {what}: max |Δpred| = {dev:.3g}', flush=True)
