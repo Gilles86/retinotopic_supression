@@ -1,0 +1,5 @@
+question	variant	n_obs	n_subjects	divergences	rhat_max	ess_bulk_min	ess_tail_min	ppc_obs_coverage95	ppc_area_means_inside	n_areas	term
+next_minus_opp	x	241	28	0	1.01	1035.0	1093.0	0.946058091286307	8	9	next_minus_opp
+hp_minus_next	x	241	28	0	1.0	1195.0	808.0	0.950207468879668	8	9	hp_minus_next
+hp_minus_opp	x	241	28	0	1.0	1009.0	930.0	0.9377593360995851	9	9	hp_minus_opp
+dS	x	241	28	0	1.01	1153.0	797.0	0.9543568464730291	8	9	dS

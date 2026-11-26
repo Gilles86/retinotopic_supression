@@ -24,12 +24,12 @@ Source note: the revised manuscript could not be opened here (newest accessible 
 | Item | Status | One-line verdict |
 |---|---|---|
 | 1. Sustained width | done | "Local" holds at the group level (FWHM 4.7°); "in all 28 participants" and 2.8° go |
-| 2. Gaussian and DN robustness | **pending** (cluster, fits about half done) | Keep the old sentences out; mark pending; drop the DN baseline-variant sentence (S12) |
+| 2. Gaussian and DN robustness | **pending** (fits done; standard-error step running on the cluster, SLURM 8890963 and 8890965) | Keep the old sentences out; mark pending; drop the DN baseline-variant sentence (S12) |
 | 3. Decoding predictions | done | Predictions barely change (−1.20 vs −1.58%, r = .61); Gaussian/DN decoding holds pooled |
 | 4. Item-specific HP effects | done | No distractor-specific reduction (dD +1.3 [−1.6, +4.0]); drop dT |
 | 5. Gain vs baseline (S13) | done | Holds, slightly stronger; drop the 72% recovery sentence |
 | 6. Model predictions of item responses | done | HP − next reproduced; the next − opposite comparison only with the trend caveat (item 13) |
-| 7. LP-gradient variant | **pending** (cluster, about 1,000 CPU-h, results expected 26 Nov) | Remove the old −0.6% (p = .73); mark pending |
+| 7. LP-gradient variant | done | No reliable next − opposite difference in the sustained field (+1.0 [−0.7, +2.7]); HP below both |
 | 8. Trial-wise, Student-t | done | History terms hold; new Fig. 7 panel c recommended |
 | 9. Individual differences | done | No relation (ρ = −0.02); the behavioural benefit is unreliable per participant |
 | 10. Methods text | done | Replacement text below; long list of sentences to delete |
@@ -236,7 +236,7 @@ Verdict: both Results sentences still hold on the zero-sum fit.
 
 > "Analysed in the same way as the measured responses, the fitted model reproduced the lower response at HP than next to it (predicted −7.2 ± 3.7% against a measured −9.2 ± 4.9%; difference p = .94). It predicted almost no difference between the locations next to HP and the location opposite it (−1.5 ± 0.7%), less than the measured difference (−17.1 ± 6.3%; difference p = .023), although the measured difference itself was not reliable once participants were weighted by the precision of their estimates."
 
-## Item 7. LP gradient as a zero-sum joint variant (PENDING, cluster)
+## Item 7. LP gradient as a zero-sum joint variant
 
 **What was built.**
 - **New model:** `m6_TDS_dS_adjopp_zs` in `retsupp/modeling/fit_cv_ladder_nested.py`. It is the main model (m5_TDS_dS_zs) plus δ = g_next − g_opp.
@@ -250,20 +250,36 @@ Verdict: both Results sentences still hold on the zero-sum fit.
 - **Standard errors:** `retsupp/modeling/fit_gain_stats_adjopp.py` stores per-run sufficient statistics of the gains on each fit, so jackknife SEs of δ, HP − next and HP − opposite come out as for the main model. Its canary is fine: the linear reconstruction of the fit's prediction is exact to 1.9 × 10⁻⁵.
 - **Statistics:** `retsupp/visualize/paper/adjopp_meta.py` runs the Student-t hierarchical model (pathway = mean of its areas), each area on its own data, and the Wilcoxon table.
 
-**Status: pending.**
-- The 240 remaining cells are SLURM 8838317 (lowprio; 8 running at the time of writing, the rest expected to start from about 21:30 on 25 Nov).
-- About 1 h per cell, roughly 240 × 4 CPU-h, about 1,000 CPU-h in total (more than the earlier estimate of about 280 CPU-h, because each cell is a joint LM with pRFs free, not a fit with frozen pRFs).
-- The gain statistics (SLURM 8840134, after the fits) follow automatically.
-- Then run:
-  1. `rsync sciencecluster:/shares/zne.uzh/gdehol/ds-retsupp/derivatives/adjopp_gain_stats_zs_2026-11-25 /data/ds-retsupp/derivatives/`
-  2. `PYTHONPATH=. ~/mambaforge/envs/bauer/bin/python -m retsupp.visualize.paper.adjopp_meta`
+**Status: done.**
+- All 241 participant × area fits finished (SLURM 8838317), followed by the gain statistics (SLURM 8840134).
+- Outputs: `/data/ds-retsupp/derivatives/adjopp_gain_stats_zs_2026-11-25/`, `notes/data/adjopp_meta_zs_2026-11-25/`.
+- SE calibration is 0.63 for δ and 0.69 to 0.71 for the HP contrasts (0.67 expected).
+- The hierarchical model has no divergences, r-hat ≤ 1.01, and a predictive coverage of 94 to 95%.
 
-**No held-out comparison.** The variant is fitted on all runs only, so there is no held-out R² against the main model. That would need the same model in a run-3 cross-validation scheme, another full set of fits. If wanted, report only the training-SSE difference per cell, which the fits store.
+**Numbers** (% of the drive; Student-t hierarchical model, mean [95% HDI], P = posterior probability of the sign; n = 28)
 
-**Manuscript sentence until then.** Replace "A variant with separate sustained gains next to and opposite the HP location found no difference between them (−0.6%, p = .73)" with a pending marker, for example:
-> "⟦PENDING: zero-sum joint variant with separate sustained gains next to and opposite the HP location (running)⟧"
+| Contrast | All areas | Early | Dorsal | Occipitotemporal |
+|---|---|---|---|---|
+| δ = next − opposite | +1.0 [−0.7, +2.7], P(>0) = .89 | +2.3 [−0.5, +5.1], P(>0) = .95 | −1.2 [−3.6, +1.4], P(<0) = .83 | +1.2 [−0.9, +3.3], P(>0) = .87 |
+| HP − next | **−3.2 [−5.7, −0.7], P = .990** | **−5.2 [−8.8, −1.9], P = .997** | −0.8, P = .68 | −2.9 [−6.0, +0.0], P = .967 |
+| HP − opposite | **−1.7 [−2.8, −0.7], P = .998** | **−2.3 [−4.2, −0.5], P = .992** | −1.2, P = .971 | **−1.5 [−2.6, −0.3], P = .994** |
+| dS (HP − mean LP) | **−2.6 [−4.5, −0.7], P = .995** | **−4.2 [−6.7, −1.4], P = .999** | −1.1, P = .78 | −2.2 [−4.4, +0.1], P = .969 |
 
-Do not keep the −0.6% (p = .73): it comes from the earlier non-zero-sum fits.
+- **On their own data:** no area shows a δ. V3 has HP − next −11.0 (P = .995), and V3, V3AB and hV4 have HP − opposite (P ≥ .982).
+- **Plain medians (Wilcoxon) are unstable in sign:** δ is −0.0 over all areas (p = .61) and −2.6 in early areas (p = .92). Dorsal is the only one that reaches significance (−3.9, p = .010, q = .029), and the hierarchical model does not support it (P = .83).
+- **The estimates are the fit's own values.** In a third to a half of the cells, the least-squares re-solve differs slightly from the fit, by a median of 0.08 points for δ. Using the re-solved values instead changes nothing.
+
+**Verdict.**
+- The sustained field does not differ between the locations next to HP and the location opposite HP. δ has no reliable sign by any method, and in early visual cortex it is, if anything, positive (higher gain next to HP).
+- This agrees with Fig. 3, where next < opposite is only a trend that does not survive weighting by precision (item 13).
+- It also agrees with the decoding, where the intensity next to HP was if anything higher than opposite it (+0.68 ± 0.32%).
+- The HP reduction itself holds in this model as in the main model (dS −2.6%, early −4.2%).
+
+**Manuscript sentence.** Replace "A variant with separate sustained gains next to and opposite the HP location found no difference between them (−0.6%, p = .73)" with:
+
+> "A variant of the model with separate sustained gains next to and opposite the HP location, fitted in the same way, found no reliable difference between them (next minus opposite +1.0% of the drive, 95% HDI [−0.7, +2.7]; early visual cortex +2.3% [−0.5, +5.1]), whereas the gain at HP remained below both (HP − next −3.2% [−5.7, −0.7]; HP − opposite −1.7% [−2.8, −0.7])."
+
+**No held-out comparison.** The variant is fitted on all runs only, so it has no held-out R² against the main model. That would need another full set of fits in the run-wise cross-validation scheme. Do not claim that the variant is worse or better out of sample.
 
 ## 8. Trial-wise effects with the Student-t model
 
@@ -367,7 +383,7 @@ Verdict: still no relation; the limitation sentence stays, with new numbers and 
 >
 > **Statistics of the gain-field terms.** For each participant and area, we obtained the standard errors of dS, g_T and g_D by a leave-one-run-out jackknife of the gains re-solved under the model's constraints, with all other parameters held at the joint fit. Half the difference between odd and even runs, divided by this standard error, had a median of 0.73 for dS (0.67 expected). [Hierarchical model paragraph from update 2/3.] Single-area statements rest on each area fitted on its own (the same model without pooling over areas).
 >
-> **Variants.** As checks, we fitted (i) the same model with a distractor gain that differs between the HP and LP locations (dD), (ii) [the LP-split variant, pending], and (iii) the same model with Gaussian and divisive-normalization pRFs [pending]. The width of the sustained field was examined by profiling the fit over a grid of widths (Supplementary Fig. [width profiles])."
+> **Variants.** As checks, we fitted (i) the same model with a distractor gain that differs between the HP and LP locations (dD), (ii) the same model with separate sustained gains next to and opposite the HP location (g_next = g_LP + δ/3, g_opp = g_LP − 2δ/3, keeping the field zero-sum), and (iii) the same model with Gaussian and divisive-normalization pRFs [pending]. The width of the sustained field was examined by profiling the fit over a grid of widths (Supplementary Fig. [width profiles])."
 
 **Old Methods sentences that must go:**
 - The nested series of models with terms added one at a time, and every "estimated alone" result.
@@ -601,7 +617,7 @@ The same jackknife SEs let the two analyses be compared on one scale. For each p
 
 **Caveats to keep in the text.**
 - The precision comes from the model's assumptions: the pRF, the HRF and the shape of the field. The argument is therefore only as good as the model's fit, and the held-out tests of the model support that fit.
-- It concerns precision within a participant. It does not make individual differences in dS reliable: across participants, odd and even runs agree poorly in early areas (ρ = 0.15; item 9).
+- It concerns precision within a participant and area. Individual differences in dS are only moderately reliable: odd and even runs agree with ρ = .57 over all areas (item 9) and ρ = .15 in early areas alone.
 
 **Suggested sentence (Results, after Fig. 3, or Discussion):**
 
