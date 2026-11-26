@@ -1,0 +1,19 @@
+field	roi	subset	n	median	ci_lo	ci_hi	share_bound
+sustained	IPS	all fits	25	3.0237510032717134			0.36
+sustained	IPS	reliable (|z| > 2)	4	3.129279395364093			0.25
+sustained	LO	all fits	28	4.396788091336251			0.17857142857142858
+sustained	LO	reliable (|z| > 2)	10	4.396788091336251			0.2
+sustained	TO	all fits	28	2.4860972213477766			0.10714285714285714
+sustained	TO	reliable (|z| > 2)	2	4.263856232054689			0.0
+sustained	V1	all fits	28	3.6986389044004495			0.10714285714285714
+sustained	V1	reliable (|z| > 2)	13	3.931006837390661			0.0
+sustained	V2	all fits	28	3.7476138146997835			0.10714285714285714
+sustained	V2	reliable (|z| > 2)	13	3.8249218548074295			0.07692307692307693
+sustained	V3	all fits	28	4.41825742384696			0.10714285714285714
+sustained	V3	reliable (|z| > 2)	17	3.9852726908606315			0.17647058823529413
+sustained	V3AB	all fits	27	4.151342562631966			0.4444444444444444
+sustained	V3AB	reliable (|z| > 2)	9	3.3348872632102786			0.1111111111111111
+sustained	VO	all fits	21	2.266307489552295			0.5238095238095238
+sustained	VO	reliable (|z| > 2)	8	2.1200485478343083			0.375
+sustained	hV4	all fits	28	5.067843792194722			0.25
+sustained	hV4	reliable (|z| > 2)	8	4.131122979643523			0.125

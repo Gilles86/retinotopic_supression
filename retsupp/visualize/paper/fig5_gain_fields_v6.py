@@ -61,6 +61,7 @@ TGT, DIS = 'opp', 'left'          # target opposite HP; distractor at the LP loc
 
 
 ZERO_SUM = False   # --zero-sum: draw the sustained field as zero-sum (LP = -dS/4, HP = 3/4 dS) of the dS drawn
+TARGET_YLIM = (-25, 85)   # --target-ylim: panel b's y range (%) with --bayes-dir
 HP_ANGLE = 0.      # --hp-angle: where HP is drawn, degrees clockwise from the top (45: upper right, a real search position)
 
 
@@ -687,7 +688,7 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
     d_where = ' in ' + ', '.join(d_rois) if d_rois else ' nowhere reliably'
     t_rois = t[(t.model == 'DoG') & (t.term == 'T') & (t.q < .05)].roi.tolist()
     if B is not None:
-        t_rois = B['sm']['target'].query('q < .05').index.tolist()
+        t_rois = B['sm']['target'].query('q < .05 and median > 0').index.tolist()   # credible gains, not losses
     t_where = (' in every area' if len(t_rois) == 9 else ' beyond V1' if set(t_rois) == set(ROI_ORDER) - {'V1'}
                else f' in {len(t_rois)} of 9 areas')
     row(fig, yb, 'b', [('Gain at the ', FG), ('target', TARGET), (t_where, FG),
@@ -704,9 +705,9 @@ def main(gain_table, conditional_table, slope_table, sigma_table, suffix, per_ar
                                              ci_high=lambda x: x.ci_high * k)
         if B is not None:
             F.dot_panel(ax, [(B['est']['target'], 'y', TARGET, B['sm']['target']),
-                             (B['est']['distractor'], 'y', DISTRACTOR, B['sm']['distractor'])], (-25, 85),
+                             (B['est']['distractor'], 'y', DISTRACTOR, B['sm']['distractor'])], TARGET_YLIM,
                         'Gain change (%)')
-            pooled_bayes(ax, B, (-25, 85), series=(('target', TARGET), ('distractor', DISTRACTOR)))
+            pooled_bayes(ax, B, TARGET_YLIM, series=(('target', TARGET), ('distractor', DISTRACTOR)))
             ax.set_yticks([0, 40, 80])
         else:
             F.dot_panel(ax, [(d100, 'T', TARGET, sm100('T')), (d100, 'D', DISTRACTOR, sm100('D'))], (-40, 120),
@@ -943,7 +944,21 @@ def bayes_legend(legend, B, n):
                             'rotated so that the HP location is at the upper right, one of the four diagonal positions')
     areas = lambda term: ', '.join(f"{a} {f(g(term, a), '%')}" for a in ROI_ORDER)
     sig = lambda term: [a for a in ROI_ORDER if max(g(term, a).p_gt0, g(term, a).p_lt0) > .975]
+    sig_sign = lambda term, pos: [a for a in sig(term) if (g(term, a)['mean'] > 0) == pos]
+
+    def credible(term):
+        pos, neg = sig_sign(term, True), sig_sign(term, False)
+        if not pos and not neg:
+            return 'no single area'
+        return '; '.join(x for x in (pos and 'positive in ' + ', '.join(pos), neg and 'negative in ' + ', '.join(neg))
+                         if x)
     import re
+    if ZERO_SUM:     # no level shared by the four locations in the model: say what the grey lines show instead
+        head = re.sub(r'The sustained field itself is a suppression at all four possible locations.*?(?=Right three maps)',
+                      'Under the zero-sum constraint (g_HP + 3 g_LP = 0) the sustained gain is −dS/4 at each LP location '
+                      'and +3 dS/4 at HP; the grey lines under each map give these two values. A level shared by all '
+                      'four locations is not part of the model (with the pRFs fitted together with the gains, it cannot '
+                      'be separated from the item weight and the pRF amplitude). ', head)
     head = re.sub(r'\. Values used: .*$', '. Values used (posterior means): ' + '; '.join(
         f"{a}: HP − LP {g('dS', a)['mean']:+.1f}%, target {g('target', a)['mean']:+.0f}%, distractor "
         f"{g('distractor', a)['mean']:+.0f}%".replace('-', '−') for a in AREAS) + '.', head)
@@ -970,8 +985,8 @@ def bayes_legend(legend, B, n):
            f"dorsal {f(g('target', 'dorsal'), '%')}, occipitotemporal {f(g('target', 'occipitotemporal'), '%')}; "
            f"distractor: early {f(g('distractor', 'early'), '%')}, dorsal {f(g('distractor', 'dorsal'), '%')}, "
            f"occipitotemporal {f(g('distractor', 'occipitotemporal'), '%')}). Over all nine "
-           f"areas: target {f(g('target', 'all'), '%')}, distractor {f(g('distractor', 'all'), '%')}; credible in "
-           f"{', '.join(sig('target'))} (target) and {', '.join(sig('distractor')) or 'no single area'} (distractor). "
+           f"areas: target {f(g('target', 'all'), '%')}, distractor {f(g('distractor', 'all'), '%')}; credible: target "
+           f"{credible('target')}; distractor {credible('distractor')}. "
            f"c, Sustained gain at HP minus at LP (dS). Left of the divider, the mean over all nine areas "
            f"{f(g('dS', 'all'), '%')} and the pathway means: early {f(g('dS', 'early'), '%')}, dorsal "
            f"{f(g('dS', 'dorsal'), '%')}, occipitotemporal {f(g('dS', 'occipitotemporal'), '%')}. Per area: "
@@ -1340,8 +1355,11 @@ if __name__ == '__main__':
                     'dS_meta (that output folder)')
     ap.add_argument('--bayes-variant', default='t', choices=['t', 'normal', 'no_se'])
     ap.add_argument('--map-areas', nargs=3, default=None, help='the three areas of the panel-a maps (default V3 hV4 TO)')
+    ap.add_argument('--target-ylim', nargs=2, type=float, default=None, help='panel b y range in %% (default -25 85)')
     a = ap.parse_args()
     ZERO_SUM = a.zero_sum
+    if a.target_ylim:
+        TARGET_YLIM = tuple(a.target_ylim)
     if a.map_areas:
         AREAS[:] = a.map_areas
     if a.hp_angle:
