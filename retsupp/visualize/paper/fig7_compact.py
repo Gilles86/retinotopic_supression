@@ -30,6 +30,7 @@ UNIT_LABELS = {'early': 'Early\n(V1–V3)', 'dorsal': 'Dorsal\n(V3AB, IPS)',
                'occipitotemporal': 'Occipito-\ntemporal', 'all': 'All nine\nareas'}
 UNIT_X = {'all': 0., 'early': 1.35, 'dorsal': 2.35, 'occipitotemporal': 3.35}
 PALE = .4
+RT_YLIM = (-.085, .065)   # --rt-ylim: panel b's y range
 
 
 def pd_stars(p):
@@ -239,9 +240,9 @@ def main(meta, name, param, compact=False, fit_label=FIT_LABEL, rt_summary=None,
                       ([lambda a: draw_source(a, 'global')], FG, 'Global' if compact else 'Global gain')], W, H, icon=ik)
     axb = fig.add_axes([xb / W, y0 / H, pw / W, ph / H])
     rb = panel(axb, summary, [('T_rt', 'abs', TARGET), ('D_rt', 'abs', DISTRACTOR), ('G_rt', 'abs', FG)], 1,
-               (-.085, .065), 'Gain change per SD\nslower response', width=.5)
-    axb.set_yticks([-.08, -.04, 0, .04])
-    axb.text(UNIT_X['occipitotemporal'] + .38, .06, 'Higher on\nslow trials', ha='right', va='top', fontsize=6.5, color='.45')
+               RT_YLIM, 'Gain change per SD\nslower response', width=.5)
+    axb.set_yticks([t for t in (-.08, -.04, 0, .04, .08) if RT_YLIM[0] <= t <= RT_YLIM[1]])
+    axb.text(UNIT_X['occipitotemporal'] + .38, RT_YLIM[1] - .005, 'Higher on\nslow trials', ha='right', va='top', fontsize=6.5, color='.45')
     ax.text(UNIT_X['occipitotemporal'] + .38, 66, 'Higher on\nrepeats', ha='right', va='top', fontsize=6.5, color='.45')
     if panel_c:
         assert compact, '--panel-c needs --compact'
@@ -287,13 +288,18 @@ def main(meta, name, param, compact=False, fit_label=FIT_LABEL, rt_summary=None,
                        'whole display points the same way but not credibly ({Grt_all}, P = {Grt_all_p}), and the target gain '
                        'does not change credibly ({Trt_all}, P = {Trt_all_p}).')
     n_sub, n_obs = int(diag.n_subjects.max()), int(diag.n_obs.max())
+    dr = g('D_dist_repeat', 'rel')
+    d_sentence = ("Repeating the distractor's location does not change the distractor gain credibly ({D_all}, P = {D_all_p})."
+                  if max(dr.p_gt0, dr.p_lt0) <= .975 else
+                  "Repeating the distractor's location " + ('lowers' if dr['mean'] < 0 else 'raises') +
+                  " the distractor gain ({D_all}, P = {D_all_p}).")
     tn = g('T_target_repeat', 'rel_nose')
     tn_p = max(tn.p_gt0, tn.p_lt0)
     T_nose_phrase = ('the target-repeat effect remains (P = {T_nose_p})' if tn_p > .975 else
                      'the target-repeat effect keeps its direction but falls just short of the threshold (P = {T_nose_p}), and'
                      if tn_p > .95 else
                      'the target-repeat effect keeps its direction but is not credible (P = {T_nose_p}), and')
-    legend = LEGEND.replace('{T_nose_phrase} but the RT', '{T_nose_phrase} the RT' if T_nose_phrase.endswith(', and') else '{T_nose_phrase} but the RT').replace('{rt_sentence}', rt_sentence).replace('{T_nose_phrase}', T_nose_phrase).replace(
+    legend = LEGEND.replace("Repeating the distractor's location does not change the distractor gain credibly ({D_all}, P = {D_all_p}).", d_sentence).replace('{T_nose_phrase} but the RT', '{T_nose_phrase} the RT' if T_nose_phrase.endswith(', and') else '{T_nose_phrase} but the RT').replace('{rt_sentence}', rt_sentence).replace('{T_nose_phrase}', T_nose_phrase).replace(
         'n = 30 subjects (247 subject × area estimates', f'n = {n_sub} subjects ({n_obs} subject × area estimates').format(
         conv=conv,
         T_all=fmt(g('T_target_repeat', 'rel'), 100, '%'), T_all_p=pdir(g('T_target_repeat', 'rel')),
@@ -376,6 +382,7 @@ if __name__ == '__main__':
     ap.add_argument('--name', default='fig7_compact')
     ap.add_argument('--param', default='notes/data/trialwise_signal_se_2026-11/trialwise_af_signal_se_2026-11_parametric.tsv',
                     help='Collected parametric table (for the pooled-group check in the legend)')
+    ap.add_argument('--rt-ylim', nargs=2, type=float, default=None, help='panel b y range (default -0.085 0.065)')
     ap.add_argument('--compact', action='store_true', help='narrower panels, shorter titles and keys (same content)')
     ap.add_argument('--fit-label', default=FIT_LABEL, help='how the legend names the base fits')
     ap.add_argument('--rt-summary', default=None, help='rt_power_meta summary.tsv for panel b')
@@ -386,5 +393,7 @@ if __name__ == '__main__':
     ap.add_argument('--panel-c', default=None, help='trialwise_meta_bayes output with Q_main, P_main and '
                     'T_target_at_prev_dist (--prev-target-neutral fits): adds panel c (needs --compact)')
     a = ap.parse_args()
+    if a.rt_ylim:
+        RT_YLIM = tuple(a.rt_ylim)
     main(a.meta, a.name, a.param, a.compact, a.fit_label, a.rt_summary, a.rt_analysis, a.rt_legend, a.primary_t,
          a.panel_c)

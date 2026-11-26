@@ -170,7 +170,12 @@ LEGEND_ABS = """**Figure S. Item responses by location relative to HP, per area,
 """
 
 
-def figure_abs(vals, t, name='figS_item_locations_per_area_abs_n28', clip=.45):
+LEGEND_ABS_OWN = """**Supplementary Figure. Item responses by location relative to HP, per area, in absolute units (n = 28).** As Fig. 3e, for each of the nine areas: the response at each location type (HP, dark purple; next to HP, the two neighbouring locations pooled, mid purple; opposite HP, light purple), window 3.2–6.4 s after search onset, item types pooled, in % signal change and expressed relative to each participant's mean over the four item locations in that area (no division by the participant's mean response, so no participant is left out for a small or negative mean). Dots: participants (triangles: beyond the axis); diamonds and bars: median and bootstrapped 95% CI (10 000 resamples). Statistics: each area fitted on its own data, with each participant weighted by the precision of their estimate (leave-one-run-out jackknife SE; estimate ~ Student-t(ν, μ, √(SE² + τ²)), no pooling over areas; posterior mean [95% HDI], P = posterior probability of the sign; as Fig. 3 and Supplementary Table S1). Stars: HP − opposite credible on the area's own data, * P > .975, ** P > .995. HP − opposite: {hp_opp}. HP − next: {hp_next}. Next − opposite: {next_opp}. Check (Wilcoxon signed-rank on the unweighted values, Benjamini-Hochberg across the nine areas), HP − opposite: {wil}. n per area: participants with selected voxels at every item location ({n}); in IPS, LO, TO, VO and hV4 a participant's item locations hold a median of 1–2 voxels each (V1 8, V2 12, V3 7), so single-area values there rest on few voxels. The inference is at the pathway level (Fig. 3e). Data: `notes/data/fig3_robustness_n28_2026-11-12.tsv`, `notes/data/fig3_meta_2026-11-25/own_data.tsv`; code: `retsupp/visualize/paper/fig3_robustness.py`, `retsupp/visualize/paper/fig3_meta.py`.
+"""
+
+
+def figure_abs(vals, t, name='figS_item_locations_per_area_abs_n28', clip=.45, own=None):
+    """own: fig3_meta's own_data.tsv; if given, stars and legend from the precision-weighted own-data fits."""
     import matplotlib.pyplot as plt
     from retsupp.visualize.paper.fig3_item_locations import LOC_COLORS, LOC_TYPES, loc_icon
     from retsupp.visualize.paper.paper_style import DOUBLE, FG, MUTED, ROI_GROUPS, offset_spines, save
@@ -202,8 +207,12 @@ def figure_abs(vals, t, name='figS_item_locations_per_area_abs_n28', clip=.45):
             lo, hi = boot(y, np.median)
             ax.plot([xs[r] + off[c]] * 2, [lo, hi], color=LOC_COLORS[c], lw=1.2, zorder=3, solid_capstyle='butt')
             ax.plot(xs[r] + off[c], np.median(y), 'D', ms=3.6, color=LOC_COLORS[c], mec='w', mew=.5, zorder=4)
-        q = ta.loc[r, 'page_q']
-        st = '***' if q < .001 else '**' if q < .01 else '*' if q < .05 else ''
+        if own is not None:
+            pr = own[(own.term == 'HP − opposite (abs)') & (own.unit == r)].iloc[0].p_lt0
+            st = '**' if pr > .995 else '*' if pr > .975 else ''
+        else:
+            q = ta.loc[r, 'page_q']
+            st = '***' if q < .001 else '**' if q < .01 else '*' if q < .05 else ''
         if st:
             ax.text(xs[r], clip * 1.02, st, ha='center', va='bottom', fontsize=7, color=FG)
     ax.axhline(0, color='.6', lw=.6, ls='--', zorder=0)
@@ -236,5 +245,15 @@ def figure_abs(vals, t, name='figS_item_locations_per_area_abs_n28', clip=.45):
                        f'{ta.loc[r, "hp_opp_ci_hi"]:+.3f}], {int(ta.loc[r, "hp_opp_k_neg"])}/{int(ta.loc[r, "n"])} < 0, '
                        f'q = {fp(ta.loc[r, "hp_opp_q"])}' for r in ROI_ORDER).replace('-', '−')
     n = ', '.join(f'{r} {int(ta.loc[r, "n"])}' for r in ROI_ORDER)
+    if own is not None:
+        def od(term):
+            o = own[own.term == f'{term} (abs)'].set_index('unit')
+            return '; '.join(f"{r} {o.loc[r, 'mean']:+.3f}% [{o.loc[r, 'hdi_lo']:+.3f}, {o.loc[r, 'hdi_hi']:+.3f}], "
+                             f"P = {max(o.loc[r, 'p_gt0'], o.loc[r, 'p_lt0']):.3f}".replace('P = 1.000', 'P > .999')
+                             .replace('P = 0.', 'P = .') for r in ROI_ORDER).replace('-', '−')
+        wil = '; '.join(f'{r} q = {fp(ta.loc[r, "hp_opp_q"])}' for r in ROI_ORDER)
+        save(fig, name, LEGEND_ABS_OWN.format(hp_opp=od('HP − opposite'), hp_next=od('HP − next'),
+                                              next_opp=od('next − opposite'), wil=wil, n=n))
+        return fig
     save(fig, name, LEGEND_ABS.format(stars=stars, hp_opp=hp_opp, n=n))
     return fig

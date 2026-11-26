@@ -27,6 +27,7 @@ from retsupp.visualize.paper.fig2_prf_fits import PATHWAY
 
 ARMS = {
     'current': ('Current (Fig. 3)', 'notes/data/event_deconv_relative_final2_2026-11'),
+    'zs': ('Main model', 'notes/data/event_deconv_relative_zs_lm_2026-11-16'),
     'refit': ('Current, refitted pRFs', 'notes/data/event_deconv_relative_polished_2026-11-12'),
     'r0.2': ('r > 0.2', 'notes/data/event_deconv_relative_relnull_r0.2_2026-11-12'),
     'r0.1': ('r > 0.1', 'notes/data/event_deconv_relative_relnull_r0.1_2026-11-12'),
@@ -107,12 +108,17 @@ def main(arms, out_prefix):
 
 # ---------------------------------------------------------------- supplementary figure
 
-SEL_STYLE = {'current': ('Current', '#1F2933'), 'r0.2': ('r > 0.2', '#616E7C'), 'r0.1': ('r > 0.1', '#A3ACB5')}   # selections are not conditions: greys
+SEL_STYLE = {'current': ('Current', '#1F2933'), 'zs': ('Main model', '#1F2933'), 'r0.2': ('r > 0.2', '#616E7C'), 'r0.1': ('r > 0.1', '#A3ACB5')}   # selections are not conditions: greys
 GROUPS = ['Early', 'Dorsal', 'Occipitotemporal', 'All areas']
 GROUP_LAB = {'Early': 'Early', 'Dorsal': 'Dorsal', 'Occipitotemporal': 'Occ.-temporal', 'All areas': 'All areas'}
 
 
-def figure(out_prefix, blur_root, name='figS_item_locations_voxel_selection_n28'):
+ZS_SELECTION = ("Main model: the voxels and pRFs of the joint zero-sum gain-field fits (the main model; R² mixture "
+                "p_signal > 0.5, R² > 0.05, top 500 by R², BOLD SD ≤ 20%, cross-run reliability > 0), bar-only "
+                "prediction from those pRFs with the gains at 0.")
+
+
+def figure(out_prefix, blur_root, name='figS_item_locations_voxel_selection_n28', sels=None):
     import matplotlib.pyplot as plt
     from retsupp.visualize.paper.item_location_blur import voxel_table
     from retsupp.visualize.paper.paper_style import DOUBLE, FG, HP, letter, offset_spines, save
@@ -123,7 +129,7 @@ def figure(out_prefix, blur_root, name='figS_item_locations_voxel_selection_n28'
     blur = voxel_table(blur_root, range(3, 31), ROIS, .75, centre_only=True)
     b = blur.groupby(['subject', 'roi'])[['a_self', 'a_next', 'a_opp']].mean()
     b = pd.DataFrame({'next': b.a_next / b.a_self, 'opposite': b.a_opp / b.a_self}).groupby('roi').median()
-    sels = list(SEL_STYLE)
+    sels = sels or ['current', 'r0.2', 'r0.1']
 
     W, H = DOUBLE, 3.9
     fig = plt.figure(figsize=(W, H))
@@ -207,6 +213,13 @@ def figure(out_prefix, blur_root, name='figS_item_locations_voxel_selection_n28'
     legend = f"""
 **Supplementary Figure. The location effect of Fig. 3e under looser voxel selections: more voxels, smaller standard errors, but a smaller effect, so no gain in precision; pRF blur cannot account for the weak effect outside early areas.** Same pipeline as Fig. 3d, e (voxels whose pRF centre lies within 2° of an item location; their BOLD minus the bar-only prediction, deconvolved with nideconv, Fourier basis, item type × location type relative to the run's HP location; window 3.2–6.4 s after search onset; areas pooled weighted by voxel count; n = 28). Current: the gain-field fits' voxels (p_signal > 0.5, top 500 by R², leave-one-run-out reliability > 0) as in Fig. 3. r > 0.2, r > 0.1: every voxel of the area with model-free cross-run reliability above 0.2 or 0.1 and p ≤ .01 against a circular-shift null (BOLD SD ≤ 20%), with pRFs refitted together with the gain fields (m7_full); bar-only prediction from those pRFs with the gains at 0. a, Voxels per item location (per subject the median over the four locations, median over subjects). b, The response at one item location that a pRF centred on another location picks up, as a share of what it picks up at its own location (pRF centres, current selection, integrated over a 1.5° item; median over subjects); for a modulation confined to the HP item, HP − opposite keeps 1 minus the leak to the opposite location and HP − next 1 minus the leak to the next location (pooled per pathway: early ≥ 99%, dorsal 99% and 92%, occipitotemporal 97% and 90%). c, d, HP minus opposite and HP minus next to HP (mean over the item types), in % signal, mean ± SEM over subjects; * p < .05, Wilcoxon signed-rank test, uncorrected. HP − opposite: {'; '.join(parts)}. Missing fits: r > 0.2, sub-06 IPS, sub-25 VO, sub-26 VO; r > 0.1, sub-17 V3 (left out of those pools).
 """
+    if 'zs' in sels:
+        legend = legend.replace("Current: the gain-field fits' voxels (p_signal > 0.5, top 500 by R², leave-one-run-out "
+                                "reliability > 0) as in Fig. 3.", ZS_SELECTION).replace(
+            "with pRFs refitted together with the gain fields (m7_full)",
+            "with pRFs refitted together with the gain fields in the earlier, not zero-sum, model (m7_full; no zero-sum "
+            "fits exist for these selections)").replace("(pRF centres, current selection,",
+                                                        "(pRF centres of the main voxel selection, from the pRF fits before the zero-sum refit,")
     save(fig, name, legend)
 
 
@@ -215,10 +228,12 @@ if __name__ == '__main__':
     ap.add_argument('--arms', nargs='+', default=list(ARMS))
     ap.add_argument('--out-prefix', default='notes/data/fig3_voxel_selection_n28_2026-11-12')
     ap.add_argument('--figure', action='store_true', help='draw the supplementary figure from the written tables')
+    ap.add_argument('--sels', nargs='+', default=None, help='selections drawn in the figure (default current r0.2 r0.1)')
+    ap.add_argument('--name', default='figS_item_locations_voxel_selection_n28')
     ap.add_argument('--blur-root', default='/data/ds-retsupp/derivatives/'
                     'af_prf_cv_ladder_nested_full_bounded_maxsd20_reliable_roihrf_polished')
     a = ap.parse_args()
     if a.figure:
-        figure(a.out_prefix, a.blur_root)
+        figure(a.out_prefix, a.blur_root, a.name, a.sels)
     else:
         main(a.arms, a.out_prefix)

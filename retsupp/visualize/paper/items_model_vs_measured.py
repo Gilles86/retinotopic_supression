@@ -191,11 +191,14 @@ def noise_band(pred, resid, seed=0):
     return np.percentile(med, [2.5, 97.5]), power
 
 
+ITEMS_VARIANT = 'SD'   # --items-variant: the prediction compared with the measured item-type contrasts
+
+
 def part_items():
     rows = []
     for grouping, groups in GROUPINGS.items():
         meas = window(HPLP_MEAS, groups)
-        pred = window(PRED.format(mode='hplp', v='SD'), groups)
+        pred = window(PRED.format(mode='hplp', v=ITEMS_VARIANT), groups)
         for g in meas.index.get_level_values('grp').unique():
             mg = meas.xs(g, level='grp').dropna()
             pg_ = pred.xs(g, level='grp').dropna()
@@ -250,9 +253,12 @@ if __name__ == '__main__':
     ap.add_argument('--hplp-meas', default=HPLP_MEAS)
     ap.add_argument('--pred', default=PRED, help='prediction folders, with {mode} and {v}')
     ap.add_argument('--overlap', default=OVERLAP, help='folder of the sub-XX_overlap.tsv files')
+    ap.add_argument('--items-variant', default='SD', help='prediction variant for --part items (zero-sum run: S is '
+                    'the main model as fitted, SD the variant with dD)')
     ap.add_argument('--no-sdt', action='store_true', help='no SDT / SDT0 variants (zero-sum run)')
     a = ap.parse_args()
     TAG, REL_MEAS, HPLP_MEAS, PRED, OVERLAP = a.tag, a.rel_meas, a.hplp_meas, a.pred, a.overlap
+    ITEMS_VARIANT = a.items_variant
     if a.no_sdt:
         VARIANTS = {k: v for k, v in VARIANTS.items() if k not in ('SDT', 'SDT0')}
     main(a.part)
